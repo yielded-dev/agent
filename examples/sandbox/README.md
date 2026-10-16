@@ -8,6 +8,11 @@ Workspace links select within that account; knowing an ID does not grant access.
 `@yielded/sandbox` supplies the isolated container, filesystem and process receipts.
 The coding loop uses Effect's OpenAI provider; no Codex CLI is installed or invoked.
 
+The composer offers GPT-6.1 Sol and GPT-6 Astra, reasoning effort, and processing
+priority. New workspaces default to Sol with medium reasoning and ultrafast priority.
+Each message retains its settings for recovery; reopening a workspace restores the
+last settings used there.
+
 The example exposes `read_file`, `write_file`, `edit_file`, `list_files`, `search`
 and `bash`. Tool execution is serialized. Process tickets and results use Agent's
 Durable Steps, and retries retain the original deadline and workspace identity.

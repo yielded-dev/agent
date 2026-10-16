@@ -7,10 +7,12 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import {
   Accepted,
   CommandInput,
+  defaultModelSettings,
   FileContent,
   FileList,
   LIVE_TEXT_THREAD_HEADER,
   MessageInput,
+  ModelSettings,
   SandboxError,
   ShellCommand,
   WorkspaceEvent,
@@ -169,8 +171,11 @@ interface Pending {
   readonly text: string;
   readonly submissionId?: string;
   readonly command?: boolean;
+  readonly settings?: ModelSettings;
 }
 interface Workspace {
+  readonly historyReady: boolean;
+  readonly acceptedSettings: ModelSettings;
   readonly entries: ReadonlyArray<Entry>;
   readonly commands: ReadonlyArray<ShellCommand>;
   readonly drafts: ReadonlyArray<Draft>;
@@ -188,6 +193,8 @@ interface Workspace {
 
 export const workspace = Atom.family((id: string) => {
   const state = Atom.make<Workspace>({
+    historyReady: false,
+    acceptedSettings: defaultModelSettings,
     entries: [],
     commands: [],
     drafts: [],
@@ -204,6 +211,17 @@ export const workspace = Atom.family((id: string) => {
   }).pipe(Atom.setIdleTTL("5 minutes"));
 
   const draft = Atom.make("").pipe(Atom.setIdleTTL("5 minutes"));
+  const settingsDraft = Atom.make<ModelSettings | null>(null);
+
+  const settings = Atom.make((get) => get(settingsDraft) ?? get(state).acceptedSettings);
+
+  const changeSettings = Atom.fnSync((change: Partial<Record<keyof ModelSettings, string>>, get) =>
+    get.set(
+      settingsDraft,
+      Schema.decodeUnknownSync(ModelSettings)({ ...get(settings), ...change }),
+    ),
+  );
+
   const directory = Atom.make("");
   const selectedFile = Atom.make<string | null>(null);
   const revision = Atom.make(0);
@@ -339,6 +357,8 @@ export const workspace = Atom.family((id: string) => {
       });
 
       const pages = Effect.gen(function* () {
+        get.set(state, { ...get.once(state), historyReady: false });
+
         const response = yield* request(
           "events?" +
             new URLSearchParams({ workspaceId: id, after: String(get.once(state).cursor) }),
@@ -390,6 +410,7 @@ export const workspace = Atom.family((id: string) => {
               let runId = current.runId;
               let drafts = current.drafts;
               let committedTurns = current.committedTurns;
+              let acceptedSettings = current.acceptedSettings;
 
               if (page.cursor > current.cursor) {
                 for (const entry of page.entries) {
@@ -410,6 +431,7 @@ export const workspace = Atom.family((id: string) => {
                   )
                     reviewRequired = true;
                   if (entry.kind === "user") {
+                    acceptedSettings = entry.settings ?? defaultModelSettings;
                     if (entry.submissionId) active = entry.submissionId;
                     if (pending && entry.requestId === pending.requestId) {
                       pending = null;
@@ -438,6 +460,8 @@ export const workspace = Atom.family((id: string) => {
               get.set(state, {
                 ...current,
                 entries: [...entries.values()].slice(-500),
+                acceptedSettings,
+                historyReady: page.caughtUp === true,
                 drafts: drafts.filter(
                   (draft) => draft.runId !== runId || !committedTurns.includes(draft.turnId),
                 ),
@@ -451,7 +475,7 @@ export const workspace = Atom.family((id: string) => {
                 error: reviewRequired
                   ? "A workspace operation needs review. Review the transcript and files, or start a new workspace. Further changes are blocked here."
                   : error,
-                connection: "Live",
+                connection: page.caughtUp === true ? "Live" : "Loading history…",
               });
             }),
           ),
@@ -564,7 +588,12 @@ export const workspace = Atom.family((id: string) => {
           Effect.gen(function* () {
             while (true) {
               yield* pages.pipe(Effect.scoped, Effect.ignore);
-              get.set(state, { ...get.once(state), drafts: [], connection: "Reconnecting…" });
+              get.set(state, {
+                ...get.once(state),
+                historyReady: false,
+                drafts: [],
+                connection: "Reconnecting…",
+              });
               yield* Effect.sleep("2 seconds");
             }
           }),
@@ -582,26 +611,41 @@ export const workspace = Atom.family((id: string) => {
 
   const admission = Atom.fn<void>()(
     Effect.fnUntraced(function* (_, get) {
-      const message = get(draft).trim();
       const current = get(state);
+      const retry = current.uncertain && !current.pending?.command ? current.pending : null;
+      const message = retry?.text ?? get(draft).trim();
 
       if (
         !message ||
         get(expired) ||
-        current.pending ||
         current.active ||
-        current.uncertain ||
-        current.admissionRequestId
+        current.reviewRequired ||
+        current.admissionRequestId ||
+        (!retry && (!current.historyReady || current.pending || current.uncertain))
       )
         return;
 
-      const input = yield* Schema.decodeEffect(MessageInput)({
-        workspaceId: id,
-        requestId: crypto.randomUUID(),
-        message,
-      });
+      const input = yield* Schema.decodeEffect(MessageInput)(
+        retry
+          ? {
+              workspaceId: id,
+              requestId: retry.requestId,
+              message,
+              ...(retry.settings === undefined ? {} : { settings: retry.settings }),
+            }
+          : {
+              workspaceId: id,
+              requestId: crypto.randomUUID(),
+              message,
+              settings: get(settings),
+            },
+      );
 
-      const pending: Pending = { requestId: input.requestId, text: message };
+      const pending: Pending = {
+        requestId: input.requestId,
+        text: message,
+        ...(input.settings === undefined ? {} : { settings: input.settings }),
+      };
 
       if (message.startsWith("!")) {
         const command = yield* Schema.decodeEffect(CommandInput)({
@@ -645,14 +689,26 @@ export const workspace = Atom.family((id: string) => {
         return;
       }
 
-      get.set(state, { ...current, pending, admissionRequestId: input.requestId, error: null });
-      get.set(draft, "");
+      get.set(state, {
+        ...current,
+        pending,
+        admissionRequestId: input.requestId,
+        uncertain: false,
+        error: null,
+      });
+      if (!retry) get.set(draft, "");
       yield* json("messages", Accepted, input).pipe(
         Effect.tap((accepted) =>
           Effect.sync(() => {
             const latest = get(state);
 
-            if (latest.reviewRequired || latest.admissionRequestId !== input.requestId) return;
+            // Preserve canonical reconciliation after its entry leaves the displayed history.
+            if (
+              latest.reviewRequired ||
+              latest.admissionRequestId !== input.requestId ||
+              latest.pending?.requestId !== input.requestId
+            )
+              return;
 
             const durable = latest.entries.some(
               (entry) => entry.kind === "user" && entry.requestId === input.requestId,
@@ -669,6 +725,8 @@ export const workspace = Atom.family((id: string) => {
               ...latest,
               pending: durable ? null : { ...pending, submissionId: accepted.submissionId },
               active: terminal ? null : accepted.submissionId,
+              uncertain: false,
+              error: null,
               // The accepted submission's Run is known only when its canonical input arrives.
               runId: durable || terminal ? latest.runId : null,
               committedTurns: durable || terminal ? latest.committedTurns : [],
@@ -679,8 +737,14 @@ export const workspace = Atom.family((id: string) => {
           Effect.sync(() => {
             const latest = get(state);
 
-            if (latest.reviewRequired || latest.admissionRequestId !== input.requestId) return;
-            const rejected = Schema.is(RequestRejected)(error) && error.status < 500;
+            if (
+              latest.reviewRequired ||
+              latest.admissionRequestId !== input.requestId ||
+              latest.pending?.requestId !== input.requestId
+            )
+              return;
+            // A later refusal cannot prove that the original request was never accepted.
+            const rejected = !retry && Schema.is(RequestRejected)(error) && error.status < 500;
 
             const durable = latest.entries.some(
               (entry) => entry.kind === "user" && entry.requestId === input.requestId,
@@ -695,7 +759,7 @@ export const workspace = Atom.family((id: string) => {
                 ? null
                 : rejected
                   ? error.message
-                  : "Delivery could not be confirmed. Watching workspace events; the message will not be resent.",
+                  : "Delivery could not be confirmed. Retry to continue with this message.",
             });
           }),
         ),
@@ -717,7 +781,14 @@ export const workspace = Atom.family((id: string) => {
     (get, value: void) => {
       const current = get.get(state);
 
-      if (current.pending || current.active || current.uncertain || current.admissionRequestId)
+      const retry = current.uncertain && current.pending && !current.pending.command;
+
+      if (
+        current.active ||
+        current.reviewRequired ||
+        current.admissionRequestId ||
+        (!retry && (!current.historyReady || current.pending || current.uncertain))
+      )
         return;
       get.set(admission, value);
     },
@@ -790,6 +861,8 @@ export const workspace = Atom.family((id: string) => {
   return {
     state: visibleState,
     draft,
+    settings,
+    changeSettings,
     directory,
     selectedFile,
     files,
