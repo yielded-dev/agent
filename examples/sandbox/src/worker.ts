@@ -11,14 +11,16 @@ import { CanonicalSequence, type CanonicalRecordEnvelope } from "@yielded/agent/
 import { toolCallSettledRecordId } from "@yielded/agent/run-journal";
 import { AbortCommand, Principal, IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { makeSandboxAgentContainer, makeSandboxAgentOutbound } from "@yielded/sandbox/cloudflare";
-import { Deferred, Effect, Layer, Schema, Stream } from "effect";
-import { Worker, WorkerEnvironment } from "effect-cf";
+import { Cause, Deferred, Effect, Layer, Schedule, Schema, Stream } from "effect";
+import { Rpc, Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 
 import { codingAgent, definitions } from "./agent.ts";
 import {
   CodingInput,
+  CommandAccepted,
+  CommandInput,
   EventPage,
   LIVE_TEXT_THREAD_HEADER,
   MAX_INPUT_BYTES,
@@ -26,6 +28,7 @@ import {
   WorkspaceId,
   type Entry,
 } from "./contract.ts";
+import { workspaceIdFromPath } from "./location.ts";
 import { CodingThread } from "./runtime.ts";
 
 export { CodingThread };
@@ -86,7 +89,7 @@ const boundedBody = Effect.fn("Sandbox.body")(function* (request: Request) {
 const FailedWorkspaceOperation = Schema.Struct({ errorTag: Schema.Literal("CodingToolError") });
 
 /** Project canonical records; the UI owns no second execution journal. */
-const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
+const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
   const id = String(sequence);
   const p = record.payload;
 
@@ -193,6 +196,9 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
   }
 };
 
+const entriesFor = (record: CanonicalRecordEnvelope): Entry[] =>
+  entriesForRecord(record).map((entry) => ({ ...entry, sequence: record.sequence }));
+
 const handle = Effect.fn("Sandbox.fetch")(function* () {
   const request = yield* Worker.NativeRequest;
   const env = yield* WorkerEnvironment;
@@ -201,7 +207,14 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
   if (url.pathname === "/sandbox") return Response.redirect(`${url.origin}/sandbox/`, 308);
   if (!url.pathname.startsWith("/sandbox/")) return new Response("Not found", { status: 404 });
   if (!url.pathname.startsWith("/sandbox/api/")) {
-    const asset = yield* Effect.promise(() => env.ASSETS.fetch(request));
+    const document = url.pathname === "/sandbox/" || workspaceIdFromPath(url.pathname) !== null;
+
+    if (!document && !url.pathname.startsWith("/sandbox/assets/"))
+      return new Response("Workspace not found", { status: 404 });
+    const assetUrl = new URL(request.url);
+
+    if (document) assetUrl.pathname = "/sandbox/";
+    const asset = yield* Effect.promise(() => env.ASSETS.fetch(new Request(assetUrl, request)));
     const headers = new Headers(asset.headers);
 
     headers.set("x-content-type-options", "nosniff");
@@ -221,6 +234,38 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
   const address = (id: string) =>
     ThreadId.make(`${session.accountId.toLowerCase()}--${id.toLowerCase()}`);
+
+  if (request.method === "POST" && url.pathname === "/sandbox/api/commands") {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId, ...CommandInput.fields })),
+    )(yield* boundedBody(request));
+
+    const limit = yield* Effect.promise(() => env.RUN_LIMIT.limit({ key: session.accountId }));
+
+    if (!limit.success)
+      return json({ message: "Please wait a moment before running another command." }, 429);
+
+    const reply = yield* Effect.tryPromise(
+      async () => await env.THREADS.getByName(address(input.workspaceId)).command(input),
+    );
+
+    const decoded = yield* Schema.decodeEffect(CommandAccepted)(reply);
+
+    return "error" in decoded
+      ? json({ message: decoded.error.message }, decoded.error.status)
+      : json(decoded.command, 202);
+  }
+  if (request.method === "POST" && url.pathname === "/sandbox/api/stop-command") {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId, requestId: WorkspaceId })),
+    )(yield* boundedBody(request));
+
+    const stopped = yield* Effect.tryPromise(() =>
+      env.THREADS.getByName(address(input.workspaceId)).stopCommand(input.requestId),
+    );
+
+    return stopped ? json({}) : json({ message: "The command has not been accepted yet." }, 409);
+  }
 
   if (request.method === "POST" && url.pathname === "/sandbox/api/messages") {
     const input = yield* Schema.decodeEffect(Schema.fromJsonString(MessageInput))(
@@ -280,6 +325,18 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     const threadId = address(workspaceId);
 
+    if (url.pathname === "/sandbox/api/commands")
+      return json(yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commands()));
+    if (url.pathname === "/sandbox/api/command-result") {
+      const requestId = yield* Schema.decodeEffect(WorkspaceId)(
+        url.searchParams.get("requestId") ?? "",
+      );
+
+      return json(
+        yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commandResult(requestId)),
+      );
+    }
+
     if (url.pathname === "/sandbox/api/text") {
       const text = Stream.unwrap(
         Effect.map(CloudflareThreadClient, (client) => client.watchTextBytes(threadId)),
@@ -299,6 +356,72 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
       );
 
       const bodyClosed = yield* Deferred.make<void>();
+
+      const commandChanges = Stream.unwrap(
+        Effect.gen(function* () {
+          type CommandEvents = Awaited<
+            ReturnType<DurableObjectStub<CodingThread>["commandEvents"]>
+          >;
+          let opening: Promise<CommandEvents> | undefined;
+          let received: CommandEvents | undefined;
+          let closed = false;
+
+          const cancel = () => {
+            const observation = received;
+
+            received = undefined;
+
+            try {
+              observation?.lifetime[Symbol.dispose]();
+            } catch {
+              // Disposing the opening RPC may already have revoked this capability.
+            }
+            const body = observation?.stream;
+
+            return body && !body.locked ? body.cancel().catch(() => undefined) : Promise.resolve();
+          };
+
+          // Own the original RPC before awaiting it, including a body returned after cancellation.
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              closed = true;
+            }).pipe(
+              Effect.andThen(Rpc.dispose(opening).pipe(Effect.ignoreCause)),
+              Effect.andThen(
+                Effect.promise(cancel).pipe(
+                  Effect.interruptible,
+                  Effect.timeout("1 second"),
+                  Effect.ignore,
+                ),
+              ),
+            ),
+          );
+
+          const observation = yield* Effect.tryPromise(() => {
+            opening = env.THREADS.getByName(threadId).commandEvents();
+
+            return opening.then((value) => {
+              received = value;
+
+              return closed ? cancel().then(() => value) : value;
+            });
+          }).pipe(Effect.interruptible);
+
+          return Stream.fromReadableStream({
+            evaluate: () => observation.stream,
+            releaseLockOnEnd: true,
+            onError: (cause) => new Cause.UnknownError(cause),
+          });
+        }),
+      ).pipe(
+        Stream.decodeText(),
+        Stream.splitLines,
+        Stream.map((line) => `${line}\n`),
+        Stream.encodeText,
+        // Command hints can lag a deployment without closing canonical history.
+        Stream.catch(() => Stream.empty),
+        Stream.repeat(Schedule.spaced("2 seconds")),
+      );
 
       const pages = Stream.unwrap(
         Effect.gen(function* () {
@@ -339,6 +462,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
             `${Schema.encodeSync(Schema.fromJsonString(EventPage))(page)}\n`,
           ),
         ),
+        Stream.merge(commandChanges, { haltStrategy: "either" }),
         // Both sources emit complete NDJSON lines; idle writes expose disconnects.
         Stream.merge(
           Stream.tick("15 seconds").pipe(
@@ -393,6 +517,18 @@ export default Worker.make(Layer.empty, {
           json(
             { message: "The request exceeds this workspace's limits." },
             error.limit === "input-bytes" ? 413 : 429,
+          ),
+        ),
+      AdmissionPolicyError: (error) =>
+        Effect.succeed(
+          json(
+            {
+              message:
+                error.code === "sandbox-shell-active"
+                  ? "Wait for the current command to finish before messaging the agent."
+                  : "This workspace is not accepting new work.",
+            },
+            error.reason === "unavailable" ? 503 : 409,
           ),
         ),
     }),

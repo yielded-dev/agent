@@ -2,20 +2,23 @@ import { fetchWithSession } from "@yielded/agent-example-auth/client";
 import { decodeLiveText } from "@yielded/agent-platform-cloudflare/live-text";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { Effect, Layer, Schema, Stream } from "effect";
-import { Atom } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 import {
   Accepted,
-  EventPage,
+  CommandInput,
   FileContent,
   FileList,
   LIVE_TEXT_THREAD_HEADER,
   MessageInput,
   SandboxError,
+  ShellCommand,
+  WorkspaceEvent,
   WorkspaceId,
   type Draft,
   type Entry,
 } from "./contract";
+import { workspaceIdFromPath } from "./location";
 
 const runtime = Atom.runtime(Layer.empty);
 const problem = (message: string) => SandboxError.make({ message });
@@ -43,17 +46,56 @@ const storedWorkspace = (subject: string) => {
   return saveWorkspace(subject, crypto.randomUUID());
 };
 
+/** A malformed route has no workspace; the account registry owns the location listener. */
 export const workspaceId = Atom.family((subject: string) =>
   Atom.writable(
-    () => storedWorkspace(subject),
-    (get, id: string) => get.setSelf(saveWorkspace(subject, id)),
+    (get) => {
+      const read = () => {
+        const pathname = window.location.pathname;
+
+        const id =
+          pathname === "/sandbox" || pathname === "/sandbox/"
+            ? storedWorkspace(subject).toLowerCase()
+            : workspaceIdFromPath(pathname);
+
+        if (id !== null && pathname !== `/sandbox/${id}`)
+          window.history.replaceState(
+            window.history.state,
+            "",
+            `/sandbox/${id}${window.location.search}${window.location.hash}`,
+          );
+
+        return id === null ? null : saveWorkspace(subject, id);
+      };
+
+      const update = () => get.setSelf(read());
+
+      window.addEventListener("popstate", update);
+      get.addFinalizer(() => window.removeEventListener("popstate", update));
+
+      return read();
+    },
+    (get, id: string) => {
+      const next = Schema.decodeSync(WorkspaceId)(id).toLowerCase();
+
+      window.history.pushState(
+        window.history.state,
+        "",
+        `/sandbox/${next}${window.location.search}${window.location.hash}`,
+      );
+      get.setSelf(saveWorkspace(subject, next));
+    },
   ).pipe(Atom.keepAlive),
 );
 
 export const newWorkspace = Atom.fnSync((subject: string, get) => {
-  const current = get(workspace(get(workspaceId(subject))).state);
+  const id = get(workspaceId(subject));
 
-  if (current.active || current.pending || current.admissionRequestId) return;
+  if (id !== null) {
+    const current = get(workspace(id).state);
+
+    if (current.active || current.pending || current.admissionRequestId) return;
+  }
   get.set(workspaceId(subject), crypto.randomUUID());
 });
 
@@ -80,14 +122,26 @@ const request = Effect.fnUntraced(function* (path: string, input?: unknown) {
         }),
   });
 
-  if (!response.ok)
+  if (!response.ok) {
+    const detail = yield* Effect.tryPromise(() => response.json()).pipe(
+      Effect.flatMap(
+        Schema.decodeUnknownEffect(
+          Schema.Struct({ message: Schema.String.check(Schema.isMaxLength(512)) }),
+        ),
+      ),
+      Effect.map((value) => value.message),
+      Effect.orElseSucceed(() => null),
+    );
+
     return yield* RequestRejected.make({
       status: response.status,
       message:
         response.status === 401
           ? "Your session expired. Sign in again."
-          : `Request failed (${response.status}). Check your account access and try again.`,
+          : (detail ??
+            `Request failed (${response.status}). Check your account access and try again.`),
     });
+  }
 
   return response;
 });
@@ -114,9 +168,11 @@ interface Pending {
   readonly requestId: string;
   readonly text: string;
   readonly submissionId?: string;
+  readonly command?: boolean;
 }
 interface Workspace {
   readonly entries: ReadonlyArray<Entry>;
+  readonly commands: ReadonlyArray<ShellCommand>;
   readonly drafts: ReadonlyArray<Draft>;
   readonly runId: string | null;
   readonly committedTurns: ReadonlyArray<string>;
@@ -133,6 +189,7 @@ interface Workspace {
 export const workspace = Atom.family((id: string) => {
   const state = Atom.make<Workspace>({
     entries: [],
+    commands: [],
     drafts: [],
     runId: null,
     committedTurns: [],
@@ -150,11 +207,18 @@ export const workspace = Atom.family((id: string) => {
   const directory = Atom.make("");
   const selectedFile = Atom.make<string | null>(null);
   const revision = Atom.make(0);
+  const commandRevision = Atom.make(0);
 
   const files = runtime.atom((get) => {
     get(revision);
 
     return json(`files?${query(id, get(directory))}`, FileList);
+  });
+
+  const expired = Atom.make((get) => {
+    const listing = get(files);
+
+    return AsyncResult.isSuccess(listing) && listing.value.expired;
   });
 
   const file = runtime.atom((get) => {
@@ -165,6 +229,96 @@ export const workspace = Atom.family((id: string) => {
   });
 
   const refresh = Atom.fnSync((_, get) => get.set(revision, get(revision) + 1));
+
+  const commandEvents = runtime
+    .atom((get) => {
+      get(commandRevision);
+
+      const apply = (commands: ReadonlyArray<ShellCommand>) => {
+        const current = get.once(state);
+
+        const active = commands.find(
+          (command) => command.status === "queued" || command.status === "running",
+        );
+
+        const unknown = commands.some((command) => command.status === "unknown");
+
+        const admitting =
+          current.pending?.command && current.admissionRequestId === current.pending.requestId;
+
+        const missing =
+          current.pending?.command &&
+          !admitting &&
+          !commands.some((command) => command.requestId === current.pending?.requestId);
+
+        const pending = current.pending?.command
+          ? admitting || missing
+            ? current.pending
+            : active
+              ? { requestId: active.requestId, text: `!${active.script}`, command: true }
+              : null
+          : (current.pending ??
+            (active
+              ? { requestId: active.requestId, text: `!${active.script}`, command: true }
+              : null));
+
+        get.set(state, {
+          ...current,
+          commands,
+          pending,
+          uncertain: unknown || missing || (current.pending?.command ? false : current.uncertain),
+          reviewRequired: unknown || current.reviewRequired,
+          error: unknown
+            ? "The command's outcome could not be confirmed. Its original receipt is retained; start a new workspace before making more changes."
+            : missing
+              ? "Checking the command's original request. It will not be sent with a new ID."
+              : current.pending?.command
+                ? null
+                : current.error,
+        });
+        get.set(revision, get.once(revision) + 1);
+      };
+
+      return Effect.gen(function* () {
+        let commands = yield* json(`commands?${query(id, "")}`, Schema.Array(ShellCommand));
+        const current = get.once(state);
+
+        if (
+          current.pending?.command &&
+          !current.admissionRequestId &&
+          !commands.some((command) => command.requestId === current.pending?.requestId)
+        ) {
+          // An empty read can precede a delayed admission. Only replay its exact identity.
+          const accepted = yield* json("commands", ShellCommand, {
+            workspaceId: id,
+            requestId: current.pending.requestId,
+            script: current.pending.text.slice(1).trim(),
+          });
+
+          commands = [...commands, accepted];
+        }
+        apply(commands);
+      }).pipe(
+        Effect.tapError(() =>
+          Effect.sync(() => {
+            const current = get.once(state);
+
+            if (current.pending?.command)
+              get.set(state, {
+                ...current,
+                uncertain: true,
+                error:
+                  "Could not confirm the command's outcome. Reconnect to its original request.",
+              });
+          }),
+        ),
+      );
+    })
+    .pipe(Atom.setIdleTTL(0));
+
+  const reconnectCommand = Atom.fnSync((_, get) =>
+    get.set(commandRevision, get(commandRevision) + 1),
+  );
 
   const events = runtime
     .atom((get) => {
@@ -214,9 +368,16 @@ export const workspace = Atom.family((id: string) => {
           ),
           Stream.splitLines,
           Stream.filter((line) => line.trim().length > 0),
-          Stream.mapEffect((line) => Schema.decodeEffect(Schema.fromJsonString(EventPage))(line)),
+          Stream.mapEffect((line) =>
+            Schema.decodeEffect(Schema.fromJsonString(WorkspaceEvent))(line),
+          ),
           Stream.runForEach((page) =>
             Effect.sync(() => {
+              if ("_tag" in page) {
+                get.set(commandRevision, get.once(commandRevision) + 1);
+
+                return;
+              }
               const current = get.once(state);
 
               if (page.cursor < current.cursor) return;
@@ -426,6 +587,7 @@ export const workspace = Atom.family((id: string) => {
 
       if (
         !message ||
+        get(expired) ||
         current.pending ||
         current.active ||
         current.uncertain ||
@@ -440,6 +602,48 @@ export const workspace = Atom.family((id: string) => {
       });
 
       const pending: Pending = { requestId: input.requestId, text: message };
+
+      if (message.startsWith("!")) {
+        const command = yield* Schema.decodeEffect(CommandInput)({
+          requestId: input.requestId,
+          script: message.slice(1).trim(),
+        });
+
+        get.set(state, {
+          ...current,
+          pending: { ...pending, command: true },
+          admissionRequestId: input.requestId,
+          error: null,
+        });
+        get.set(draft, "");
+        yield* json("commands", ShellCommand, { ...command, workspaceId: id }).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              const latest = get(state);
+              const rejected = Schema.is(RequestRejected)(error) && error.status < 500;
+
+              if (rejected && !get(draft)) get.set(draft, message);
+              get.set(state, {
+                ...latest,
+                pending: rejected ? null : latest.pending,
+                uncertain: !rejected,
+                error: rejected ? error.message : "Checking the command's original receipt…",
+              });
+            }),
+          ),
+          Effect.ensuring(
+            Effect.sync(() => {
+              const latest = get(state);
+
+              if (latest.admissionRequestId === input.requestId)
+                get.set(state, { ...latest, admissionRequestId: null });
+              get.set(commandRevision, get(commandRevision) + 1);
+            }),
+          ),
+        );
+
+        return;
+      }
 
       get.set(state, { ...current, pending, admissionRequestId: input.requestId, error: null });
       get.set(draft, "");
@@ -521,6 +725,33 @@ export const workspace = Atom.family((id: string) => {
 
   const stop = Atom.fn<void>()(
     Effect.fnUntraced(function* (_, get) {
+      const current = get(state);
+      const pending = current.pending;
+
+      if (pending?.command) {
+        if (
+          current.admissionRequestId ||
+          !current.commands.some((command) => command.requestId === pending.requestId)
+        )
+          return;
+        yield* json("stop-command", Schema.Struct({}), {
+          workspaceId: id,
+          requestId: pending.requestId,
+        }).pipe(
+          Effect.catch(() =>
+            Effect.sync(() => {
+              const latest = get(state);
+
+              get.set(state, {
+                ...latest,
+                error: "Stop could not be confirmed. The command keeps its original time limit.",
+              });
+            }),
+          ),
+        );
+
+        return;
+      }
       const submissionId = get(state).active;
 
       if (!submissionId || get(state).uncertain) return;
@@ -562,8 +793,11 @@ export const workspace = Atom.family((id: string) => {
     directory,
     selectedFile,
     files,
+    expired,
     file,
     events,
+    commandEvents,
+    reconnectCommand,
     send,
     stop,
     refresh,

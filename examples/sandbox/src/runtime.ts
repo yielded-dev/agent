@@ -7,19 +7,35 @@ import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudfl
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
-import { Effect, Layer, Schema } from "effect";
-import { DurableObject, WorkerEnvironment } from "effect-cf";
+import { Effect, Layer, Schema, Stream } from "effect";
+import { DurableObject, Rpc, WorkerEnvironment } from "effect-cf";
 import { Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 
 import { codingAgent, definitions } from "./agent.ts";
-import { MAX_INPUT_BYTES, SandboxError } from "./contract.ts";
+import { commandAdmission, commandMaintenance, ShellCommands } from "./commands.ts";
+import {
+  CommandInput,
+  MAX_INPUT_BYTES,
+  SandboxError,
+  ShellCommand,
+  WorkspaceEvent,
+  WorkspaceId,
+} from "./contract.ts";
 import { codingToolsLive } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
 const Address = Schema.String.check(Schema.isPattern(/^([0-9a-f-]{36})--([0-9a-f-]{36})$/i));
 
 export const ownerOf = (threadId: string) => Schema.decodeSync(Address)(threadId).split("--")[0];
+
+class CommandEventsLifetime extends Rpc.RpcTarget {
+  readonly controller = new AbortController();
+
+  [Symbol.dispose]() {
+    this.controller.abort();
+  }
+}
 
 const provider = Layer.effect(
   OpenAiClient.OpenAiClient,
@@ -77,9 +93,13 @@ const registered = DurableAgentRuntime.layerRegistered([
 ]).pipe(Layer.provide(codingToolsLive));
 
 // Share the owner's existing storage with tools; alarms use the registered runtime.
-const owner = ThreadWorkDiscovery.layer.pipe(Layer.provideMerge(ThreadObject.layer([])));
+const owner = ThreadWorkDiscovery.layer.pipe(
+  Layer.provideMerge(ThreadObject.layer([]).pipe(Layer.provide(commandAdmission))),
+);
 
 const application = Layer.fresh(ThreadMaintenance.layer).pipe(
+  Layer.provideMerge(commandMaintenance),
+  Layer.provideMerge(ShellCommands.layer),
   Layer.provideMerge(registered),
   Layer.provideMerge(owner),
   Layer.provideMerge(Workspace.layer),
@@ -100,22 +120,86 @@ export class CodingThread extends ThreadObject.make(application, {
   maxQueueDepthPerLane: 2,
   maxInputBytes: MAX_INPUT_BYTES,
 }) {
+  command(input: unknown) {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const decoded = yield* Schema.decodeUnknownEffect(CommandInput)(input);
+        const command = yield* (yield* ShellCommands).accept(decoded);
+
+        return { command };
+      }).pipe(Effect.catchTag("CommandRejected", (error) => Effect.succeed({ error }))),
+    );
+  }
+  commands() {
+    return this[DurableObject.RunSymbol](
+      Effect.flatMap(ShellCommands, (commands) => commands.list),
+    );
+  }
+  commandEvents() {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const commands = yield* ShellCommands;
+
+        const changed = yield* Schema.encodeEffect(Schema.fromJsonString(WorkspaceEvent))({
+          _tag: "CommandHistoryChanged",
+        });
+
+        const lifetime = new CommandEventsLifetime();
+
+        const stream = commands.watch.pipe(
+          Stream.mapEffect((commands) =>
+            Schema.encodeEffect(Schema.fromJsonString(Schema.Array(ShellCommand)))(commands),
+          ),
+          Stream.changes,
+          Stream.as(`${changed}\n`),
+          Stream.encodeText,
+          Stream.toReadableStreamWith(yield* Effect.context(), {
+            signal: lifetime.controller.signal,
+          }),
+        );
+
+        // Idle RPC byte streams defer source cancellation until another write.
+        return { stream, lifetime };
+      }),
+    );
+  }
+  commandResult(id: string) {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const requestId = yield* Schema.decodeEffect(WorkspaceId)(id);
+
+        return yield* (yield* ShellCommands).wait(requestId);
+      }),
+    );
+  }
+  stopCommand(id: string) {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const requestId = yield* Schema.decodeEffect(WorkspaceId)(id);
+
+        return yield* (yield* ShellCommands).stop(requestId);
+      }),
+    );
+  }
   files(path: string) {
     return this[DurableObject.RunSymbol](
       Effect.gen(function* () {
-        const sandbox = yield* (yield* Workspace).existing;
+        const { sandbox, expired } = yield* (yield* Workspace).inspect;
 
-        if (sandbox === null) return [];
+        if (sandbox === null || expired) return { entries: [], expired };
         const directory = yield* pathInWorkspace(path);
-        const description = yield* sandbox.describe;
-
-        if (!description.running) return [];
         const entries = yield* sandbox.readDirectory(directory);
 
-        return entries.slice(0, 200).map((entry) => ({
-          path: `${path ? `${path}/` : ""}${entry.name}`,
-          directory: entry.type === "directory",
-        }));
+        return {
+          entries: entries
+            .filter((entry) => !entry.name.startsWith(".sandbox-agent"))
+            .slice(0, 200)
+            .map((entry) => ({
+              path: `${path ? `${path}/` : ""}${entry.name}`,
+              directory: entry.type === "directory",
+            })),
+          expired: false,
+        };
       }),
     );
   }
