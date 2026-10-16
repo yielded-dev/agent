@@ -65,7 +65,7 @@ export const workspaceId = Atom.family((subject: string) =>
             `/sandbox/${id}${window.location.search}${window.location.hash}`,
           );
 
-        return id;
+        return id === null ? null : saveWorkspace(subject, id);
       };
 
       const update = () => get.setSelf(read());
@@ -317,7 +317,7 @@ export const workspace = Atom.family((id: string) => {
           }
         }
       }).pipe(
-        Effect.catch(() =>
+        Effect.tapError(() =>
           Effect.sync(() => {
             const current = get.once(state);
 

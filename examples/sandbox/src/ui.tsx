@@ -146,7 +146,7 @@ function Workspace({ id }: { id: string }) {
   const atoms = workspace(id);
 
   useAtomMount(atoms.events);
-  useAtomMount(atoms.commandEvents);
+  const commandEvents = useAtomValue(atoms.commandEvents);
   const state = useAtomValue(atoms.state);
   const [draft, setDraft] = useAtom(atoms.draft);
   const [sent, send] = useAtom(atoms.send);
@@ -287,6 +287,19 @@ function Workspace({ id }: { id: string }) {
           {state.error && (
             <p className="error" role="alert">
               {state.error}
+            </p>
+          )}
+          {AsyncResult.isFailure(commandEvents) && !state.pending?.command && (
+            <p className="error" role="alert">
+              Could not load command history.{" "}
+              <Button
+                variant="ghost"
+                type="button"
+                disabled={commandEvents.waiting}
+                onClick={() => reconnectCommand()}
+              >
+                Reconnect
+              </Button>
             </p>
           )}
           {AsyncResult.isFailure(sent) && (
