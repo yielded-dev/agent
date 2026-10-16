@@ -38,7 +38,11 @@ it.live(
                 compatibilityDate: "2026-03-24",
                 compatibilityFlags: ["nodejs_compat"],
                 durableObjects: { CHECKOUTS: { className: "CheckoutRun", useSQLite: true } },
-                bindings: { CHECKOUT_TOKEN: "control-secret", CHECKOUT_PASSWORD: "buyer-secret" },
+                bindings: {
+                  CHECKOUT_TOKEN: "control-secret",
+                  CHECKOUT_PASSWORD: "buyer-secret",
+                  CHECKOUT_RUN_ID: "checkout-test",
+                },
               }),
             ),
         ),
@@ -57,6 +61,12 @@ it.live(
             headers,
             ...(body === undefined ? {} : { body: new URLSearchParams(body) }),
           }),
+        ).pipe(
+          Effect.tap((response) =>
+            Effect.sync(() =>
+              assert.strictEqual(response.headers.get("x-checkout-run-id"), "checkout-test"),
+            ),
+          ),
         );
 
       assert.strictEqual((yield* request("/evidence")).status, 401);

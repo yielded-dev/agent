@@ -42,6 +42,7 @@ import {
   Evidence,
   Receipt,
   WorkerFailure,
+  workerRunHeader,
 } from "./proof.ts";
 
 type Env = Cloudflare.Env;
@@ -602,7 +603,12 @@ export class CheckoutRun extends DurableObject<Env> {
 }
 
 export default {
-  fetch(request: Request, env: Env): Promise<Response> {
-    return env.CHECKOUTS.getByName("buyer").fetch(request);
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const original = await env.CHECKOUTS.getByName("buyer").fetch(request);
+    const response = new Response(original.body, original);
+
+    response.headers.set(workerRunHeader, env.CHECKOUT_RUN_ID);
+
+    return response;
   },
 };
