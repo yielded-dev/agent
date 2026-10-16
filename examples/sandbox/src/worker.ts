@@ -29,6 +29,7 @@ import {
   WorkspaceId,
   WorkspacePage,
   type Entry,
+  type ShellCommand,
 } from "./contract.ts";
 import { workspaceIdFromPath } from "./location.ts";
 import { CodingThread } from "./runtime.ts";
@@ -247,14 +248,37 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     yield* Effect.tryPromise(() => directory.remember({ id, title }));
   });
 
+  const firstPage = Effect.fnUntraced(function* (id: string) {
+    const client = yield* CloudflareThreadClient;
+
+    return yield* client
+      .readPage(address(id), { afterSequence: CanonicalSequence.make(0), limit: 64 })
+      .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed([])));
+  });
+
   const rememberHistory = Effect.fnUntraced(function* (
     id: string,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
+    commands?: ReadonlyArray<ShellCommand>,
   ) {
-    if (records.length === 0) return;
-    const input = records.flatMap(entriesFor).find((entry) => entry.kind === "user");
+    const command = (commands ??
+      (yield* Effect.tryPromise(() => env.THREADS.getByName(address(id)).commands())))[0];
 
-    yield* remember(id, input ? titleFor(input.text) : null);
+    if (records.length === 0 && command === undefined) return;
+
+    const input = records.flatMap(({ sequence, record: { payload } }) =>
+      payload._tag === "UserInputRecorded" && Schema.is(CodingInput)(payload.input)
+        ? [{ sequence, text: payload.input.message }]
+        : [],
+    )[0];
+
+    // Commands follow their recorded canonical tail, before the next agent input.
+    const text =
+      command && (input === undefined || command.afterSequence < input.sequence)
+        ? `!${command.script}`
+        : input?.text;
+
+    yield* remember(id, text === undefined ? null : titleFor(text));
   });
 
   if (request.method === "POST" && url.pathname === "/sandbox/api/workspaces") {
@@ -280,21 +304,9 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     if (previous !== null) {
       const id = yield* Schema.decodeEffect(WorkspaceId)(previous);
 
-      const records = yield* Effect.flatMap(CloudflareThreadClient, (client) =>
-        client.readPage(address(id), { afterSequence: CanonicalSequence.make(0), limit: 64 }),
-      ).pipe(
-        Effect.provide(clientLayer),
-        Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed([])),
-      );
+      const records = yield* firstPage(id).pipe(Effect.provide(clientLayer));
 
       yield* rememberHistory(id, records);
-      if (records.length === 0) {
-        const commands = yield* Effect.tryPromise(() =>
-          env.THREADS.getByName(address(id)).commands(),
-        );
-
-        if (commands[0]) yield* remember(id, titleFor(`!${commands[0].script}`));
-      }
     }
 
     return json(
@@ -406,7 +418,11 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     if (url.pathname === "/sandbox/api/commands") {
       const commands = yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commands());
 
-      if (commands[0]) yield* remember(workspaceId, titleFor(`!${commands[0].script}`));
+      if (commands[0]) {
+        const records = yield* firstPage(workspaceId).pipe(Effect.provide(clientLayer));
+
+        yield* rememberHistory(workspaceId, records, commands);
+      }
 
       return json(commands);
     }
