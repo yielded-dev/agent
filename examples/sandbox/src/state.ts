@@ -171,6 +171,7 @@ interface Pending {
   readonly text: string;
   readonly submissionId?: string;
   readonly command?: boolean;
+  readonly settings?: ModelSettings;
 }
 interface Workspace {
   readonly entries: ReadonlyArray<Entry>;
@@ -600,27 +601,41 @@ export const workspace = Atom.family((id: string) => {
 
   const admission = Atom.fn<void>()(
     Effect.fnUntraced(function* (_, get) {
-      const message = get(draft).trim();
       const current = get(state);
+      const retry = current.uncertain && !current.pending?.command ? current.pending : null;
+      const message = retry?.text ?? get(draft).trim();
 
       if (
         !message ||
         get(expired) ||
-        current.pending ||
         current.active ||
-        current.uncertain ||
-        current.admissionRequestId
+        current.reviewRequired ||
+        current.admissionRequestId ||
+        (!retry && (current.pending || current.uncertain))
       )
         return;
 
-      const input = yield* Schema.decodeEffect(MessageInput)({
-        workspaceId: id,
-        requestId: crypto.randomUUID(),
-        message,
-        settings: get(settings),
-      });
+      const input = yield* Schema.decodeEffect(MessageInput)(
+        retry
+          ? {
+              workspaceId: id,
+              requestId: retry.requestId,
+              message,
+              ...(retry.settings === undefined ? {} : { settings: retry.settings }),
+            }
+          : {
+              workspaceId: id,
+              requestId: crypto.randomUUID(),
+              message,
+              settings: get(settings),
+            },
+      );
 
-      const pending: Pending = { requestId: input.requestId, text: message };
+      const pending: Pending = {
+        requestId: input.requestId,
+        text: message,
+        ...(input.settings === undefined ? {} : { settings: input.settings }),
+      };
 
       if (message.startsWith("!")) {
         const command = yield* Schema.decodeEffect(CommandInput)({
@@ -664,8 +679,14 @@ export const workspace = Atom.family((id: string) => {
         return;
       }
 
-      get.set(state, { ...current, pending, admissionRequestId: input.requestId, error: null });
-      get.set(draft, "");
+      get.set(state, {
+        ...current,
+        pending,
+        admissionRequestId: input.requestId,
+        uncertain: false,
+        error: null,
+      });
+      if (!retry) get.set(draft, "");
       yield* json("messages", Accepted, input).pipe(
         Effect.tap((accepted) =>
           Effect.sync(() => {
@@ -688,6 +709,8 @@ export const workspace = Atom.family((id: string) => {
               ...latest,
               pending: durable ? null : { ...pending, submissionId: accepted.submissionId },
               active: terminal ? null : accepted.submissionId,
+              uncertain: false,
+              error: null,
               // The accepted submission's Run is known only when its canonical input arrives.
               runId: durable || terminal ? latest.runId : null,
               committedTurns: durable || terminal ? latest.committedTurns : [],
@@ -699,7 +722,8 @@ export const workspace = Atom.family((id: string) => {
             const latest = get(state);
 
             if (latest.reviewRequired || latest.admissionRequestId !== input.requestId) return;
-            const rejected = Schema.is(RequestRejected)(error) && error.status < 500;
+            // A later refusal cannot prove that the original request was never accepted.
+            const rejected = !retry && Schema.is(RequestRejected)(error) && error.status < 500;
 
             const durable = latest.entries.some(
               (entry) => entry.kind === "user" && entry.requestId === input.requestId,
@@ -714,7 +738,7 @@ export const workspace = Atom.family((id: string) => {
                 ? null
                 : rejected
                   ? error.message
-                  : "Delivery could not be confirmed. Watching workspace events; the message will not be resent.",
+                  : "Delivery could not be confirmed. Retry to continue with this message.",
             });
           }),
         ),
@@ -736,7 +760,14 @@ export const workspace = Atom.family((id: string) => {
     (get, value: void) => {
       const current = get.get(state);
 
-      if (current.pending || current.active || current.uncertain || current.admissionRequestId)
+      const retry = current.uncertain && current.pending && !current.pending.command;
+
+      if (
+        current.active ||
+        current.reviewRequired ||
+        current.admissionRequestId ||
+        (!retry && (current.pending || current.uncertain))
+      )
         return;
       get.set(admission, value);
     },

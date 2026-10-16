@@ -516,8 +516,12 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 export default Worker.make(Layer.empty, {
   fetch: handle().pipe(
     Effect.catchTags({
-      AccountError: (error) =>
-        Effect.succeed(json({ message: error.message }, error.code === "unauthorized" ? 401 : 503)),
+      AccountError: Effect.fnUntraced(function* (error) {
+        if (error.code === "unavailable")
+          yield* Effect.logError("Sandbox authentication unavailable");
+
+        return json({ message: error.message }, error.code === "unauthorized" ? 401 : 503);
+      }),
       SchemaError: () => Effect.succeed(json({ message: "Invalid request." }, 400)),
       AdmissionConflict: () =>
         Effect.succeed(
@@ -547,18 +551,19 @@ export default Worker.make(Layer.empty, {
           ),
         ),
     }),
-    Effect.catch((error) =>
-      Effect.succeed(
-        error === "body-too-large"
-          ? json({ message: "Request body too large." }, 413)
-          : json(
-              {
-                message:
-                  "The request could not be completed. Reconnect to check its state before retrying.",
-              },
-              503,
-            ),
-      ),
+    Effect.catch(
+      Effect.fnUntraced(function* (error) {
+        if (error === "body-too-large") return json({ message: "Request body too large." }, 413);
+        yield* Effect.logError("Sandbox request failed", { errorTag: error._tag });
+
+        return json(
+          {
+            message:
+              "The request could not be completed. Reconnect to check its state before retrying.",
+          },
+          503,
+        );
+      }),
     ),
   ),
 });

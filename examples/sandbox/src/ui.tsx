@@ -394,6 +394,15 @@ function Workspace({ id }: { id: string }) {
               <Button variant="outline" type="button" onClick={() => reconnectCommand()}>
                 Reconnect
               </Button>
+            ) : state.pending && state.uncertain && !state.active && !state.reviewRequired ? (
+              <Button
+                variant="outline"
+                type="button"
+                disabled={expired || sent.waiting || !!state.admissionRequestId}
+                onClick={() => send()}
+              >
+                Retry delivery
+              </Button>
             ) : state.active || state.pending?.command ? (
               <Button
                 variant="outline"
