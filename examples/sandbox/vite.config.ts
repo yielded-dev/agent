@@ -1,10 +1,11 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   base: "/sandbox/",
   build: { outDir: "dist/sandbox", emptyOutDir: true },
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   run: {
     tasks: {
       check: { command: "tsc --noEmit -p tsconfig.json", cache: false },

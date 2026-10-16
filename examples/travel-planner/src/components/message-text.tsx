@@ -1,4 +1,4 @@
-import { Streamdown, type StreamdownProps } from "streamdown";
+import { MessageResponse, type MessageResponseProps } from "@yielded/ui";
 
 import { safeTravelUrl } from "../travel-content";
 import { TravelImage } from "./travel/photo-gallery";
@@ -8,9 +8,7 @@ export const safeMessageUrl = (url: string | undefined) =>
     ? url
     : safeTravelUrl(url);
 
-const components: StreamdownProps["components"] = {
-  strong: "strong",
-  em: "em",
+const components: MessageResponseProps["components"] = {
   a: ({ href, children }) => {
     const url = safeMessageUrl(href);
 
@@ -39,46 +37,13 @@ export function MessageText({
   readonly streaming?: boolean;
 }) {
   return (
-    <Streamdown
+    <MessageResponse
       className="message-markdown"
-      mode={streaming ? "streaming" : "static"}
-      isAnimating={streaming}
-      parseIncompleteMarkdown={streaming}
-      controls={false}
-      skipHtml
-      rehypePlugins={[]}
-      allowedElements={[
-        "p",
-        "a",
-        "img",
-        "strong",
-        "em",
-        "del",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "ul",
-        "ol",
-        "li",
-        "blockquote",
-        "pre",
-        "code",
-        "hr",
-        "br",
-        "table",
-        "thead",
-        "tbody",
-        "tr",
-        "th",
-        "td",
-      ]}
-      urlTransform={(url) => safeMessageUrl(url)}
+      streaming={streaming}
+      urlTransform={safeMessageUrl}
       components={components}
     >
       {text}
-    </Streamdown>
+    </MessageResponse>
   );
 }

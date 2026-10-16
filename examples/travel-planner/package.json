@@ -19,8 +19,7 @@
     "@yielded/agent-platform-cloudflare": "workspace:*",
     "@yielded/agent-storage-cloudflare": "workspace:*",
     "@yielded/agent-testing": "workspace:*",
-    "class-variance-authority": "catalog:",
-    "clsx": "catalog:",
+    "@yielded/ui": "workspace:*",
     "effect": "catalog:",
     "effect-cf": "catalog:",
     "isomorphic-git": "catalog:",
@@ -28,8 +27,7 @@
     "memfs": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "streamdown": "catalog:",
-    "tailwind-merge": "catalog:"
+    "streamdown": "catalog:"
   },
   "devDependencies": {
     "@alchemy.run/cloudflare-runtime": "catalog:",

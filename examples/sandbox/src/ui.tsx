@@ -6,8 +6,19 @@ import {
   useAtomValue,
 } from "@effect/atom-react";
 import { accountLifetime, auth, sessionObservation } from "@yielded/agent-example-auth/client";
+import {
+  Button,
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+  Message,
+  MessageResponse,
+  Reasoning,
+  Tool,
+} from "@yielded/ui";
 import { AsyncResult } from "effect/reactivity";
-import { useEffect, useMemo, useRef } from "react";
+import { Check, LoaderCircle } from "lucide-react";
+import { useMemo } from "react";
 
 import { type Entry } from "./contract";
 import { newWorkspace, workspace, workspaceId } from "./state";
@@ -77,21 +88,24 @@ function Account({ subject, signOut }: { subject: string; signOut: () => void })
     <div className="app">
       <header>
         <Brand />
-        <button onClick={signOut}>Sign out</button>
+        <Button variant="outline" onClick={signOut}>
+          Sign out
+        </Button>
       </header>
       <div className="heading">
         <div>
           <small>SANDBOX / CODING WORKSPACE</small>
           <h1>Make something work.</h1>
         </div>
-        <button
+        <Button
+          variant="outline"
           disabled={
             state.active !== null || state.pending !== null || state.admissionRequestId !== null
           }
           onClick={() => create(subject)}
         >
           ＋ New workspace
-        </button>
+        </Button>
       </div>
       <p className="muted">{workspaceDescription}</p>
       <Workspace key={id} id={id} />
@@ -107,12 +121,27 @@ function Workspace({ id }: { id: string }) {
   const [draft, setDraft] = useAtom(atoms.draft);
   const [sent, send] = useAtom(atoms.send);
   const [stopped, stop] = useAtom(atoms.stop);
-  const transcript = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
 
-  useEffect(() => {
-    if (follow.current) transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
-  }, [state.entries, state.pending]);
+  const { entries, results } = useMemo(() => {
+    const calls = new Set(state.entries.filter((entry) => entry.kind === "tool").map(toolKey));
+
+    const results = new Map(
+      state.entries
+        .filter((entry) => entry.kind === "result")
+        .map((entry) => [toolKey(entry), entry]),
+    );
+
+    return {
+      entries: state.entries.filter(
+        (entry) => entry.kind !== "result" || !calls.has(toolKey(entry)),
+      ),
+      results,
+    };
+  }, [state.entries]);
+
+  const completed = state.entries.findLast(
+    (entry) => entry.kind === "status" && Object.hasOwn(completionLabels, entry.text),
+  );
 
   const busy =
     state.active !== null ||
@@ -130,51 +159,64 @@ function Workspace({ id }: { id: string }) {
             {state.connection}
           </small>
         </div>
-        <div
-          className="transcript"
-          ref={transcript}
-          role="log"
-          aria-label="Workspace transcript"
-          onScroll={() => {
-            const el = transcript.current;
-
-            if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          }}
-        >
-          {state.entries.length === 0 && !state.pending && (
-            <div className="welcome">
-              <small>FULL FILESYSTEM + BASH</small>
-              <h2>From a prompt to working files.</h2>
-              <p>Ask the agent to write code, run commands, or explore a problem.</p>
-              <button
-                onClick={() =>
-                  setDraft(
-                    "Build a small Python CLI that summarizes a text file. Create sample input and run it.",
-                  )
-                }
-              >
-                Try building a Python CLI →
-              </button>
-            </div>
-          )}
-          {state.entries.length >= 500 && <p className="muted">Showing the latest 500 entries.</p>}
-          {state.entries.map((entry) => (
-            <TranscriptEntry key={entry.id} entry={entry} />
-          ))}
-          {state.pending && (
-            <article className="entry user">
-              <small>
-                You ·{" "}
-                {state.uncertain
-                  ? "Checking delivery"
-                  : state.pending.submissionId
-                    ? "Accepted; awaiting history"
-                    : "Sending…"}
-              </small>
-              <p>{state.pending.text}</p>
-            </article>
-          )}
-        </div>
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {completed && <span key={completed.id}>{completionLabels[completed.text]}</span>}
+        </p>
+        <Conversation className="transcript" aria-label="Workspace transcript" aria-live="off">
+          <ConversationContent className="transcript-content">
+            {state.entries.length === 0 && !state.pending && (
+              <div className="welcome">
+                <small>FULL FILESYSTEM + BASH</small>
+                <h2>From a prompt to working files.</h2>
+                <p>Ask the agent to write code, run commands, or explore a problem.</p>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setDraft(
+                      "Build a small Python CLI that summarizes a text file. Create sample input and run it.",
+                    )
+                  }
+                >
+                  Try building a Python CLI →
+                </Button>
+              </div>
+            )}
+            {state.entries.length >= 500 && (
+              <p className="muted">Showing the latest 500 entries.</p>
+            )}
+            {entries.map((entry) => (
+              <TranscriptEntry
+                key={entry.id}
+                entry={entry}
+                result={results.get(toolKey(entry))}
+                active={state.active !== null && entry.runId === state.runId}
+              />
+            ))}
+            {state.pending && (
+              <Message from="user">
+                <small>
+                  You ·{" "}
+                  {state.uncertain
+                    ? "Checking delivery"
+                    : state.pending.submissionId
+                      ? "Accepted; awaiting history"
+                      : "Sending…"}
+                </small>
+                <p className="whitespace-pre-wrap">{state.pending.text}</p>
+              </Message>
+            )}
+            {state.drafts.map((entry) => (
+              <TranscriptEntry key={entry.id} entry={entry} streaming />
+            ))}
+            {state.active && state.drafts.length === 0 && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+                <LoaderCircle className="size-3.5 motion-safe:animate-spin" aria-hidden="true" />
+                Working…
+              </p>
+            )}
+          </ConversationContent>
+          <ConversationScrollButton />
+        </Conversation>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -217,13 +259,18 @@ function Workspace({ id }: { id: string }) {
                     : "⌘ / Ctrl + Enter to send"}
             </small>
             {state.active ? (
-              <button type="button" disabled={stopped.waiting} onClick={() => stop()}>
+              <Button
+                variant="outline"
+                type="button"
+                disabled={stopped.waiting}
+                onClick={() => stop()}
+              >
                 {stopped.waiting ? "Stopping…" : "■ Stop"}
-              </button>
+              </Button>
             ) : (
-              <button className="primary" disabled={busy || !draft.trim()} type="submit">
+              <Button variant="default" disabled={busy || !draft.trim()} type="submit">
                 Send ↑
-              </button>
+              </Button>
             )}
           </div>
         </form>
@@ -233,29 +280,76 @@ function Workspace({ id }: { id: string }) {
   );
 }
 
-function TranscriptEntry({ entry }: { entry: Entry }) {
-  if (entry.kind === "tool" || entry.kind === "result")
+const completionLabels: Readonly<Record<string, string>> = {
+  Completed: "The agent’s response is ready.",
+  Stopped: "The agent has stopped.",
+  Failed: "The agent could not finish. Check the conversation for details.",
+  Unknown: "An action needs review before the agent can continue.",
+};
+
+const toolKey = (entry: Entry) =>
+  entry.toolCallId ? JSON.stringify([entry.runId, entry.toolCallId]) : entry.id;
+
+const toolTitles: Readonly<Record<string, string>> = {
+  list_files: "List files",
+  read_file: "Read file",
+  write_file: "Write file",
+  edit_file: "Edit file",
+  search: "Search files",
+  bash: "Run Bash",
+};
+
+function TranscriptEntry({
+  entry,
+  result,
+  active = false,
+  streaming = false,
+}: {
+  readonly entry: Entry;
+  readonly result?: Entry;
+  readonly active?: boolean;
+  readonly streaming?: boolean;
+}) {
+  if (entry.kind === "tool" || entry.kind === "result") {
+    const outcome = result ?? (entry.kind === "result" ? entry : undefined);
+
     return (
-      <details className={entry.failed ? "error" : ""}>
-        <summary>
-          {entry.name ?? "Tool"} ·{" "}
-          {entry.failed ? "Failed" : entry.kind === "tool" ? "Command" : "Result"}
-        </summary>
-        <pre>{entry.text}</pre>
-      </details>
+      <Tool
+        title={
+          Object.hasOwn(toolTitles, entry.name ?? "")
+            ? toolTitles[entry.name ?? ""]
+            : (entry.name ?? "Tool")
+        }
+        status={
+          outcome ? (outcome.failed ? "failed" : "complete") : active ? "running" : "incomplete"
+        }
+        input={entry.kind === "tool" ? entry.text : undefined}
+        output={outcome?.text}
+      />
     );
+  }
+  if (entry.kind === "reasoning") return <Reasoning streaming={streaming}>{entry.text}</Reasoning>;
   if (entry.kind === "status")
     return (
-      <p className={entry.text === "Failed" || entry.text === "Unknown" ? "error" : "muted"}>
-        ◇ {entry.text}
+      <p
+        className={`flex items-center gap-2 text-xs ${entry.failed ? "text-destructive" : "text-muted-foreground"}`}
+      >
+        {entry.text === "Completed" && <Check className="size-3.5" aria-hidden="true" />}
+        {entry.text}
       </p>
     );
 
   return (
-    <article className={`entry ${entry.kind}`}>
-      <small>{entry.kind === "user" ? "You" : "Yielded Agent"}</small>
-      <p>{entry.text}</p>
-    </article>
+    <Message from={entry.kind === "user" ? "user" : "assistant"}>
+      <p className="mb-2 text-xs font-medium text-muted-foreground">
+        {entry.kind === "user" ? "You" : "Yielded Agent"}
+      </p>
+      {entry.kind === "user" ? (
+        <p className="whitespace-pre-wrap">{entry.text}</p>
+      ) : (
+        <MessageResponse streaming={streaming}>{entry.text}</MessageResponse>
+      )}
+    </Message>
   );
 }
 
@@ -273,18 +367,21 @@ function Files({ id }: { id: string }) {
         <h2>
           Workspace <small title={id}>/ {id.slice(0, 8)}</small>
         </h2>
-        <button onClick={() => refresh(undefined)}>↻ Refresh</button>
+        <Button variant="outline" onClick={() => refresh(undefined)}>
+          ↻ Refresh
+        </Button>
       </div>
       <div className="file-browser">
         <nav aria-label="File browser">
           <div className="directory">
-            <button
+            <Button
+              variant="outline"
               disabled={!directory}
               onClick={() => setDirectory(directory.split("/").slice(0, -1).join("/"))}
               aria-label="Parent directory"
             >
               ↑
-            </button>
+            </Button>
             <span title={directory || "/"}>{directory || "/"}</span>
           </div>
           {files.waiting && (
@@ -302,16 +399,17 @@ function Files({ id }: { id: string }) {
           )}
           {AsyncResult.isSuccess(files) &&
             files.value.map((item) => (
-              <button
+              <Button
+                variant="ghost"
                 key={item.path}
-                className="file-item"
+                className="file-item block h-auto text-left font-mono text-xs aria-[current=true]:bg-muted aria-[current=true]:text-primary"
                 title={item.path}
                 aria-current={!item.directory && selected === item.path ? "true" : undefined}
                 onClick={() => (item.directory ? setDirectory(item.path) : setSelected(item.path))}
               >
                 {item.directory ? "▸ " : "· "}
                 {item.path.split("/").at(-1)}
-              </button>
+              </Button>
             ))}
         </nav>
         <div className="viewer">

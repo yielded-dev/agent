@@ -13,11 +13,13 @@ import { makeSandboxAgentContainer, makeSandboxAgentOutbound } from "@yielded/sa
 import { Effect, Layer, Schema, Stream } from "effect";
 import { Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
 
 import { codingAgent, definitions } from "./agent.ts";
 import {
   CodingInput,
   EventPage,
+  LIVE_TEXT_THREAD_HEADER,
   MAX_INPUT_BYTES,
   MessageInput,
   WorkspaceId,
@@ -98,10 +100,11 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
           text: p.input.message,
           requestId: p.input.requestId,
           submissionId: p.submissionId,
+          ...(p.runId === undefined ? {} : { runId: p.runId }),
         },
       ];
     case "RunStarted":
-      return [{ id, kind: "status", text: "Running" }];
+      return [{ id, kind: "status", text: "Running", runId: p.runId }];
     case "ModelResponseRecorded": {
       const prompt = Schema.decodeSync(Prompt.Prompt)(p.messages);
 
@@ -109,10 +112,18 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
         message.role !== "assistant"
           ? []
           : message.content.flatMap((part, index): Entry[] => {
-              if (part.type === "text")
-                return [
-                  { id: `${id}-${messageIndex}-${index}`, kind: "assistant", text: part.text },
-                ];
+              if (part.type === "text" || part.type === "reasoning")
+                return part.text.length === 0
+                  ? []
+                  : [
+                      {
+                        id: `${id}-${messageIndex}-${index}`,
+                        kind: part.type === "text" ? "assistant" : "reasoning",
+                        text: part.text,
+                        runId: p.runId,
+                        turnId: p.turnId,
+                      },
+                    ];
               if (part.type === "tool-call")
                 return [
                   {
@@ -120,6 +131,9 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
                     kind: "tool",
                     name: part.name,
                     text: JSON.stringify(part.params, null, 2),
+                    toolCallId: part.id,
+                    runId: p.runId,
+                    turnId: p.turnId,
                   },
                 ];
 
@@ -135,10 +149,21 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
           name: p.toolName,
           text: JSON.stringify(p.result, null, 2),
           failed: p.isFailure,
+          toolCallId: p.toolCallId,
+          runId: p.runId,
         },
       ];
     case "ToolCallUnknown":
-      return [{ id, kind: "status", text: "Unknown", failed: true }];
+      return [
+        {
+          id,
+          kind: "status",
+          text: "Unknown",
+          failed: true,
+          runId: p.runId,
+          toolCallId: p.toolCallId,
+        },
+      ];
     case "SubmissionSettled":
       return [
         {
@@ -151,6 +176,7 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
                 ? "Stopped"
                 : "Failed",
           submissionId: p.submissionId,
+          ...(p.runId === undefined ? {} : { runId: p.runId }),
           failed: p.outcome === "failed",
           reviewRequired: p.outcome === "failed" && Schema.is(FailedWorkspaceOperation)(p.result),
         },
@@ -247,6 +273,19 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     const threadId = address(workspaceId);
 
+    if (url.pathname === "/sandbox/api/text") {
+      const text = Stream.unwrap(
+        Effect.map(CloudflareThreadClient, (client) => client.watchTextBytes(threadId)),
+      ).pipe(Stream.provide(clientLayer));
+
+      return HttpServerResponse.stream(text, {
+        headers: {
+          "content-type": "application/x-ndjson",
+          "cache-control": "no-store",
+          [LIVE_TEXT_THREAD_HEADER]: threadId,
+        },
+      });
+    }
     if (url.pathname === "/sandbox/api/events") {
       const after = yield* Schema.decodeEffect(CanonicalSequence)(
         Number(url.searchParams.get("after") ?? "0"),
@@ -269,7 +308,16 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
                 );
 
               const next = records.at(-1)?.sequence ?? cursor;
-              const page: EventPage = { cursor: next, entries: records.flatMap(entriesFor) };
+
+              const page: EventPage = {
+                cursor: next,
+                entries: records.flatMap(entriesFor),
+                committedTurns: records.flatMap(({ record: { payload } }) =>
+                  payload._tag === "ModelResponseRecorded"
+                    ? [{ runId: payload.runId, turnId: payload.turnId }]
+                    : [],
+                ),
+              };
 
               return [page, { cursor: next, wait: records.length < 64 }] as const;
             }),

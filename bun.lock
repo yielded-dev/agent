@@ -141,17 +141,22 @@
         "@yielded/agent-example-auth": "workspace:*",
         "@yielded/agent-platform-cloudflare": "workspace:*",
         "@yielded/sandbox": "0.1.0",
+        "@yielded/ui": "workspace:*",
         "effect": "catalog:",
         "effect-cf": "catalog:",
+        "lucide-react": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
+        "streamdown": "catalog:",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
+        "@tailwindcss/vite": "catalog:",
         "@types/node": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "@vitejs/plugin-react": "catalog:",
+        "tailwindcss": "catalog:",
         "typescript": "catalog:",
         "vite": "catalog:",
         "vite-plus": "catalog:",
@@ -183,8 +188,7 @@
         "@yielded/agent-platform-cloudflare": "workspace:*",
         "@yielded/agent-storage-cloudflare": "workspace:*",
         "@yielded/agent-testing": "workspace:*",
-        "class-variance-authority": "catalog:",
-        "clsx": "catalog:",
+        "@yielded/ui": "workspace:*",
         "effect": "catalog:",
         "effect-cf": "catalog:",
         "isomorphic-git": "catalog:",
@@ -193,7 +197,6 @@
         "react": "catalog:",
         "react-dom": "catalog:",
         "streamdown": "catalog:",
-        "tailwind-merge": "catalog:",
       },
       "devDependencies": {
         "@alchemy.run/cloudflare-runtime": "catalog:",
@@ -485,6 +488,34 @@
       },
       "peerDependencies": {
         "effect": "^4.0.0",
+      },
+    },
+    "packages/ui": {
+      "name": "@yielded/ui",
+      "version": "0.0.0",
+      "dependencies": {
+        "@base-ui/react": "catalog:",
+        "class-variance-authority": "catalog:",
+        "clsx": "catalog:",
+        "lucide-react": "catalog:",
+        "streamdown": "catalog:",
+        "tailwind-merge": "catalog:",
+        "use-stick-to-bottom": "catalog:",
+      },
+      "devDependencies": {
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "tailwindcss": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+        "vite-plus": "catalog:",
+      },
+      "peerDependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "tailwindcss": "^4.0.0",
       },
     },
     "packages/workflow": {
@@ -1939,6 +1970,8 @@
 
     "@yielded/starlight-theme": ["@yielded/starlight-theme@0.2.2", "", { "dependencies": { "@fontsource-variable/ibm-plex-sans": "^5.3.0", "@fontsource/ibm-plex-mono": "^5.3.0", "@fontsource/ibm-plex-sans": "^5.3.0", "@resvg/resvg-js": "^2.6.2", "github-slugger": "^2.0.0", "mdast-util-from-markdown": "^2.0.3", "mdast-util-gfm": "^3.1.0", "mermaid": "^12.0.0", "micromark-extension-gfm": "^3.0.0", "satori": "^0.33.5" }, "peerDependencies": { "@astrojs/starlight": ">=0.42.0", "astro": ">=7.2.10" } }, "sha512-Jq/l7INND8IYYAwpIy5T9oACEoVlYtSdGzgBI1ArJefHAroF/E5S+BZ7BoYukksZFqBoz3H4Wnc6/lFWiIPM2Q=="],
 
+    "@yielded/ui": ["@yielded/ui@workspace:packages/ui"],
+
     "@yuku-codegen/binding-android-arm64": ["@yuku-codegen/binding-android-arm64@0.9.5", "", { "os": "android", "cpu": "arm64" }, "sha512-jrOY5WM+AaAqkv51fHP1x28ifto4WgcZVzodLUyMU1jMWn5Sq+VciRdk/n8E0Ey5w4p4cWWE+m5GfXWOYh7Kzw=="],
 
     "@yuku-codegen/binding-darwin-arm64": ["@yuku-codegen/binding-darwin-arm64@0.9.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-4O4lkCQIzPZGjiNB1GORSI6hBECbiiSBS/APZXPvNKYH+nhY4uuqv03LNXA+SET3hoBjvr95P5rIhY8KQaQUBA=="],
@@ -3262,6 +3295,8 @@
     "uri-js": ["uri-js@4.4.1", "", { "dependencies": { "punycode": "^2.1.0" } }, "sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg=="],
 
     "url-extras": ["url-extras@0.1.0", "", {}, "sha512-8tzwTeXFPuX/5PHuCDQE5Dd9Ts4rwoq2t9aIT+HS4iAVpmj5l4Ao7Q+BuuFjvWRqrLswBhQDk8O96ZicgCqQqw=="],
+
+    "use-stick-to-bottom": ["use-stick-to-bottom@1.1.6", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-z3Up8jYQGTkUCsGBnwg6/wj70KgXoW5Kz1AAc1j8MtQuYMBo6ZsdhrIXoegxa7gaMMilgQYyTohTrt3p94jHog=="],
 
     "use-sync-external-store": ["use-sync-external-store@1.6.0", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w=="],
 

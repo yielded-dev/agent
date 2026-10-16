@@ -1,10 +1,10 @@
 import { Dialog } from "@base-ui/react/dialog";
+import { Button } from "@yielded/ui";
 import { Check, CircleAlert, Expand, LoaderCircle, Search, X } from "lucide-react";
 
 import type { ResearchScoutActivity } from "../domain.ts";
 import { ActivityEvents, ElapsedTime } from "./activity-panel.tsx";
 import { AgentProgress } from "./agent-progress.tsx";
-import { Button } from "./ui/button.tsx";
 
 const stateLabel = {
   loading: "Loading updates…",

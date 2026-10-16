@@ -1,5 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useAtom } from "@effect/atom-react";
+import { Button } from "@yielded/ui";
 import { AsyncResult } from "effect/reactivity";
 import {
   ArrowUpRight,
@@ -17,7 +18,6 @@ import type { EditorActivity, TripApp } from "../domain.ts";
 import { changeTripAppAtom } from "../state.ts";
 import { ActivityEvents, ElapsedTime } from "./activity-panel.tsx";
 import { MessageText } from "./message-text.tsx";
-import { Button } from "./ui/button.tsx";
 
 const statusLabel = {
   building: "Building your changes…",
