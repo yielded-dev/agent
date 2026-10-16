@@ -11757,6 +11757,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               limit: 1,
             }),
           ),
+        ).pipe(
+          Effect.catchTag("ThreadNotMaterialized", (error) =>
+            afterSequence === ZERO_SEQUENCE ? Effect.succeed(Option.none()) : Effect.fail(error),
+          ),
         );
 
         if (Option.isSome(committed)) return;
@@ -12605,7 +12609,8 @@ export class DurableAgentRuntime extends Context.Service<
     ) => Effect.Effect<SubmissionStatus, DurableAwaitFailure>;
     /**
      * Wait for an already-committed record or one incarnation-local progress hint after
-     * `afterSequence`. Canonical records remain authoritative: callers re-read after return.
+     * `afterSequence`. Sequence zero can wait for a Thread's first submission without
+     * materializing it. Canonical records remain authoritative: callers re-read after return.
      */
     readonly awaitProgress: (
       threadId: ThreadId,

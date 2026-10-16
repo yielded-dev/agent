@@ -256,18 +256,22 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
         Effect.gen(function* () {
           const client = yield* CloudflareThreadClient;
 
-          return Stream.unfold(after, (cursor) =>
+          return Stream.unfold({ cursor: after, wait: false }, ({ cursor, wait }) =>
             Effect.gen(function* () {
-              let records = yield* client.readPage(threadId, { afterSequence: cursor, limit: 64 });
+              if (wait) yield* client.awaitProgress(threadId, cursor);
 
-              if (records.length === 0) {
-                yield* client.awaitProgress(threadId, cursor);
-                records = yield* client.readPage(threadId, { afterSequence: cursor, limit: 64 });
-              }
+              const records = yield* client
+                .readPage(threadId, { afterSequence: cursor, limit: 64 })
+                .pipe(
+                  Effect.catchTag("ThreadNotMaterialized", (error) =>
+                    cursor === 0 ? Effect.succeed([]) : Effect.fail(error),
+                  ),
+                );
+
               const next = records.at(-1)?.sequence ?? cursor;
               const page: EventPage = { cursor: next, entries: records.flatMap(entriesFor) };
 
-              return [page, next] as const;
+              return [page, { cursor: next, wait: records.length < 64 }] as const;
             }),
           );
         }),
