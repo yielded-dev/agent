@@ -85,7 +85,8 @@ includes deployment and application wiring. No separate storage Layer is needed.
 `CloudflareThreadClient.layerFromBinding({ namespace: env.THREADS })` supplies the
 client. Submit authenticated input with a Thread ID, principal, idempotency key, and
 definition digests. Admission arms maintenance before accepting work and returns a
-receipt after durable writes. It enqueues execution; the receipt is not the result.
+receipt after durable writes. By default, the submit event also starts the admitted work
+in an `effect-cf` processing scope. The receipt does not wait for execution or a model request.
 
 Use `awaitSettlementRecord(receipt)` for the canonical terminal record and decode
 ordinary completed output with the agent's Schema. Use `readPage` and `awaitProgress`
@@ -106,8 +107,8 @@ client methods cancel the remote subscription when their stream scope closes.
 maintenance and composes application registrations from `options.alarms`. Do not
 write the raw alarm slot or replace its handler.
 
-`dispatchAfterEvent` defaults to **true**, starting due work sooner but potentially delaying
-cold receipts. To opt out, provide `DurableObjectAlarm.ScheduleConfiguration` with
+`dispatchAfterEvent` defaults to **true**, allowing submit to start admitted work immediately
+and other events to dispatch due work. To opt out, provide `DurableObjectAlarm.ScheduleConfiguration` with
 `{ dispatchAfterEvent: false }` through `Layer.provideMerge` on the application Layer.
 In that mode, alarms still start work promptly; the recovery window does not delay execution.
 

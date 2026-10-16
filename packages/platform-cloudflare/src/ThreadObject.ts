@@ -523,14 +523,11 @@ const submitEndpoint = (encoded: unknown): Effect.Effect<unknown, never, Endpoin
         const scheduling = yield* DurableObjectAlarm.ScheduleConfiguration;
 
         if (scheduling.dispatchAfterEvent === true) {
-          const alarms = yield* DurableAlarmService;
+          const maintenance = yield* ThreadMaintenance;
 
-          // Make accepted work eligible for post-response dispatch without changing queue retry floors.
-          yield* alarms.scheduleNow.pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("Post-admission maintenance hint failed", error),
-            ),
-          );
+          // effect-cf owns the background scope and native event lifetime. Admission is
+          // already durable; neither the Attempt nor its model request delays this receipt.
+          yield* maintenance.start(receipt);
         }
 
         return SubmitSucceeded.make({ receipt });

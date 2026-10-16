@@ -9135,7 +9135,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       submission: SubmissionSnapshot,
     ) => Effect.Effect<CapturedWorkerBinding, DurableBindingFailure | DurableWorkerFailure>,
     threadId: ThreadId,
-    options?: { readonly yieldAfter?: DateTime.Utc },
+    options?: { readonly yieldAfter?: DateTime.Utc; readonly admittedSubmissionId?: SubmissionId },
   ): Effect.Effect<
     {
       readonly settlement: Option.Option<Settlement>;
@@ -9144,6 +9144,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     DurableWorkerFailure | DurableBindingFailure
   > =>
     Effect.gen(function* () {
+      if (
+        options?.admittedSubmissionId !== undefined &&
+        unclaimedAdmissions.get(options.admittedSubmissionId) !== threadId
+      )
+        return { settlement: Option.none(), firstClaimedSubmissionId: undefined };
+
       let resumeAfterRetention = false;
       let handoff: ClaimHandoff | undefined;
       let nextHandoff: ClaimHandoff | undefined;
@@ -9161,6 +9167,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           if (Option.isNone(claimed)) return Option.none();
           const session = claimed.value;
           const { claim } = session;
+
+          // A submit hint cannot skip an older FIFO head or take over another admission.
+          // Closing this scope releases the unexecuted claim before normal maintenance.
+          if (
+            firstClaimedSubmissionId === undefined &&
+            options?.admittedSubmissionId !== undefined &&
+            claim.submissionId !== options.admittedSubmissionId
+          )
+            return Option.none();
 
           const freshlyAdmitted = unclaimedAdmissions.get(claim.submissionId) === threadId;
 
@@ -9381,7 +9396,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   const processThreadHeadImpl = (
     threadId: ThreadId,
-    options?: { readonly yieldAfter?: DateTime.Utc },
+    options?: { readonly yieldAfter?: DateTime.Utc; readonly admittedSubmissionId?: SubmissionId },
   ): Effect.Effect<Option.Option<Settlement>, DurableWorkerFailure | DurableBindingFailure> =>
     processThreadHead(resolveCurrentBinding, threadId, options).pipe(
       Effect.map(({ settlement }) => settlement),
@@ -12721,10 +12736,15 @@ export class DurableAgentRuntime extends Context.Service<
      * A trusted host may supply `yieldAfter` to return None before the next Turn's context
      * preparation, committing any completed Turn first. This releases ownership without settling or resetting the durable
      * Run deadline. It is a cooperative scheduling deadline, not a hard interruption timeout.
+     * `admittedSubmissionId` starts only that locally admitted, unclaimed Submission if it is
+     * still the FIFO head. An admission no longer locally unclaimed returns None.
      */
     readonly processThreadHead: (
       threadId: ThreadId,
-      options?: { readonly yieldAfter?: DateTime.Utc },
+      options?: {
+        readonly yieldAfter?: DateTime.Utc;
+        readonly admittedSubmissionId?: SubmissionId;
+      },
     ) => Effect.Effect<Option.Option<Settlement>, DurableWorkerFailure | DurableBindingFailure>;
     readonly runResolvedWorker: Effect.Effect<void, DurableWorkerFailure | DurableBindingFailure>;
     /**
