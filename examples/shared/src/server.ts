@@ -1,7 +1,7 @@
 import { OAuthScope, OAuthServer } from "@yielded/auth";
 import * as Portable from "@yielded/crypto/Portable";
 import { Jwk } from "@yielded/jose";
-import { Clock, Effect, Redacted, Schema, Semaphore } from "effect";
+import { Clock, Effect, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
@@ -43,7 +43,7 @@ type KeySnapshot = {
   readonly expiresAt: number;
 };
 type KeyCache = {
-  readonly gate: Semaphore.Semaphore;
+  pending?: Promise<void>;
   snapshot?: KeySnapshot;
   nextAttemptAt: number;
 };
@@ -55,7 +55,7 @@ const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, 
   let cache = keyCaches.get(key);
 
   if (cache === undefined) {
-    cache = { gate: Semaphore.makeUnsafe(1), nextAttemptAt: 0 };
+    cache = { nextAttemptAt: 0 };
     keyCaches.set(key, cache);
   }
   const current = cache;
@@ -64,8 +64,28 @@ const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, 
   if (current.snapshot && current.snapshot.expiresAt > now && current.snapshot.kids.includes(kid))
     return current.snapshot.publicKeys;
 
-  return yield* current.gate.withPermits(1)(
-    Effect.gen(function* () {
+  // Native promise reactions resume in each waiting Worker's request context.
+  // Effect semaphore observers resume in the releasing request instead.
+  const acquire: Effect.Effect<() => void> = Effect.suspend(() => {
+    const pending = current.pending;
+
+    if (pending)
+      return Effect.promise(() => pending).pipe(Effect.interruptible, Effect.andThen(acquire));
+    let complete: () => void = () => undefined;
+
+    current.pending = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+
+    return Effect.succeed(() => {
+      current.pending = undefined;
+      complete();
+    });
+  });
+
+  return yield* Effect.acquireUseRelease(
+    acquire,
+    Effect.fnUntraced(function* () {
       const now = yield* Clock.currentTimeMillis;
       const previous = current.snapshot;
 
@@ -84,6 +104,7 @@ const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, 
         const response = yield* http.get(config.AUTH_JWKS_URL);
 
         if (response.status !== 200) return yield* unavailable();
+
         const keys = yield* response.json.pipe(Effect.flatMap(Schema.decodeUnknownEffect(KeySet)));
 
         current.snapshot = {
@@ -109,6 +130,7 @@ const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, 
         Effect.provide(FetchHttpClient.layer),
       );
     }),
+    (release) => Effect.sync(release),
   );
 });
 
