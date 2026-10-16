@@ -260,6 +260,7 @@ function Workspace({ id }: { id: string }) {
   const [draft, setDraft] = useAtom(atoms.draft);
   const [sent, send] = useAtom(atoms.send);
   const [stopped, stop] = useAtom(atoms.stop);
+  const [recovery, recover] = useAtom(atoms.recover);
   const reconnectCommand = useAtomSet(atoms.reconnectCommand);
   const expired = useAtomValue(atoms.expired);
   const settings = useAtomValue(atoms.settings);
@@ -465,6 +466,9 @@ function Workspace({ id }: { id: string }) {
               </select>
             </label>
           </fieldset>
+          {AsyncResult.isFailure(recovery) && (
+            <p role="alert">Recovery could not be checked. Try again.</p>
+          )}
           <label htmlFor="prompt">
             {draft.trimStart().startsWith("!") ? "Run a command" : "Your coding task"}
           </label>
@@ -499,7 +503,16 @@ function Workspace({ id }: { id: string }) {
                         ? "Loading history…"
                         : "! runs Bash · ⌘ / Ctrl + Enter to send"}
             </small>
-            {state.pending?.command && state.uncertain ? (
+            {state.reviewRequired ? (
+              <Button
+                variant="outline"
+                type="button"
+                disabled={recovery.waiting}
+                onClick={() => recover()}
+              >
+                {recovery.waiting ? "Checking recovery…" : "Check recovery"}
+              </Button>
+            ) : state.pending?.command && state.uncertain ? (
               <Button variant="outline" type="button" onClick={() => reconnectCommand()}>
                 Reconnect
               </Button>

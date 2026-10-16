@@ -13,6 +13,7 @@ import {
   LIVE_TEXT_THREAD_HEADER,
   MessageInput,
   ModelSettings,
+  RecoveryResult,
   SandboxError,
   ShellCommand,
   WorkspaceEvent,
@@ -239,6 +240,8 @@ interface Workspace {
 }
 
 export const workspace = Atom.family((id: string) => {
+  const recoveryKey = `sandbox-recovery:${id}`;
+
   const state = Atom.make<Workspace>({
     historyReady: false,
     acceptedSettings: defaultModelSettings,
@@ -504,6 +507,16 @@ export const workspace = Atom.family((id: string) => {
                 ];
                 get.set(revision, get.once(revision) + 1);
               }
+              if (page.reviewRequired !== undefined) {
+                // Only the owner can clear recovery; command receipts remain independently binding.
+                reviewRequired =
+                  page.reviewRequired ||
+                  current.commands.some((command) => command.status === "unknown");
+                if (current.reviewRequired && !reviewRequired) {
+                  uncertain = false;
+                  error = null;
+                }
+              }
               get.set(state, {
                 ...current,
                 entries: [...entries.values()].slice(-500),
@@ -654,7 +667,11 @@ export const workspace = Atom.family((id: string) => {
         { concurrency: 2, discard: true },
       ).pipe(Effect.ensuring(clearDrafts));
     })
-    .pipe(Atom.setIdleTTL(0));
+    .pipe(runtime.factory.withReactivity([recoveryKey]), Atom.setIdleTTL(0));
+
+  const recover = runtime.fn<void>()(() => json("recover", RecoveryResult, { workspaceId: id }), {
+    reactivityKeys: [recoveryKey],
+  });
 
   const admission = Atom.fn<void>()(
     Effect.fnUntraced(function* (_, get) {
@@ -918,6 +935,7 @@ export const workspace = Atom.family((id: string) => {
     events,
     commandEvents,
     reconnectCommand,
+    recover,
     send,
     stop,
     refresh,

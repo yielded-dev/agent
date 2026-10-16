@@ -28,6 +28,11 @@ exit status. There is no interactive stdin or persistent shell session. Commands
 and agent work cannot overlap. A workspace retains up to 100 command receipts;
 reconnecting or retrying the same request resumes its original process.
 
+If container startup fails, use **Check recovery**. The server can close a coding
+call only when its complete saved history proves no native operation started.
+An operation that may have run stays blocked until its outcome is known; checking
+recovery never resends the request or reruns the model.
+
 A workspace belongs to the authenticated account. Files are temporary: the
 container expires after 30 minutes of inactivity. An expired workspace cannot be
 silently replaced during recovery. Its conversation remains readable; the UI marks

@@ -24,6 +24,7 @@ import {
   WorkspaceEvent,
   WorkspaceId,
 } from "./contract.ts";
+import { codingReconciler, recoverWorkspace, workspaceRecoveryRequired } from "./recovery.ts";
 import { codingToolsLive } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -142,7 +143,7 @@ const registered = DurableAgentRuntime.layerRegistered([
         }),
       ),
   },
-]).pipe(Layer.provide(codingToolsLive));
+]).pipe(Layer.provide(codingToolsLive), Layer.provide(codingReconciler));
 
 // Share the owner's existing storage with tools; alarms use the registered runtime.
 const owner = ThreadWorkDiscovery.layer.pipe(
@@ -172,6 +173,12 @@ export class CodingThread extends ThreadObject.make(application, {
   maxQueueDepthPerLane: 1,
   maxInputBytes: MAX_INPUT_BYTES,
 }) {
+  recoveryRequired() {
+    return this[DurableObject.RunSymbol](workspaceRecoveryRequired());
+  }
+  recoverWorkspace() {
+    return this[DurableObject.RunSymbol](recoverWorkspace());
+  }
   command(input: unknown) {
     return this[DurableObject.RunSymbol](
       Effect.gen(function* () {
