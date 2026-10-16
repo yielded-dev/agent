@@ -43,7 +43,7 @@ import {
   Stream,
   Struct,
 } from "effect";
-import { DurableObjectAlarm, DurableObjectStorage } from "effect-cf";
+import { DurableObjectAlarm, DurableObjectState, DurableObjectStorage } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
 import { SqlError, UnknownError } from "effect/sql/SqlError";
 
@@ -1276,6 +1276,10 @@ export class ThreadMaintenance extends Context.Service<
   {
     /** One idempotent pass; failures propagate after durably scheduling bounded recovery. */
     readonly pass: Effect.Effect<MaintenancePassReport, MaintenancePassFailure>;
+    /** Start a committed admission under the same bounded processing and recovery guard. */
+    readonly start: (
+      admission: Pick<SubmissionWorkItem, "threadId" | "submissionId">,
+    ) => Effect.Effect<void>;
     /**
      * Constructor gate: initialize/inspect only the O(1) maintenance record and ensure a dirty
      * generation has an alarm. It never scans the ledger or canonical history.
@@ -1318,6 +1322,7 @@ export class ThreadMaintenance extends Context.Service<
       const alarms = yield* ThreadMaintenanceAlarm;
       const config = yield* CloudflareDurableRuntimeConfig;
       const { ctx } = yield* DurableObjectContext;
+      const execution = DurableObjectState.fromDurableObjectState(ctx);
       const dueQueue = DueQueue.make(ctx.storage);
       const storage = DurableObjectStorage.fromDurableObjectStorage(ctx.storage);
       const runStorage = yield* makeStorageEffect;
@@ -1990,12 +1995,13 @@ export class ThreadMaintenance extends Context.Service<
         );
 
       const attemptSelected = Effect.fnUntraced(function* (
-        selected: SubmissionWorkItem,
+        selected: Pick<SubmissionWorkItem, "threadId" | "submissionId">,
         previousWaits: ReadonlyArray<BindingWait>,
         yieldAfter: DateTime.Utc,
         recovery: NativeRecovery,
+        admitted = false,
       ): Effect.fn.Return<number, MaintenancePassFailure> {
-        yield* recoverThread(selected.threadId, recovery);
+        if (!admitted) yield* recoverThread(selected.threadId, recovery);
 
         let bindingFailure: DurableBindingFailure | undefined;
 
@@ -2003,14 +2009,19 @@ export class ThreadMaintenance extends Context.Service<
         // and committing its registry wait below.
         const settlement = recovery.faults.has(selected.threadId)
           ? Option.none()
-          : yield* runtime.processThreadHead(selected.threadId, { yieldAfter }).pipe(
-              Effect.provideService(CurrentNativeSource, true),
-              Effect.catchTag("BindingUnavailable", (failure) => {
-                bindingFailure = failure;
+          : yield* runtime
+              .processThreadHead(selected.threadId, {
+                yieldAfter,
+                ...(admitted ? { admittedSubmissionId: selected.submissionId } : {}),
+              })
+              .pipe(
+                Effect.provideService(CurrentNativeSource, true),
+                Effect.catchTag("BindingUnavailable", (failure) => {
+                  bindingFailure = failure;
 
-                return Effect.succeed(Option.none());
-              }),
-            );
+                  return Effect.succeed(Option.none());
+                }),
+              );
 
         const previous = previousWaits.find((wait) => wait.submissionId === selected.submissionId);
 
@@ -2634,6 +2645,7 @@ export class ThreadMaintenance extends Context.Service<
         yieldAfter: DateTime.Utc,
         dispatchUntil: DateTime.Utc,
         observed: MaintenanceObservation,
+        admission?: Pick<SubmissionWorkItem, "threadId" | "submissionId">,
       ) {
         const leanSelection =
           framework.singleThreadRuntime === runtime &&
@@ -2721,7 +2733,21 @@ export class ThreadMaintenance extends Context.Service<
         let result: NativePassResult;
         let backlog: ReadonlyArray<ThreadId> | undefined;
 
-        if (leanSelection) {
+        if (leanSelection && admission !== undefined && started._tag === "Actionable") {
+          // Admission already identified the work. Its exact FIFO claim and owner generation
+          // remain authoritative; the normal loop discovers and acknowledges everything after it.
+          dispatch.dispatched++;
+          dispatch.active.set(
+            admission.threadId,
+            yield* fork(attemptSelected(admission, [], yieldAfter, recovery, true)),
+          );
+          result = {
+            phase: "actionable",
+            nonterminal: started.nonterminal,
+            nextAttemptAt: undefined,
+            dispatched: true,
+          };
+        } else if (leanSelection) {
           result = yield* advance(started, yieldAfter, observed, recovery, dispatch);
           recovery.started = true;
           yield* Deferred.succeed(recovery.queue, []);
@@ -3069,9 +3095,10 @@ export class ThreadMaintenance extends Context.Service<
         yieldAfter: DateTime.Utc,
         dispatchUntil: DateTime.Utc,
         observed: MaintenanceObservation,
+        admission?: Pick<SubmissionWorkItem, "threadId" | "submissionId">,
       ): Effect.fn.Return<MaintenancePassReport, MaintenancePassFailure, Scope.Scope> {
         const concurrent = yield* Effect.exit(
-          Effect.scoped(dispatch(yieldAfter, dispatchUntil, observed)).pipe(
+          Effect.scoped(dispatch(yieldAfter, dispatchUntil, observed, admission)).pipe(
             Effect.provideService(ThreadMutationGate, mutations),
           ),
         );
@@ -3289,9 +3316,9 @@ export class ThreadMaintenance extends Context.Service<
         return report;
       });
 
-      return ThreadMaintenance.of({
-        // A mid-pass immediate hint is droppable; durable dirty state decides the final alarm.
-        pass: Effect.gen(function* () {
+      // A mid-pass immediate hint is droppable; durable dirty state decides the final alarm.
+      const runPass = Effect.fnUntraced(
+        function* (admission: Pick<SubmissionWorkItem, "threadId" | "submissionId"> | undefined) {
           const now = yield* Clock.currentTimeMillis;
           const yieldAfter = DateTime.makeUnsafe(now + 10 * 60_000);
           const dispatchUntil = DateTime.makeUnsafe(now + 14 * 60_000);
@@ -3306,14 +3333,16 @@ export class ThreadMaintenance extends Context.Service<
           return yield* alarms
             .deferWakes(
               maintenancePassGate.withPermit(
-                dueQueue.withView(Effect.scoped(pass(yieldAfter, dispatchUntil, observed))).pipe(
-                  // Close event-owned auxiliary work and release Attempt ownership before
-                  // failure rearming, while still holding the pass permit.
-                  Effect.onErrorIf(
-                    () => true,
-                    () => rearmFailure(observed),
+                dueQueue
+                  .withView(Effect.scoped(pass(yieldAfter, dispatchUntil, observed, admission)))
+                  .pipe(
+                    // Close event-owned auxiliary work and release Attempt ownership before
+                    // failure rearming, while still holding the pass permit.
+                    Effect.onErrorIf(
+                      () => true,
+                      () => rearmFailure(observed),
+                    ),
                   ),
-                ),
               ),
             )
             .pipe(
@@ -3324,22 +3353,26 @@ export class ThreadMaintenance extends Context.Service<
                   alarmFailure("defer maintenance wakes")(error),
               }),
             );
-        }).pipe(
-          // Include permit waiting, recovery and acknowledgement in the event deadline.
-          // Interruption releases Attempt ownership, leaving the prearmed dirty generation
-          // for recovery. It never changes the logical Run duration or settles a policy failure.
-          // This cooperative timer cannot preempt synchronous CPU work or stuck finalizers.
-          Effect.timeoutOrElse({
-            duration: "14 minutes",
-            orElse: () =>
-              DurableAlarmError.make({
-                operation: "maintenance pass deadline",
-                message:
-                  "The maintenance event exceeded its 14 minute deadline; durable recovery remains pending",
-              }),
-          }),
-          Effect.ensuring(reportParked),
-        ),
+        },
+        // Include permit waiting, recovery and acknowledgement in the event deadline.
+        // Interruption releases Attempt ownership, leaving the prearmed dirty generation
+        // for recovery. It never changes the logical Run duration or settles a policy failure.
+        // This cooperative timer cannot preempt synchronous CPU work or stuck finalizers.
+        Effect.timeoutOrElse({
+          duration: "14 minutes",
+          orElse: () =>
+            DurableAlarmError.make({
+              operation: "maintenance pass deadline",
+              message:
+                "The maintenance event exceeded its 14 minute deadline; durable recovery remains pending",
+            }),
+        }),
+        Effect.ensuring(reportParked),
+      );
+
+      return ThreadMaintenance.of({
+        pass: runPass(undefined),
+        start: (admission) => execution.waitUntil(runPass(admission)),
         ensureAlarm: mutations
           .withSnapshot(() => ensureAlarm())
           .pipe(Effect.tap(() => reportParked)),
