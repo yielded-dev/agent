@@ -183,6 +183,9 @@ export const runtimeEvictionFailpoint =
 
 const maintenancePauses = new Map<string, Array<ThreadMaintenanceFailpointLocation>>();
 
+/** Observe a completed maintenance checkpoint without polling the native alarm slot. */
+export const maintenanceFinishObservers = new Map<string, Effect.Effect<void>>();
+
 interface MaintenancePauseGate {
   readonly reached: Promise<void>;
   readonly released: Promise<void>;
@@ -256,6 +259,11 @@ export const maintenanceRaceFailpoint =
       const thread = ctx.id.name;
 
       if (thread === undefined) return;
+      if (location === "maintenance:finish:after") {
+        const observe = maintenanceFinishObservers.get(thread);
+
+        if (observe !== undefined) yield* observe;
+      }
       yield* pauseWorkerInputInsertion(thread, location);
       const queue = maintenancePauses.get(thread);
 

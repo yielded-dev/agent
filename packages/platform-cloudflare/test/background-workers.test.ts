@@ -1367,7 +1367,9 @@ it("retains one worker input when its caller loses admission ownership to the so
 }, 30_000);
 
 // Regression: https://github.com/yielded-dev/agent/pull/358
-it("retries unavailable worker funding admission with the same durable input identity", async () => {
+it("retries unavailable worker funding admission with the same durable input identity", async ({
+  signal,
+}) => {
   const source = `background-cf-independent-outage-${crypto.randomUUID()}`;
   const completionEntered = Deferred.makeUnsafe<void>();
   const releaseCompletion = Deferred.makeUnsafe<void>();
@@ -1428,7 +1430,7 @@ it("retries unavailable worker funding admission with the same durable input ide
       delivery: { message: recovered.message, receipt: recovered.receipt },
     });
     completingAlarm = runDurableObjectAlarm(stubFor(workerThread));
-    await expect.poll(() => Effect.runPromise(Deferred.isDone(completionEntered))).toBe(true);
+    await Effect.runPromise(Deferred.await(completionEntered), { signal });
     const completing = Option.getOrThrow(await readExecution(recovered.receipt!));
 
     expect(
