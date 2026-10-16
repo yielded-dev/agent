@@ -5468,7 +5468,7 @@ function decodeRunDisposition<DispositionSchema extends Schema.Top>(
 /** Internal control output consumed by the driver before RunEvent publication. */
 interface NextTurn {
   readonly _tag: "NextTurn";
-  readonly restarting?: boolean;
+  readonly restartTurnId?: TurnId;
   readonly prompt: Prompt.Prompt;
   readonly turn: number;
   readonly toolCalls: number;
@@ -5514,7 +5514,7 @@ const makeTurn = <
   turn: number,
   priorToolCalls: number,
   options: RunOptions<HookError, HookRequirements>,
-  restarting = false,
+  restartTurnId?: TurnId,
 ): Effect.Effect<
   TurnOutput,
   AgentRuntimeFailure<typeof agent, HookError, InstructionError>,
@@ -5544,7 +5544,7 @@ const makeTurn = <
           }),
         );
       }
-      if (context.finalizationUsed && !restarting) {
+      if (context.finalizationUsed && restartTurnId === undefined) {
         return failExecution(
           AgentPolicyError.make({
             limit:
@@ -5558,7 +5558,7 @@ const makeTurn = <
         );
       }
       const ids = yield* IdGenerator;
-      const turnId = yield* ids.nextTurnId;
+      const turnId = restartTurnId ?? (yield* ids.nextTurnId);
       // Model-visible final-output contract (RUN-028):
       // derived before context preparation so a limit-targeting adapter can
       // reserve the contract's overhead in its window calculation, applied to
@@ -7532,7 +7532,7 @@ const makeTurn = <
                   prompt: nextPrompt,
                   turn,
                   toolCalls: priorToolCalls,
-                  restarting: true,
+                  restartTurnId: turnId,
                 });
               }),
             ),
@@ -9017,7 +9017,7 @@ function executeWithCompletion<
                     readonly turn: number;
                     readonly toolCalls: number;
                     readonly resume?: RunTurnResume;
-                    readonly restarting?: boolean;
+                    readonly restartTurnId?: TurnId;
                   }
                 | undefined;
 
@@ -9057,7 +9057,7 @@ function executeWithCompletion<
                           request.turn,
                           request.toolCalls,
                           options,
-                          request.restarting,
+                          request.restartTurnId,
                         )
                       : makeResumeTurn(
                           agent,

@@ -5719,9 +5719,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         committed?: NonNullable<TurnCommitInput["runCompletion"]>;
       } = {};
 
-      const turnCounter = yield* Ref.make(
-        journal.committedTurns + (journal.policyUsage.modelRestarts ?? 0),
-      );
+      const turnCounter = yield* Ref.make(journal.committedTurns);
 
       const idGenerator: (typeof IdGenerator)["Service"] = {
         nextThreadId: Effect.succeed(submission.threadId),

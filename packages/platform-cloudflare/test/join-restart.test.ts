@@ -398,6 +398,12 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
         });
         expect(yield* runtime.submissionStatus(admitted.joined)).toMatchObject({ _tag: "settled" });
 
+        // Requested regression seam: recovery must read history after joined-input
+        // cancellation, including eviction before the replacement response commits.
+        expect((yield* runtime.explain(admitted.receipt.submissionId)).evidence).toMatchObject({
+          recordedSettlementOutcome: "completed",
+        });
+
         const records = (yield* readTestThread(
           store,
           ThreadExportRequest.make({ threadId: admitted.receipt.threadId }),
