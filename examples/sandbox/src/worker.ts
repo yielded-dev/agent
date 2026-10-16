@@ -260,11 +260,12 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     id: string,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     commands?: ReadonlyArray<ShellCommand>,
+    fallback?: string | null,
   ) {
     const command = (commands ??
       (yield* Effect.tryPromise(() => env.THREADS.getByName(address(id)).commands())))[0];
 
-    if (records.length === 0 && command === undefined) return;
+    if (records.length === 0 && command === undefined && fallback === undefined) return;
 
     const input = records.flatMap(({ sequence, record: { payload } }) =>
       payload._tag === "UserInputRecorded" && Schema.is(CodingInput)(payload.input)
@@ -278,7 +279,30 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
         ? `!${command.script}`
         : input?.text;
 
-    yield* remember(id, text === undefined ? null : titleFor(text));
+    yield* remember(id, text === undefined ? (fallback ?? null) : titleFor(text));
+  });
+
+  const rememberRequest = Effect.fnUntraced(function* (id: string, title: string | null) {
+    let before: number | null = null;
+
+    // Indexed titles are final; only missing or untitled entries need history recovery.
+    do {
+      const page = yield* Schema.decodeEffect(WorkspacePage)(
+        yield* Effect.tryPromise(() => directory.list(before)),
+      );
+
+      const entry = page.entries.find((entry) => entry.id === id.toLowerCase());
+
+      if (entry !== undefined) {
+        if (entry.title !== null) return;
+        break;
+      }
+      before = page.next;
+    } while (before !== null);
+
+    const records = yield* firstPage(id).pipe(Effect.provide(clientLayer));
+
+    yield* rememberHistory(id, records, undefined, title);
   });
 
   if (request.method === "POST" && url.pathname === "/sandbox/api/workspaces") {
@@ -326,7 +350,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     if (!limit.success)
       return json({ message: "Please wait a moment before running another command." }, 429);
 
-    yield* remember(input.workspaceId, titleFor(`!${input.script}`));
+    yield* rememberRequest(input.workspaceId, titleFor(`!${input.script}`));
 
     const reply = yield* Effect.tryPromise(
       async () => await env.THREADS.getByName(address(input.workspaceId)).command(input),
@@ -362,7 +386,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     if (!(yield* hostedModelAccess(session.accountId, env)))
       return json({ message: "Hosted model access is not available for this account." }, 403);
 
-    yield* remember(input.workspaceId, titleFor(input.message));
+    yield* rememberRequest(input.workspaceId, titleFor(input.message));
 
     const receipt = yield* Effect.gen(function* () {
       const client = yield* CloudflareThreadClient;
