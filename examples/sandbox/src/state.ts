@@ -2,7 +2,7 @@ import { fetchWithSession } from "@yielded/agent-example-auth/client";
 import { decodeLiveText } from "@yielded/agent-platform-cloudflare/live-text";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { Effect, Layer, Schema, Stream } from "effect";
-import { Atom } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 import {
   Accepted,
@@ -213,6 +213,12 @@ export const workspace = Atom.family((id: string) => {
     get(revision);
 
     return json(`files?${query(id, get(directory))}`, FileList);
+  });
+
+  const expired = Atom.make((get) => {
+    const listing = get(files);
+
+    return AsyncResult.isSuccess(listing) && listing.value.expired;
   });
 
   const file = runtime.atom((get) => {
@@ -592,6 +598,7 @@ export const workspace = Atom.family((id: string) => {
 
       if (
         !message ||
+        get(expired) ||
         current.pending ||
         current.active ||
         current.uncertain ||
@@ -797,6 +804,7 @@ export const workspace = Atom.family((id: string) => {
     directory,
     selectedFile,
     files,
+    expired,
     file,
     events,
     commandEvents,

@@ -38,7 +38,8 @@ export const ShellCommand = Schema.Struct({
   ...CommandInput.fields,
   afterSequence: Schema.Natural,
   createdAt: Schema.Finite,
-  status: Schema.Literals(["queued", "running", "completed", "unknown"]),
+  status: Schema.Literals(["queued", "running", "completed", "failed", "unknown"]),
+  failure: Schema.optionalKey(Schema.Literals(["workspace-expired", "not-started"])),
   output: Schema.optionalKey(CommandOutput),
 });
 
@@ -94,9 +95,10 @@ export const EventPage = Schema.Struct({
 
 export type EventPage = typeof EventPage.Type;
 
-export const FileList = Schema.Array(
-  Schema.Struct({ path: Schema.String, directory: Schema.Boolean }),
-);
+export const FileList = Schema.Struct({
+  entries: Schema.Array(Schema.Struct({ path: Schema.String, directory: Schema.Boolean })),
+  expired: Schema.Boolean,
+});
 
 export const FileContent = Schema.Struct({
   path: Schema.String,

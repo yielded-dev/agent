@@ -15,6 +15,10 @@ export class Workspace extends Context.Service<
     readonly identity: { readonly path: string; readonly id: string };
     readonly open: Effect.Effect<SessionSandbox["Service"], SandboxOperationError>;
     readonly existing: Effect.Effect<SessionSandbox["Service"] | null, SandboxOperationError>;
+    readonly inspect: Effect.Effect<
+      { readonly sandbox: SessionSandbox["Service"] | null; readonly expired: boolean },
+      SandboxOperationError
+    >;
   }
 >()("sandbox-example/Workspace") {
   static readonly layer = Layer.effect(
@@ -57,6 +61,19 @@ export class Workspace extends Context.Service<
         Effect.mapError(failure),
       );
 
+      const inspect = Effect.gen(function* () {
+        const instanceId = yield* saved;
+
+        if (instanceId === null) return { sandbox: null, expired: false };
+        const sandbox = yield* bind(instanceId);
+        const description = yield* sandbox.describe;
+
+        return {
+          sandbox,
+          expired: !description.running || description.current?.instanceId !== instanceId,
+        };
+      }).pipe(Effect.mapError(failure));
+
       const open = Effect.gen(function* () {
         const retained = yield* existing;
 
@@ -71,7 +88,7 @@ export class Workspace extends Context.Service<
         return exact;
       }).pipe(Effect.mapError(failure));
 
-      return Workspace.of({ identity, open, existing });
+      return Workspace.of({ identity, open, existing, inspect });
     }),
   ).pipe(Layer.provide(NativeSandboxNamespace.layer({ binding: "SANDBOXES" })));
 }

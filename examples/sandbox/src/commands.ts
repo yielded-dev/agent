@@ -44,16 +44,16 @@ const busy = () =>
   });
 
 const terminal = (command: ShellCommand) =>
-  command.status === "completed" || command.status === "unknown";
+  command.status === "completed" || command.status === "failed" || command.status === "unknown";
 
-const stoppedOutput = (timedOut: boolean) => ({
+const stoppedOutput = {
   stdout: "",
   stderr: "",
-  exitCode: timedOut ? 124 : 130,
-  timedOut,
+  exitCode: 130,
+  timedOut: false,
   truncated: false,
   nextOffset: null,
-});
+};
 
 // The native ledger checks this inside fresh admission's transaction, after replay lookup.
 // Command admission writes the same key under the same SQL transaction owner.
@@ -200,13 +200,29 @@ const make = Effect.gen(function* () {
     if (allocation === undefined) {
       if (command.stopRequested || (yield* Clock.currentTimeMillis) >= command.deadlineAt) {
         yield* update(
-          { ...command, status: "completed", output: stoppedOutput(!command.stopRequested) },
+          command.stopRequested
+            ? { ...command, status: "completed", output: stoppedOutput }
+            : { ...command, status: "failed", failure: "not-started" },
           true,
         );
 
         return Option.none<number>();
       }
-      allocation = yield* allocateCommand(command.deadlineAt);
+      const allocated = yield* allocateCommand(command.deadlineAt).pipe(Effect.result);
+
+      if (allocated._tag === "Failure") {
+        // Inspect only after failed allocation; ordinary command startup adds no RPC.
+        const inspection = yield* (yield* Workspace).inspect.pipe(Effect.result);
+
+        if (inspection._tag === "Success" && inspection.success.expired) {
+          yield* update({ ...command, status: "failed", failure: "workspace-expired" }, true);
+
+          return Option.none<number>();
+        }
+
+        return yield* allocated.failure;
+      }
+      allocation = allocated.success;
 
       // A stop can arrive during allocation. Keep its durable intent when retaining the ticket.
       command = yield* update({ ...command, allocation, status: "running" });

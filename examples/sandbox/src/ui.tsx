@@ -24,7 +24,8 @@ import { type Entry, type ShellCommand } from "./contract";
 import { signIn } from "./location";
 import { newWorkspace, workspace, workspaceId } from "./state";
 
-const workspaceDescription = "Files live in a temporary, isolated workspace.";
+const workspaceDescription =
+  "Workspace files expire after 30 minutes idle. Conversation history is kept.";
 
 const Brand = () => (
   <a className="brand" href="/">
@@ -151,6 +152,7 @@ function Workspace({ id }: { id: string }) {
   const [sent, send] = useAtom(atoms.send);
   const [stopped, stop] = useAtom(atoms.stop);
   const reconnectCommand = useAtomSet(atoms.reconnectCommand);
+  const expired = useAtomValue(atoms.expired);
 
   const { entries, results } = useMemo(() => {
     const calls = new Set(state.entries.filter((entry) => entry.kind === "tool").map(toolKey));
@@ -191,6 +193,7 @@ function Workspace({ id }: { id: string }) {
   );
 
   const busy =
+    expired ||
     state.active !== null ||
     state.pending !== null ||
     state.admissionRequestId !== null ||
@@ -275,6 +278,12 @@ function Workspace({ id }: { id: string }) {
             send();
           }}
         >
+          {expired && (
+            <p className="error" role="alert">
+              This workspace has expired and its files are no longer available. Your conversation is
+              still here. Start a new workspace to run code again.
+            </p>
+          )}
           {state.error && (
             <p className="error" role="alert">
               {state.error}
@@ -293,6 +302,7 @@ function Workspace({ id }: { id: string }) {
             placeholder="Ask the agent, or use ! to run a command"
             value={draft}
             maxLength={8000}
+            disabled={expired}
             onChange={(event) => setDraft(event.target.value)}
             rows={3}
             onKeyDown={(event) => {
@@ -351,25 +361,31 @@ function Workspace({ id }: { id: string }) {
 
 function CommandEntry({ command }: { command: ShellCommand }) {
   const output = command.output;
-  const running = command.status === "queued" || command.status === "running";
+
+  const label = {
+    queued: "Preparing…",
+    running: "Running…",
+    failed: command.failure === "workspace-expired" ? "Workspace expired" : "Could not start",
+    unknown: "Outcome unknown",
+    completed: output?.timedOut ? "Timed out" : `Exit ${output?.exitCode ?? "—"}`,
+  }[command.status];
 
   return (
     <article className="rounded-lg border border-border bg-muted/30 p-4" aria-label="Shell command">
       <div className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>Shell · /workspace</span>
-        <span role="status">
-          {running
-            ? "Running…"
-            : command.status === "unknown"
-              ? "Outcome unknown"
-              : output?.timedOut
-                ? "Timed out"
-                : `Exit ${output?.exitCode ?? "—"}`}
-        </span>
+        <span role="status">{label}</span>
       </div>
       <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-sm">
         $ {command.script}
       </pre>
+      {command.failure && (
+        <p className="mt-3 border-t border-border pt-3 text-sm text-destructive">
+          {command.failure === "workspace-expired"
+            ? "The temporary workspace is no longer available. This command was not run. Start a new workspace."
+            : "The command could not start before its deadline. It was not run."}
+        </p>
+      )}
       {output && (
         <div className="mt-3 border-t border-border pt-3">
           {output.stdout && (
@@ -508,11 +524,13 @@ function Files({ id }: { id: string }) {
               Could not load files. Refresh to retry.
             </p>
           )}
-          {AsyncResult.isSuccess(files) && files.value.length === 0 && (
-            <p className="muted">No files here yet.</p>
+          {AsyncResult.isSuccess(files) && files.value.entries.length === 0 && (
+            <p className="muted">
+              {files.value.expired ? "This workspace's files have expired." : "No files here yet."}
+            </p>
           )}
           {AsyncResult.isSuccess(files) &&
-            files.value.map((item) => (
+            files.value.entries.map((item) => (
               <Button
                 variant="ghost"
                 key={item.path}

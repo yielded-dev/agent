@@ -24,8 +24,9 @@ reconnecting or retrying the same request resumes its original process.
 
 A workspace belongs to the authenticated account. Files are temporary: the
 container expires after 30 minutes of inactivity. An expired workspace cannot be
-silently replaced during recovery. Start a new workspace for fresh work. Commands
-have no production credentials; network access is limited to the public npm
+silently replaced during recovery. Its conversation remains readable; the UI marks
+its files as expired and stops accepting new work. Start a new workspace for fresh
+work. Commands have no production credentials; network access is limited to the public npm
 registry. The host caps concurrent containers at four.
 
 ## Development and deployment

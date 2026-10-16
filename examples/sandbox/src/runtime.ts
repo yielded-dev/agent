@@ -141,22 +141,22 @@ export class CodingThread extends ThreadObject.make(application, {
   files(path: string) {
     return this[DurableObject.RunSymbol](
       Effect.gen(function* () {
-        const sandbox = yield* (yield* Workspace).existing;
+        const { sandbox, expired } = yield* (yield* Workspace).inspect;
 
-        if (sandbox === null) return [];
+        if (sandbox === null || expired) return { entries: [], expired };
         const directory = yield* pathInWorkspace(path);
-        const description = yield* sandbox.describe;
-
-        if (!description.running) return [];
         const entries = yield* sandbox.readDirectory(directory);
 
-        return entries
-          .filter((entry) => !entry.name.startsWith(".sandbox-agent"))
-          .slice(0, 200)
-          .map((entry) => ({
-            path: `${path ? `${path}/` : ""}${entry.name}`,
-            directory: entry.type === "directory",
-          }));
+        return {
+          entries: entries
+            .filter((entry) => !entry.name.startsWith(".sandbox-agent"))
+            .slice(0, 200)
+            .map((entry) => ({
+              path: `${path ? `${path}/` : ""}${entry.name}`,
+              directory: entry.type === "directory",
+            })),
+          expired: false,
+        };
       }),
     );
   }
