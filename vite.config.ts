@@ -100,6 +100,8 @@ const generatedPaths = [
   "examples/travel-planner/src/routeTree.gen.ts",
   // pi-durable and tardie workers, installed and typechecked outside this workspace.
   "examples/durable-bench/third-party/**",
+  "examples/cold-start/third-party/**",
+  "examples/cold-start/dist/**",
   "examples/durable-bench/fixtures/**",
   "examples/durable-bench/results/**",
   "examples/durable-bench/dist/**",

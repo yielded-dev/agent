@@ -1,0 +1,21 @@
+{
+  "name": "@yielded/agent-example-cold-start",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@effect/ai-openai-compat": "catalog:",
+    "@effect/platform-browser": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "@types/node": "catalog:",
+    "@yielded/agent": "workspace:*",
+    "@yielded/agent-platform-cloudflare": "workspace:*",
+    "effect": "catalog:",
+    "effect-cf": "catalog:",
+    "esbuild": "catalog:",
+    "typescript": "catalog:"
+  }
+}
