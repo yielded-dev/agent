@@ -307,6 +307,7 @@ function Workspace({ id }: { id: string }) {
   const busy =
     !state.historyReady ||
     expired ||
+    state.reviewRequired ||
     state.active !== null ||
     state.pending !== null ||
     state.admissionRequestId !== null ||

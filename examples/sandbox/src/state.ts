@@ -512,11 +512,9 @@ export const workspace = Atom.family((id: string) => {
                 reviewRequired =
                   page.reviewRequired ||
                   current.commands.some((command) => command.status === "unknown");
-                if (current.reviewRequired && !reviewRequired) {
-                  uncertain = false;
-                  error = null;
-                }
+                if (current.reviewRequired && !reviewRequired) error = null;
               }
+              // Review gates writes; it does not settle an active or pending submission.
               get.set(state, {
                 ...current,
                 entries: [...entries.values()].slice(-500),
@@ -528,9 +526,9 @@ export const workspace = Atom.family((id: string) => {
                 runId,
                 committedTurns,
                 cursor: page.cursor,
-                active: reviewRequired ? null : active,
-                pending: reviewRequired ? null : pending,
-                uncertain: reviewRequired || uncertain,
+                active,
+                pending,
+                uncertain,
                 reviewRequired,
                 error: reviewRequired
                   ? "A workspace operation needs review. Review the transcript and files, or start a new workspace. Further changes are blocked here."
@@ -861,6 +859,8 @@ export const workspace = Atom.family((id: string) => {
   const stop = Atom.fn<void>()(
     Effect.fnUntraced(function* (_, get) {
       const current = get(state);
+
+      if (current.reviewRequired) return;
       const pending = current.pending;
 
       if (pending?.command) {
