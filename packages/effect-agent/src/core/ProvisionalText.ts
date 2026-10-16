@@ -18,13 +18,20 @@ const modelIdentity = {
 };
 
 /**
- * Best-effort drafts, never canonical history. Emitted native parts omit provider metadata.
+ * Best-effort text and reasoning drafts, never canonical history. Native parts omit provider metadata.
  * Discard retracts one generation; AttemptEnded closes every draft for that Attempt.
  */
 export const Event = Schema.Union([
   Schema.TaggedStruct("Text", {
     ...modelIdentity,
-    part: Schema.Union([Response.TextStartPart, Response.TextDeltaPart, Response.TextEndPart]),
+    part: Schema.Union([
+      Response.TextStartPart,
+      Response.TextDeltaPart,
+      Response.TextEndPart,
+      Response.ReasoningStartPart,
+      Response.ReasoningDeltaPart,
+      Response.ReasoningEndPart,
+    ]),
   }),
   Schema.TaggedStruct("Discard", modelIdentity),
   Schema.TaggedStruct("AttemptEnded", attemptIdentity),

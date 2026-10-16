@@ -1,9 +1,9 @@
 import { Dialog } from "@base-ui/react/dialog";
+import { Button } from "@yielded/ui";
 import { ChevronLeft, ChevronRight, Expand, ImageOff, X } from "lucide-react";
 import { useState } from "react";
 
 import { safeTravelUrl, type TravelPhoto } from "../../travel-content";
-import { Button } from "../ui/button";
 
 /** Reserve image space, hide broken-image chrome, and never send the conversation as a referrer. */
 export function TravelImage({

@@ -1,0 +1,5 @@
+The Conversation components are adapted from Vercel AI Elements.
+Source: https://registry.ai-sdk.dev/conversation.json
+Copyright 2023 Vercel, Inc. Licensed under Apache-2.0 (LICENSE-APACHE).
+Modifications: Base UI control, accessibility labels, instant scrolling, and reduced public surface.
+Other Yielded UI code is covered by LICENSE.

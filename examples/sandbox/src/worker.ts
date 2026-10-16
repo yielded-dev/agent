@@ -6,18 +6,21 @@ import {
 } from "@yielded/agent-example-auth/server";
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { digestDefinitions } from "@yielded/agent/digest";
-import { ThreadId, SubmissionId } from "@yielded/agent/identifiers";
+import { ThreadId, SubmissionId, ToolCallId } from "@yielded/agent/identifiers";
 import { CanonicalSequence, type CanonicalRecordEnvelope } from "@yielded/agent/records";
+import { toolCallSettledRecordId } from "@yielded/agent/run-journal";
 import { AbortCommand, Principal, IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { makeSandboxAgentContainer, makeSandboxAgentOutbound } from "@yielded/sandbox/cloudflare";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Deferred, Effect, Layer, Schema, Stream } from "effect";
 import { Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
 
 import { codingAgent, definitions } from "./agent.ts";
 import {
   CodingInput,
   EventPage,
+  LIVE_TEXT_THREAD_HEADER,
   MAX_INPUT_BYTES,
   MessageInput,
   WorkspaceId,
@@ -98,10 +101,11 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
           text: p.input.message,
           requestId: p.input.requestId,
           submissionId: p.submissionId,
+          ...(p.runId === undefined ? {} : { runId: p.runId }),
         },
       ];
     case "RunStarted":
-      return [{ id, kind: "status", text: "Running" }];
+      return [{ id, kind: "status", text: "Running", runId: p.runId }];
     case "ModelResponseRecorded": {
       const prompt = Schema.decodeSync(Prompt.Prompt)(p.messages);
 
@@ -109,10 +113,18 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
         message.role !== "assistant"
           ? []
           : message.content.flatMap((part, index): Entry[] => {
-              if (part.type === "text")
-                return [
-                  { id: `${id}-${messageIndex}-${index}`, kind: "assistant", text: part.text },
-                ];
+              if (part.type === "text" || part.type === "reasoning")
+                return part.text.length === 0
+                  ? []
+                  : [
+                      {
+                        id: `${id}-${messageIndex}-${index}`,
+                        kind: part.type === "text" ? "assistant" : "reasoning",
+                        text: part.text,
+                        runId: p.runId,
+                        turnId: p.turnId,
+                      },
+                    ];
               if (part.type === "tool-call")
                 return [
                   {
@@ -120,6 +132,14 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
                     kind: "tool",
                     name: part.name,
                     text: JSON.stringify(part.params, null, 2),
+                    toolCallId: part.id,
+                    toolResultId: toolCallSettledRecordId(
+                      p.runId,
+                      p.turn,
+                      ToolCallId.make(part.id),
+                    ),
+                    runId: p.runId,
+                    turnId: p.turnId,
                   },
                 ];
 
@@ -135,10 +155,22 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
           name: p.toolName,
           text: JSON.stringify(p.result, null, 2),
           failed: p.isFailure,
+          toolCallId: p.toolCallId,
+          toolResultId: record.recordId,
+          runId: p.runId,
         },
       ];
     case "ToolCallUnknown":
-      return [{ id, kind: "status", text: "Unknown", failed: true }];
+      return [
+        {
+          id,
+          kind: "status",
+          text: "Unknown",
+          failed: true,
+          runId: p.runId,
+          toolCallId: p.toolCallId,
+        },
+      ];
     case "SubmissionSettled":
       return [
         {
@@ -151,6 +183,7 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
                 ? "Stopped"
                 : "Failed",
           submissionId: p.submissionId,
+          ...(p.runId === undefined ? {} : { runId: p.runId }),
           failed: p.outcome === "failed",
           reviewRequired: p.outcome === "failed" && Schema.is(FailedWorkspaceOperation)(p.result),
         },
@@ -247,10 +280,25 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     const threadId = address(workspaceId);
 
+    if (url.pathname === "/sandbox/api/text") {
+      const text = Stream.unwrap(
+        Effect.map(CloudflareThreadClient, (client) => client.watchTextBytes(threadId)),
+      ).pipe(Stream.provide(clientLayer));
+
+      return HttpServerResponse.stream(text, {
+        headers: {
+          "content-type": "application/x-ndjson",
+          "cache-control": "no-store",
+          [LIVE_TEXT_THREAD_HEADER]: threadId,
+        },
+      });
+    }
     if (url.pathname === "/sandbox/api/events") {
       const after = yield* Schema.decodeEffect(CanonicalSequence)(
         Number(url.searchParams.get("after") ?? "0"),
       );
+
+      const bodyClosed = yield* Deferred.make<void>();
 
       const pages = Stream.unwrap(
         Effect.gen(function* () {
@@ -269,7 +317,16 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
                 );
 
               const next = records.at(-1)?.sequence ?? cursor;
-              const page: EventPage = { cursor: next, entries: records.flatMap(entriesFor) };
+
+              const page: EventPage = {
+                cursor: next,
+                entries: records.flatMap(entriesFor),
+                committedTurns: records.flatMap(({ record: { payload } }) =>
+                  payload._tag === "ModelResponseRecorded"
+                    ? [{ runId: payload.runId, turnId: payload.turnId }]
+                    : [],
+                ),
+              };
 
               return [page, { cursor: next, wait: records.length < 64 }] as const;
             }),
@@ -282,9 +339,34 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
             `${Schema.encodeSync(Schema.fromJsonString(EventPage))(page)}\n`,
           ),
         ),
+        // Both sources emit complete NDJSON lines; idle writes expose disconnects.
+        Stream.merge(
+          Stream.tick("15 seconds").pipe(
+            Stream.drop(1),
+            Stream.map(() => new Uint8Array([10])),
+          ),
+          { haltStrategy: "left" },
+        ),
+        // The Worker response bridge does not forward the native request signal.
+        Stream.interruptWhen(
+          Effect.callback<void>((resume) => {
+            const onAbort = () => resume(Effect.void);
+
+            if (request.signal.aborted) onAbort();
+            else request.signal.addEventListener("abort", onAbort, { once: true });
+
+            return Effect.sync(() => request.signal.removeEventListener("abort", onAbort));
+          }),
+        ),
+        Stream.onExit(() => Deferred.succeed(bodyClosed, undefined)),
       );
 
-      return new Response(Stream.toReadableStream(pages), {
+      const context = yield* Worker.WorkerContext;
+
+      // Retain the request while body cleanup cancels the outstanding progress RPC.
+      yield* context.waitUntil(Deferred.await(bodyClosed));
+
+      return HttpServerResponse.stream(pages, {
         headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
       });
     }

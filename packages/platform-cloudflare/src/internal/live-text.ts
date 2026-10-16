@@ -7,7 +7,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import { HostProtocolError } from "../CloudflareThreadClient.ts";
+import { HostProtocolError } from "./host-protocol-error.ts";
+import { Observation } from "./live-text-observation.ts";
 import {
   BUFFER_SIZE,
   Frame,
@@ -18,7 +19,6 @@ import {
   MAX_FRAME_BYTES,
   MAX_ID_LENGTH,
   MAX_OBSERVERS,
-  Observation,
 } from "./live-text-protocol.ts";
 
 class ObservationLifetime extends RpcTarget {
@@ -113,19 +113,20 @@ export class LiveTextHub extends Context.Service<
             event.runId,
             event.turnId,
             event.generation,
+            event.part.type.startsWith("reasoning-") ? "reasoning" : "text",
             event.part.id,
           ]);
 
           const draft = drafts.get(key);
 
-          if (event.part.type === "text-start") {
+          if (event.part.type === "text-start" || event.part.type === "reasoning-start") {
             if (draft !== undefined || drafts.size >= MAX_DRAFT_PARTS) return fail(event.attemptId);
             drafts.set(key, { start: event, text: "", ended: false });
           } else {
             // After invalidation, never expose an orphaned suffix as a complete prefix.
             if (draft === undefined) return false;
             if (draft.ended) return fail(event.attemptId);
-            if (event.part.type === "text-delta") {
+            if (event.part.type === "text-delta" || event.part.type === "reasoning-delta") {
               if (length + event.part.delta.length > MAX_DRAFT_LENGTH) return fail(event.attemptId);
               draft.text += event.part.delta;
               length += event.part.delta.length;
@@ -176,9 +177,11 @@ export class LiveTextHub extends Context.Service<
         let streamId = "";
         let sequence = 0;
         let closed = false;
+        let keepalive: ReturnType<typeof setInterval> | undefined;
 
         const dispose = () => {
           closed = true;
+          clearInterval(keepalive);
           buffer.length = 0;
           pending = undefined;
           observers.delete(observer);
@@ -231,16 +234,22 @@ export class LiveTextHub extends Context.Service<
             for (let offset = 0; offset < draft.text.length; offset += MAX_DELTA_LENGTH) {
               yield frame({
                 ...draft.start,
-                part: Response.makePart("text-delta", {
-                  id: draft.start.part.id,
-                  delta: draft.text.slice(offset, offset + MAX_DELTA_LENGTH),
-                }),
+                part: Response.makePart(
+                  draft.start.part.type === "reasoning-start" ? "reasoning-delta" : "text-delta",
+                  {
+                    id: draft.start.part.id,
+                    delta: draft.text.slice(offset, offset + MAX_DELTA_LENGTH),
+                  },
+                ),
               });
             }
             if (draft.ended)
               yield frame({
                 ...draft.start,
-                part: Response.makePart("text-end", { id: draft.start.part.id }),
+                part: Response.makePart(
+                  draft.start.part.type === "reasoning-start" ? "reasoning-end" : "text-end",
+                  { id: draft.start.part.id },
+                ),
               });
           }
         };
@@ -298,6 +307,12 @@ export class LiveTextHub extends Context.Service<
           start(value) {
             controller = value;
             observers.add(observer);
+            // Write only between complete frames, before RPC can split their bytes.
+            // Idle writes expose disconnected consumers without growing the native queue.
+            keepalive = setInterval(() => {
+              if (closed || value.desiredSize === null || value.desiredSize <= 0) return;
+              value.enqueue(new Uint8Array([10]));
+            }, 15_000);
             flush();
           },
           pull: flush,

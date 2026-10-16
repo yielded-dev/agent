@@ -15,17 +15,22 @@
     "@yielded/agent-example-auth": "workspace:*",
     "@yielded/agent-platform-cloudflare": "workspace:*",
     "@yielded/sandbox": "0.1.0",
+    "@yielded/ui": "workspace:*",
     "effect": "catalog:",
     "effect-cf": "catalog:",
+    "lucide-react": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "streamdown": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
+    "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",

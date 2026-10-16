@@ -1,6 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@400;500;600;650;700;750;800&display=swap");
 @import "tailwindcss";
 @source "../node_modules/streamdown/dist/*.js";
+@source "../node_modules/@yielded/ui/src";
 
 @theme inline {
   --color-background: #fcfcf9;

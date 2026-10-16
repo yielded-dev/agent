@@ -58,7 +58,7 @@ const provider = Layer.effect(
 // The provider passes through this Responses option; its Config type omits it.
 const modelConfig: typeof OpenAiLanguageModel.Config.Service &
   Pick<CreateResponse, "parallel_tool_calls"> = {
-  reasoning: { effort: "low" },
+  reasoning: { effort: "low", summary: "auto" },
   max_output_tokens: 16_384,
   parallel_tool_calls: false,
 };

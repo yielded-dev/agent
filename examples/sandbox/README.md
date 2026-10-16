@@ -9,7 +9,9 @@ The coding loop uses Effect's OpenAI provider; no Codex CLI is installed or invo
 The example exposes `read_file`, `write_file`, `edit_file`, `list_files`, `search`
 and `bash`. Tool execution is serialized. Process tickets and results use Agent's
 Durable Steps, and retries retain the original deadline and workspace identity.
-The browser observes canonical events and can reconnect without resubmitting work.
+The browser reconciles live assistant text and provider reasoning summaries with
+canonical history, so reconnecting never resubmits work. `@yielded/ui` renders the
+conversation, Markdown, and paired tool results; the example owns its Tailwind theme.
 
 A workspace belongs to the authenticated account. Files are temporary: the
 container expires after 30 minutes of inactivity. An expired workspace cannot be

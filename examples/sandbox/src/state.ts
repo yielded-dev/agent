@@ -1,4 +1,6 @@
 import { fetchWithSession } from "@yielded/agent-example-auth/client";
+import { decodeLiveText } from "@yielded/agent-platform-cloudflare/live-text";
+import { ThreadId } from "@yielded/agent/identifiers";
 import { Effect, Layer, Schema, Stream } from "effect";
 import { Atom } from "effect/reactivity";
 
@@ -7,9 +9,11 @@ import {
   EventPage,
   FileContent,
   FileList,
+  LIVE_TEXT_THREAD_HEADER,
   MessageInput,
   SandboxError,
   WorkspaceId,
+  type Draft,
   type Entry,
 } from "./contract";
 
@@ -113,6 +117,9 @@ interface Pending {
 }
 interface Workspace {
   readonly entries: ReadonlyArray<Entry>;
+  readonly drafts: ReadonlyArray<Draft>;
+  readonly runId: string | null;
+  readonly committedTurns: ReadonlyArray<string>;
   readonly cursor: number;
   readonly active: string | null;
   readonly admissionRequestId: string | null;
@@ -126,6 +133,9 @@ interface Workspace {
 export const workspace = Atom.family((id: string) => {
   const state = Atom.make<Workspace>({
     entries: [],
+    drafts: [],
+    runId: null,
+    committedTurns: [],
     cursor: 0,
     active: null,
     admissionRequestId: null,
@@ -157,102 +167,256 @@ export const workspace = Atom.family((id: string) => {
   const refresh = Atom.fnSync((_, get) => get.set(revision, get(revision) + 1));
 
   const events = runtime
-    .atom((get) =>
-      Effect.gen(function* () {
-        while (true) {
-          yield* Effect.gen(function* () {
-            const response = yield* request(
-              `events?${new URLSearchParams({ workspaceId: id, after: String(get.once(state).cursor) })}`,
-            );
+    .atom((get) => {
+      const registry = get.registry;
 
-            const body = response.body;
+      // Clear synchronously when this observer is disposed, before another mount can start.
+      // Its context cannot write after disposal; the retained Workspace still can.
+      get.addFinalizer(() => {
+        if (registry.getNodes().has(state))
+          registry.update(state, (current) => ({ ...current, drafts: [] }));
+      });
 
-            if (!body) return yield* problem("The event connection has no body.");
-            let lineSize = 0;
+      const clearDrafts = Effect.sync(() => {
+        if (!registry.getNodes().has(state)) return;
+        const current = get.once(state);
 
-            yield* Stream.fromReadableStream({
-              evaluate: () => body,
-              onError: () => problem("Event connection interrupted."),
-            }).pipe(
-              Stream.decodeText(),
-              // Bound incomplete lines too, before splitLines can retain an arbitrary buffer.
-              Stream.mapEffect((chunk) =>
-                Effect.gen(function* () {
-                  for (const part of chunk.split(/(?<=\n)/)) {
-                    lineSize += part.length;
-                    if (lineSize > 2_000_000) return yield* problem("The event page is too large.");
-                    if (part.endsWith("\n")) lineSize = 0;
+        if (current.drafts.length > 0) get.set(state, { ...current, drafts: [] });
+      });
+
+      const pages = Effect.gen(function* () {
+        const response = yield* request(
+          "events?" +
+            new URLSearchParams({ workspaceId: id, after: String(get.once(state).cursor) }),
+        );
+
+        const body = response.body;
+
+        if (!body) return yield* problem("The event connection has no body.");
+        let lineSize = 0;
+
+        yield* Stream.fromReadableStream({
+          evaluate: () => body,
+          onError: () => problem("Event connection interrupted."),
+        }).pipe(
+          Stream.decodeText(),
+          // Bound incomplete lines too, before splitLines can retain an arbitrary buffer.
+          Stream.mapEffect((chunk) =>
+            Effect.gen(function* () {
+              for (const part of chunk.split(/(?<=\n)/)) {
+                lineSize += part.length;
+                if (lineSize > 2_000_000) return yield* problem("The event page is too large.");
+                if (part.endsWith("\n")) lineSize = 0;
+              }
+
+              return chunk;
+            }),
+          ),
+          Stream.splitLines,
+          Stream.filter((line) => line.trim().length > 0),
+          Stream.mapEffect((line) => Schema.decodeEffect(Schema.fromJsonString(EventPage))(line)),
+          Stream.runForEach((page) =>
+            Effect.sync(() => {
+              const current = get.once(state);
+
+              if (page.cursor < current.cursor) return;
+              const entries = new Map(current.entries.map((entry) => [entry.id, entry]));
+              let active = current.active;
+              let pending = current.pending;
+              let uncertain = current.uncertain;
+              let error = current.error;
+              let reviewRequired = current.reviewRequired;
+              let runId = current.runId;
+              let drafts = current.drafts;
+              let committedTurns = current.committedTurns;
+
+              if (page.cursor > current.cursor) {
+                for (const entry of page.entries) {
+                  entries.set(entry.id, entry);
+                  if (
+                    entry.runId &&
+                    (entry.kind === "user" ||
+                      (entry.kind === "status" && entry.text === "Running")) &&
+                    entry.runId !== runId
+                  ) {
+                    drafts = drafts.filter((draft) => draft.runId !== runId);
+                    runId = entry.runId;
+                    committedTurns = [];
                   }
-
-                  return chunk;
-                }),
-              ),
-              Stream.splitLines,
-              Stream.filter((line) => line.trim().length > 0),
-              Stream.mapEffect((line) =>
-                Schema.decodeEffect(Schema.fromJsonString(EventPage))(line),
-              ),
-              Stream.runForEach((page) =>
-                Effect.sync(() => {
-                  const current = get.once(state);
-
-                  if (page.cursor < current.cursor) return;
-                  const entries = new Map(current.entries.map((entry) => [entry.id, entry]));
-                  let active = current.active;
-                  let pending = current.pending;
-                  let uncertain = current.uncertain;
-                  let error = current.error;
-                  let reviewRequired = current.reviewRequired;
-
-                  if (page.cursor > current.cursor) {
-                    for (const entry of page.entries) {
-                      entries.set(entry.id, entry);
-                      if (
-                        entry.reviewRequired === true ||
-                        (entry.kind === "status" && entry.text === "Unknown")
-                      )
-                        reviewRequired = true;
-                      if (entry.kind === "user") {
-                        if (entry.submissionId) active = entry.submissionId;
-                        if (pending && entry.requestId === pending.requestId) {
-                          pending = null;
-                          uncertain = false;
-                          error = null;
-                        }
-                      }
-                      if (entry.kind === "status" && entry.submissionId) {
-                        if (entry.text === "Running") active = entry.submissionId;
-                        else if (
-                          ["Completed", "Failed", "Stopped"].includes(entry.text) &&
-                          active === entry.submissionId
-                        )
-                          active = null;
-                      }
+                  if (
+                    entry.reviewRequired === true ||
+                    (entry.kind === "status" && entry.text === "Unknown")
+                  )
+                    reviewRequired = true;
+                  if (entry.kind === "user") {
+                    if (entry.submissionId) active = entry.submissionId;
+                    if (pending && entry.requestId === pending.requestId) {
+                      pending = null;
+                      uncertain = false;
+                      error = null;
                     }
-                    get.set(revision, get.once(revision) + 1);
                   }
-                  get.set(state, {
-                    ...current,
-                    entries: [...entries.values()].slice(-500),
-                    cursor: page.cursor,
-                    active: reviewRequired ? null : active,
-                    pending: reviewRequired ? null : pending,
-                    uncertain: reviewRequired || uncertain,
-                    reviewRequired,
-                    error: reviewRequired
-                      ? "A workspace operation needs review. Review the transcript and files, or start a new workspace. Further changes are blocked here."
-                      : error,
-                    connection: "Live",
-                  });
-                }),
-              ),
-            );
-          }).pipe(Effect.scoped, Effect.ignore);
-          get.set(state, { ...get.once(state), connection: "Reconnecting…" });
-          yield* Effect.sleep("2 seconds");
-        }
-      }),
-    )
+                  if (entry.kind === "status" && entry.submissionId) {
+                    if (entry.text === "Running") active = entry.submissionId;
+                    else if (["Completed", "Failed", "Stopped"].includes(entry.text)) {
+                      drafts = drafts.filter((draft) => draft.submissionId !== entry.submissionId);
+                      if (active === entry.submissionId) active = null;
+                    }
+                  }
+                }
+                committedTurns = [
+                  ...new Set([
+                    ...committedTurns,
+                    ...(page.committedTurns ?? [])
+                      .filter((turn) => turn.runId === runId)
+                      .map((turn) => turn.turnId),
+                  ]),
+                ];
+                get.set(revision, get.once(revision) + 1);
+              }
+              get.set(state, {
+                ...current,
+                entries: [...entries.values()].slice(-500),
+                drafts: drafts.filter(
+                  (draft) => draft.runId !== runId || !committedTurns.includes(draft.turnId),
+                ),
+                runId,
+                committedTurns,
+                cursor: page.cursor,
+                active: reviewRequired ? null : active,
+                pending: reviewRequired ? null : pending,
+                uncertain: reviewRequired || uncertain,
+                reviewRequired,
+                error: reviewRequired
+                  ? "A workspace operation needs review. Review the transcript and files, or start a new workspace. Further changes are blocked here."
+                  : error,
+                connection: "Live",
+              });
+            }),
+          ),
+        );
+
+        return yield* problem("Event connection interrupted.");
+      });
+
+      const previews = Effect.gen(function* () {
+        const response = yield* request("text?" + new URLSearchParams({ workspaceId: id }));
+
+        const threadId = yield* Schema.decodeUnknownEffect(ThreadId)(
+          response.headers.get(LIVE_TEXT_THREAD_HEADER),
+        );
+
+        const body = response.body;
+
+        if (!body) return yield* problem("The text connection has no body.");
+        yield* decodeLiveText(
+          threadId,
+          Stream.fromReadableStream({
+            evaluate: () => body,
+            onError: () => problem("Text connection interrupted."),
+          }),
+        ).pipe(
+          Stream.runForEach((frame) =>
+            Effect.sync(() => {
+              const current = get.once(state);
+
+              if (frame._tag === "Reset") {
+                get.set(state, { ...current, drafts: [] });
+
+                return;
+              }
+              const event = frame.event;
+
+              if (event._tag !== "Text") {
+                get.set(state, {
+                  ...current,
+                  drafts: current.drafts.filter(
+                    (draft) =>
+                      draft.submissionId !== event.submissionId ||
+                      draft.attemptId !== event.attemptId ||
+                      (event._tag === "Discard" &&
+                        (draft.runId !== event.runId ||
+                          draft.turnId !== event.turnId ||
+                          draft.generation !== event.generation)),
+                  ),
+                });
+
+                return;
+              }
+              // A later snapshot can still contain a canonically committed model call.
+              if (event.runId === current.runId && current.committedTurns.includes(event.turnId))
+                return;
+              const part = event.part;
+              const kind = part.type.startsWith("reasoning-") ? "reasoning" : "assistant";
+
+              const draftId = JSON.stringify([
+                event.threadId,
+                event.submissionId,
+                event.attemptId,
+                event.runId,
+                event.turnId,
+                event.generation,
+                kind,
+                part.id,
+              ]);
+
+              if (part.type === "text-start" || part.type === "reasoning-start") {
+                // Retained canonical evidence rejects late snapshots from older or settled Runs.
+                if (
+                  current.entries.some(
+                    (entry) =>
+                      (entry.runId === event.runId && event.runId !== current.runId) ||
+                      (entry.kind === "status" &&
+                        entry.submissionId === event.submissionId &&
+                        ["Completed", "Failed", "Stopped"].includes(entry.text)),
+                  )
+                )
+                  return;
+
+                const draft: Draft = {
+                  id: draftId,
+                  kind,
+                  text: "",
+                  submissionId: event.submissionId,
+                  attemptId: event.attemptId,
+                  runId: event.runId,
+                  turnId: event.turnId,
+                  generation: event.generation,
+                };
+
+                get.set(state, { ...current, drafts: [...current.drafts, draft] });
+              } else if (part.type === "text-delta" || part.type === "reasoning-delta") {
+                get.set(state, {
+                  ...current,
+                  drafts: current.drafts.map((draft) =>
+                    draft.id === draftId ? { ...draft, text: draft.text + part.delta } : draft,
+                  ),
+                });
+              }
+            }),
+          ),
+        );
+      });
+
+      return Effect.all(
+        [
+          Effect.gen(function* () {
+            while (true) {
+              yield* pages.pipe(Effect.scoped, Effect.ignore);
+              get.set(state, { ...get.once(state), drafts: [], connection: "Reconnecting…" });
+              yield* Effect.sleep("2 seconds");
+            }
+          }),
+          Effect.gen(function* () {
+            while (true) {
+              yield* previews.pipe(Effect.ensuring(clearDrafts), Effect.scoped, Effect.ignore);
+              yield* Effect.sleep("2 seconds");
+            }
+          }),
+        ],
+        { concurrency: 2, discard: true },
+      ).pipe(Effect.ensuring(clearDrafts));
+    })
     .pipe(Atom.setIdleTTL(0));
 
   const admission = Atom.fn<void>()(
@@ -301,6 +465,9 @@ export const workspace = Atom.family((id: string) => {
               ...latest,
               pending: durable ? null : { ...pending, submissionId: accepted.submissionId },
               active: terminal ? null : accepted.submissionId,
+              // The accepted submission's Run is known only when its canonical input arrives.
+              runId: durable || terminal ? latest.runId : null,
+              committedTurns: durable || terminal ? latest.committedTurns : [],
             });
           }),
         ),
@@ -374,5 +541,31 @@ export const workspace = Atom.family((id: string) => {
     }),
   );
 
-  return { state, draft, directory, selectedFile, files, file, events, send, stop, refresh };
+  const visibleState = Atom.make((get) => {
+    const current = get(state);
+
+    return {
+      ...current,
+      // Keep early parts until their canonical admission arrives; old Runs stay hidden.
+      drafts: current.drafts.filter(
+        (draft) =>
+          draft.runId === current.runId &&
+          draft.submissionId === current.active &&
+          !current.committedTurns.includes(draft.turnId),
+      ),
+    };
+  });
+
+  return {
+    state: visibleState,
+    draft,
+    directory,
+    selectedFile,
+    files,
+    file,
+    events,
+    send,
+    stop,
+    refresh,
+  };
 });

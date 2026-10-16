@@ -1,7 +1,8 @@
 import { ThreadId } from "@yielded/agent/identifiers";
 import { Event } from "@yielded/agent/provisional-text";
-import { Rpc } from "effect-cf";
 import * as Schema from "effect/Schema";
+
+import { HostProtocolError } from "./host-protocol-error.ts";
 
 export const MAX_FRAME_BYTES = 32 * 1_024;
 export const MAX_ID_LENGTH = 256;
@@ -14,12 +15,6 @@ export const MAX_DRAFT_LENGTH = 2 * 1_024 * 1_024;
 const streamId = Schema.NonEmptyString.check(Schema.isMaxLength(MAX_ID_LENGTH));
 
 export const Request = Schema.Struct({ schemaVersion: Schema.Literal(1) });
-
-/** The RPC lifetime survives an idle byte stream and is disposed on caller disconnect. */
-export const Observation = Schema.Struct({
-  stream: Schema.instanceOf(ReadableStream<Uint8Array>),
-  lifetime: Schema.declare(Rpc.isDisposable),
-});
 
 /**
  * Reset replaces all drafts with a snapshot, streamed as native Text parts before live deltas.
@@ -53,6 +48,12 @@ export const isBoundedEvent = (event: Event): boolean => {
     event._tag !== "Text" ||
     (event.part.id.length <= MAX_ID_LENGTH &&
       Object.keys(event.part.metadata).length === 0 &&
-      (event.part.type !== "text-delta" || event.part.delta.length <= MAX_DELTA_LENGTH))
+      ((event.part.type !== "text-delta" && event.part.type !== "reasoning-delta") ||
+        event.part.delta.length <= MAX_DELTA_LENGTH))
   );
 };
+
+export const liveTextProtocolFailure = () =>
+  HostProtocolError.make({
+    message: "Provisional text is incomplete or invalid; discard drafts and read canonical records",
+  });

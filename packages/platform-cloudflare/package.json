@@ -27,6 +27,7 @@
     "./cloudflare-scheduling": "./src/CloudflareScheduling.ts",
     "./cloudflare-subscriptions": "./src/CloudflareSubscriptions.ts",
     "./cloudflare-thread-client": "./src/CloudflareThreadClient.ts",
+    "./live-text": "./src/LiveText.ts",
     "./interactive-browser": "./src/InteractiveBrowser.ts",
     "./browser-session": "./src/BrowserSession.ts",
     "./browser-credentials": "./src/BrowserCredentials.ts",

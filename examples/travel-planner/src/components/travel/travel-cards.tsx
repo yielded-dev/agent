@@ -1,4 +1,5 @@
 import { Tabs } from "@base-ui/react/tabs";
+import { Card, CardContent } from "@yielded/ui";
 import { ArrowUpRight, CalendarDays, MapPin, Plane, Utensils, Compass } from "lucide-react";
 
 import type {
@@ -8,7 +9,6 @@ import type {
   StayOption,
   TravelContent,
 } from "../../travel-content";
-import { Card, CardContent } from "../ui/card";
 import { PhotoGallery, TravelImage } from "./photo-gallery";
 
 function SourceLink({
