@@ -1,5 +1,6 @@
-import type { Effect, Option } from "effect";
 import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { ToolCallId } from "../core/Identifiers.ts";

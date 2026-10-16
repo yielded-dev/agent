@@ -1,8 +1,11 @@
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import { SettlementId } from "@yielded/agent/identifiers";
 import { DeploymentId } from "@yielded/agent/records";
-import { Context, Effect, Schema, type Scope } from "effect";
-import { DurableDeferred } from "effect/workflow";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as DurableDeferred from "effect/workflow/DurableDeferred";
 
 /** Only identities cross the Workflow boundary; the agent journal owns the outcome. */
 export class WorkflowSubmission extends Schema.Class<WorkflowSubmission>(

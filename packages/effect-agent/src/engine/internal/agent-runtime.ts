@@ -1,4 +1,3 @@
-import type { Take } from "effect";
 import * as AiError from "effect/ai/AiError";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
@@ -33,6 +32,7 @@ import * as SchemaGetter from "effect/SchemaGetter";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+import type * as Take from "effect/Take";
 import * as Tracer from "effect/Tracer";
 
 import * as Agent from "../../core/Agent.ts";

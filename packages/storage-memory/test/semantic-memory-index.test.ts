@@ -11,8 +11,10 @@ import {
   SemanticMemoryIndex,
   SemanticMemoryProfile,
 } from "@yielded/agent/semantic-memory-index";
-import { Schema as NamespaceSchema, Effect, Schema } from "effect";
-import { Hex } from "effect/encoding";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as NamespaceSchema from "effect/Schema";
+import * as Schema from "effect/Schema";
 
 const TestNamespace = MemoryNamespace.define({
   name: "test/memory",

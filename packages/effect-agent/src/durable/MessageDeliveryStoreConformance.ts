@@ -1,4 +1,8 @@
-import { DateTime, Effect, Equal, Result, Schema } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { Update } from "../core/AgentUpdates.ts";
 import {

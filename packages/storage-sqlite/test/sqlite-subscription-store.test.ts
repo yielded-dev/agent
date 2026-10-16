@@ -1,5 +1,5 @@
-import { NodeFileSystem } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
 import {
   SqliteStorageConfig,
@@ -20,10 +20,13 @@ import {
   subscriptionConformancePartition,
   subscriptionStoreConformanceCases,
 } from "@yielded/agent/testing/subscription-store-conformance";
-import type { PlatformError } from "effect";
-import { Effect, FileSystem, Layer, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import type * as PlatformError from "effect/PlatformError";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { TestClock } from "effect/testing";
+import * as TestClock from "effect/testing/TestClock";
 
 const testLayer = (filename: string) =>
   subscriptionStoreLayer(subscriptionConformancePartition).pipe(

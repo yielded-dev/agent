@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import * as NodeHost from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
@@ -10,8 +10,16 @@ import * as Subagent from "@yielded/agent/subagent";
 import { SubagentHost } from "@yielded/agent/subagent-host";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
-import { Context, Effect, FileSystem, Layer, Schema, Stream } from "effect";
-import { LanguageModel, Model, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 const principal = Schema.decodeSync(Principal)("automatic-owner");
 const threadId = Schema.decodeSync(ThreadId)("automatic-parent");

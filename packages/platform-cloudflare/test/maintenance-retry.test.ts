@@ -16,21 +16,19 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { runInDurableObject } from "cloudflare:test";
-import {
-  Cause,
-  Clock,
-  Deferred,
-  Effect,
-  ErrorReporter,
-  Exit,
-  Fiber,
-  Layer,
-  Logger,
-  Option,
-  Stream,
-} from "effect";
 import { DurableObject } from "effect-cf";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as ErrorReporter from "effect/ErrorReporter";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it } from "vite-plus/test";
 
 import { instrumentedStorage } from "../../../test/fixtures/instrumented-storage.ts";

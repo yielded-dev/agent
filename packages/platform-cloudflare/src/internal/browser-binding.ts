@@ -1,5 +1,9 @@
 /// <reference types="@cloudflare/workers-types" />
-import { Cause, Context, Effect, Layer, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import puppeteer, {
   type Browser,
   type ConnectionTransport,

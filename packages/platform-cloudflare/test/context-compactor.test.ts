@@ -10,9 +10,16 @@ import { submissionSettlementRecordId } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
-import { LanguageModel, Model, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

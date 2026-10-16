@@ -1,5 +1,5 @@
-import { NodeFileSystem } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
 import {
   activityProcessorStoreLayer,
@@ -15,21 +15,19 @@ import {
   ActivityWorkConflict,
   PreparedActivity,
 } from "@yielded/agent/activity-store";
-import type { PlatformError } from "effect";
-import {
-  Cause,
-  Context,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Layer,
-  Result,
-  Schema,
-  Scope,
-} from "effect";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import type * as PlatformError from "effect/PlatformError";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as TestClock from "effect/testing/TestClock";
 
 const key = Schema.decodeSync(ActivityProcessorKey)({
   processorId: "profile",

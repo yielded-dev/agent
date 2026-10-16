@@ -1,6 +1,8 @@
-import { Crypto, Effect, Schema } from "effect";
-import type { Prompt } from "effect/ai";
-import { Hex } from "effect/encoding";
+import type * as Prompt from "effect/ai/Prompt";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Schema from "effect/Schema";
 
 import { ThreadId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";

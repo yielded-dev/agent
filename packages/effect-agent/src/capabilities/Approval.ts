@@ -1,4 +1,11 @@
-import { Clock, Context, DateTime, Duration, Effect, Layer, Ref, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 
 import { ThreadId, RunId, ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";

@@ -1,5 +1,5 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   decodeAbortFact,
   decodeAdmissionFact,
@@ -136,7 +136,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import type * as SqlError from "effect/sql/SqlError";
 import * as Stream from "effect/Stream";
 
 import { DoStorageConfig } from "./DoStorageConfig.ts";
@@ -421,7 +421,7 @@ const internalFailure =
  */
 const sqlFailure =
   (operation: string) =>
-  (error: SqlError): LedgerError =>
+  (error: SqlError.SqlError): LedgerError =>
     internalFailure(operation)(
       DoLedgerError.make({
         cause: error,
@@ -530,7 +530,7 @@ const makeServices = Effect.fnUntraced(function* () {
   };
 
   const cached = <A>(
-    effect: Effect.Effect<A, SqlError | DoStorageCorruptionError>,
+    effect: Effect.Effect<A, SqlError.SqlError | DoStorageCorruptionError>,
     operation: string,
   ) => effect.pipe(Effect.mapError(internalFailure(operation)));
 

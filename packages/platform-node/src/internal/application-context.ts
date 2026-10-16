@@ -1,4 +1,8 @@
-import { Clock, Context, References, Scope, Tracer } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as References from "effect/References";
+import * as Scope from "effect/Scope";
+import * as Tracer from "effect/Tracer";
 
 /** Live lifetime and diagnostics may cross the managed host's private storage boundary. */
 export const applicationInvocationContext = Context.pick(

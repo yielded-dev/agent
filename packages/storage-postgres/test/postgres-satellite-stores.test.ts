@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import * as PostgresStorage from "@yielded/agent-storage-postgres/postgres-storage";
 import { MessageDeliveryStore } from "@yielded/agent/message-delivery";
@@ -20,8 +20,11 @@ import {
   subscriptionConformancePartition,
   subscriptionStoreConformanceCases,
 } from "@yielded/agent/testing/subscription-store-conformance";
-import { Effect, Layer, Result, Schema } from "effect";
-import { TestClock } from "effect/testing";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 import { clientLayer, storage, withTemporaryDatabase } from "./harness.ts";
 

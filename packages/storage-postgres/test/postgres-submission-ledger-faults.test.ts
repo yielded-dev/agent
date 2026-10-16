@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import {
   PostgresStorageFailpointError,
@@ -61,8 +61,15 @@ import {
 } from "@yielded/agent/submission-ledger";
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import { AppendRequest, ThreadMaterialization } from "@yielded/agent/thread-store";
-import type { Crypto } from "effect";
-import { Cause, DateTime, Effect, Exit, Layer, Option, Ref, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 
 import { withSubmissionOwner } from "../../../test/fixtures/ledger-read-contracts.ts";

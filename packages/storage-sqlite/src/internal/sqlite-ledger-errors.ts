@@ -1,5 +1,5 @@
 import { LedgerError } from "@yielded/agent/submission-ledger";
-import type { SqlError } from "effect/sql/SqlError";
+import type * as SqlError from "effect/sql/SqlError";
 
 import { SqliteLedgerError, SqliteWriteContention } from "../SqliteStorageError.ts";
 
@@ -12,7 +12,7 @@ const internalFailure =
 /** Classify raw SQL failures: write-lock timeouts stay retryable typed contention. */
 export const sqlFailure =
   (operation: string) =>
-  (error: SqlError): LedgerError => {
+  (error: SqlError.SqlError): LedgerError => {
     const internal =
       error.reason._tag === "LockTimeoutError"
         ? SqliteWriteContention.make({

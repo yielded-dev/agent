@@ -1,4 +1,7 @@
-import { Effect, Predicate, Schema, type Scope } from "effect";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { utf8ByteLength as bytes } from "./internal/utf8.ts";
 import {

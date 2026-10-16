@@ -16,7 +16,11 @@ import {
   NetworkDisabled,
   type SandboxImplementation,
 } from "@yielded/agent/sandbox";
-import { Deferred, Duration, Effect, Fiber, Schema } from "effect";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Schema from "effect/Schema";
 
 /**
  * Shared `CodeExecutor` conformance (TEST-015). Every adapter — the

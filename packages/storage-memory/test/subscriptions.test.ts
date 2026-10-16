@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import { memorySubscriptionStoreLayer } from "@yielded/agent-storage-memory/memory-subscription-store";
 import { digestJson } from "@yielded/agent/digest";
@@ -37,8 +37,15 @@ import {
   Subscriptions,
   type SubscribeOptions,
 } from "@yielded/agent/subscriptions";
-import { DateTime, Cause, Deferred, Effect, Exit, Fiber, Layer, Schema } from "effect";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 const partition = { tenantId: "tenant", address: "repository:42" };
 const principal = Schema.decodeSync(Principal)("manager");

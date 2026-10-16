@@ -7,9 +7,15 @@ import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/ag
 import { Redactor, type RedactedPreview, type RedactionError } from "@yielded/agent/redaction";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
 import { Principal, type IdempotencyKey } from "@yielded/agent/submission-ledger";
-import type { Crypto } from "effect";
-import { Effect, Layer, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { DeterministicIdGeneratorLayer } from "../travel-planner/deterministic-layers.ts";
 import {

@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   DoSubscriptionTransaction,
   doSubscriptionStoreLayer,
@@ -17,9 +17,11 @@ import {
   subscriptionConformancePartition,
   subscriptionStoreConformanceCases,
 } from "@yielded/agent/testing/subscription-store-conformance";
-import { Effect, Layer, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { TestClock } from "effect/testing";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it } from "vite-plus/test";
 
 import { withScheduleStorage } from "./harness.ts";

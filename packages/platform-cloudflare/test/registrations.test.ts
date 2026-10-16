@@ -1,4 +1,4 @@
-import { BrowserCrypto } from "@effect/platform-browser";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import {
   ThreadObjectPlacement,
   ThreadObjectNamespace,
@@ -12,10 +12,13 @@ import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
 import { DefinitionDigestInput, DeploymentId } from "@yielded/agent/records";
 import { AdmissionRequest, SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { env, runInDurableObject } from "cloudflare:test";
-import { Context, Effect, Layer, Option } from "effect";
 import { DurableObject } from "effect-cf";
-import { Statement } from "effect/sql";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as Statement from "effect/sql/Statement";
 import { expect, it } from "vite-plus/test";
 
 import { stubFor } from "./harness.ts";
@@ -47,7 +50,7 @@ it("keeps local submission lookups inside the physical owner, including corrupt 
         const built = yield* Layer.build(runtime);
         const ports = Context.get(built, ThreadObject.ThreadObjectPorts);
         const ledger = Context.get(built, SubmissionLedger);
-        const sql = Context.get(built, SqlClient);
+        const sql = Context.get(built, SqlClient.SqlClient);
 
         const agentDigests = yield* digestDefinitions(
           DefinitionDigestInput.make({ agent: "local-lookup", model: "none", tools: "none" }),

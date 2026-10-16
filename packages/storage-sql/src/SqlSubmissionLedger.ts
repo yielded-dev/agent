@@ -106,9 +106,16 @@ import {
   transferPageFits,
   type ThreadStoreFailure,
 } from "@yielded/agent/thread-store";
-import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream, Struct } from "effect";
+import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import type * as SqlError from "effect/sql/SqlError";
+import * as Stream from "effect/Stream";
+import * as Struct from "effect/Struct";
 
 import {
   decodeAbortFact,
@@ -382,7 +389,7 @@ export interface SqlSubmissionLedgerOptions<
   readonly errors: SqlStorageErrors<S, C>;
   readonly hitFailpoint: SqlStorageFailpoint<F>;
   readonly offsetPrefix: string;
-  readonly sqlFailure: (operation: string) => (error: SqlError) => LedgerError;
+  readonly sqlFailure: (operation: string) => (error: SqlError.SqlError) => LedgerError;
 }
 
 /** Durable submission transitions shared by relational adapters. */

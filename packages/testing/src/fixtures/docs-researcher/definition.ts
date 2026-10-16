@@ -3,8 +3,11 @@ import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { type RuntimeBinding } from "@yielded/agent/agent-runtime";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentPolicy } from "@yielded/agent/subagent";
-import { Context, Effect, Schema } from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 // ---------------------------------------------------------------------------
 // Docs Researcher (P7 internal agent #3, plan §6): a coordinator that

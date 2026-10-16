@@ -1,6 +1,11 @@
 import { expect, it } from "@effect/vitest";
-import { Context, Effect, Layer, Option, Tracer, Schema } from "effect";
-import { Toolkit } from "effect/ai";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Tracer from "effect/Tracer";
 
 import * as Agent from "../../src/core/Agent.ts";
 import { AttemptId, SubmissionId, ThreadId } from "../../src/core/Identifiers.ts";

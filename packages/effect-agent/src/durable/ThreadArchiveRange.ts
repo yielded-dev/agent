@@ -1,4 +1,5 @@
-import type { Effect, Option } from "effect";
+import type * as Effect from "effect/Effect";
+import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { ThreadId } from "../core/Identifiers.ts";

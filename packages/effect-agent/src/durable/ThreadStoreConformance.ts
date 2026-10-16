@@ -1,4 +1,8 @@
-import { Effect, DateTime, Option, Schema, Stream } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { AgentPolicy } from "../core/AgentPolicy.ts";
 import {

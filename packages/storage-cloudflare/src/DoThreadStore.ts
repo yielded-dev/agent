@@ -1,5 +1,5 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { makeSqlThreadImport } from "@yielded/agent-storage-sql/sql-thread-import";
 import {
   makeSelectedReads,
@@ -46,7 +46,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { isSqlError } from "effect/sql/SqlError";
+import * as SqlError from "effect/sql/SqlError";
 import * as Stream from "effect/Stream";
 
 import {
@@ -481,12 +481,12 @@ const makeServices = Effect.fnUntraced(function* () {
     read: (body) =>
       journal.owner.transaction(body).pipe(
         Effect.provideService(SqlClientService.SqlClient, sql),
-        Effect.catchIf(isSqlError, (cause) => storeError("export transaction", cause)),
+        Effect.catchIf(SqlError.isSqlError, (cause) => storeError("export transaction", cause)),
       ),
     write: (body) =>
       journal.owner.transaction(body.pipe(Effect.tap(() => journal.state.invalidate))).pipe(
         Effect.provideService(SqlClientService.SqlClient, sql),
-        Effect.catchIf(isSqlError, (cause) => storeError("import transaction", cause)),
+        Effect.catchIf(SqlError.isSqlError, (cause) => storeError("import transaction", cause)),
       ),
   });
 

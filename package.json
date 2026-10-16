@@ -99,7 +99,7 @@
     "@effect/sql-pg": "4.0.5",
     "@effect/sql-sqlite-do": "4.0.5",
     "@effect/sql-sqlite-node": "4.0.5",
-    "@effect/tsgo": "0.51.1",
+    "@effect/tsgo": "0.53.3",
     "@effect/vitest": "4.0.5",
     "@fontsource-variable/ibm-plex-sans": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.3.0",

@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { type EventSources } from "@yielded/agent/event-source";
 import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
 import { type ScheduledEnvelope, ScheduledInputAdmission } from "@yielded/agent/schedule";
@@ -17,7 +17,12 @@ import {
   SubscriptionIntake,
   Subscriptions,
 } from "@yielded/agent/subscriptions";
-import { Cause, Duration, Effect, Exit, Layer, Option } from "effect";
+import * as Cause from "effect/Cause";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import { makeNodePreparedInputAdmission, NodeAdmission } from "./internal/prepared-admission.ts";
 import { NodeDurableHost } from "./NodeDurableHost.ts";

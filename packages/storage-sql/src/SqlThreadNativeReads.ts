@@ -56,8 +56,8 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
-import type { Fragment } from "effect/sql/Statement";
+import type * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import {
   executionStates,
@@ -223,12 +223,12 @@ const decodeReadyWork = Schema.decodeUnknownEffect(
 /** Keep every compound below workerd's limit while retaining one bounded indexed statement. */
 const boundedCandidates = (
   sql: SqlClient.SqlClient,
-  branches: ReadonlyArray<Fragment>,
+  branches: ReadonlyArray<Statement.Fragment>,
   limit: number,
   distinct: boolean,
 ) => {
   const join = sql.join(distinct ? " UNION " : " UNION ALL ", false);
-  const groups: Array<Fragment> = [];
+  const groups: Array<Statement.Fragment> = [];
 
   for (let start = 0; start < branches.length; start += 4) {
     const group = join(branches.slice(start, start + 4));
@@ -521,7 +521,9 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     pg: () => makeSqlTransaction(sql, { begin: "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" }),
   });
 
-  const snapshot = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | SqlError, R> =>
+  const snapshot = <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | SqlError.SqlError, R> =>
     owner === undefined ? sqlSnapshot(effect) : owner.snapshot(effect);
 
   const requireThread = Effect.fnUntraced(function* (threadId: SelectedThreadRead["threadId"]) {
@@ -654,7 +656,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               // Cover [0, atSequence) with disjoint power-of-two buckets. Each native
               // prefix index seeks its newest visible sequence, even for nonmonotone
               // coverage. At most 53 scalar candidates precede one payload lookup.
-              let candidates: Array<Fragment> = [];
+              let candidates: Array<Statement.Fragment> = [];
               let start = 0;
 
               while (start < selection.atSequence) {
@@ -676,7 +678,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               // Binary scalar merges avoid workerd's compound-SELECT and function-arity
               // limits. Materialize the winning sequence once before hydrating its record.
               while (candidates.length > 1) {
-                const merged: Array<Fragment> = [];
+                const merged: Array<Statement.Fragment> = [];
 
                 for (let at = 0; at < candidates.length; at += 2) {
                   const left = candidates[at];

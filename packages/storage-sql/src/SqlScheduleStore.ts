@@ -21,7 +21,9 @@ import {
   applyScheduleChange,
   scheduleDeadline,
 } from "@yielded/agent/schedule-transition";
-import { Effect, Result, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 
 import { sqliteJsonText } from "./internal/sql-json.ts";

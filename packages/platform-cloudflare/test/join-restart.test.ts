@@ -17,9 +17,20 @@ import {
   type ExecutionCheckpoint,
 } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
-import { Clock, Deferred, Effect, Fiber, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { expect, it } from "vite-plus/test";
 
 import { submitOptions } from "./fixtures.ts";

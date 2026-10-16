@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import * as Agent from "@yielded/agent/agent";
@@ -22,8 +22,19 @@ import {
   Principal,
 } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
-import { Cause, Effect, Exit, FileSystem, Layer, Option, Schema, Stream } from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 const digest = Schema.decodeSync(Digest)("a".repeat(64));
 const digests = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });

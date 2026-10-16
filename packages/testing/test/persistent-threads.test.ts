@@ -1,4 +1,5 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { describe, expect, it } from "@effect/vitest";
 import { Output, PersistentHistory } from "@yielded/agent";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
@@ -15,22 +16,23 @@ import { readTestThread } from "@yielded/agent/testing/thread-store-conformance"
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { replayThread } from "@yielded/agent/thread-projection";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
-import {
-  Cause,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Layer,
-  Ref,
-  Schema,
-  SchemaGetter,
-  SchemaIssue,
-  Scope,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, Tool, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import * as SchemaIssue from "effect/SchemaIssue";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 const threadId = Schema.decodeSync(ThreadId)("retained-history");
 const options = { threadId };

@@ -22,7 +22,11 @@ import {
   scheduleUsesCapacity,
   scheduleDeadline,
 } from "@yielded/agent/schedule-transition";
-import { Context, Effect, Layer, Result, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 
 const CURRENT_SCHEDULE_STORE_VERSION = 3;

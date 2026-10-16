@@ -1,4 +1,5 @@
-import { NodeCrypto, NodeServices } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import { AgentWorkflow } from "@yielded/agent-workflow";
 import { WorkflowAgentHost } from "@yielded/agent-workflow/workflow-agent-host";
@@ -8,8 +9,14 @@ import {
   ResolutionCompletedWithResult,
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
-import { Effect, Fiber, FileSystem, Layer, Option, Schema, Stream } from "effect";
-import { ChildProcess } from "effect/process";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   hostLayer,

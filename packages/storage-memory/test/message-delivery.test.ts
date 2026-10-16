@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import { memoryMessageDeliveryStoreLayer } from "@yielded/agent-storage-memory/memory-message-delivery-store";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
@@ -30,8 +30,15 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { SettledSubmission } from "@yielded/agent/submission-status";
 import { PreparedInput } from "@yielded/agent/subscription";
-import { Crypto, DateTime, Deferred, Effect, Exit, Fiber, Layer, Schema } from "effect";
-import { TestClock } from "effect/testing";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 const ownerThreadId = Schema.decodeSync(ThreadId)("sender");
 const threadId = Schema.decodeSync(ThreadId)("receiver");

@@ -3,8 +3,10 @@ import { makeSqlSubmissionLedgerKernel } from "@yielded/agent-storage-sql/sql-su
 import { StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import { SubmissionLedger } from "@yielded/agent/submission-ledger";
-import type { Crypto } from "effect";
-import { Context, Effect, Layer } from "effect";
+import * as Context from "effect/Context";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import type * as SqlClientService from "effect/sql/SqlClient";
 
 import { sqliteClientLayer } from "./internal/sqlite-client-layer.ts";

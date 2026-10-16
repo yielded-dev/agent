@@ -13,8 +13,13 @@ import type {
 } from "@yielded/agent/memory-store";
 import { MemoryKey, MemoryScope } from "@yielded/agent/memory-store";
 import type { ThreadHistory } from "@yielded/agent/thread-history";
-import { Effect, type Layer, Schema } from "effect";
-import type { IdGenerator as EffectAiIdGenerator, LanguageModel, Model, Tool } from "effect/ai";
+import type * as EffectAiIdGenerator from "effect/ai/IdGenerator";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import type * as Model from "effect/ai/Model";
+import type * as Tool from "effect/ai/Tool";
+import * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 import * as ContextTools from "../../src/capabilities/ContextTools.ts";

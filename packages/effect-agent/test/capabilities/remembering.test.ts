@@ -13,7 +13,8 @@ import {
   MemoryWriter,
 } from "@yielded/agent/memory-store";
 import * as Protocol from "@yielded/agent/remembering-store";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import { describe, expect } from "vite-plus/test";
 
 import * as Remembering from "../../src/capabilities/Remembering.ts";

@@ -1,7 +1,7 @@
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import type { AgentId } from "@yielded/agent/identifiers";
 import { SettlementFailureDiagnostic } from "@yielded/agent/records";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** Must be the exact registered Definition instance; its model and tool services belong to registration. */
 export interface WorkflowAgent<Input extends Schema.Top, Output extends Schema.Top> {

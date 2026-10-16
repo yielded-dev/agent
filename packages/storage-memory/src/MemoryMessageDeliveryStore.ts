@@ -35,7 +35,11 @@ import {
 } from "@yielded/agent/thread-import";
 import { ThreadStoreError, makeTransferFactCheck } from "@yielded/agent/thread-store";
 import { workId, type ThreadWorkEntry } from "@yielded/agent/thread-work";
-import { Effect, Layer, MutableRef, Ref, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as MutableRef from "effect/MutableRef";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 
 import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
 import { boundedWorkSelection } from "./internal/WorkSelection.ts";

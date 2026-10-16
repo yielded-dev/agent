@@ -12,8 +12,10 @@ import {
   ScheduleId,
 } from "@yielded/agent/schedule";
 import { Scheduling } from "@yielded/agent/scheduling";
-import { Effect, Layer, Schema } from "effect";
 import { WorkerEnvironment } from "effect-cf";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import {
   DEPLOYMENT_ID,

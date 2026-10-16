@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Result } from "effect";
+import * as Result from "effect/Result";
 
 import {
   scheduleDueOccurrence,

@@ -1,6 +1,14 @@
-import type { Crypto } from "effect";
-import { DateTime, Duration, Effect, Exit, Option, Result, Schema, Scope, Stream } from "effect";
-import { TestClock } from "effect/testing";
+import type * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import { InputMessage, MessageAdmission } from "../capabilities/Messaging.ts";
 import { AgentPolicy } from "../core/AgentPolicy.ts";

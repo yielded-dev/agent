@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import { MemoryScheduleStoreLive } from "@yielded/agent-storage-memory/memory-schedule-store";
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
@@ -24,8 +24,16 @@ import {
   ScheduleWakeNoop,
 } from "@yielded/agent/scheduling";
 import { Principal, QueueSequence } from "@yielded/agent/submission-ledger";
-import { Cause, Deferred, Effect, Exit, Fiber, Layer, Ref, Schema, Tracer } from "effect";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
+import * as Tracer from "effect/Tracer";
 
 const Input = Schema.Struct({ text: Schema.String });
 const agent = { definition: { id: Schema.decodeSync(AgentId)("schedule-test"), input: Input } };

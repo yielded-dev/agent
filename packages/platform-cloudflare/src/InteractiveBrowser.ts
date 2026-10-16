@@ -28,18 +28,16 @@ import {
 } from "@yielded/agent/interactive-browser";
 import { PageScreenshotResult } from "@yielded/agent/page-screenshot";
 import { SandboxImplementation } from "@yielded/agent/sandbox";
-import {
-  Cause,
-  Context,
-  Clock,
-  Duration,
-  Effect,
-  Layer,
-  Redacted,
-  Schema,
-  Semaphore,
-  Scope,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 import {
   type Browser,
   type BrowserContext,

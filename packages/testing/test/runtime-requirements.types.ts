@@ -5,8 +5,15 @@ import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { type DurableWorkerRequirements } from "@yielded/agent/durable-agent-runtime";
 import { RunContextPreparationPassthrough, type RunOptions } from "@yielded/agent/run-options";
 import { ThreadHistory } from "@yielded/agent/thread-history";
-import { Context, Effect, Layer, Schema, SchemaGetter, Scope } from "effect";
-import { Model, Tool, Toolkit } from "effect/ai";
+import * as Model from "effect/ai/Model";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import * as Scope from "effect/Scope";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2

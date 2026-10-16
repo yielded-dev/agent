@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import type { Fragment, Statement } from "effect/sql/Statement";
+import type * as Statement from "effect/sql/Statement";
 
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import type { CanonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
@@ -258,8 +258,8 @@ export const storedBatchHeader = (sql: SqlClient.SqlClient, alias?: string) => {
 
 export const runKey = (
   sql: SqlClient.SqlClient,
-  thread: Fragment,
-  run: Fragment,
+  thread: Statement.Fragment,
+  run: Statement.Fragment,
   namespace?: string,
 ) => {
   const table = sql(
@@ -269,7 +269,11 @@ export const runKey = (
   return sql`(SELECT run_key FROM ${table} WHERE thread_id=${thread} AND run_id=${run})`;
 };
 
-export const runIdentity = (sql: SqlClient.SqlClient, key: Fragment, namespace?: string) => {
+export const runIdentity = (
+  sql: SqlClient.SqlClient,
+  key: Statement.Fragment,
+  namespace?: string,
+) => {
   const table = sql(
     namespace === undefined ? "effect_agent_run_keys" : `${namespace}.effect_agent_run_keys`,
   );
@@ -338,12 +342,12 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
     });
   }
 
-  const query = <A extends object>(statement: Statement<A>) =>
+  const query = <A extends object>(statement: Statement.Statement<A>) =>
     execute(statement).pipe(
       Effect.mapError((cause) => failure("write canonical dictionary", cause)),
     );
 
-  const lookupKey = (statement: Statement<object>) =>
+  const lookupKey = (statement: Statement.Statement<object>) =>
     query(statement).pipe(
       Effect.flatMap(readKey),
       Effect.map((rows) => rows[0]?.key),

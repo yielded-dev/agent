@@ -1,5 +1,5 @@
-import { NodeServices } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { expect, it } from "@effect/vitest";
 import { PersistentHistory } from "@yielded/agent";
 import { activityProcessorStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-activity-store";
@@ -14,20 +14,22 @@ import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
 import { memoryReaderLayer } from "@yielded/agent/sql-memory-store";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
-import {
-  Duration,
-  Effect,
-  Fiber,
-  FileSystem,
-  Layer,
-  Option,
-  Path,
-  Result,
-  Schema,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, type Response, Toolkit } from "effect/ai";
-import { ChildProcess, type ChildProcessSpawner } from "effect/process";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
+import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   DAN_THREAD,

@@ -1,11 +1,11 @@
-import type { Fiber } from "effect";
-import type { Tool } from "effect/ai";
 import * as AiError from "effect/ai/AiError";
+import type * as Tool from "effect/ai/Tool";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as ErrorReporter from "effect/ErrorReporter";
 import * as Exit from "effect/Exit";
+import type * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";

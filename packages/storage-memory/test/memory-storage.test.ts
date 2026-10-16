@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, describe, it } from "@effect/vitest";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
 import { ThreadId, RunId, SubmissionId } from "@yielded/agent/identifiers";
@@ -22,19 +22,17 @@ import {
   ThreadStore,
   AppendRequest,
 } from "@yielded/agent/thread-store";
-import {
-  Cause,
-  Context,
-  DateTime,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Schema,
-  Scope,
-  Stream,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 const testLayer = MemoryThreadStoreLive.pipe(Layer.provide(NodeCrypto.layer));
 

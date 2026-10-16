@@ -13,7 +13,9 @@ import { MemoryAccess } from "@yielded/agent/memory-revalidation";
 import { type MemoryWrite } from "@yielded/agent/memory-store";
 import { MemoryKey, MemoryScope } from "@yielded/agent/memory-store";
 import { Principal } from "@yielded/agent/submission-ledger";
-import { Effect, Layer, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 export const Projects = MemoryNamespace.define({
   name: "application/projects",

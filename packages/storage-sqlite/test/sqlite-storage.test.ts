@@ -1,5 +1,6 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { expect, describe, it } from "@effect/vitest";
 import {
   SqliteStorageConfig,
@@ -70,24 +71,23 @@ import {
   type AppendResult,
   type ThreadReader,
 } from "@yielded/agent/thread-store";
-import type { PlatformError, Crypto } from "effect";
-import {
-  DateTime,
-  Cause,
-  Context,
-  Deferred,
-  Effect,
-  Exit,
-  FileSystem,
-  Fiber,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Stream,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import type * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import type * as PlatformError from "effect/PlatformError";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { TestClock } from "effect/testing";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import { seedCheckpoint, assertCheckpoint } from "../../../test/fixtures/checkpoints.ts";
 import { snapshotStore } from "../../../test/fixtures/storage-upgrade.ts";

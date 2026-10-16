@@ -50,7 +50,13 @@ import {
 } from "@yielded/agent/thread-store";
 import { MAX_RECOVERY_WORK_ITEMS } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { type Stream, Context, Effect, Fiber, Layer, Ref, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import type * as Stream from "effect/Stream";
 
 import { applicationInvocationContext } from "./internal/application-context.ts";
 import { ExclusiveSqliteHost } from "./internal/exclusive-host.ts";

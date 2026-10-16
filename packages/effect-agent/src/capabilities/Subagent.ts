@@ -1,17 +1,16 @@
-import {
-  Cause,
-  Clock,
-  DateTime,
-  Duration,
-  Effect,
-  Exit,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Scope,
-} from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 
 import {
   type Definition,

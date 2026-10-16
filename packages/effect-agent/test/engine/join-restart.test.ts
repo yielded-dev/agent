@@ -6,8 +6,19 @@ import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import type { RunEvent } from "@yielded/agent/run-event";
 import type { RunInputCommand } from "@yielded/agent/run-options";
 import { ThreadHistory } from "@yielded/agent/thread-history";
-import { Deferred, Effect, Exit, Fiber, Layer, Schema, Stream, Tracer } from "effect";
-import { LanguageModel, Model, type Response, Tool, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Tracer from "effect/Tracer";
 
 // Requested engine seam: an in-flight joined input must replace disposable drafts,
 // retain reported usage and stop restarting after two cancellations in the same Run.

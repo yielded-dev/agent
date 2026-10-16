@@ -1,12 +1,22 @@
-import { AnthropicClient, AnthropicLanguageModel } from "@effect/ai-anthropic";
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import * as AnthropicClient from "@effect/ai-anthropic/AnthropicClient";
+import * as AnthropicLanguageModel from "@effect/ai-anthropic/AnthropicLanguageModel";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
 import { describe, expect, it } from "@effect/vitest";
 import { Agent, AgentRuntime, InMemory, ThreadHistory } from "@yielded/agent";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { ModelCallContext } from "@yielded/agent/context-window";
-import { Effect, Layer, Schema } from "effect";
-import { Model, Prompt, ResponseIdTracker, Tool, Toolkit } from "effect/ai";
-import { HttpClient, HttpClientResponse, HttpServerResponse } from "effect/http";
+import * as Model from "effect/ai/Model";
+import * as Prompt from "effect/ai/Prompt";
+import * as ResponseIdTracker from "effect/ai/ResponseIdTracker";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 const Request = Schema.Struct({
   input: Schema.Array(Schema.Json),

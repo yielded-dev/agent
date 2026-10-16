@@ -1,4 +1,4 @@
-import { Duration } from "effect";
+import * as Duration from "effect/Duration";
 
 import type { AnyDefinition } from "../../core/Agent.ts";
 import { AgentPolicy } from "../../core/AgentPolicy.ts";

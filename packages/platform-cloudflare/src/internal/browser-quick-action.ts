@@ -31,7 +31,11 @@ import {
   type PageScreenshotRequest,
 } from "@yielded/agent/page-screenshot";
 import { SandboxImplementation } from "@yielded/agent/sandbox";
-import { Context, Effect, Layer, Option, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 /**
  * The Cloudflare Browser Run Quick Action `PageCapture` adapter (capability

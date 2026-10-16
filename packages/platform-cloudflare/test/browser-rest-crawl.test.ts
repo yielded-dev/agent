@@ -7,8 +7,14 @@ import {
   type PageCrawlError,
   type PageCrawlRecord,
 } from "@yielded/agent/page-crawl";
-import { Deferred, Effect, Exit, Fiber, Redacted, Stream } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Redacted from "effect/Redacted";
+import * as Stream from "effect/Stream";
 
 const JOB_ID = "crawl-job-1";
 const TOKEN = "secret-rest-token";

@@ -5,8 +5,13 @@ import {
   WorkflowDispatchStore,
   WorkflowRepairTrigger,
 } from "@yielded/agent-workflow/workflow-dispatch";
-import { Cause, Duration, Effect, Layer, Option, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 const StoredIntent = Schema.Struct({
   deployment_id: Schema.String,

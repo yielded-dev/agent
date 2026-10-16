@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory-submission-ledger";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
@@ -36,22 +36,25 @@ import {
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import {
-  Context,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Option,
-  Ref,
-  Result,
-  Schema,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
-import { Workflow, WorkflowEngine } from "effect/workflow";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
+import * as Workflow from "effect/workflow/Workflow";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 
 const deploymentId = Schema.decodeSync(DeploymentId)("dispatch-tests");
 const definitions = DefinitionDigestInput.make({ agent: "v1", model: "v1", tools: "v1" });

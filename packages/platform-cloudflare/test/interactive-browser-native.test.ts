@@ -15,7 +15,12 @@ import {
   InteractiveBrowser,
   InteractiveBrowserPolicy,
 } from "@yielded/agent/interactive-browser";
-import { Config, Effect, Layer, Logger, Option, Schema } from "effect";
+import * as Config from "effect/Config";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import nativePuppeteer, {
   type ElementHandle as NativeElementHandle,
   type TimeoutError as NativeTimeoutError,

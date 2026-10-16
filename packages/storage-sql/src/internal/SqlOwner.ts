@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
-import type { SqlClient } from "effect/sql/SqlClient";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 interface RetainedOwner {
   readonly ready: Deferred.Deferred<StorageOwner["Service"]>;
@@ -17,7 +17,10 @@ interface RetainedOwner {
 const owners = new WeakMap<object, Map<string, RetainedOwner>>();
 
 /** Each live facet co-owns the root Scope; closing one facet cannot revoke another. */
-export const sqlStorageOwner = Effect.fnUntraced(function* (sql: SqlClient, namespace = "") {
+export const sqlStorageOwner = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  namespace = "",
+) {
   return yield* Effect.uninterruptible(
     Effect.gen(function* () {
       let namespaces = owners.get(sql.transactionService);

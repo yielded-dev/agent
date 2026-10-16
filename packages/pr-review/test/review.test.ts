@@ -15,16 +15,23 @@ import {
   ReviewRepository,
   ReviewSource,
 } from "@yielded/agent-pr-review/review-repository";
-import { Deferred, Effect, Exit, Fiber, Layer, Logger, Ref, Schema, Stream, Struct } from "effect";
-import {
-  type Tool,
-  type AiError,
-  LanguageModel,
-  Model,
-  type Prompt,
-  type Response,
-} from "effect/ai";
-import { TestClock } from "effect/testing";
+import type * as AiError from "effect/ai/AiError";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import type * as Tool from "effect/ai/Tool";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Struct from "effect/Struct";
+import * as TestClock from "effect/testing/TestClock";
 
 const patch = `@@ -1,3 +1,4 @@
  unchanged

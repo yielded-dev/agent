@@ -1,4 +1,12 @@
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Option, Schema, Semaphore } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 
 import { ThreadId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";

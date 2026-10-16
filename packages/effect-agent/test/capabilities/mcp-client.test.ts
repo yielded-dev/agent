@@ -1,14 +1,22 @@
-import { NodeCrypto, NodeServices } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import type { McpConnector } from "@yielded/agent/mcp";
 import { connectMcp, McpConnectionRequest } from "@yielded/agent/mcp";
 import * as McpClient from "@yielded/agent/mcp-client";
 import type { McpToolCallFailed, McpToolResult } from "@yielded/agent/mcp-client";
 import { McpHttpTransport, McpStdioTransport } from "@yielded/agent/mcp-client";
-import { Effect, Layer, Option, Ref, Schema, Stream } from "effect";
-import { Toolkit } from "effect/ai";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import type { ChildProcessSpawner } from "effect/process";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 const request = McpConnectionRequest.make({
   serverId: "fixture",

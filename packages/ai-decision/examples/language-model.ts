@@ -1,6 +1,8 @@
 import { LanguageModelDecisionModel } from "@yielded/agent-ai-decision";
-import { Effect, Schema } from "effect";
-import { Decision, DecisionModel } from "effect/ai";
+import * as Decision from "effect/ai/Decision";
+import * as DecisionModel from "effect/ai/DecisionModel";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 export const Sentiment = Decision.make({
   input: Schema.String,

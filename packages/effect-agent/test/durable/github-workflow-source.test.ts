@@ -13,7 +13,9 @@ import { DefinitionDigests, Digest } from "@yielded/agent/records";
 import { Principal } from "@yielded/agent/submission-ledger";
 import { SubscriptionRecord } from "@yielded/agent/subscription";
 import { SubscriptionIntake } from "@yielded/agent/subscriptions";
-import { Effect, Redacted, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 const SHA = "a".repeat(40);
 const DIGEST = Schema.decodeSync(Digest)("b".repeat(64));

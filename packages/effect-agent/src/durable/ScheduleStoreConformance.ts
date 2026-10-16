@@ -1,4 +1,6 @@
-import { Effect, Result, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { AgentId, ThreadId, ReceiptId, SubmissionId } from "../core/Identifiers.ts";
 import { Receipt } from "./DurableAgentRuntime.ts";

@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { makeStorageOwner, type StorageOwner } from "@yielded/agent/run-storage";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -7,8 +7,8 @@ import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as SqlError from "effect/sql/SqlError";
 
 import { DoStorageCorruptionError, DoStorageError } from "../DoStorageError.ts";
 
@@ -27,9 +27,9 @@ export class OwnedState {
 
   readonly transaction = <A, E, R>(
     effect: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E | SqlError, R | SqlClient> =>
+  ): Effect.Effect<A, E | SqlError.SqlError, R | SqlClient.SqlClient> =>
     this.read(
-      Effect.flatMap(SqlClient, (sql) =>
+      Effect.flatMap(SqlClient.SqlClient, (sql) =>
         sql
           .withTransaction(effect)
           .pipe(Effect.onExit((exit) => (Exit.isFailure(exit) ? this.invalidate : Effect.void))),
@@ -61,7 +61,7 @@ const DoClient = Schema.declare<SqliteClient.SqliteClient>(
   (value): value is SqliteClient.SqliteClient => Predicate.hasProperty(value, SqliteClient.TypeId),
 );
 
-export const ownedState = (sql: SqlClient) =>
+export const ownedState = (sql: SqlClient.SqlClient) =>
   Schema.decodeUnknownEffect(DoClient)(sql).pipe(
     Effect.mapError(() =>
       DoStorageError.make({
@@ -136,7 +136,8 @@ export const ownedRows = <A, I>(
   key: (row: A) => string,
   identityColumn?: keyof A & string,
   uniqueFields: ReadonlyArray<ReadonlyArray<keyof A & string>> = [],
-  projection: (sql: SqlClient) => ReturnType<SqlClient["literal"]> = (sql) => sql.literal("*"),
+  projection: (sql: SqlClient.SqlClient) => ReturnType<SqlClient.SqlClient["literal"]> = (sql) =>
+    sql.literal("*"),
 ) => {
   type View = {
     readonly id: string;
@@ -148,7 +149,7 @@ export const ownedRows = <A, I>(
   const caches = new WeakMap<OwnedState, Map<string, View>>();
   const decodeRows = Schema.decodeUnknownEffect(Schema.Array(schema));
 
-  return (state: OwnedState, sql: SqlClient) => {
+  return (state: OwnedState, sql: SqlClient.SqlClient) => {
     let cache = caches.get(state);
 
     if (cache === undefined) {
@@ -197,7 +198,7 @@ export const ownedRows = <A, I>(
     const matching = (
       id: string,
       matches: View["matches"],
-      query: Effect.Effect<ReadonlyArray<unknown>, SqlError>,
+      query: Effect.Effect<ReadonlyArray<unknown>, SqlError.SqlError>,
       maxRows = Infinity,
     ) =>
       state.read(

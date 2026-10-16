@@ -8,7 +8,10 @@ import {
   InteractiveBrowser,
   InteractiveBrowserPolicy,
 } from "@yielded/agent/interactive-browser";
-import { Effect, Fiber, Layer, Logger } from "effect";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import { afterEach, beforeEach, vi } from "vite-plus/test";
 
 import { BrowserRunSessionLifecycle } from "../src/internal/browser-session-lifecycle.ts";

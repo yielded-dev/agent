@@ -11,7 +11,8 @@ import {
 } from "@yielded/agent/records";
 import { ThreadProjection } from "@yielded/agent/thread-projection";
 import { ThreadCheckpoint } from "@yielded/agent/thread-store";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { TravelPlan, TripRequest } from "./definition.ts";
 import { expectedTravelPlan, phase1Trip } from "./scenarios.ts";

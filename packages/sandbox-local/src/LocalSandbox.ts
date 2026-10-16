@@ -1,4 +1,4 @@
-import { NodeServices } from "@effect/platform-node";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   SANDBOX_DIAGNOSTIC_MAX_LENGTH,
   Sandbox,
@@ -16,9 +16,16 @@ import {
   type SandboxExecute,
   type SandboxRequest,
 } from "@yielded/agent/sandbox";
-import { Clock, Config, Duration, Effect, Layer, Option, Ref, Stream } from "effect";
-import { ChildProcess } from "effect/process";
-import { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
+import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as Ref from "effect/Ref";
+import * as Stream from "effect/Stream";
 
 /**
  * The only implementation identity produced by this package. It deliberately states that local
@@ -192,7 +199,7 @@ const flushDecoder = (stream: OutputStream, decoder: TextDecoder): Stream.Stream
   });
 
 const makeExecute =
-  (spawner: ChildProcessSpawner["Service"]): SandboxExecute =>
+  (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]): SandboxExecute =>
   (request) =>
     Stream.unwrap(
       Effect.gen(function* () {
@@ -301,13 +308,14 @@ const makeExecute =
  * so composition roots and tests can inject a spawner double. It is unisolated and must never be
  * used as a security boundary for untrusted code or commands.
  */
-export const sandboxLayer: Layer.Layer<Sandbox, never, ChildProcessSpawner> = Layer.effect(Sandbox)(
-  Effect.gen(function* () {
-    const spawner = yield* ChildProcessSpawner;
+export const sandboxLayer: Layer.Layer<Sandbox, never, ChildProcessSpawner.ChildProcessSpawner> =
+  Layer.effect(Sandbox)(
+    Effect.gen(function* () {
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
-    return Sandbox.of({ execute: makeExecute(spawner) });
-  }),
-);
+      return Sandbox.of({ execute: makeExecute(spawner) });
+    }),
+  );
 
 /** A scoped Node process implementation whose events are always labeled `unisolated`. */
 export const layer: Layer.Layer<Sandbox> = sandboxLayer.pipe(Layer.provide(NodeServices.layer));

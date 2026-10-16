@@ -1,6 +1,6 @@
 import { SqlStorageFailpointLocation as SqliteStorageFailpointLocation } from "@yielded/agent-storage-sql/sql-storage-failpoint";
 import { CanonicalSequence } from "@yielded/agent/records";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** The SQLite file uses a private-development format this adapter cannot read. */
 export class SqliteStorageCompatibilityError extends Schema.TaggedError<SqliteStorageCompatibilityError>()(

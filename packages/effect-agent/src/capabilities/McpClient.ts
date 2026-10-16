@@ -1,21 +1,27 @@
-import {
-  Cause,
-  Context,
-  Effect,
-  Layer,
-  Option,
-  Predicate,
-  Queue,
-  Schema,
-  Scope,
-  Stream,
-} from "effect";
-import { Tool, Toolkit } from "effect/ai";
 import * as McpProtocol from "effect/ai/McpProtocol";
 import * as McpSchema from "effect/ai/McpSchema";
-import { Headers, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { RpcClient, RpcClientError, type RpcMessage, RpcSerialization } from "effect/rpc";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Headers from "effect/http/Headers";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as Queue from "effect/Queue";
+import * as RpcClient from "effect/rpc/RpcClient";
+import * as RpcClientError from "effect/rpc/RpcClientError";
+import type * as RpcMessage from "effect/rpc/RpcMessage";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { ToolExecutionClass, type ToolExecutionClassValue } from "../engine/DurableStep.ts";

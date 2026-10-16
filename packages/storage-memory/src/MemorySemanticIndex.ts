@@ -10,8 +10,12 @@ import {
   SemanticMemoryIndex,
   SemanticMemoryProfile,
 } from "@yielded/agent/semantic-memory-index";
-import { Clock, Effect, Layer, Ref, Schema } from "effect";
-import { Hex } from "effect/encoding";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 
 const PositiveCapacity = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_536 }));
 const MaxStoredVectorComponents = 16_777_216;

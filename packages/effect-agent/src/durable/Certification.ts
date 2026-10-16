@@ -1,5 +1,9 @@
-import type { Crypto } from "effect";
-import { Cause, Effect, Exit, Option, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import { DurableRuntimeFailpointLocation } from "./DurableFailpoint.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";

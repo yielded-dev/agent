@@ -23,7 +23,8 @@ import {
   MemoryIndexSource,
   SemanticMemoryIndex,
 } from "@yielded/agent/semantic-memory-index";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 const TenantId = Schema.NonEmptyString.pipe(Schema.brand("app/TenantId"));
 const UserId = Schema.NonEmptyString.pipe(Schema.brand("app/UserId"));

@@ -1,5 +1,5 @@
 import { SqlStorageFailpointLocation } from "@yielded/agent-storage-sql/sql-storage-failpoint";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** The database uses an unsupported or inconsistent storage layout or record format. */
 export class PostgresStorageCompatibilityError extends Schema.TaggedError<PostgresStorageCompatibilityError>()(

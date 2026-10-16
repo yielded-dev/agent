@@ -1,7 +1,15 @@
-import type { Brand, Scope } from "effect";
-import { Context, Crypto, Effect, Layer, Option, Schema, Stream } from "effect";
-import { Tool, Toolkit } from "effect/ai";
-import { Hex } from "effect/encoding";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import type * as Brand from "effect/Brand";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import type { AnyDefinition } from "../../core/Agent.ts";
 import type { Update } from "../../core/AgentUpdates.ts";

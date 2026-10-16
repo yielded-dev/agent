@@ -6,8 +6,18 @@ import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
 import { ThreadHistory } from "@yielded/agent/thread-history";
-import { Deferred, Effect, Exit, Layer, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 let threadSequence = 0;
 

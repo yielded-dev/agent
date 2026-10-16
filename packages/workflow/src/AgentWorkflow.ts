@@ -15,7 +15,8 @@ import {
   ThreadNotMaterialized,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { WorkflowAdmissionClosed, WorkflowAgentHost } from "./WorkflowAgentHost.ts";
 import { WorkflowDispatchError } from "./WorkflowDispatch.ts";

@@ -1,5 +1,5 @@
-import { NodeCrypto } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { expect, it } from "@effect/vitest";
 import { inMemorySemanticIndexLayer } from "@yielded/agent-storage-memory/memory-semantic-index";
 import * as MemoryNamespace from "@yielded/agent/memory-namespace";
@@ -8,8 +8,15 @@ import { MemoryScope, MemoryKey, MemoryWriter } from "@yielded/agent/memory-stor
 import { indexMemorySource, querySemanticMemory } from "@yielded/agent/semantic-memory";
 import { SemanticMemoryIndex, SemanticMemoryProfile } from "@yielded/agent/semantic-memory-index";
 import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
-import { Schema as NamespaceSchema, Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect";
-import { AiError, EmbeddingModel } from "effect/ai";
+import * as AiError from "effect/ai/AiError";
+import * as EmbeddingModel from "effect/ai/EmbeddingModel";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as NamespaceSchema from "effect/Schema";
 
 const TestNamespace = MemoryNamespace.define({
   name: "test/memory",

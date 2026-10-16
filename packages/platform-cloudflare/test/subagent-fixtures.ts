@@ -5,8 +5,15 @@ import { DefinitionDigests, Digest } from "@yielded/agent/records";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentPolicy } from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
-import { Duration, Effect, Layer, Schema, Stream } from "effect";
-import { LanguageModel, Model, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   TEST_DIGESTS,

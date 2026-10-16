@@ -18,7 +18,15 @@ import {
   type CodeExecutionRequest,
 } from "@yielded/agent/code-executor";
 import { SandboxImplementation } from "@yielded/agent/sandbox";
-import { Clock, Duration, Effect, Fiber, Layer, Option, Predicate, Queue, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 
 /**
  * The deterministic in-process executor substitute (C1 of ADR-0017). It runs

@@ -1,9 +1,13 @@
 import { createHash } from "node:crypto";
 
-import { NodeServices } from "@effect/platform-node";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, layer } from "@effect/vitest";
-import { Effect, Exit, FileSystem, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Schema from "effect/Schema";
 
 import { checkReleasePackages } from "../../../scripts/check-release-packages.ts";
 import {

@@ -2,7 +2,7 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createHash } from "node:crypto";
 
-import { BrowserCrypto } from "@effect/platform-browser";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

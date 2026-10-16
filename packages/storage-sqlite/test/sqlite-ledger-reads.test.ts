@@ -1,11 +1,15 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, it } from "@effect/vitest";
 import type { StorageOwner } from "@yielded/agent/run-storage";
 import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import type { ThreadStore } from "@yielded/agent/thread-store";
-import { Effect, FileSystem, Layer, type Crypto } from "effect";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { ledgerReadCases } from "../../../test/fixtures/ledger-read-contracts.ts";

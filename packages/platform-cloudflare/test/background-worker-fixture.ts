@@ -16,8 +16,17 @@ import {
   WorkerHostConfig,
   WorkerPolicyResolver,
 } from "@yielded/agent/worker-host";
-import { Duration, Effect, Layer, Option, Schema, Stream } from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { TEST_DIGESTS, TEST_PRINCIPAL, finalParts } from "./fixtures.ts";
 

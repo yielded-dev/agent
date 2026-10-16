@@ -4,7 +4,8 @@ import {
   threadCheckpointConformanceCases,
 } from "@yielded/agent/testing/thread-store-conformance";
 import type { ThreadStore } from "@yielded/agent/thread-store";
-import { Effect, String } from "effect";
+import * as Effect from "effect/Effect";
+import * as String from "effect/String";
 
 import { storage as makeStorage, withTemporaryDatabase } from "./harness.ts";
 

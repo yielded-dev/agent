@@ -5,8 +5,16 @@ import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { ContextCompactor, type CompactionDecision } from "@yielded/agent/context-compactor";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
-import { Context, Effect, Layer, Schema, Stream } from "effect";
-import { LanguageModel, Model, Prompt, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { RunContextPreparationPassthrough } from "../../src/engine/RunOptions.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";

@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, layer } from "@effect/vitest";
 import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory-submission-ledger";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
@@ -26,8 +26,19 @@ import { ThreadHistory } from "@yielded/agent/thread-history";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Cause, Effect, Layer, Logger, Ref, References, Schema, Stream } from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as Ref from "effect/Ref";
+import * as References from "effect/References";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 let threadSequence = 0;
 

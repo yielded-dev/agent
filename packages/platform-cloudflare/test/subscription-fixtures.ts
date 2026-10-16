@@ -21,8 +21,11 @@ import {
   SubscriptionIntake,
   Subscriptions,
 } from "@yielded/agent/subscriptions";
-import { DateTime, Effect, Layer, Schema } from "effect";
 import { DurableObjectAlarm, DurableObjectState } from "effect-cf";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { TEST_DIGESTS } from "./fixtures.ts";
 

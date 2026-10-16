@@ -1,4 +1,4 @@
-import type { Schema } from "effect";
+import type * as Schema from "effect/Schema";
 
 const MAX_JSON_DEPTH = 128;
 

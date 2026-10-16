@@ -1,8 +1,15 @@
 import { makeSubscriptionPartitionAlarmHandler } from "@yielded/agent-platform-cloudflare/cloudflare-subscriptions";
 import { SubscriptionDriver } from "@yielded/agent/subscriptions";
-import { Context, DateTime, Deferred, Effect, Exit, Fiber, Schema, SchemaGetter } from "effect";
 import { DurableObjectAlarm } from "effect-cf";
-import { TestClock } from "effect/testing";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import * as TestClock from "effect/testing/TestClock";
 import { expect, it } from "vite-plus/test";
 
 class Host extends Context.Service<Host, string>()("test/AlarmHost") {}

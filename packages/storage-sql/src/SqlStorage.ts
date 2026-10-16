@@ -1,12 +1,12 @@
-import type { Cause } from "effect";
+import type * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { SqlClient } from "effect/sql/SqlClient";
-import { SqlError, UnknownError } from "effect/sql/SqlError";
-import type { Statement } from "effect/sql/Statement";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
 
@@ -46,17 +46,19 @@ const decodePostgresText = Schema.decodeEffect(PostgresText);
  * PostgreSQL validates text parameters after compilation; escaped canonical JSON stays intact.
  */
 export const makeSqlQuery = Effect.fnUntraced(function* (namespace?: string) {
-  const sql = yield* SqlClient;
+  const sql = yield* SqlClient.SqlClient;
   const postgres = sql.onDialectOrElse({ pg: () => true, orElse: () => false });
 
-  const executePostgres = Effect.fnUntraced(function* <A extends object>(statement: Statement<A>) {
+  const executePostgres = Effect.fnUntraced(function* <A extends object>(
+    statement: Statement.Statement<A>,
+  ) {
     if (postgres) {
       for (const parameter of statement.compile(true)[1]) {
         if (typeof parameter === "string") {
           yield* decodePostgresText(parameter).pipe(
             Effect.mapError((cause) =>
-              SqlError.make({
-                reason: UnknownError.make({
+              SqlError.SqlError.make({
+                reason: SqlError.UnknownError.make({
                   cause,
                   operation: "encode SQL parameter",
                   message: "Storage SQL text cannot be represented in PostgreSQL.",
@@ -73,7 +75,7 @@ export const makeSqlQuery = Effect.fnUntraced(function* (namespace?: string) {
 
   const execute = postgres
     ? executePostgres
-    : <A extends object>(statement: Statement<A>) => statement.withoutTransform;
+    : <A extends object>(statement: Statement.Statement<A>) => statement.withoutTransform;
 
   return {
     table: (name: string) => sql(namespace === undefined ? name : `${namespace}.${name}`),
@@ -120,7 +122,7 @@ export type SqlStorageFailpoint<F extends Diagnostic> = (
 ) => Effect.Effect<void, F>;
 
 /** Native transaction shape used by stores whose errors already belong to their ports. */
-export type SqlWriteTransaction = SqlClient["withTransaction"];
+export type SqlWriteTransaction = SqlClient.SqlClient["withTransaction"];
 
 /**
  * Decode database rows once, preserving the adapter's corruption error class.
@@ -167,14 +169,14 @@ export const makeRowDecoder = <C extends Diagnostic>(
  */
 export const makeSqlTransaction =
   (
-    sql: SqlClient,
+    sql: SqlClient.SqlClient,
     options: {
       readonly begin:
         | "BEGIN"
         | "BEGIN IMMEDIATE"
         | "BEGIN ISOLATION LEVEL READ COMMITTED"
         | "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY";
-      readonly prelude?: Effect.Effect<void, SqlError>;
+      readonly prelude?: Effect.Effect<void, SqlError.SqlError>;
     },
   ): SqlWriteTransaction =>
   <A, E, R>(body: Effect.Effect<A, E, R>) =>
@@ -182,8 +184,8 @@ export const makeSqlTransaction =
       Effect.scoped(
         Effect.gen(function* () {
           if (Option.isSome(yield* Effect.serviceOption(sql.transactionService))) {
-            return yield* SqlError.make({
-              reason: UnknownError.make({
+            return yield* SqlError.SqlError.make({
+              reason: SqlError.UnknownError.make({
                 cause: undefined,
                 operation: "begin storage transaction",
                 message: "Storage transactions cannot run inside an existing SQL transaction.",

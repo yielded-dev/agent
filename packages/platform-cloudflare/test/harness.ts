@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   ThreadObjectNamespace,
   type ThreadObjectRpc,
@@ -17,8 +17,12 @@ import { type Scheduling } from "@yielded/agent/scheduling";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
 import { ThreadStore } from "@yielded/agent/thread-store";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Crypto, Effect, Layer, Option, Schema } from "effect";
 import { DurableObject } from "effect-cf";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
 

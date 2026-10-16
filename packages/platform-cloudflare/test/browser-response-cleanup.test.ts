@@ -17,8 +17,14 @@ import {
   PageScreenshotRequest,
   type PageScreenshotError,
 } from "@yielded/agent/page-screenshot";
-import { Cause, Deferred, Effect, Exit, Fiber, Layer, Logger } from "effect";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as TestClock from "effect/testing/TestClock";
 
 const capture = (
   kind: "capture" | "screenshot",

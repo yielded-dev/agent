@@ -1,4 +1,4 @@
-import type { Tool } from "effect/ai";
+import type * as Tool from "effect/ai/Tool";
 import * as Context from "effect/Context";
 
 /**

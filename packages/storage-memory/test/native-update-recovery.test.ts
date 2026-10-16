@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import { DurableWorkerBinding } from "@yielded/agent/agent-registration";
@@ -35,9 +35,20 @@ import { ThreadRead, ThreadReader, ThreadStore } from "@yielded/agent/thread-sto
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { ToolResultBounds } from "@yielded/agent/tool-result";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { DateTime, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
-import { LanguageModel, Model, type Response, Tool, Toolkit } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import { MemorySubmissionLedgerLive } from "../src/MemorySubmissionLedger.ts";
 import { MemoryThreadStoreLive } from "../src/MemoryThreadStore.ts";

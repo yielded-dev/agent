@@ -1,7 +1,9 @@
 import { DurableObjectContext } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
-import type { Option } from "effect";
-import { Effect, Layer, Tracer } from "effect";
 import type { DurableObject } from "effect-cf";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Option from "effect/Option";
+import * as Tracer from "effect/Tracer";
 
 interface TelemetryProbe {
   readonly invocations: Array<DurableObject.RunOptions>;

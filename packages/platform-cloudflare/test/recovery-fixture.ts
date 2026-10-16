@@ -10,7 +10,13 @@ import { type PersistedJson } from "@yielded/agent/records";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { SubmissionLedger, type SubmissionLookupByKey } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
-import { Clock, Context, Duration, Effect, Layer, Option, Stream } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import {
   DurableAlarmError,

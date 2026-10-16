@@ -15,17 +15,18 @@ import { SubagentPolicy } from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import * as WebSearch from "@yielded/agent/web-search";
-import {
-  Effect,
-  Layer,
-  Ref,
-  Result,
-  Schema,
-  SchemaParser,
-  SchemaTransformation,
-  Stream,
-} from "effect";
-import { type LanguageModel, type Model, Tool, Toolkit } from "effect/ai";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import type * as Model from "effect/ai/Model";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as SchemaParser from "effect/SchemaParser";
+import * as SchemaTransformation from "effect/SchemaTransformation";
+import * as Stream from "effect/Stream";
 
 import { reviewToolkit, reviewToolkitLayer } from "./internal/repository.ts";
 

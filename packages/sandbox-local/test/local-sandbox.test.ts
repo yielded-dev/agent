@@ -8,24 +8,22 @@ import {
   sandboxLayer,
 } from "@yielded/agent-sandbox-local/local-sandbox";
 import { Sandbox, type SandboxEvent, type SandboxRequest } from "@yielded/agent/sandbox";
-import {
-  Cause,
-  ConfigProvider,
-  Deferred,
-  Duration,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Option,
-  Schema,
-  Sink,
-  Stream,
-  type Scope,
-} from "effect";
-import type { PlatformError } from "effect/PlatformError";
-import { ChildProcessSpawner } from "effect/process";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import type * as PlatformError from "effect/PlatformError";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const AllowedEnvironmentResult = Schema.Struct({
   allowed: Schema.String,
@@ -252,7 +250,7 @@ layer(localSandboxLayer, { excludeTestServices: true })("unisolated local Sandbo
 });
 
 const spawnerWithStdout = (
-  stdout: Stream.Stream<Uint8Array, PlatformError>,
+  stdout: Stream.Stream<Uint8Array, PlatformError.PlatformError>,
 ): ChildProcessSpawner.ChildProcessSpawner["Service"] =>
   ChildProcessSpawner.make(() =>
     Effect.succeed(

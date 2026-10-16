@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import * as Agent from "@yielded/agent/agent";
@@ -11,19 +11,20 @@ import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservat
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
-import {
-  Context,
-  Deferred,
-  Effect,
-  Fiber,
-  FileSystem,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 const callId = Schema.decodeSync(ToolCallId)("scout-call");
 

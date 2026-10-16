@@ -27,8 +27,8 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
-import type { Statement } from "effect/sql/Statement";
+import type * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqliteJsonText, queryIdentifier } from "./internal/sql-json.ts";
 import { makeSqlLifecyclePublication } from "./SqlLifecyclePublication.ts";
@@ -101,7 +101,7 @@ export interface SqlMessageDeliveryStoreOptions {
   /** Defaults to the client's transaction; Postgres supplies its writer-lock transaction. */
   readonly transaction?: <A>(
     body: Effect.Effect<A, MessageDeliveryFailure>,
-  ) => Effect.Effect<A, MessageDeliveryFailure | SqlError>;
+  ) => Effect.Effect<A, MessageDeliveryFailure | SqlError.SqlError>;
 }
 
 const Row = Schema.Struct({
@@ -271,7 +271,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
   const decodeDeadlineRows = Schema.decodeUnknownEffect(Schema.Array(Deadline));
   const decodeRecordJson = Schema.decodeEffect(codec);
 
-  const query = <A extends object>(operation: string, statement: Statement<A>) =>
+  const query = <A extends object>(operation: string, statement: Statement.Statement<A>) =>
     execute(statement).pipe(Effect.mapError((cause) => storage(operation, cause)));
 
   const owner = yield* SqlStorageOwner;

@@ -5,7 +5,11 @@ import {
 } from "@yielded/agent/lifecycle-publication";
 import { RecoverySnapshotRequest, SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { ThreadPublication, DurableAlarmError } from "../src/Alarm.ts";
 import { DurableObjectContext, ThreadObjectIdentity } from "../src/CloudflareBindings.ts";

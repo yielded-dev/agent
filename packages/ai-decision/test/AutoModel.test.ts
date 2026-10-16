@@ -1,8 +1,15 @@
 import { expect, expectTypeOf, it } from "@effect/vitest";
 import { AutoModel } from "@yielded/agent-ai-decision";
-import { Context, Deferred, Effect, Layer, Schema, Stream } from "effect";
-import type { AiError } from "effect/ai";
-import { DecisionModel, LanguageModel, Model } from "effect/ai";
+import type * as AiError from "effect/ai/AiError";
+import * as DecisionModel from "effect/ai/DecisionModel";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 const nativeModel = (name: string) =>
   Model.make(

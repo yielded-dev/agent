@@ -13,9 +13,14 @@ import {
   MemoryStorageError,
   MemoryWriter,
 } from "@yielded/agent/memory-store";
-import { Clock, Effect, Layer, Ref, Schema, Stream } from "effect";
-import { IdGenerator } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as IdGenerator from "effect/ai/IdGenerator";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as MemoryNotes from "../../src/capabilities/MemoryNotes.ts";
 

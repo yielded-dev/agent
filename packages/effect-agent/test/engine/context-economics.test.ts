@@ -1,4 +1,5 @@
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
 import { expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import { ContextBudgetError } from "@yielded/agent/agent-error";
@@ -10,10 +11,24 @@ import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
 import { type RunDurabilityHook } from "@yielded/agent/run-options";
 import { ToolResultBounds, TruncatedToolResult } from "@yielded/agent/tool-result";
-import { Cause, Effect, Exit, Layer, Option, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, type Prompt, type Response, Tool, Toolkit } from "effect/ai";
-import { toCodecOpenAI } from "effect/ai/OpenAiStructuredOutput";
-import { HttpClient, HttpClientResponse, HttpServerResponse } from "effect/http";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as OpenAiStructuredOutput from "effect/ai/OpenAiStructuredOutput";
+import type * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { RunContextPreparationPassthrough } from "../../src/engine/RunOptions.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
@@ -385,7 +400,7 @@ layer(testLayer)("context economics — bounding, tracking, status, exhaustion",
         );
 
         const transformer: LanguageModel.CodecTransformer = (schema) => {
-          const transformed = toCodecOpenAI(schema);
+          const transformed = OpenAiStructuredOutput.toCodecOpenAI(schema);
 
           admittedSchemas.push(transformed.jsonSchema);
 
@@ -421,7 +436,9 @@ layer(testLayer)("context economics — bounding, tracking, status, exhaustion",
       expect(Exit.isSuccess(fitting.exit)).toBe(true);
       expect(fitting.wireSchemas).toHaveLength(1);
       expect(fitting.admittedSchemas).toEqual(fitting.wireSchemas);
-      expect(fitting.wireSchemas[0]).toEqual(toCodecOpenAI(CredentialLookup).jsonSchema);
+      expect(fitting.wireSchemas[0]).toEqual(
+        OpenAiStructuredOutput.toCodecOpenAI(CredentialLookup).jsonSchema,
+      );
       const tooSmall = yield* run(2_400);
 
       expect(failureFrom(tooSmall.exit)).toBeInstanceOf(ContextBudgetError);

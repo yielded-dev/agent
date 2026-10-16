@@ -5,9 +5,10 @@ import {
   type StorageErrorFields,
   type CorruptionErrorFields,
 } from "@yielded/agent-storage-sql/sql-storage";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import { isSqlError, type SqlError } from "effect/sql/SqlError";
+import * as SqlError from "effect/sql/SqlError";
 
 import {
   PostgresStorageCorruptionError,
@@ -20,12 +21,12 @@ import { applyPostgresLayout, inspectPostgresStorage } from "./storage-layout.ts
 
 export { CurrentPostgresStorageVersion, readPostgresStorageHeader } from "./storage-layout.ts";
 
-const storageError = (operation: string) => (cause: SqlError) =>
+const storageError = (operation: string) => (cause: SqlError.SqlError) =>
   PostgresStorageError.make({ operation, cause, message: cause.message });
 
 export const classifyWriteFailure =
   (operation: string) =>
-  (cause: SqlError): PostgresStorageError | PostgresWriteContention =>
+  (cause: SqlError.SqlError): PostgresStorageError | PostgresWriteContention =>
     cause.reason._tag === "SerializationError" ||
     cause.reason._tag === "DeadlockError" ||
     cause.reason._tag === "LockTimeoutError"
@@ -130,8 +131,8 @@ export const makePostgresJournal = Effect.fnUntraced(function* (
         <A, E, R>(body: Effect.Effect<A, E, R>) =>
           write(body).pipe(
             Effect.mapError((error) => {
-              if (isSqlError(error)) return classifyWriteFailure(operation)(error);
-              if (Schema.is(PostgresStorageError)(error) && isSqlError(error.cause)) {
+              if (SqlError.isSqlError(error)) return classifyWriteFailure(operation)(error);
+              if (Schema.is(PostgresStorageError)(error) && SqlError.isSqlError(error.cause)) {
                 return classifyWriteFailure(error.operation)(error.cause);
               }
 
@@ -143,7 +144,7 @@ export const makePostgresJournal = Effect.fnUntraced(function* (
         <A, E, R>(body: Effect.Effect<A, E, R>) =>
           read(body).pipe(
             Effect.mapError((error) =>
-              isSqlError(error) ? storageError(operation)(error) : error,
+              SqlError.isSqlError(error) ? storageError(operation)(error) : error,
             ),
           ),
       isTransactionFailure,

@@ -4,8 +4,10 @@ import {
   MessageDeliveryStore,
 } from "@yielded/agent/message-delivery";
 import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
-import { Context, Effect, Layer } from "effect";
 import { DurableObjectState } from "effect-cf";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { ThreadObjectIdentity } from "../src/CloudflareBindings.ts";
 import { CloudflareThreadClient } from "../src/CloudflareThreadClient.ts";

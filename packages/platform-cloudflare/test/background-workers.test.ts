@@ -12,9 +12,13 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { WorkerCompletion, WorkerUpdate } from "@yielded/agent/worker";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Clock, Deferred, Effect, Option, Schema } from "effect";
 import { DurableObject } from "effect-cf";
-import { TestClock } from "effect/testing";
+import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { expect, it } from "vite-plus/test";
 
 import { ThreadMaintenance } from "../src/Alarm.ts";

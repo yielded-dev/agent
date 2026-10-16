@@ -30,10 +30,13 @@ import {
   subscriptionUsesCapacity,
   subscriptionDeliveryUsesCapacity,
 } from "@yielded/agent/subscription-transition";
-import { Clock, Effect, Result, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
-import type { Statement } from "effect/sql/Statement";
+import type * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqliteJsonIsTrue, jsonIsValid } from "./internal/sql-json.ts";
 import { makeRowDecoder, makeSqlQuery, SqlInteger, SqlNumber } from "./SqlStorage.ts";
@@ -157,7 +160,7 @@ export interface SqlSubscriptionStoreOptions {
    */
   readonly transaction?: <A>(
     body: Effect.Effect<A, SubscriptionError | SubscriptionFailpointError>,
-  ) => Effect.Effect<A, SubscriptionError | SubscriptionFailpointError | SqlError>;
+  ) => Effect.Effect<A, SubscriptionError | SubscriptionFailpointError | SqlError.SqlError>;
 }
 
 /**
@@ -174,7 +177,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
   const { table: relation, execute } = yield* makeSqlQuery(options.namespace);
   const failpoint = yield* SubscriptionFailpoint;
 
-  const query = <A extends object>(statement: Statement<A>, code: string) =>
+  const query = <A extends object>(statement: Statement.Statement<A>, code: string) =>
     execute(statement).pipe(Effect.mapError(() => unavailable(code)));
 
   const transaction = <A>(body: Effect.Effect<A, SubscriptionError | SubscriptionFailpointError>) =>
@@ -450,7 +453,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
   });
 
   const count = Effect.fnUntraced(function* (
-    statement: Statement<Record<string, unknown>>,
+    statement: Statement.Statement<Record<string, unknown>>,
     code: string,
   ) {
     const rows = yield* query(statement, code);

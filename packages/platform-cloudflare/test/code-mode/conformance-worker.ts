@@ -10,7 +10,11 @@ import {
 } from "@yielded/agent/code-executor";
 import { NetworkDisabled } from "@yielded/agent/sandbox";
 import { DurableObject } from "cloudflare:workers";
-import { Duration, Effect, ManagedRuntime, Predicate, type Layer } from "effect";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import * as ManagedRuntime from "effect/ManagedRuntime";
+import * as Predicate from "effect/Predicate";
 
 import { dynamicWorkerCodeExecutorLayer } from "../../src/CloudflareCodeMode.ts";
 

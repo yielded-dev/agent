@@ -5,7 +5,8 @@ import {
   ActivityProcessorStore,
   type ActivityStoreError,
 } from "@yielded/agent/activity-store";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as SqlClientService from "effect/sql/SqlClient";
 
 export type SqliteActivityInitializationError = ActivityStoreError | ActivityMutationFailure;

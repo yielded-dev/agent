@@ -1,8 +1,8 @@
-import type { Scope } from "effect";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { SubagentReservationsMemoryLive } from "./capabilities/SubagentReservations.ts";
 import { Store } from "./core/Thread.ts";

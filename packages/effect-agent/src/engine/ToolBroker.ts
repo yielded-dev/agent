@@ -1,6 +1,7 @@
-import type { Effect } from "effect";
-import type { Tool, Toolkit } from "effect/ai";
+import type * as Tool from "effect/ai/Tool";
+import type * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 /**

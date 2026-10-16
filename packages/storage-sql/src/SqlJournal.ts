@@ -24,8 +24,8 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
-import type { Statement } from "effect/sql/Statement";
+import type * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import {
   makeCanonicalStorage,
@@ -223,7 +223,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
       ...(cause === undefined ? {} : { cause }),
     });
 
-  const query = <A extends object>(statement: Statement<A>) =>
+  const query = <A extends object>(statement: Statement.Statement<A>) =>
     execute(statement).pipe(
       Effect.mapError((cause) => failed("Active execution storage failed", cause)),
     );
@@ -525,7 +525,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 
   const storageError =
     (operation: string) =>
-    (error: SqlError): S =>
+    (error: SqlError.SqlError): S =>
       options.errors.storage({ operation, message: error.message, cause: error });
 
   const materialize = Effect.fnUntraced(function* (

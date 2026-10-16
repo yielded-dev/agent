@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import * as AgentRuntime from "@yielded/agent/agent-runtime";
@@ -35,8 +35,18 @@ import {
 } from "@yielded/agent/run-journal";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { Selection, Snapshot } from "@yielded/agent/tool-exposure";
-import { DateTime, Effect, Layer, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, Prompt, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { makeJournalMetadata } from "../../src/durable/internal/journal-metadata.ts";
 

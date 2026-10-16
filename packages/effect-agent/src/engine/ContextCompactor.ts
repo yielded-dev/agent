@@ -1,4 +1,5 @@
-import type { LanguageModel, Model } from "effect/ai";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import type * as Model from "effect/ai/Model";
 import * as Prompt from "effect/ai/Prompt";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";

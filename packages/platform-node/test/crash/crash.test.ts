@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
@@ -26,8 +26,14 @@ import {
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
 import { ThreadStore } from "@yielded/agent/thread-store";
-import { Deferred, Effect, Exit, Fiber, Option, Schema, Stream } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   BOOK_CALL_ID,

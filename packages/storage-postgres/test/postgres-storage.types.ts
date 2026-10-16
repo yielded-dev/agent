@@ -10,34 +10,35 @@ import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import type { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
-import type { Crypto, Layer } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
+import type * as Crypto from "effect/Crypto";
+import type * as Layer from "effect/Layer";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 type Persistence = typeof PostgresStorage.layer;
 type Ledger = ReturnType<typeof PostgresStorage.submissionLedgerLayer>;
 
-expectTypeOf<Layer.Services<Persistence>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
+expectTypeOf<Layer.Services<Persistence>>().toEqualTypeOf<SqlClient.SqlClient | Crypto.Crypto>();
 expectTypeOf<Layer.Success<Persistence>>().toEqualTypeOf<
   ThreadStore | ThreadReader | ThreadImport | SubmissionLedger | SettlementPublisher | StorageOwner
 >();
 expectTypeOf<Layer.Error<Persistence>>().toEqualTypeOf<PostgresStorageInitializationError>();
-expectTypeOf<Layer.Services<Ledger>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
+expectTypeOf<Layer.Services<Ledger>>().toEqualTypeOf<SqlClient.SqlClient | Crypto.Crypto>();
 expectTypeOf<Layer.Success<Ledger>>().toEqualTypeOf<
   SubmissionLedger | SettlementPublisher | StorageOwner
 >();
 expectTypeOf<Layer.Error<Ledger>>().toEqualTypeOf<PostgresStorageInitializationError>();
 expectTypeOf<
   Layer.Services<ReturnType<typeof PostgresStorage.scheduleStoreLayer>>
->().toEqualTypeOf<SqlClient>();
+>().toEqualTypeOf<SqlClient.SqlClient>();
 expectTypeOf<
   Layer.Services<ReturnType<typeof PostgresStorage.activityStoreLayer>>
->().toEqualTypeOf<SqlClient>();
+>().toEqualTypeOf<SqlClient.SqlClient>();
 expectTypeOf<Layer.Error<ReturnType<typeof PostgresStorage.activityStoreLayer>>>().toEqualTypeOf<
   PostgresStorageError | ActivityStoreError | ActivityMutationFailure
 >();
 expectTypeOf<
   Layer.Services<ReturnType<typeof PostgresStorage.subscriptionStoreLayer>>
->().toEqualTypeOf<SqlClient>();
+>().toEqualTypeOf<SqlClient.SqlClient>();
 expectTypeOf<
   Layer.Services<ReturnType<typeof PostgresStorage.messageDeliveryStoreLayer>>
->().toEqualTypeOf<SqlClient | Crypto.Crypto>();
+>().toEqualTypeOf<SqlClient.SqlClient | Crypto.Crypto>();

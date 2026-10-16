@@ -1,6 +1,9 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { ConfigProvider, Effect, Layer } from "effect";
-import { FetchHttpClient } from "effect/http";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Layer from "effect/Layer";
 
 import { reviewActionProgram, withActionInputs } from "./action.ts";
 

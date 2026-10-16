@@ -1,5 +1,5 @@
-import type { Effect } from "effect";
 import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
 import * as Schema from "effect/Schema";
 

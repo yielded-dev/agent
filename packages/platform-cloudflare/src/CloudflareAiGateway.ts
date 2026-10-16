@@ -1,11 +1,15 @@
-import { Context, Effect, Layer, Option, Redactable, Redacted, Schema } from "effect";
-import {
-  FetchHttpClient,
-  Headers,
-  HttpClient,
-  HttpClientError,
-  HttpClientRequest,
-} from "effect/http";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Headers from "effect/http/Headers";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redactable from "effect/Redactable";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 const Segment = Schema.NonEmptyString.check(
   Schema.isMaxLength(256),

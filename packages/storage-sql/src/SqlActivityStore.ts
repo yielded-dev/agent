@@ -11,7 +11,9 @@ import {
   type ActivitySession,
 } from "@yielded/agent/activity-store";
 import { CanonicalSequence, Digest } from "@yielded/agent/records";
-import { Clock, Effect, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 
 import { sqlStorageOwner } from "./internal/SqlOwner.ts";

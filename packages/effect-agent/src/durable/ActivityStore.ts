@@ -1,4 +1,8 @@
-import { Context, Effect, Layer, Schema, type Scope } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { ThreadId } from "../core/Identifiers.ts";
 import { CanonicalSequence, Digest, PersistedJson, RecordId } from "./Records.ts";

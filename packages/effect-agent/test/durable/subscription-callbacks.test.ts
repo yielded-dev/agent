@@ -10,7 +10,10 @@ import {
   SubscriptionRecord,
 } from "@yielded/agent/subscription";
 import { makeSubscriptionInputBinding } from "@yielded/agent/subscription-input";
-import { Context, Effect, Schema, SchemaGetter } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 const version = EventSourceVersion.make({ name: "scoped-callback", version: "1" });
 const partition = SourcePartition.make({ tenantId: "tenant", address: "events" });

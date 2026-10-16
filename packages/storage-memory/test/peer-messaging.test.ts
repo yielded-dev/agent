@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import { memoryMessageDeliveryStoreLayer } from "@yielded/agent-storage-memory/memory-message-delivery-store";
 import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory-submission-ledger";
@@ -46,9 +46,19 @@ import { PreparedInput } from "@yielded/agent/subscription";
 import { ThreadTailRequest, ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Clock, Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect";
-import { LanguageModel, Model, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const Input = Schema.Struct({ text: Schema.String });
 

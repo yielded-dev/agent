@@ -1,4 +1,4 @@
-import type { Schema } from "effect";
+import type * as Schema from "effect/Schema";
 
 /** Own a validated JSON value before exposing a separate copy to application callbacks. */
 export const copyJson = (value: Schema.Json): Schema.Json => {

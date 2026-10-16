@@ -4,7 +4,8 @@ import {
   MemoryRecallError,
   MemoryRecallLimits,
 } from "@yielded/agent/memory-reference";
-import { Context, Effect } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 
 const limits = MemoryRecallLimits.make({
   maxSources: 8,

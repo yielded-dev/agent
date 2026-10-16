@@ -10,10 +10,18 @@ import {
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Option, Scheduler, Schema } from "effect";
 import { DurableObject } from "effect-cf";
-import { SqlClient } from "effect/sql/SqlClient";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
+import * as Scheduler from "effect/Scheduler";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -109,7 +117,7 @@ describe("DC alarm semantics", () => {
     await runInDurableObject(stubFor(thread), (instance, state) =>
       instance[DurableObject.RunSymbol](
         Effect.gen(function* () {
-          const sql = yield* SqlClient;
+          const sql = yield* SqlClient.SqlClient;
           const alarm = yield* DurableAlarmService;
 
           yield* sql`CREATE TABLE alarm_isolation_probe (value INTEGER)`;

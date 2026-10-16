@@ -33,8 +33,17 @@ import {
 import { scheduleOwnerKey } from "@yielded/agent/schedule-transition";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import { ReconciliationUncertain, ToolReconciler } from "@yielded/agent/tool-reconciler";
-import { type Clock, Deferred, Effect, Layer, Schema, Stream } from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import type * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { layerFromBindings } from "../src/internal/layers.ts";
 import { pauseWorkerInputInsertion } from "./helpers/worker-input-contention.ts";

@@ -5,7 +5,10 @@ import {
 } from "@yielded/agent/durable-agent-runtime";
 import type { ThreadId } from "@yielded/agent/identifiers";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Effect, Option, Queue, Stream } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Queue from "effect/Queue";
+import * as Stream from "effect/Stream";
 
 const PENDING_CAPACITY = 1_024;
 

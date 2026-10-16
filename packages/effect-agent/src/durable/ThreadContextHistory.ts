@@ -1,4 +1,7 @@
-import { Effect, Layer, Schema, Stream } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import type { ThreadId } from "../core/Identifiers.ts";
 import {

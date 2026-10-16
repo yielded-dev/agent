@@ -7,7 +7,8 @@ import {
 } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { CURRENT_RECORD_FORMAT, PROMPT_EVIDENCE_TAGS } from "@yielded/agent/records";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import {

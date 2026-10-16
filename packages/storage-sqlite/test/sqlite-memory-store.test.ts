@@ -1,5 +1,5 @@
-import { NodeFileSystem } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
 import * as MemoryNamespace from "@yielded/agent/memory-namespace";
 import {
@@ -21,21 +21,19 @@ import {
   memoryStoreLayer,
   memoryStoreLayerWithFailpoints,
 } from "@yielded/agent/sql-memory-store";
-import {
-  Schema as NamespaceSchema,
-  Cause,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Layer,
-  Result,
-  Schema,
-} from "effect";
-import type { PlatformError } from "effect";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import type * as PlatformError from "effect/PlatformError";
+import * as Result from "effect/Result";
+import * as NamespaceSchema from "effect/Schema";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { TestClock } from "effect/testing";
+import * as TestClock from "effect/testing/TestClock";
 
 const TestNamespace = MemoryNamespace.define({
   name: "test/memory",

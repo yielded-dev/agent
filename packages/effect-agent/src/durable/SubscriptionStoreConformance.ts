@@ -1,5 +1,8 @@
-import { Clock, Effect, Result, Schema } from "effect";
-import { TestClock } from "effect/testing";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 import { AgentId, ThreadId, ReceiptId, SubmissionId } from "../core/Identifiers.ts";
 import { Receipt } from "./DurableAgentRuntime.ts";

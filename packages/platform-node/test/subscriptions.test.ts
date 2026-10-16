@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import { NodeSubscriptions } from "@yielded/agent-platform-node/node-subscriptions";
@@ -39,21 +39,22 @@ import {
   makeSubscriptionInputBinding,
 } from "@yielded/agent/subscription-input";
 import { Subscriptions } from "@yielded/agent/subscriptions";
-import type { PlatformError } from "effect";
-import {
-  Context,
-  Effect,
-  Exit,
-  FileSystem,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Scope,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import type * as PlatformError from "effect/PlatformError";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const partition = SourcePartition.make({
   tenantId: "node-subscription-tenant",

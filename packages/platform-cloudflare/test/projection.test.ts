@@ -20,9 +20,17 @@ import {
 } from "@yielded/agent/thread-store";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Cause, Clock, Deferred, Effect, Exit, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -20,7 +20,6 @@ import { RecalledMemory } from "@yielded/agent/memory";
 import { MemoryLookup } from "@yielded/agent/memory-reference";
 import { MemoryWrite, MemoryDocument } from "@yielded/agent/memory-store";
 import { ScheduleAuthorizer, ScheduleFailpoint } from "@yielded/agent/schedule";
-import { Clock, Context, Effect, Layer, Schema } from "effect";
 import {
   DurableObject,
   DurableObjectAlarm,
@@ -28,6 +27,11 @@ import {
   RpcTracing,
   WorkerEnvironment,
 } from "effect-cf";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { ThreadMaintenance } from "../src/Alarm.ts";
 import { layerFromBindings } from "../src/internal/layers.ts";

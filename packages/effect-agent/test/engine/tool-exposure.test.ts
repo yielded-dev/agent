@@ -15,8 +15,19 @@ import {
   CurrentToolCatalog,
   RunToolVisibility,
 } from "@yielded/agent/tool-exposure";
-import { Cause, Effect, Exit, Layer, Option, Schema, SchemaGetter, Stream } from "effect";
-import { LanguageModel, Model, type Response, Tool, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import * as Stream from "effect/Stream";
 
 let threadSequence = 0;
 

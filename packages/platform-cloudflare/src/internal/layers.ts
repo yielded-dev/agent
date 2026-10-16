@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { doMessageDeliveryStoreLayer } from "@yielded/agent-storage-cloudflare/do-message-delivery-store";
 import {
   type DoStorageFailpointHandler,
@@ -109,7 +109,7 @@ import * as Match from "effect/Match";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import {
   type ThreadRecoveryEvents,
@@ -253,7 +253,7 @@ export type CloudflareDurableRuntimeServices =
   | ThreadProjectionMaintenance
   | ThreadObjectPorts
   | ProgressWaitRegistry
-  | SqlClient;
+  | SqlClient.SqlClient;
 
 /**
  * Owner-side execution port for a `portCall` request the wire endpoint has already decoded.
@@ -643,7 +643,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         Layer.mergeAll(
           options.lifecyclePublication === undefined ? Layer.empty : lifecyclePublicationLayer,
           storageConfigLayer(storageOptions),
-          Layer.effect(SqlClient)(SqlClient),
+          Layer.effect(SqlClient.SqlClient)(SqlClient.SqlClient),
         ),
       );
 
@@ -768,14 +768,24 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         options.publication === undefined
           ? ThreadPublication.layer
           : options.publication.pipe(
-              Layer.provide(Layer.mergeAll(rawLocalPorts, Layer.effect(SqlClient)(SqlClient))),
+              Layer.provide(
+                Layer.mergeAll(
+                  rawLocalPorts,
+                  Layer.effect(SqlClient.SqlClient)(SqlClient.SqlClient),
+                ),
+              ),
             );
 
       const projection =
         options.projection === undefined
           ? ThreadProjectionMaintenance.layer
           : options.projection.pipe(
-              Layer.provide(Layer.mergeAll(rawLocalPorts, Layer.effect(SqlClient)(SqlClient))),
+              Layer.provide(
+                Layer.mergeAll(
+                  rawLocalPorts,
+                  Layer.effect(SqlClient.SqlClient)(SqlClient.SqlClient),
+                ),
+              ),
             );
 
       const localPorts =

@@ -2,17 +2,22 @@ import { expect, it } from "@effect/vitest";
 import { Agent, AgentRuntime, Identifiers, InMemory, Subagent } from "@yielded/agent";
 import { AutoModel } from "@yielded/agent-ai-decision";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
-import type { Scope } from "effect";
-import { Context, Deferred, Effect, Exit, Fiber, Layer, Schema, Stream } from "effect";
-import {
-  DecisionModel,
-  AiError,
-  LanguageModel,
-  Model,
-  type Prompt,
-  type Response,
-  Toolkit,
-} from "effect/ai";
+import * as AiError from "effect/ai/AiError";
+import * as DecisionModel from "effect/ai/DecisionModel";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 import { expectTypeOf } from "vite-plus/test";
 
 const policy = AgentPolicy.make({

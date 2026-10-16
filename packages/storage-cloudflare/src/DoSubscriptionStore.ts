@@ -10,9 +10,12 @@ import {
   type SubscriptionFailpointError,
   SubscriptionStore,
 } from "@yielded/agent/subscription";
-import { Context, Effect, Layer, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import type * as SqlError from "effect/sql/SqlError";
 
 const CURRENT_SUBSCRIPTION_STORE_VERSION = 4;
 
@@ -207,7 +210,7 @@ const makeSubscriptionStore = Effect.fnUntraced(function* (owned: SourcePartitio
   yield* initializeDoSubscriptionStore();
 
   const query = <A extends object>(
-    effect: Effect.Effect<ReadonlyArray<A>, SqlError>,
+    effect: Effect.Effect<ReadonlyArray<A>, SqlError.SqlError>,
     code: string,
   ) => effect.pipe(Effect.mapError(() => unavailable(code)));
 

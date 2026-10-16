@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   DoScheduleAlarmControl,
   DoScheduleTransaction,
@@ -35,7 +35,6 @@ import {
   ScheduleWakeNoop,
 } from "@yielded/agent/scheduling";
 import { AdmissionFence } from "@yielded/agent/submission-ledger";
-import { Clock, Context, DateTime, Effect, Layer, Schema } from "effect";
 import {
   DurableObject as EffectCfDurableObject,
   DurableObjectAlarm,
@@ -43,6 +42,12 @@ import {
   DurableObjectState as EffectCfDurableObjectState,
   type WorkerEnvironment,
 } from "effect-cf";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import type { ThreadObjectNamespace } from "./CloudflareBindings.ts";
 import { CloudflareThreadClient } from "./CloudflareThreadClient.ts";

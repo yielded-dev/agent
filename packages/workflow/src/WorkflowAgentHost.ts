@@ -18,22 +18,22 @@ import {
   SubmissionLedger,
   SubmissionLookupById,
 } from "@yielded/agent/submission-ledger";
-import {
-  Cause,
-  Context,
-  Crypto,
-  Effect,
-  Exit,
-  Layer,
-  Option,
-  RcMap,
-  Ref,
-  Result,
-  Schema,
-  Semaphore,
-  Stream,
-} from "effect";
-import { DurableDeferred, Workflow, WorkflowEngine } from "effect/workflow";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as RcMap from "effect/RcMap";
+import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
+import * as DurableDeferred from "effect/workflow/DurableDeferred";
+import * as Workflow from "effect/workflow/Workflow";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 
 import { workflowCompletion } from "./internal/completion.ts";
 import {

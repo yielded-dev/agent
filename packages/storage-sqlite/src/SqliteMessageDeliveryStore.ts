@@ -3,7 +3,8 @@ import {
   MessageDeliveryStore,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { initializeSqliteJournal } from "./internal/sqlite-journal.ts";
 

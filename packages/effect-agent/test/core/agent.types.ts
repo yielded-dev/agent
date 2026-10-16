@@ -6,8 +6,16 @@ import {
   type AgentRunDispositionError,
 } from "@yielded/agent/agent-error";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
-import { Context, Effect, Layer, Schema, Stream } from "effect";
-import { type AiError, LanguageModel, Model, Tool, Toolkit } from "effect/ai";
+import type * as AiError from "effect/ai/AiError";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2

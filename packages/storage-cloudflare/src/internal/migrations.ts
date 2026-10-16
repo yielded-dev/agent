@@ -11,7 +11,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import type * as SqlError from "effect/sql/SqlError";
 
 import {
   DoStorageCompatibilityError,
@@ -121,7 +121,7 @@ const incompatible = (actualVersion: number, message: string) =>
     message: `${message} Keep the original store; the store was not changed.`,
   });
 
-const storageError = (cause: SqlError) =>
+const storageError = (cause: SqlError.SqlError) =>
   DoStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const inspection = (version: number, statements: ReadonlyArray<string>) =>

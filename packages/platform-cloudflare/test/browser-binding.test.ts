@@ -1,7 +1,14 @@
 import { expect, it } from "@effect/vitest";
-import { Cause, Deferred, Effect, ErrorReporter, Fiber, Layer, Redacted, Schema } from "effect";
-import { FetchHttpClient } from "effect/http";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as ErrorReporter from "effect/ErrorReporter";
+import * as Fiber from "effect/Fiber";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 import {
   BrowserSessionError,

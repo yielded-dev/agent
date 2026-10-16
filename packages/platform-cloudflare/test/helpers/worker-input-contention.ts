@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 /** Owner-local controls for the single retained-input claim race. */
 export const workerInputContentions = new Map<

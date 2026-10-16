@@ -22,17 +22,15 @@ import {
   type SubmissionSnapshot,
 } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
-import {
-  Cause,
-  Duration,
-  Effect,
-  Exit,
-  FileSystem,
-  Option,
-  Schema,
-  Stream,
-  type Scope,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import {
   CRASH_DEPLOYMENT_ID,

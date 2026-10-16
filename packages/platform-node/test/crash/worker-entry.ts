@@ -25,8 +25,16 @@ import {
   type Settlement,
   type SubmissionSnapshot,
 } from "@yielded/agent/submission-ledger";
-import { Cause, Duration, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
-import type { Response } from "effect/ai";
+import type * as Response from "effect/ai/Response";
+import * as Cause from "effect/Cause";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   CHILD_ANSWER,

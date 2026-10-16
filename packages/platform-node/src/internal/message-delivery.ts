@@ -3,7 +3,11 @@ import {
   type MessageDeliveryFailure,
   MessageDeliveryStore,
 } from "@yielded/agent/message-delivery";
-import { Cause, Clock, Effect, Exit, Option } from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
 
 const reportFailure = (cause: Cause.Cause<MessageDeliveryFailure>): Effect.Effect<void> =>
   Cause.hasInterruptsOnly(cause)

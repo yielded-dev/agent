@@ -1,6 +1,7 @@
-import type { OpenAiSchema } from "@effect/ai-openai";
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import { NodeServices } from "@effect/platform-node";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
+import type * as OpenAiSchema from "@effect/ai-openai/OpenAiSchema";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { makeReviewer, ReviewChange, ReviewRequest } from "@yielded/agent-pr-review/review";
 import {
@@ -9,22 +10,22 @@ import {
   ReviewRepository,
   ReviewSource,
 } from "@yielded/agent-pr-review/review-repository";
-import {
-  Cause,
-  ConfigProvider,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Logger,
-  Option,
-  Redacted,
-  Schema,
-  Stream,
-} from "effect";
-import type { AiError } from "effect/ai";
-import { Base64 } from "effect/encoding";
-import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
+import type * as AiError from "effect/ai/AiError";
+import * as Cause from "effect/Cause";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Base64 from "effect/encoding/Base64";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Logger from "effect/Logger";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { reviewActionProgram, reviewPublicationFailure } from "../src/action.ts";
 import { makeReviewOpenAi } from "../src/review-openai.ts";

@@ -1,4 +1,4 @@
-import { BrowserCrypto } from "@effect/platform-browser";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { ledgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
 import { layer, invalidate } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import * as Agent from "@yielded/agent/agent";
@@ -11,8 +11,15 @@ import { IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Context, Effect, Layer, Schema, Stream } from "effect";
-import { LanguageModel, Model, Prompt, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Prompt from "effect/ai/Prompt";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { expect, it } from "vite-plus/test";
 
 import {

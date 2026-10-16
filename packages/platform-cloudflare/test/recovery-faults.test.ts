@@ -50,23 +50,21 @@ import {
 } from "@yielded/agent/thread-store";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import type { Crypto } from "effect";
-import {
-  Cause,
-  Clock,
-  DateTime,
-  Deferred,
-  Duration,
-  Effect,
-  Fiber,
-  Layer,
-  Logger,
-  Option,
-  Schema,
-  Stream,
-} from "effect";
 import { DurableObject } from "effect-cf";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import type * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -1,4 +1,9 @@
-import { Clock, Duration, Effect, Ref, Schema, type Scope } from "effect";
+import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 const Natural = Schema.Natural;
 const BudgetLevel = Schema.Literals(["global", "tenant", "agent", "thread", "run"]);
