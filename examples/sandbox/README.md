@@ -1,7 +1,8 @@
 # Sandbox coding agent
 
 A signed-in coding workspace at `agent.yielded.dev/sandbox/<workspace-id>`.
-Opening `/sandbox/` resumes this browser's last workspace for the signed-in account.
+Opening `/sandbox/` lists the account's saved workspaces, newest first, across browsers
+and devices. Each has a permanent link and a title from its first request.
 Workspace links select within that account; knowing an ID does not grant access.
 
 `@yielded/agent` runs the conversation and tools in a durable Thread Object.
@@ -45,6 +46,11 @@ vp run -F @yielded/agent-example-sandbox build
 vp run -F @yielded/agent-example-sandbox worker
 ```
 
+The account directory stores navigation only; Threads own conversation and execution.
+After changing `src/schema.ts`, run `vp -C examples/sandbox run db:generate`, then
+review and commit the generated Drizzle migration. Each directory applies it before
+serving requests.
+
 Docker is required to build and run the native container locally. Authentication
 uses the shared Yielded gateway; local native verification supplies a controlled
 issuer, never a production bypass.
@@ -59,7 +65,7 @@ also check the account's current hosted-model permission.
 vp run -F @yielded/agent-example-sandbox deploy:production
 ```
 
-The checked-in Wrangler configuration owns only the Sandbox route and its new
-Thread/Container namespaces. It does not own the shared authentication gateway.
+The checked-in Wrangler configuration owns the Sandbox route and its Thread,
+container, and account workspace-directory namespaces. It does not own the shared authentication gateway.
 Wrangler 4.151 is scoped to this example because it supports the native
 `durable_object` container policy and named images used by Sandbox.

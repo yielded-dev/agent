@@ -8,6 +8,7 @@ export default defineConfig({
   plugins: [tailwindcss(), react()],
   run: {
     tasks: {
+      "db:generate": { command: "drizzle-kit generate", cache: false },
       check: { command: "tsc --noEmit -p tsconfig.json", cache: false },
       build: { command: "vp build && wrangler deploy --dry-run", cache: false },
       "deploy:production": { command: "vp build && wrangler deploy", cache: false },

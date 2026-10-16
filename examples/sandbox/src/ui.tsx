@@ -16,13 +16,14 @@ import {
   Reasoning,
   Tool,
 } from "@yielded/ui";
+import { DateTime } from "effect";
 import { AsyncResult } from "effect/reactivity";
-import { Check, LoaderCircle } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, FolderCode, LoaderCircle } from "lucide-react";
 import { useMemo } from "react";
 
 import { type Entry, type ShellCommand } from "./contract";
 import { signIn } from "./location";
-import { newWorkspace, workspace, workspaceId } from "./state";
+import { location, newWorkspace, workspace, workspaceList } from "./state";
 
 const workspaceDescription =
   "Workspace files expire after 30 minutes idle. Conversation history is kept.";
@@ -86,35 +87,8 @@ export function App() {
 }
 
 function Account({ subject, signOut }: { subject: string; signOut: () => void }) {
-  const id = useAtomValue(workspaceId(subject));
-  const create = useAtomSet(newWorkspace);
-
-  if (id === null)
-    return (
-      <main className="gate">
-        <Brand />
-        <h1>This workspace link is invalid.</h1>
-        <p>Open a saved workspace link or start a new one.</p>
-        <Button onClick={() => create(subject)}>New workspace</Button>
-      </main>
-    );
-
-  return <AccountWorkspace key={id} id={id} subject={subject} signOut={signOut} />;
-}
-
-function AccountWorkspace({
-  id,
-  subject,
-  signOut,
-}: {
-  id: string;
-  subject: string;
-  signOut: () => void;
-}) {
-  // Atom.family caches bundles weakly; retain this workspace while it is mounted.
-  const atoms = useMemo(() => workspace(id), [id]);
-  const state = useAtomValue(atoms.state);
-  const create = useAtomSet(newWorkspace);
+  const route = useAtomValue(location);
+  const navigate = useAtomSet(location);
 
   return (
     <div className="app">
@@ -124,24 +98,156 @@ function AccountWorkspace({
           Sign out
         </Button>
       </header>
+      {route.page === "workspace" ? (
+        <AccountWorkspace key={route.id} id={route.id} />
+      ) : route.page === "list" ? (
+        <WorkspaceList subject={subject} />
+      ) : (
+        <main className="gate">
+          <h1>This workspace link is invalid.</h1>
+          <Button onClick={() => navigate(null)}>Your workspaces</Button>
+        </main>
+      )}
+    </div>
+  );
+}
+
+function CreateWorkspace({ disabled = false }: { disabled?: boolean }) {
+  const [result, create] = useAtom(newWorkspace);
+
+  return (
+    <div>
+      <Button variant="outline" disabled={disabled || result.waiting} onClick={() => create()}>
+        {result.waiting ? "Creating…" : "＋ New workspace"}
+      </Button>
+      {AsyncResult.isFailure(result) && !result.waiting && (
+        <p className="error" role="alert">
+          Could not create the workspace. Try again.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function WorkspaceList({ subject }: { subject: string }) {
+  const atoms = useMemo(() => workspaceList(subject), [subject]);
+  const result = useAtomValue(atoms.page);
+  const cursors = useAtomValue(atoms.cursors);
+  const next = useAtomSet(atoms.next);
+  const previous = useAtomSet(atoms.previous);
+  const refresh = useAtomSet(atoms.refresh);
+
+  return (
+    <main className="mx-auto max-w-4xl pb-10">
       <div className="heading">
         <div>
-          <small>SANDBOX / CODING WORKSPACE</small>
+          <small>SANDBOX</small>
+          <h1>Your workspaces</h1>
+        </div>
+        <CreateWorkspace />
+      </div>
+      <p className="mt-4 text-sm text-muted-foreground">{workspaceDescription}</p>
+      <div className="my-6 flex items-center justify-between gap-3">
+        <h2>{cursors.length === 0 ? "Recent workspaces" : "Earlier workspaces"}</h2>
+        <Button variant="ghost" size="sm" disabled={result.waiting} onClick={() => refresh()}>
+          Refresh
+        </Button>
+      </div>
+      {AsyncResult.isFailure(result) ? (
+        <p className="error" role="alert">
+          Could not load your workspaces. Refresh to try again.
+        </p>
+      ) : !AsyncResult.isSuccess(result) ? (
+        <p className="text-muted-foreground" role="status">
+          Loading your workspaces…
+        </p>
+      ) : result.value.entries.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border px-6 py-14 text-center">
+          <FolderCode className="mx-auto mb-4 size-7 text-muted-foreground" />
+          <h2>No workspaces yet</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Start a workspace to build something with the agent.
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+          {result.value.entries.map((entry) => (
+            <li key={entry.id}>
+              <a
+                className="flex items-center gap-4 px-5 py-5 no-underline hover:bg-muted"
+                href={`/sandbox/${entry.id}`}
+              >
+                <FolderCode className="size-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{entry.title ?? "Untitled workspace"}</p>
+                  <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                    <span className="font-mono">{entry.id.slice(0, 8)}</span>
+                    <span>
+                      Saved{" "}
+                      {DateTime.formatLocal(DateTime.makeUnsafe(entry.addedAt), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </span>
+                  </p>
+                </div>
+                <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(cursors.length > 0 || (AsyncResult.isSuccess(result) && result.value.next !== null)) && (
+        <div className="mt-5 flex justify-between gap-3">
+          <Button
+            variant="outline"
+            disabled={cursors.length === 0 || result.waiting}
+            onClick={() => previous()}
+          >
+            Newer
+          </Button>
+          <Button
+            variant="outline"
+            disabled={
+              !AsyncResult.isSuccess(result) || result.value.next === null || result.waiting
+            }
+            onClick={() => next()}
+          >
+            Older
+          </Button>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function AccountWorkspace({ id }: { id: string }) {
+  // Atom.family caches bundles weakly; retain this workspace while it is mounted.
+  const atoms = useMemo(() => workspace(id), [id]);
+  const state = useAtomValue(atoms.state);
+  const navigate = useAtomSet(location);
+  const busy = state.active !== null || state.pending !== null || state.admissionRequestId !== null;
+
+  return (
+    <>
+      <div className="heading">
+        <div>
+          <Button
+            className="-ml-2.5"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => navigate(null)}
+          >
+            <ArrowLeft className="size-3.5" /> Your workspaces
+          </Button>
           <h1>Make something work.</h1>
         </div>
-        <Button
-          variant="outline"
-          disabled={
-            state.active !== null || state.pending !== null || state.admissionRequestId !== null
-          }
-          onClick={() => create(subject)}
-        >
-          ＋ New workspace
-        </Button>
+        <CreateWorkspace disabled={busy} />
       </div>
       <p className="muted">{workspaceDescription}</p>
       <Workspace key={id} id={id} />
-    </div>
+    </>
   );
 }
 

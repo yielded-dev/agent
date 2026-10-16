@@ -6,6 +6,21 @@ export const LIVE_TEXT_THREAD_HEADER = "x-yielded-thread-id";
 
 export const WorkspaceId = Schema.String.check(Schema.isUUID());
 
+export const WorkspaceRegistration = Schema.Struct({
+  id: WorkspaceId,
+  title: Schema.NullOr(Schema.String.check(Schema.isMaxLength(120))),
+});
+
+export const WorkspaceSummary = Schema.Struct({
+  ...WorkspaceRegistration.fields,
+  addedAt: Schema.Natural,
+});
+
+export const WorkspacePage = Schema.Struct({
+  entries: Schema.Array(WorkspaceSummary),
+  next: Schema.NullOr(Schema.Natural),
+});
+
 export const CODING_ADMISSION_GROUP = "sandbox-coding";
 
 export const ModelSettings = Schema.Struct({

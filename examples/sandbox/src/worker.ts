@@ -27,12 +27,14 @@ import {
   MAX_INPUT_BYTES,
   MessageInput,
   WorkspaceId,
+  WorkspacePage,
   type Entry,
 } from "./contract.ts";
 import { workspaceIdFromPath } from "./location.ts";
 import { CodingThread } from "./runtime.ts";
+import { AccountWorkspaces } from "./workspaces.ts";
 
-export { CodingThread };
+export { CodingThread, AccountWorkspaces };
 
 const containerOptions = {
   namespaceBinding: "SANDBOXES",
@@ -47,6 +49,7 @@ declare global {
   namespace Cloudflare {
     interface Env extends AuthEnvironment {
       THREADS: DurableObjectNamespace<CodingThread>;
+      WORKSPACES: DurableObjectNamespace<AccountWorkspaces>;
       SANDBOXES: DurableObjectNamespace<CodingSandbox>;
       ASSETS: Fetcher;
       RUN_LIMIT: RateLimit;
@@ -237,6 +240,70 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
   const address = (id: string) =>
     ThreadId.make(`${session.accountId.toLowerCase()}--${id.toLowerCase()}`);
 
+  const directory = env.WORKSPACES.getByName(session.accountId.toLowerCase());
+  const titleFor = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 120) || null;
+
+  const remember = Effect.fnUntraced(function* (id: string, title: string | null) {
+    yield* Effect.tryPromise(() => directory.remember({ id, title }));
+  });
+
+  const rememberHistory = Effect.fnUntraced(function* (
+    id: string,
+    records: ReadonlyArray<CanonicalRecordEnvelope>,
+  ) {
+    if (records.length === 0) return;
+    const input = records.flatMap(entriesFor).find((entry) => entry.kind === "user");
+
+    yield* remember(id, input ? titleFor(input.text) : null);
+  });
+
+  if (request.method === "POST" && url.pathname === "/sandbox/api/workspaces") {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId })),
+    )(yield* boundedBody(request));
+
+    const limit = yield* Effect.promise(() => env.RUN_LIMIT.limit({ key: session.accountId }));
+
+    if (!limit.success)
+      return json({ message: "Please wait before creating another workspace." }, 429);
+    yield* remember(input.workspaceId, null);
+
+    return json({});
+  }
+  if (request.method === "GET" && url.pathname === "/sandbox/api/workspaces") {
+    const before = yield* Schema.decodeEffect(Schema.NullOr(Schema.Natural))(
+      url.searchParams.has("before") ? Number(url.searchParams.get("before")) : null,
+    );
+
+    const previous = url.searchParams.get("previous");
+
+    if (previous !== null) {
+      const id = yield* Schema.decodeEffect(WorkspaceId)(previous);
+
+      const records = yield* Effect.flatMap(CloudflareThreadClient, (client) =>
+        client.readPage(address(id), { afterSequence: CanonicalSequence.make(0), limit: 64 }),
+      ).pipe(
+        Effect.provide(clientLayer),
+        Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed([])),
+      );
+
+      yield* rememberHistory(id, records);
+      if (records.length === 0) {
+        const commands = yield* Effect.tryPromise(() =>
+          env.THREADS.getByName(address(id)).commands(),
+        );
+
+        if (commands[0]) yield* remember(id, titleFor(`!${commands[0].script}`));
+      }
+    }
+
+    return json(
+      yield* Schema.decodeEffect(WorkspacePage)(
+        yield* Effect.tryPromise(() => directory.list(before)),
+      ),
+    );
+  }
+
   if (request.method === "POST" && url.pathname === "/sandbox/api/commands") {
     const input = yield* Schema.decodeEffect(
       Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId, ...CommandInput.fields })),
@@ -246,6 +313,8 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     if (!limit.success)
       return json({ message: "Please wait a moment before running another command." }, 429);
+
+    yield* remember(input.workspaceId, titleFor(`!${input.script}`));
 
     const reply = yield* Effect.tryPromise(
       async () => await env.THREADS.getByName(address(input.workspaceId)).command(input),
@@ -280,6 +349,8 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
       return json({ message: "Please wait a moment before sending another request." }, 429);
     if (!(yield* hostedModelAccess(session.accountId, env)))
       return json({ message: "Hosted model access is not available for this account." }, 403);
+
+    yield* remember(input.workspaceId, titleFor(input.message));
 
     const receipt = yield* Effect.gen(function* () {
       const client = yield* CloudflareThreadClient;
@@ -332,8 +403,13 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     const threadId = address(workspaceId);
 
-    if (url.pathname === "/sandbox/api/commands")
-      return json(yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commands()));
+    if (url.pathname === "/sandbox/api/commands") {
+      const commands = yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commands());
+
+      if (commands[0]) yield* remember(workspaceId, titleFor(`!${commands[0].script}`));
+
+      return json(commands);
+    }
     if (url.pathname === "/sandbox/api/command-result") {
       const requestId = yield* Schema.decodeEffect(WorkspaceId)(
         url.searchParams.get("requestId") ?? "",
@@ -446,6 +522,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
                   ),
                 );
 
+              if (cursor === 0) yield* rememberHistory(workspaceId, records);
               const next = records.at(-1)?.sequence ?? cursor;
 
               const page: EventPage = {
