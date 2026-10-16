@@ -1,6 +1,5 @@
+import { Effect, Layer } from "effect";
 import { WorkerEnvironment } from "effect-cf";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 
 import { trackTool } from "../server/progress.ts";
 import { TripRepository } from "../server/trips.ts";

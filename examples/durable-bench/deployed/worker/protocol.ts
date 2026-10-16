@@ -1,6 +1,6 @@
 import { Receipt } from "@yielded/agent/receipt";
 import { Settlement } from "@yielded/agent/submission-ledger";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 export const TARGETS = ["yielded", "pi", "tardie", "effect-ai-floor"] as const;
 export const Target = Schema.Literals(TARGETS);

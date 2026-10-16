@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 import { lines } from "./protocol.ts";
 

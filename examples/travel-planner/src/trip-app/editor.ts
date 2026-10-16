@@ -1,12 +1,10 @@
-import * as OpenAiTool from "@effect/ai-openai/OpenAiTool";
+import { OpenAiTool } from "@effect/ai-openai";
 import { Subagent, Agent, Output } from "@yielded/agent";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { SubagentGrant } from "@yielded/agent/subagent-contract";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { Effect, Schema } from "effect";
+import { Tool, Toolkit } from "effect/ai";
 
 import { DeliverResponse } from "../agent.ts";
 import { PlannerSettings, PlannerError, Text, Trip, TripId } from "../domain.ts";

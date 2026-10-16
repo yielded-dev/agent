@@ -1,13 +1,5 @@
-import * as Cause from "effect/Cause";
-import * as Command from "effect/cli/Command";
-import * as Flag from "effect/cli/Flag";
-import * as Clock from "effect/Clock";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Fiber from "effect/Fiber";
-import * as FileSystem from "effect/FileSystem";
-import * as Schema from "effect/Schema";
+import { Cause, Clock, Console, Effect, Exit, Fiber, FileSystem, Schema } from "effect";
+import { Command, Flag } from "effect/cli";
 
 import { Cloudflare, type Run, withRun } from "./cloudflare.ts";
 import { Frame, Identity } from "./evidence.ts";

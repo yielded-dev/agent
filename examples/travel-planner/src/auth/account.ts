@@ -1,4 +1,4 @@
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 /** Stable application data identity issued by the authentication host. */
 export const AccountId = Schema.String.check(

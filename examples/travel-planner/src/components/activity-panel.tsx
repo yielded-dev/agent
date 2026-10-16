@@ -1,4 +1,4 @@
-import * as DateTime from "effect/DateTime";
+import { DateTime } from "effect";
 import { useEffect, useState } from "react";
 
 import type { PlannerActivity, PlannerProgress, PlannerSnapshot } from "../domain";

@@ -1,7 +1,5 @@
+import { Effect, Layer, Schema } from "effect";
 import { CloudflareTracer, Worker, WorkerEnvironment } from "effect-cf";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 
 import { PlannerError, TripApp, TripAppData, TripId } from "../domain.ts";
 import { appNameFromHost, readTripAppAddress } from "./addresses.ts";

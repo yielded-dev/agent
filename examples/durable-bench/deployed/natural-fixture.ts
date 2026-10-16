@@ -1,9 +1,6 @@
 import { join } from "node:path";
 
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Schema from "effect/Schema";
+import { Console, Effect, FileSystem, Schema } from "effect";
 import { convertV4MiniflareOptions, Log, LogLevel, Miniflare } from "miniflare";
 
 import { build } from "./build.ts";

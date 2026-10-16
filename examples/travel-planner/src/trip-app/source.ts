@@ -1,8 +1,4 @@
-import * as Clock from "effect/Clock";
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { Clock, Context, Effect, Layer, Schema } from "effect";
 import git, { type HttpClient, type TreeEntry } from "isomorphic-git";
 import { memfs } from "memfs";
 

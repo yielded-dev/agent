@@ -13,11 +13,7 @@ import {
   ThreadTailRequest,
 } from "@yielded/agent/thread-store";
 import { FrameworkMessage } from "@yielded/agent/worker";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 
 import { PlannerError, PlannerInput } from "../domain.ts";
 import { PlannerAttempt, ProgressStore } from "../server/progress.ts";

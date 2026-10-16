@@ -1,9 +1,6 @@
 import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
-import * as Option from "effect/Option";
-import * as Predicate from "effect/Predicate";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
+import { Option, Predicate, Redacted, Schema } from "effect";
+import { AsyncResult } from "effect/reactivity";
 import {
   ArrowUpRight,
   BookOpen,

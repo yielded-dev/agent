@@ -1,9 +1,7 @@
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Schema from "effect/Schema";
+import { Effect, FileSystem, Schema } from "effect";
 
 import { hash, read, workspace } from "./platform.ts";
 import {

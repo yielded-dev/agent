@@ -1,4 +1,4 @@
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 import { type Result, type Sample } from "./model.ts";
 import { TARGETS } from "./worker/protocol.ts";

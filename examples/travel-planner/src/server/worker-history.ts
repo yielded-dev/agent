@@ -1,9 +1,7 @@
 import type { ThreadId } from "@yielded/agent/identifiers";
 import { CanonicalSequence } from "@yielded/agent/records";
 import { ThreadRead, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Effect, Schema, Stream } from "effect";
 
 import { PlannerError } from "../domain.ts";
 

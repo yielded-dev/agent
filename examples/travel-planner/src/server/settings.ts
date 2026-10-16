@@ -1,8 +1,5 @@
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient } from "effect/sql/SqlClient";
 
 import { PlannerError, PlannerSettings, defaultPlannerSettings } from "../domain.ts";
 
@@ -41,7 +38,7 @@ const storageError = () =>
 export const PlannerSettingsStoreLive = Layer.effect(
   PlannerSettingsStore,
   Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
+    const sql = yield* SqlClient;
     const failpoint = yield* SettingsFailpoint;
 
     yield* failpoint.hit("schema:before");

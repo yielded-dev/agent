@@ -1,8 +1,6 @@
-import * as Context from "effect/Context";
-import type * as Effect from "effect/Effect";
-import * as Rpc from "effect/rpc/Rpc";
-import * as RpcGroup from "effect/rpc/RpcGroup";
-import * as Schema from "effect/Schema";
+import type { Effect } from "effect";
+import { Context, Schema } from "effect";
+import { Rpc, RpcGroup } from "effect/rpc";
 
 import { ConnectOpenAi, OpenAiConnection } from "./credential-domain.ts";
 import { TravelContent, TravelUrl } from "./travel-content.ts";

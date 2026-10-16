@@ -1,4 +1,4 @@
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 /** Only this metadata can leave the private credential store. */
 export const OpenAiConnection = Schema.Struct({

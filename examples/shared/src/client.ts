@@ -1,10 +1,6 @@
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
-import * as Atom from "effect/reactivity/Atom";
-import * as AtomHttpApi from "effect/reactivity/AtomHttpApi";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
+import { Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
+import { AsyncResult, Atom, AtomHttpApi, AtomRegistry } from "effect/reactivity";
 
 import { AccountError, AuthApi } from "./contract";
 

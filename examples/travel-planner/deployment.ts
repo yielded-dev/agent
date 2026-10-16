@@ -2,11 +2,7 @@ import type { Sandbox } from "@cloudflare/sandbox";
 import type { OAuthScope } from "@yielded/auth";
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import * as Config from "effect/Config";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
+import { Config, Effect, Layer, Redacted, Schema } from "effect";
 
 const state = Layer.unwrap(
   Config.Boolean("ALCHEMY_LOCAL_STATE").pipe(

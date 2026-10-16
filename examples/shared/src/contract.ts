@@ -1,8 +1,6 @@
 import { OAuthScope } from "@yielded/auth";
-import * as HttpApi from "effect/http-api/HttpApi";
-import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
-import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 
 export const AccountClaims = Schema.Struct({
   accountId: Schema.String.check(Schema.isUUID()),

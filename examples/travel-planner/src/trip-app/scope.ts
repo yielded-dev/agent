@@ -1,5 +1,5 @@
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
-import * as Effect from "effect/Effect";
+import { Effect } from "effect";
 
 import { PlannerError } from "../domain.ts";
 import { ownerOfThread } from "../server/tenancy.ts";

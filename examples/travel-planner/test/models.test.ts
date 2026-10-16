@@ -1,17 +1,8 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
-import * as OpenAiTool from "@effect/ai-openai/OpenAiTool";
+import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
 import { it } from "@effect/vitest";
-import * as LanguageModel from "effect/ai/LanguageModel";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as ConfigProvider from "effect/ConfigProvider";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { ConfigProvider, Effect, Layer, Redacted, Schema, Stream } from "effect";
+import { LanguageModel, Tool, Toolkit } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 import { expect } from "vite-plus/test";
 
 import { defaultPlannerSettings } from "../src/domain.ts";

@@ -1,14 +1,7 @@
 import { hostedModelAccess, type AuthEnvironment } from "@yielded/agent-example-auth/server";
-import * as Context from "effect/Context";
-import * as DateTime from "effect/DateTime";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as Layer from "effect/Layer";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
+import { Context, DateTime, Effect, Layer, Redacted, Schema } from "effect";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { SqlClient } from "effect/sql/SqlClient";
 
 import type { OpenAiConnection } from "../credential-domain.ts";
 import { PlannerError } from "../domain.ts";
@@ -226,7 +219,7 @@ export const credentialStoreLayer = (env: CredentialEnvironment, threadId: strin
 
         return { sealed: denied, status: denied, save: () => denied, remove: denied };
       }
-      const sql = yield* SqlClient.SqlClient;
+      const sql = yield* SqlClient;
       const failpoint = yield* CredentialFailpoint;
       const owner = ownerOfThread(threadId);
 

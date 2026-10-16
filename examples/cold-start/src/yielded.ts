@@ -1,6 +1,5 @@
-import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
-import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
+import { BrowserCrypto } from "@effect/platform-browser";
 import {
   HostResponse,
   LiveTextFrame,
@@ -12,13 +11,10 @@ import { digestDefinitions } from "@yielded/agent/digest";
 import { text } from "@yielded/agent/output";
 import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
 import { DefinitionDigestInput } from "@yielded/agent/records";
+import { Effect, Layer, Schema } from "effect";
 import { DurableObjectState, Rpc } from "effect-cf";
-import * as Model from "effect/ai/Model";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { Model, Toolkit } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 
 import { alarmEntered, constructed, identity, probe } from "./identity.ts";
 import { encode, lines, type Env } from "./protocol.ts";

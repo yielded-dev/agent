@@ -1,7 +1,4 @@
-import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
-import * as Scope from "effect/Scope";
-import * as Stream from "effect/Stream";
+import { Effect, Fiber, Scope, Stream } from "effect";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import { connectBrowserVoice } from "../src/voice/browser.ts";

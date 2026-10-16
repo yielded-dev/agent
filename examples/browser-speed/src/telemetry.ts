@@ -1,23 +1,21 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as LanguageModel from "effect/ai/LanguageModel";
-import type * as Response from "effect/ai/Response";
-import * as Telemetry from "effect/ai/Telemetry";
-import * as Cause from "effect/Cause";
-import * as Clock from "effect/Clock";
-import * as Context from "effect/Context";
-import * as DateTime from "effect/DateTime";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as Layer from "effect/Layer";
-import * as OtlpSerialization from "effect/observability/OtlpSerialization";
-import * as OtlpTracer from "effect/observability/OtlpTracer";
-import * as Option from "effect/Option";
+import { OpenAiClient } from "@effect/ai-openai";
+import {
+  Cause,
+  Clock,
+  Context,
+  DateTime,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Schema,
+  Stream,
+  Tracer,
+} from "effect";
+import { LanguageModel, Telemetry, type Response } from "effect/ai";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { OtlpSerialization, OtlpTracer } from "effect/observability";
 import * as RegExp from "effect/RegExp";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
-import * as Tracer from "effect/Tracer";
 
 import {
   browserCommandTimeoutMillis,

@@ -1,11 +1,5 @@
-import * as Deferred from "effect/Deferred";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Option from "effect/Option";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
-import * as Atom from "effect/reactivity/Atom";
-import * as Reactivity from "effect/reactivity/Reactivity";
-import * as Schema from "effect/Schema";
+import { Deferred, Effect, Exit, Option, Schema } from "effect";
+import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 
 import { speechContext } from "../conversation.ts";
 import { PlannerError } from "../domain.ts";

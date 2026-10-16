@@ -1,9 +1,5 @@
-import * as LanguageModel from "effect/ai/LanguageModel";
-import * as Cause from "effect/Cause";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Layer from "effect/Layer";
-import * as Stream from "effect/Stream";
+import { Cause, Effect, Exit, Layer, Stream } from "effect";
+import { LanguageModel } from "effect/ai";
 
 import { PlannerAttempt } from "./progress.ts";
 import { responseTextPreview } from "./response-stream.ts";

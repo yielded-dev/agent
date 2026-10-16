@@ -1,8 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import { assert, it } from "@effect/vitest";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { Effect, Schema } from "effect";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 

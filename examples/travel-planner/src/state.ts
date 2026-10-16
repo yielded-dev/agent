@@ -1,22 +1,9 @@
 import { authenticatedHttpClient } from "@yielded/agent-example-auth/client";
-import * as Data from "effect/Data";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
-import * as Atom from "effect/reactivity/Atom";
-import * as AtomRpc from "effect/reactivity/AtomRpc";
-import * as Reactivity from "effect/reactivity/Reactivity";
-import type * as Redacted from "effect/Redacted";
-import * as RpcClient from "effect/rpc/RpcClient";
-import * as RpcSerialization from "effect/rpc/RpcSerialization";
-import * as Schedule from "effect/Schedule";
-import * as Schema from "effect/Schema";
-import * as Semaphore from "effect/Semaphore";
-import * as Stream from "effect/Stream";
+import type { Redacted } from "effect";
+import { Data, Effect, Exit, Layer, Option, Schedule, Schema, Semaphore, Stream } from "effect";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { AsyncResult, Atom, AtomRpc, Reactivity } from "effect/reactivity";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 
 import { AccountError, type AccountSession } from "./auth/account";
 import { runtime } from "./auth/client";

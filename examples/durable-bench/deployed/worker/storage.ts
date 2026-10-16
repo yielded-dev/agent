@@ -2,10 +2,8 @@ import { CurrentDoStorageVersion } from "@yielded/agent-storage-cloudflare/do-st
 import type { exportThread } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import { CURRENT_RECORD_FORMAT, RecordEnvelope } from "@yielded/agent/records";
 import { ThreadExportRequest, type ThreadExportCursor } from "@yielded/agent/thread-store";
-import * as Prompt from "effect/ai/Prompt";
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { Context, Effect, Schema } from "effect";
+import { Prompt } from "effect/ai";
 
 import { fingerprint, type Message } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";

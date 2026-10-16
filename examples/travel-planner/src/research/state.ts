@@ -1,5 +1,5 @@
 import type { CanonicalRecordEnvelope } from "@yielded/agent/records";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 import type { ResearchScoutActivity } from "../domain.ts";
 import { emptyProgress } from "../server/progress.ts";

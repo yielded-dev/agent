@@ -3,11 +3,8 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Effect, FileSystem, Schema, Stream } from "effect";
+import { ChildProcess } from "effect/process";
 
 export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
   message: Schema.String,

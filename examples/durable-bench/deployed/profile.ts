@@ -1,11 +1,6 @@
 import { join } from "node:path";
 
-import * as Clock from "effect/Clock";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Schema from "effect/Schema";
-import * as Semaphore from "effect/Semaphore";
+import { Clock, Console, Effect, FileSystem, Schema, Semaphore } from "effect";
 
 import { Cloudflare, request } from "./cloudflare.ts";
 import { type Profile, type ProfileType } from "./model.ts";

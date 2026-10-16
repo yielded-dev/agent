@@ -7,14 +7,9 @@ import {
 } from "@yielded/agent-platform-cloudflare/browser-session";
 import { CodeExecutor } from "@yielded/agent/code-executor";
 import type { ThreadHistory } from "@yielded/agent/thread-history";
-import * as Deferred from "effect/Deferred";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Fiber from "effect/Fiber";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
-import type * as Scope from "effect/Scope";
-import * as TestClock from "effect/testing/TestClock";
+import type { Scope } from "effect";
+import { Deferred, Effect, Exit, Fiber, Redacted, Schema } from "effect";
+import { TestClock } from "effect/testing";
 
 import type { Browser } from "../src/browser.ts";
 import { LabError, type RunInput } from "../src/contract.ts";

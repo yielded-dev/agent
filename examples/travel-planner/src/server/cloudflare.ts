@@ -9,16 +9,11 @@ import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object"
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { DefinitionDigestInput } from "@yielded/agent/records";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
+import { Effect, Layer, Option, Schema } from "effect";
 import { CloudflareTracer, DurableObject, WorkerEnvironment } from "effect-cf";
-import type * as Tool from "effect/ai/Tool";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as HttpRouter from "effect/http/HttpRouter";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as RpcSerialization from "effect/rpc/RpcSerialization";
-import * as RpcServer from "effect/rpc/RpcServer";
-import * as Schema from "effect/Schema";
+import type { Tool } from "effect/ai";
+import { FetchHttpClient, HttpRouter } from "effect/http";
+import { RpcSerialization, RpcServer } from "effect/rpc";
 
 import { TripToolsLive } from "../agent.ts";
 import type { TripSiteStore } from "../domain.ts";

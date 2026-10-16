@@ -7,13 +7,9 @@ import {
   WorkerHostConfig,
   WorkerPolicyResolver,
 } from "@yielded/agent/worker-host";
+import { Duration, Effect, Layer, Option, Schema } from "effect";
 import { WorkerEnvironment } from "effect-cf";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Duration from "effect/Duration";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
+import { Toolkit } from "effect/ai";
 
 import { DeliverResponse } from "../agent.ts";
 import { PlannerError } from "../domain.ts";

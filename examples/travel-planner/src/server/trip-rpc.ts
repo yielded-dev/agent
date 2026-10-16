@@ -1,8 +1,6 @@
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
+import { Effect, Layer, Schema } from "effect";
 import { WorkerEnvironment } from "effect-cf";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 
 import {
   ConversationId,

@@ -1,8 +1,7 @@
 import { authenticateRequest } from "@yielded/agent-example-auth/server";
 import { DurableObject } from "cloudflare:workers";
+import { Effect, Schema } from "effect";
 import { WorkerEnvironment } from "effect-cf";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
 
 import { AccountId, type AccountError, type AccountSession } from "./account";
 

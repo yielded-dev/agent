@@ -1,15 +1,8 @@
-import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
 import { DurableObject } from "cloudflare:workers";
-import * as LanguageModel from "effect/ai/LanguageModel";
-import * as Prompt from "effect/ai/Prompt";
-import type * as AiResponse from "effect/ai/Response";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as ManagedRuntime from "effect/ManagedRuntime";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
+import { LanguageModel, Prompt, type Response as AiResponse } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 
 import { history, payload, fingerprint, type Turn, type Message } from "../../src/plan.ts";
 import { TEXT_OUTPUT_INSTRUCTIONS } from "../text.ts";

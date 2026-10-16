@@ -1,4 +1,4 @@
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 import { SendMessageRequest, VoiceWork, type PlannerProgress } from "../domain.ts";
 import { shortContext, type Caption, type LiveEvent } from "./protocol.ts";

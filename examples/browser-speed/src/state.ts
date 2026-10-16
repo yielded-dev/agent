@@ -1,14 +1,6 @@
 import { authenticatedHttpClient, sessionObservation } from "@yielded/agent-example-auth/client";
-import * as Cause from "effect/Cause";
-import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
-import * as Predicate from "effect/Predicate";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
-import * as Atom from "effect/reactivity/Atom";
-import * as AtomHttpApi from "effect/reactivity/AtomHttpApi";
-import * as Reactivity from "effect/reactivity/Reactivity";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
+import { Cause, Effect, Option, Predicate, Redacted, Schema } from "effect";
+import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
 import {
   LabApi,

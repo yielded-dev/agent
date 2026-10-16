@@ -1,4 +1,4 @@
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 const Id = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256));
 

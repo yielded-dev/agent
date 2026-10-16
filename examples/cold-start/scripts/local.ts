@@ -1,14 +1,6 @@
-import * as Command from "effect/cli/Command";
-import * as Flag from "effect/cli/Flag";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
-import * as Predicate from "effect/Predicate";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Console, Effect, FileSystem, Path, Predicate, Schema, Stream } from "effect";
+import { Command, Flag } from "effect/cli";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { environment, executable, sourceMap } from "./local-child.ts";
 import { BenchError, check, hash, read, save, workspace } from "./platform.ts";

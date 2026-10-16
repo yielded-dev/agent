@@ -1,8 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import * as OpenAiClient from "@effect/ai-openai-compat/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
-import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
+import { BrowserCrypto } from "@effect/platform-browser";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
 import {
   HostResponse,
@@ -14,14 +13,10 @@ import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { text } from "@yielded/agent/output";
 import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
 import { DefinitionDigestInput, PersistedJson } from "@yielded/agent/records";
+import { Effect, Layer, Schema } from "effect";
 import { DurableObject, DurableObjectAlarm, DurableObjectState } from "effect-cf";
-import * as Model from "effect/ai/Model";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { Model, Tool, Toolkit } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 
 import { payload, type Turn } from "../../src/plan.ts";
 import { INSTRUCTIONS } from "../text.ts";

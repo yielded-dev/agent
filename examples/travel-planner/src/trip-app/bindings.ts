@@ -1,6 +1,6 @@
+import { Schema } from "effect";
 import { R2, Workflow } from "effect-cf";
 import * as Sandbox from "effect-cf/sandbox";
-import * as Schema from "effect/Schema";
 
 import { AppBuildRequest, AppCommit } from "../domain.ts";
 import { AppBuildBucket } from "./bucket.ts";

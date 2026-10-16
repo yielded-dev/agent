@@ -1,5 +1,4 @@
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { Effect, Schema } from "effect";
 
 import { AccountId } from "../auth/account.ts";
 import { PlannerError, type PlannerSnapshot } from "../domain.ts";

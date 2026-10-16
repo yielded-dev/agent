@@ -1,4 +1,4 @@
-import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import { BrowserCrypto } from "@effect/platform-browser";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
@@ -10,19 +10,17 @@ import { ThreadId } from "@yielded/agent/identifiers";
 import { text as textOutput } from "@yielded/agent/output";
 import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
 import { DefinitionDigestInput } from "@yielded/agent/records";
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
-import * as AiError from "effect/ai/AiError";
-import * as LanguageModel from "effect/ai/LanguageModel";
-import * as Model from "effect/ai/Model";
-import type * as Prompt from "effect/ai/Prompt";
-import type * as Response from "effect/ai/Response";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as ManagedRuntime from "effect/ManagedRuntime";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import {
+  AiError,
+  LanguageModel,
+  Model,
+  Tool,
+  Toolkit,
+  type Prompt,
+  type Response,
+} from "effect/ai";
 
 import { fingerprint, next, payload, type Message, type Turn } from "./plan.ts";
 import { serve, tables, type Bench } from "./serve.ts";

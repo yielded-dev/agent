@@ -1,6 +1,5 @@
 import { exportThread } from "@yielded/agent-storage-cloudflare/do-thread-store";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { Effect, Schema } from "effect";
 
 import { CYCLE, history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
