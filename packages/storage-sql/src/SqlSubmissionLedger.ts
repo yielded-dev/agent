@@ -1709,7 +1709,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     yield* hitFailpoint("ledger:mark-input-applied:after", operation);
   });
 
-  const appendInput = Effect.fn("SqlSubmissionLedger.appendInput")(function* (
+  const appendInput = Effect.fnUntraced(function* (
     submissionId: SubmissionId,
     request: AppendRequest,
   ) {
