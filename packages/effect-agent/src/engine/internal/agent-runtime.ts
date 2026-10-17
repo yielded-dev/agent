@@ -3978,12 +3978,14 @@ const nextContextEstimate = Effect.fnUntraced(function* (
 
 const snapshotCompactionMessages = (messages: ReadonlyArray<Prompt.Message>) =>
   Effect.try({
-    try: () =>
-      messages.map((message) =>
-        Schema.decodeUnknownSync(Schema.Json)(
-          JSON.parse(JSON.stringify(Schema.encodeSync(Prompt.Message)(message))),
-        ),
-      ),
+    try: () => {
+      const encodeMessage = Schema.encodeSync(Prompt.Message);
+      const decodeSnapshot = Schema.decodeUnknownSync(Schema.Json);
+
+      return messages.map((message) =>
+        decodeSnapshot(JSON.parse(JSON.stringify(encodeMessage(message)))),
+      );
+    },
     catch: (cause) =>
       CompactionError.make({ message: "Could not snapshot prepared compaction history", cause }),
   });
