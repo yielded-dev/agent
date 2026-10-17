@@ -175,6 +175,7 @@ import {
   type CommittedPromptSuffix,
   type PromptHistory,
 } from "./internal/prompt-history-cache.ts";
+import { decodeOwnedPrompt } from "./internal/prompt-messages.ts";
 import { captureRecord } from "./internal/record-encoding.ts";
 import { RunContextReader } from "./internal/run-context-reader.ts";
 import { readRunContext } from "./internal/run-context.ts";
@@ -182,6 +183,7 @@ import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
   initialDispatchBlockedTurns,
   isUnresolvedToolOperation,
+  type ToolOperationState,
   toolOperationStates,
 } from "./internal/tool-operations.ts";
 import { makeWorkerRuntime, WorkerInputControl } from "./internal/worker-host.ts";
@@ -427,7 +429,12 @@ import {
   decodeWorkCursor,
   type ThreadWorkPage,
 } from "./ThreadWork.ts";
-import { DeclaredToolCallEvidence, ToolReconciler } from "./ToolReconciler.ts";
+import {
+  DeclaredToolCallEvidence,
+  type ReconciliationDecision,
+  ReconciliationNeverStarted,
+  ToolReconciler,
+} from "./ToolReconciler.ts";
 import { WakeScheduler } from "./WakeScheduler.ts";
 import { WorkerAdmissionPort, WorkerAdmissionRequest } from "./WorkerAdmission.ts";
 
@@ -528,6 +535,112 @@ const ORPHAN_ZERO_CONSUMED_ACCOUNTING = Schema.decodeSync(PersistedJson)({
   basis: "orphan-zero-consumed",
 });
 
+const makeRunRecoveryIndex = (runId: RunId, records: ReadonlyArray<CanonicalRecordEnvelope>) => {
+  const responses = records.flatMap(({ record, sequence }) =>
+    record.payload._tag === "ModelResponseRecorded"
+      ? [{ recordId: record.recordId, sequence, response: record.payload }]
+      : [],
+  );
+
+  let validated = false;
+  let operations: ReadonlyMap<string, ToolOperation> | undefined;
+  let states: ReadonlyArray<ToolOperationState> | undefined;
+
+  return {
+    records,
+    responses,
+    validateDeclarations: Effect.suspend(() => {
+      if (validated) return Effect.void;
+      const turns = new Set<number>();
+      const identities = new Set<string>();
+
+      for (const { recordId, response } of responses) {
+        if (
+          turns.has(response.turn) ||
+          recordId !== modelResponseRecordId(runId, response.turn) ||
+          response.turnId !== turnIdForRun(runId, response.turn)
+        )
+          return Effect.fail(
+            RunJournalError.make({ message: "Tool declaration has no unique original response" }),
+          );
+        turns.add(response.turn);
+        for (const operation of response.toolOperations) {
+          if (identities.has(operation.toolCallId))
+            return Effect.fail(
+              RunJournalError.make({ message: "Tool Call identity is reused within a Run" }),
+            );
+          identities.add(operation.toolCallId);
+        }
+      }
+      validated = true;
+
+      return Effect.void;
+    }),
+    get operations(): ReadonlyMap<string, ToolOperation> {
+      return (operations ??= new Map(
+        responses.flatMap(({ response }) =>
+          response.toolOperations.map((operation) => [operation.toolCallId, operation] as const),
+        ),
+      ));
+    },
+    get operationStates(): ReadonlyArray<ToolOperationState> {
+      return (states ??= toolOperationStates(records, runId));
+    },
+  };
+};
+
+const makeRecoveryIndex = (records: ReadonlyArray<CanonicalRecordEnvelope>) => {
+  const byRecordId = new Map<RecordId, CanonicalRecordEnvelope>();
+  const byRun = new Map<RunId, Array<CanonicalRecordEnvelope>>();
+  const runs = new Map<RunId, ReturnType<typeof makeRunRecoveryIndex>>();
+  let hasLineage = false;
+
+  for (const entry of records) {
+    byRecordId.set(entry.record.recordId, entry);
+    const payload = entry.record.payload;
+
+    if (payload._tag === "SubagentLineageRecorded") hasLineage = true;
+    if (!("runId" in payload) || payload.runId === undefined) continue;
+    const group = byRun.get(payload.runId);
+
+    if (group === undefined) byRun.set(payload.runId, [entry]);
+    else group.push(entry);
+  }
+
+  return {
+    byRecordId,
+    hasLineage,
+    run: (runId: RunId) => {
+      let run = runs.get(runId);
+
+      if (run === undefined) {
+        run = makeRunRecoveryIndex(runId, byRun.get(runId) ?? []);
+        runs.set(runId, run);
+      }
+
+      return run;
+    },
+  };
+};
+
+// Private readers receive captured control arrays. Refreshes replace the array, so each
+// weakly held index describes one immutable tail; effectful admission evidence is never cached.
+const recoveryIndexes = new WeakMap<
+  ReadonlyArray<CanonicalRecordEnvelope>,
+  ReturnType<typeof makeRecoveryIndex>
+>();
+
+const recoveryIndex = (records: ReadonlyArray<CanonicalRecordEnvelope>) => {
+  let index = recoveryIndexes.get(records);
+
+  if (index === undefined) {
+    index = makeRecoveryIndex(records);
+    recoveryIndexes.set(records, index);
+  }
+
+  return index;
+};
+
 /** The four parent-log/child-log subagent records of one Run, indexed per Tool Call. */
 interface SubagentCallRecords {
   readonly requested: Map<ToolCallId, SubagentRequested>;
@@ -547,7 +660,8 @@ const subagentRecordsOf = (
   const joined = new Map<ToolCallId, SubagentJoined>();
   const declaredNames = new Map<ToolCallId, string>();
 
-  for (const envelope of records) {
+  // These maps become live Attempt state; only their immutable source rows are shared.
+  for (const envelope of recoveryIndex(records).run(runId).records) {
     const payload = envelope.record.payload;
 
     switch (payload._tag) {
@@ -1220,7 +1334,6 @@ const nowUtc: Effect.Effect<DateTime.Utc> = Effect.map(Clock.currentTimeMillis, 
   DateTime.toUtc(DateTime.makeUnsafe(millis)),
 );
 
-const decodePrompt = Schema.decodeUnknownEffect(Prompt.Prompt);
 const decodePersisted = Schema.decodeUnknownEffect(PersistedJson);
 const encodeCompactionMessageJson = Schema.encodeEffect(Schema.fromJsonString(Prompt.Message));
 const decodeCompactionMessageJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Json));
@@ -1235,10 +1348,13 @@ interface DeclaredApplicationCall {
 }
 
 interface DeclaredToolCalls {
-  readonly application: Array<DeclaredApplicationCall>;
-  readonly all: Array<DeclaredApplicationCall>;
-  readonly providerResults: Array<Prompt.ToolResultPart>;
+  readonly prompt: Prompt.Prompt;
+  readonly application: ReadonlyArray<DeclaredApplicationCall>;
+  readonly all: ReadonlyArray<DeclaredApplicationCall>;
+  readonly providerResults: ReadonlyArray<Prompt.ToolResultPart>;
 }
+
+const declaredResponses = new WeakMap<Prompt.Prompt, DeclaredToolCalls>();
 
 /**
  * Pure inspection of every Tool Call declared in one canonical response. Provider-executed calls
@@ -1249,7 +1365,7 @@ const declaredToolCalls = (
   messages: PersistedJson,
 ): Effect.Effect<DeclaredToolCalls, RunJournalError> =>
   Effect.suspend(() =>
-    decodePrompt(messages).pipe(
+    decodeOwnedPrompt(messages).pipe(
       Effect.mapError((cause) =>
         RunJournalError.make({
           message: "ModelResponseRecorded messages are not Schema-encoded Prompt messages",
@@ -1257,6 +1373,9 @@ const declaredToolCalls = (
         }),
       ),
       Effect.flatMap((prompt) => {
+        const cached = declaredResponses.get(prompt);
+
+        if (cached !== undefined) return Effect.succeed(cached);
         const application: Array<DeclaredApplicationCall> = [];
         const all: Array<DeclaredApplicationCall> = [];
         const providerResults: Array<Prompt.ToolResultPart> = [];
@@ -1304,7 +1423,11 @@ const declaredToolCalls = (
           }
         }
 
-        return Effect.succeed({ application, all, providerResults });
+        const declared = { prompt, application, all, providerResults };
+
+        declaredResponses.set(prompt, declared);
+
+        return Effect.succeed(declared);
       }),
     ),
   );
@@ -1332,11 +1455,13 @@ interface PendingToolBatch {
   }>;
   readonly declaredIds: ReadonlySet<string>;
   readonly responseRecordId: RecordId;
-  /** The pending `ModelResponseRecorded.messages`: its pre-assistant slice is the resume's leading messages. */
-  readonly messages: PersistedJson;
+  /** Owned decoded response; its pre-assistant slice is the resume's leading messages. */
+  readonly prompt: Prompt.Prompt;
 }
 
-type AttemptAppendContext = RunWriter;
+type ProgressWriter = Effect.Success<ReturnType<typeof makeProgressWriter>>;
+type AttemptAppendContext = RunWriter & { readonly progress: ProgressWriter };
+type ProgressSession = RunStorageSession & AttemptAppendContext;
 
 interface RunTiming {
   readonly startedAt: DateTime.Utc;
@@ -1420,6 +1545,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         readonly threadId: ThreadId;
         readonly through: CanonicalSequence;
         readonly runId: RunId;
+        readonly pendingResponseId: RecordId | undefined;
         readonly contextRecordId: string | undefined;
         readonly contextEvidence: ReadonlyArray<JournalRecordEnvelope>;
         readonly journal: RunJournalProjection;
@@ -1542,19 +1668,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         };
   });
 
-  const operationsFor = (records: ReadonlyArray<CanonicalRecordEnvelope>, runId: RunId) => {
-    const operations = new Map<string, ToolOperation>();
-
-    for (const {
-      record: { payload },
-    } of records) {
-      if (payload._tag !== "ModelResponseRecorded" || payload.runId !== runId) continue;
-      for (const operation of payload.toolOperations)
-        operations.set(operation.toolCallId, operation);
-    }
-
-    return operations;
-  };
+  const operationsFor = (records: ReadonlyArray<CanonicalRecordEnvelope>, runId: RunId) =>
+    recoveryIndex(records).run(runId).operations;
 
   const supportsOperation = (
     call: OpenToolCallEvidence,
@@ -2012,123 +2127,61 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     hostSubmissionId?: SubmissionId,
   ): Effect.fn.Return<RecoveryEvidence, RunJournalError | LedgerError> {
     const runId = runIdForSubmission(submissionId);
+    const index = recoveryIndex(records);
+    const run = index.run(runId);
 
-    const hostRunId =
-      hostSubmissionId === undefined ? undefined : runIdForSubmission(hostSubmissionId);
+    yield* run.validateDeclarations;
+    const input = index.byRecordId.get(submissionInputRecordId(submissionId));
+    const inputRecorded = input !== undefined;
+    const abortRecorded = index.byRecordId.has(submissionAbortRecordId(submissionId));
+    const subagentLineageRecorded = index.hasLineage;
 
-    const inputId = submissionInputRecordId(submissionId);
-    const abortId = submissionAbortRecordId(submissionId);
-    const settlementId = submissionSettlementRecordId(submissionId);
+    const settlement = index.byRecordId.get(submissionSettlementRecordId(submissionId))?.record
+      .payload;
 
-    const hostSettlementId =
-      hostSubmissionId === undefined ? undefined : submissionSettlementRecordId(hostSubmissionId);
+    const hostSettlement =
+      hostSubmissionId === undefined
+        ? undefined
+        : index.byRecordId.get(submissionSettlementRecordId(hostSubmissionId))?.record.payload;
 
-    let inputRecorded = false;
-    let inputSequence: CanonicalSequence | undefined;
-    let abortRecorded = false;
-    let subagentLineageRecorded = false;
-    let recordedSettlementOutcome: SettlementOutcome | undefined;
-    let hostSettlementOutcome: SettlementOutcome | undefined;
-    let hostRespondedAfterInput = false;
+    const recordedSettlementOutcome =
+      settlement?._tag === "SubmissionSettled" ? settlement.outcome : undefined;
+
+    const hostSettlementOutcome =
+      hostSettlement?._tag === "SubmissionSettled" ? hostSettlement.outcome : undefined;
+
+    const hostRespondedAfterInput =
+      hostSubmissionId !== undefined &&
+      input !== undefined &&
+      index
+        .run(runIdForSubmission(hostSubmissionId))
+        .responses.some(({ sequence }) => sequence > input.sequence);
+
     const unknownIds = new Set<string>();
-    const declarationIds = new Set<string>();
-    const responseTurns = new Set<number>();
     const requested: Array<PendingApprovalEvidence> = [];
     const canonicalApprovals = new Map<ToolCallId, ApprovalDecision>();
+    let lastResponseTurn: number | undefined;
 
-    let lastResponse:
-      | {
-          readonly turn: number;
-          readonly messages: PersistedJson;
-          readonly toolExposure?: Snapshot | undefined;
-        }
-      | undefined;
-
-    for (const envelope of records) {
-      const recordId = envelope.record.recordId;
+    for (const envelope of run.records) {
       const payload = envelope.record.payload;
 
-      if (recordId === inputId) {
-        inputRecorded = true;
-        inputSequence = envelope.sequence;
-        continue;
-      }
-      if (recordId === abortId) {
-        abortRecorded = true;
-        continue;
-      }
-      if (recordId === settlementId && payload._tag === "SubmissionSettled") {
-        recordedSettlementOutcome = payload.outcome;
-        continue;
-      }
-      if (
-        hostSettlementId !== undefined &&
-        recordId === hostSettlementId &&
-        payload._tag === "SubmissionSettled"
-      ) {
-        hostSettlementOutcome = payload.outcome;
-        continue;
-      }
       switch (payload._tag) {
         case "ToolCallUnknown": {
-          if (payload.runId === runId) unknownIds.add(payload.toolCallId);
+          unknownIds.add(payload.toolCallId);
           break;
         }
         case "ToolApprovalRequested": {
-          if (payload.runId !== runId) break;
           requested.push(
             PendingApprovalEvidence.make({ toolCallId: payload.toolCallId, turn: payload.turn }),
           );
           break;
         }
         case "ToolApprovalDecided": {
-          if (payload.runId === runId) canonicalApprovals.set(payload.toolCallId, payload.decision);
-          break;
-        }
-        case "SubagentLineageRecorded": {
-          // Thread-level fact (one lineage record per child Thread, spec §11):
-          // its presence gates the AwaitParentEstablishment row for parent-linked
-          // Submissions; root Threads never carry it and never consult it.
-          subagentLineageRecorded = true;
+          canonicalApprovals.set(payload.toolCallId, payload.decision);
           break;
         }
         case "ModelResponseRecorded": {
-          if (payload.runId === runId) {
-            if (
-              responseTurns.has(payload.turn) ||
-              recordId !== modelResponseRecordId(runId, payload.turn) ||
-              payload.turnId !== turnIdForRun(runId, payload.turn)
-            )
-              return yield* RunJournalError.make({
-                message: "Tool declaration has no unique original response",
-              });
-            responseTurns.add(payload.turn);
-            for (const operation of payload.toolOperations) {
-              if (declarationIds.has(operation.toolCallId))
-                return yield* RunJournalError.make({
-                  message: "Tool Call identity is reused within a Run",
-                });
-              declarationIds.add(operation.toolCallId);
-            }
-          }
-          if (
-            payload.runId === runId &&
-            (lastResponse === undefined || payload.turn > lastResponse.turn)
-          ) {
-            lastResponse = {
-              turn: payload.turn,
-              messages: payload.messages,
-              ...(payload.toolExposure === undefined ? {} : { toolExposure: payload.toolExposure }),
-            };
-          }
-          if (
-            hostRunId !== undefined &&
-            payload.runId === hostRunId &&
-            inputSequence !== undefined &&
-            envelope.sequence > inputSequence
-          ) {
-            hostRespondedAfterInput = true;
-          }
+          lastResponseTurn = Math.max(lastResponseTurn ?? 0, payload.turn);
           break;
         }
         default: {
@@ -2137,11 +2190,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
     }
 
-    const operationStates = toolOperationStates(records, runId);
-
-    const operations = new Map<string, ToolOperation>(
-      operationStates.map(({ operation }) => [operation.toolCallId, operation]),
-    );
+    const operationStates = run.operationStates;
+    const operations = run.operations;
 
     for (const toolCallId of unknownIds)
       if (!operations.has(toolCallId))
@@ -2266,8 +2316,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     let declaredPendingBatch: DeclaredPendingBatchEvidence | undefined;
     const requestedIds = new Set(requested.map((approval) => approval.toolCallId));
 
-    if (lastResponse !== undefined) {
-      const turn = lastResponse.turn;
+    if (lastResponseTurn !== undefined) {
+      const turn = lastResponseTurn;
 
       const pending = operationStates.filter((state) => state.turn === turn && !state.settled);
 
@@ -2321,30 +2371,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     selectedIds: ReadonlySet<string>,
   ) {
     const calls = new Map<string, DeclaredToolCall>();
-    const turns = new Set<number>();
-    const identities = new Set<string>();
+    const run = recoveryIndex(records).run(runId);
 
-    for (const { record } of records) {
-      const response = record.payload;
-
-      if (response._tag !== "ModelResponseRecorded" || response.runId !== runId) continue;
-      if (
-        turns.has(response.turn) ||
-        record.recordId !== modelResponseRecordId(runId, response.turn) ||
-        response.turnId !== turnIdForRun(runId, response.turn)
-      )
-        return yield* RunJournalError.make({
-          message: "Tool declaration has no unique original response",
-        });
-      turns.add(response.turn);
-
-      for (const operation of response.toolOperations) {
-        if (identities.has(operation.toolCallId))
-          return yield* RunJournalError.make({
-            message: "Operation evidence differs from the original declaration",
-          });
-        identities.add(operation.toolCallId);
-      }
+    yield* run.validateDeclarations;
+    for (const { response } of run.responses) {
       if (!response.toolOperations.some((operation) => selectedIds.has(operation.toolCallId)))
         continue;
 
@@ -2408,6 +2438,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     runId: ReturnType<typeof runIdForSubmission>,
     completionTool?: string,
   ): Effect.fn.Return<PendingToolBatch | undefined, RunJournalError> {
+    const run = recoveryIndex(records).run(runId);
+
+    yield* run.validateDeclarations;
+
     let lastResponse:
       | {
           readonly turn: number;
@@ -2431,10 +2465,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
     >();
 
-    for (const envelope of records) {
+    for (const envelope of run.records) {
       const payload = envelope.record.payload;
 
-      if (payload._tag === "ModelResponseRecorded" && payload.runId === runId) {
+      if (payload._tag === "ModelResponseRecorded") {
         if (lastResponse === undefined || payload.turn > lastResponse.turn) {
           settledByCallId.clear();
           lastResponse = {
@@ -2448,7 +2482,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         }
         continue;
       }
-      if (payload._tag === "ToolCallSettled" && payload.runId === runId) {
+      if (payload._tag === "ToolCallSettled") {
         settledByCallId.set(payload.toolCallId, {
           recordId: envelope.record.recordId,
           toolName: payload.toolName,
@@ -2537,9 +2571,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       completionCall !== undefined &&
       completionCall.name === completionTool &&
       settledByCallId.get(completionCall.id)?.isFailure === false &&
-      !records.some(
-        ({ record }) => record.payload._tag === "RunCompleted" && record.payload.runId === runId,
-      );
+      !run.records.some(({ record }) => record.payload._tag === "RunCompleted");
 
     if (settled.length >= calls.length && !projectSettledCompletion) return undefined;
 
@@ -2550,7 +2582,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       settled,
       declaredIds: new Set(calls.map((call) => call.id)),
       responseRecordId: modelResponseRecordId(runId, lastResponse.turn),
-      messages: lastResponse.messages,
+      prompt: declared.prompt,
       toolParameterRejections: lastResponse.toolParameterRejections,
       toolOperations: lastResponse.toolOperations,
       toolResultMaxBytes: lastResponse.toolResultMaxBytes,
@@ -2559,29 +2591,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         : { toolExposure: lastResponse.toolExposure }),
     };
   });
-
-  /**
-   * Records without the pending Turn's response and its partial results: the resumed Attempt's
-   * canonical prompt boundary sits BEFORE the pending Turn, whose messages re-enter official
-   * history through the engine's batch-resume continuation.
-   */
-  const withoutPendingBatch = <E>(
-    records: Stream.Stream<JournalRecordEnvelope, E>,
-    pending: PendingToolBatch,
-    runId: ReturnType<typeof runIdForSubmission>,
-  ): Stream.Stream<JournalRecordEnvelope, E> =>
-    records.pipe(
-      Stream.filter((envelope) => {
-        if (envelope.record.recordId === pending.responseRecordId) return false;
-        const payload = envelope.record.payload;
-
-        return !(
-          payload._tag === "ToolCallSettled" &&
-          payload.runId === runId &&
-          pending.declaredIds.has(payload.toolCallId)
-        );
-      }),
-    );
 
   const materializeThread = (threadId: ThreadId) =>
     store.materialize(ThreadMaterialization.make({ threadId }));
@@ -2598,9 +2607,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       definitions,
     ).pipe(Effect.provideService(ThreadStore, store), Effect.provideService(WakeScheduler, wake));
 
-  type ProgressWriter = Effect.Success<ReturnType<typeof makeProgressWriter>>;
-  const progressWriters = new WeakMap<RunWriter, ProgressWriter>();
-
   const activeProgress = new Map<ThreadId, { readonly writer: ProgressWriter }>();
 
   const withProgress = Effect.fnUntraced(function* (writer: RunWriter) {
@@ -2612,8 +2618,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         Effect.provideContext(journalServices),
       ));
 
-    const owned: RunWriter = {
+    const owned: AttemptAppendContext = {
       ...writer,
+      progress,
       append: (batch) =>
         progress.commit(batch).pipe(
           Effect.provideService(CurrentRunWriter, writer),
@@ -2621,8 +2628,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           Effect.tapError(() => writer.checkActive),
         ),
     };
-
-    progressWriters.set(owned, progress);
 
     return { owned, progress };
   });
@@ -2651,8 +2656,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     const inputWriter = { ...session, append: session.appendInput };
 
-    const wrapped: RunStorageSession = {
+    const wrapped: ProgressSession = {
       ...session,
+      progress,
       append: owned.append,
       appendInput: (batch: CommitBatch) =>
         storageOwner.withProgress(
@@ -2680,8 +2686,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       publishSettlement: (batch) =>
         progress.publish(batch).pipe(Effect.provideService(CurrentRunSettlement, session)),
     };
-
-    progressWriters.set(wrapped, progress);
 
     return wrapped;
   });
@@ -2745,17 +2749,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     ): PublishSettlement =>
     (batch) =>
       Effect.suspend(() => {
-        const progress = progressWriters.get(ctx);
-
-        if (progress === undefined)
-          return Effect.fail(
-            ThreadStoreError.make({
-              operation: "publish Run continuation",
-              message: "Settlement has no scoped progress writer",
-            }),
-          );
-
-        return progress.publish(batch).pipe(
+        return ctx.progress.publish(batch).pipe(
           Effect.provideService(CurrentRunSettlement, {
             threadId: ctx.threadId,
             tail: ctx.tail,
@@ -3110,68 +3104,50 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         recovered += 1;
         continue;
       }
+      let decision: ReconciliationDecision;
+
       if (intent !== undefined) {
-        switch (intent.resolution._tag) {
-          case "AbortSubmission":
-            continue;
-          case "CompletedWithResult": {
-            yield* appendClosedCall(ctx, submissionId, knownIds, call, {
-              result: { value: intent.resolution.result, isFailure: intent.resolution.isFailure },
-              resolution: intent.resolution.isFailure
-                ? "failed-with-error"
-                : "completed-with-result",
-              author,
-              reason,
-            });
-            recovered += 1;
-            continue;
-          }
-          case "NeverHappened": {
-            yield* neverStarted;
-            continue;
-          }
-          case "SafeToRetry": {
-            // Permission to repeat the original operation is not proof it never happened.
-            if (current === undefined) review.unproven.push(call);
-            else if (supported) review.retryable.push(call);
-            else review.uncertain.push(call);
-            continue;
-          }
+        if (intent.resolution._tag === "AbortSubmission") continue;
+        decision =
+          intent.resolution._tag === "NeverHappened"
+            ? ReconciliationNeverStarted.make({})
+            : intent.resolution;
+      } else {
+        const tool = current?.definition.toolkit.tools[call.toolName];
+
+        if (current === undefined && operation?.executionClass === "idempotent") {
+          review.unproven.push(call);
+          continue;
         }
-      }
-      const tool = current?.definition.toolkit.tools[call.toolName];
+        if (supported && tool !== undefined && getToolExecutionClass(tool) === "idempotent") {
+          review.retryable.push(call);
+          continue;
+        }
+        if (declared === undefined) {
+          review.unproven.push(call);
+          continue;
+        }
 
-      if (current === undefined && operation?.executionClass === "idempotent") {
-        review.unproven.push(call);
-        continue;
-      }
-      if (supported && tool !== undefined && getToolExecutionClass(tool) === "idempotent") {
-        review.retryable.push(call);
-        continue;
-      }
-      if (declared === undefined) {
-        review.unproven.push(call);
-        continue;
-      }
+        // Supplier proof is re-established on every pass; operator intent remains durable.
+        const reconciled = yield* reconciler
+          .reconcile(
+            DeclaredToolCallEvidence.make({
+              threadId: submission.threadId,
+              submissionId,
+              ...declared,
+            }),
+          )
+          .pipe(
+            Effect.map(Option.some),
+            Effect.catchTag("ToolReconcilerError", () => Effect.succeed(Option.none())),
+          );
 
-      const reconciled = yield* reconciler
-        .reconcile(
-          DeclaredToolCallEvidence.make({
-            threadId: submission.threadId,
-            submissionId,
-            ...declared,
-          }),
-        )
-        .pipe(
-          Effect.map(Option.some),
-          Effect.catchTag("ToolReconcilerError", () => Effect.succeed(Option.none())),
-        );
-
-      if (Option.isNone(reconciled)) {
-        review.unproven.push(call);
-        continue;
+        if (Option.isNone(reconciled)) {
+          review.unproven.push(call);
+          continue;
+        }
+        decision = reconciled.value;
       }
-      const decision = reconciled.value;
 
       switch (decision._tag) {
         case "CompletedWithResult": {
@@ -3189,6 +3165,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           continue;
         }
         case "SafeToRetry": {
+          // Permission to repeat the original operation is not proof it never happened.
           if (current === undefined) review.unproven.push(call);
           else if (supported) review.retryable.push(call);
           else review.uncertain.push(call);
@@ -4924,6 +4901,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const runId = runIdForSubmission(submissionId);
       const boundaries: Array<JournalBoundary> = [];
+      const completionTool = agent.definition.completion?.tool;
+      const pending = yield* pendingToolBatchFor(records, runId, completionTool);
 
       const cached = projectedJournal;
       // Unrelated Thread traffic does not invalidate an already validated owner projection.
@@ -4964,6 +4943,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               cached.threadId === ctx.threadId &&
               cached.through === projectionThrough &&
               cached.runId === runId &&
+              cached.pendingResponseId === pending?.responseRecordId &&
               cached.contextRecordId === priorContext?.recordId
             ? (boundaries.push(...cached.boundaries),
               cached.contextEvidence.forEach(retainHistory),
@@ -4975,6 +4955,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 priorContext,
                 journalMetadata,
                 priorContext === undefined ? retainHistory : undefined,
+                pending,
               );
 
       if (initialJournal?.prefix !== undefined) {
@@ -4995,6 +4976,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         threadId: ctx.threadId,
         through: CanonicalSequence.make(projectionThrough),
         runId,
+        pendingResponseId: pending?.responseRecordId,
         contextRecordId: priorContext?.recordId,
         contextEvidence: [...historyEvidence.values()],
         journal,
@@ -5063,19 +5045,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         });
       }
 
-      const completionTool = agent.definition.completion?.tool;
-
-      const pending = yield* pendingToolBatchFor(records, runId, completionTool);
-
-      const resumeProjection =
-        pending === undefined
-          ? journal
-          : yield* projectRunJournalStream(
-              withoutPendingBatch(canonical, pending, runId),
-              runId,
-              undefined,
-              priorContext,
-            );
+      const resumePrompt = journal.resumePrompt ?? journal.prompt;
 
       if (
         initialJournal !== undefined &&
@@ -5212,15 +5182,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       // RUN-023: per-Turn usage staged by the engine's `noteTurnUsage` for the
       // Turn's canonical response record (keyed by CANONICAL turn number).
-      const stagedUsage = new Map<
-        number,
-        {
-          readonly inputTokens: number;
-          readonly outputTokens: number;
-          readonly costMicrousd: number;
-          readonly modelUsage: ReadonlyArray<ModelCallUsage>;
-        }
-      >();
+      const stagedUsage = new Map<number, ReadonlyArray<ModelCallUsage>>();
 
       // Staging also backs the cumulative summary; keep it intact and track canonical prefixes.
       const committedUsageLengths = new Map<number, number>();
@@ -5230,7 +5192,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const staged = stagedUsage.get(turn);
 
         if (staged === undefined) return undefined;
-        const modelUsage = staged.modelUsage.slice(committedUsageLengths.get(turn) ?? 0);
+        const modelUsage = staged.slice(committedUsageLengths.get(turn) ?? 0);
 
         if (modelUsage.length === 0) return undefined;
 
@@ -5263,12 +5225,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             (committedUnobservedCalls.get(payload.turn) ?? 0) + (payload.unobservedModelCalls ?? 0),
           );
         }
-        progressWriters.get(ctx)?.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
+        ctx.progress.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
       };
 
       const uncommittedModelUsage = () =>
         [...stagedUsage.entries()].flatMap(([turn, usage]) =>
-          usage.modelUsage.slice(committedUsageLengths.get(turn) ?? 0),
+          usage.slice(committedUsageLengths.get(turn) ?? 0),
         );
 
       // Like stagedUsage, these counts remain relative to the initial journal snapshot.
@@ -5297,7 +5259,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const currentUsageSummary = (): Effect.Effect<RunUsageSummary, RunJournalError> =>
         Effect.gen(function* () {
-          const stagedCalls = [...stagedUsage.values()].flatMap((usage) => usage.modelUsage);
+          const stagedCalls = [...stagedUsage.values()].flat();
           let unobservedModelCalls = journal.usage.unobservedModelCalls ?? 0;
 
           for (const count of stagedUnobservedCalls.values()) {
@@ -5321,10 +5283,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           let outputTokens = journal.usage.outputTokens;
           let costMicrousd = journal.usage.costMicrousd;
 
-          for (const usage of stagedUsage.values()) {
-            inputTokens += usage.inputTokens;
-            outputTokens += usage.outputTokens;
-            costMicrousd += usage.costMicrousd;
+          for (const call of stagedCalls) {
+            inputTokens += call.inputTokens.total;
+            outputTokens += call.outputTokens.total;
+            costMicrousd += call.costMicrousd;
           }
 
           const modelCalls = journal.usage.modelCalls + stagedCalls.length;
@@ -5557,15 +5519,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       let resumeResponseMessages: Prompt.Prompt | undefined;
 
       if (pending !== undefined) {
-        const pendingMessages = yield* decodePrompt(pending.messages).pipe(
-          Effect.mapError((cause) =>
-            RunJournalError.make({
-              message:
-                "Pending ModelResponseRecorded messages are not Schema-encoded Prompt messages",
-              cause,
-            }),
-          ),
-        );
+        const pendingMessages = pending.prompt;
 
         const firstAssistant = pendingMessages.content.findIndex(
           (message) => message.role === "assistant",
@@ -5623,12 +5577,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       // Infrastructure errors can be wrapped by broker/Tool APIs. The interpreter checks this
       // authority before semantic work; progress delivery is not a coordinator checkpoint.
-      const progress = progressWriters.get(ctx);
-
-      const checkProgress =
-        progress === undefined
-          ? Effect.void
-          : progress.check(runId).pipe(Effect.provideService(CurrentRunWriter, ctx));
+      const checkProgress = ctx.progress
+        .check(runId)
+        .pipe(Effect.provideService(CurrentRunWriter, ctx));
 
       const checkpoint = recordHalt(
         Effect.flatMap(Ref.get(haltRef), (failure) =>
@@ -5750,13 +5701,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
             const priorRunPrefixLength =
               journal.committedTurns === 0
-                ? resumeProjection.prompt.content.length
-                : resumeProjection.historyBefore.content.length;
+                ? resumePrompt.content.length
+                : journal.historyBefore.content.length;
 
             const view = instructionView(
-              prefix.length === 0
-                ? resumeProjection.prompt.content
-                : [...resumeProjection.prompt.content, ...prefix],
+              prefix.length === 0 ? resumePrompt.content : [...resumePrompt.content, ...prefix],
               initialInstructions,
               true,
               priorRunPrefixLength,
@@ -6139,22 +6088,19 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 return "committed" as const;
               }
 
-              if (
-                commit._tag === "Response" &&
-                commit.defer !== true &&
-                response !== undefined &&
-                progress !== undefined
-              ) {
+              if (commit._tag === "Response" && commit.defer !== true && response !== undefined) {
                 // This read-only preflight proves that no append or Tool dispatch began.
                 // Append failures and recovered declarations retain their existing uncertainty.
-                const admissible = yield* progress.preflight(yield* turnResponseBatch(input)).pipe(
-                  Effect.provideService(CurrentRunWriter, ctx),
-                  Effect.as(true),
-                  Effect.catchCauseIf(
-                    (cause) => isPersistenceCapacityCause(cause),
-                    () => Effect.succeed(false),
-                  ),
-                );
+                const admissible = yield* ctx.progress
+                  .preflight(yield* turnResponseBatch(input))
+                  .pipe(
+                    Effect.provideService(CurrentRunWriter, ctx),
+                    Effect.as(true),
+                    Effect.catchCauseIf(
+                      (cause) => isPersistenceCapacityCause(cause),
+                      () => Effect.succeed(false),
+                    ),
+                  );
 
                 if (!admissible) return "capacity-refused" as const;
               }
@@ -6231,15 +6177,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   }),
                 };
 
-                const progress = progressWriters.get(ctx);
-
-                if (progress === undefined)
-                  return yield* ThreadStoreError.make({
-                    operation: "reserve readonly dispatch",
-                    message: "Dispatch has no scoped progress writer",
-                  });
-
-                const batch = yield* progress.defer(candidate.batch).pipe(
+                const batch = yield* ctx.progress.defer(candidate.batch).pipe(
                   Effect.provideService(CurrentRunWriter, ctx),
                   Effect.asSome,
                   Effect.catchCauseIf(
@@ -6353,15 +6291,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   ),
                 );
 
-                const progress = progressWriters.get(ctx);
-
-                if (progress === undefined)
-                  return yield* ThreadStoreError.make({
-                    operation: "reserve Step dispatch",
-                    message: "Dispatch has no scoped progress writer",
-                  });
-
-                return yield* progress
+                return yield* ctx.progress
                   .reserve(
                     runId,
                     CanonicalBatch.make({
@@ -6430,15 +6360,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             const key = usage.turn;
             const prior = stagedUsage.get(key);
 
-            stagedUsage.set(key, {
-              inputTokens: (prior?.inputTokens ?? 0) + usage.usage.inputTokens.total,
-              outputTokens: (prior?.outputTokens ?? 0) + usage.usage.outputTokens.total,
-              costMicrousd: (prior?.costMicrousd ?? 0) + usage.usage.costMicrousd,
-              modelUsage: [...(prior?.modelUsage ?? []), usage.usage],
-            });
-            progressWriters
-              .get(ctx)
-              ?.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
+            stagedUsage.set(key, [...(prior ?? []), usage.usage]);
+            ctx.progress.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
           }),
         commitCompaction: Effect.fnUntraced(function* (commit) {
           const canonicalTurn = commit.turn;
@@ -7730,7 +7653,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       > = {
         threadId: submission.threadId,
         runId,
-        history: pending === undefined ? journal.historyBefore : resumeProjection.historyBefore,
+        history: journal.historyBefore,
         input,
         // Ready corrections share the next model Turn, bounded by MAX_JOIN_DRAIN.
         commandDrainPolicy: "all",
@@ -8244,24 +8167,23 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         InputPromptValue,
         UpdatesSchema
       >,
-      session: RunStorageSession,
+      storageSession: RunStorageSession,
       resumeAfterRetention: () => void,
       onHandoff: (nextSubmissionId: SubmissionId) => void,
       yieldAfter?: DateTime.Utc,
       freshlyAdmitted = false,
     ) {
       // Recheck ownership outside the disposable cache's failure recovery.
-      yield* session.checkActive;
+      yield* storageSession.checkActive;
 
       const checkpointPrompt = yield* promptHistory
-        .take({ threadId: session.threadId })
+        .take({ threadId: storageSession.threadId })
         .pipe(Effect.provideService(ThreadStore, store), Effect.provideContext(journalServices));
 
       // withProgressSession exposes only progress.commit/publish. Their prepare step owns and
       // freezes each canonical fact before reaching this raw writer. Snapshot the private array
       // before suspension; only acknowledged ranges enter this Attempt's disposable suffix.
       let committedPromptSuffix: CommittedPromptSuffix | undefined;
-      const storageSession = session;
       let pendingOriginal: InitialContextInput | undefined;
 
       yield* Effect.addFinalizer(() =>
@@ -8325,7 +8247,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         },
       };
 
-      session = yield* withProgressSession(promptSession, () => pendingOriginal);
+      const session = yield* withProgressSession(promptSession, () => pendingOriginal);
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
 
@@ -9099,7 +9021,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       .pipe(
         Effect.flatMap((claimed) =>
           Option.isNone(claimed)
-            ? Effect.succeed(Option.none<RunStorageSession>())
+            ? Effect.succeed(Option.none<ProgressSession>())
             : withProgressSession(claimed.value).pipe(Effect.map(Option.some)),
         ),
       );
@@ -9378,7 +9300,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const claimFor = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     decision: RecoveryDecision,
-  ): Effect.fn.Return<Option.Option<RunStorageSession>, DurableWorkerFailure, Scope.Scope> {
+  ): Effect.fn.Return<Option.Option<ProgressSession>, DurableWorkerFailure, Scope.Scope> {
     const head = yield* eligibleThreadHead(submission.threadId);
 
     if (Option.isNone(head) || head.value.submissionId !== submission.submissionId)
@@ -9889,7 +9811,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         // its input append. Recovery must not revert claims a live host is still consuming.
         const claimed =
           host.value.state === "settled"
-            ? Option.none<RunStorageSession>()
+            ? Option.none<ProgressSession>()
             : yield* claimFor(host.value, decision);
 
         if (host.value.state !== "settled" && Option.isNone(claimed)) return "deferred";

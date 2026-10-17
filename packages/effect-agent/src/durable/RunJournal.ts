@@ -2,7 +2,6 @@ import * as Prompt from "effect/ai/Prompt";
 import * as Brand from "effect/Brand";
 import type * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
@@ -17,7 +16,7 @@ import { type ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import { type Selection, type Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
-import { type ModelCallUsage, summarizeModelUsage, type RunUsageSummary } from "../core/Usage.ts";
+import { type ModelCallUsage, type RunUsageSummary } from "../core/Usage.ts";
 import type { WorkerRef } from "../core/Worker.ts";
 import {
   CLEARED_TOOL_RESULT,
@@ -33,7 +32,12 @@ import {
   type JournalMetadata,
   type JournalRecordEnvelope,
 } from "./internal/journal-metadata.ts";
-import { continuationUsage } from "./internal/usage-totals.ts";
+import { decodeOwnedPrompt } from "./internal/prompt-messages.ts";
+import {
+  completedToolBatch,
+  continuationUsage,
+  recordedResponseUsage,
+} from "./internal/usage-totals.ts";
 import {
   type BatchId,
   type RecordId,
@@ -329,35 +333,14 @@ export const childIdempotencyKeyFor = (
   toolCallId: ToolCallId,
 ): IdempotencyKey => decodeIdempotencyKey(`subagent:${parentRunId}:${toolCallId}`);
 
-const decodePersistedPrompt = (
-  messages: PersistedJson,
+const decodePromptMessages = (
+  messages: PersistedJson | Prompt.Prompt,
 ): Effect.Effect<Prompt.Prompt, RunJournalError> =>
-  Schema.decodeUnknownEffect(Prompt.Prompt)(messages).pipe(
+  decodeOwnedPrompt(messages).pipe(
     Effect.mapError((cause) =>
       journalError("Canonical messages are not Schema-encoded Prompt messages", cause),
     ),
   );
-
-// Canonical payloads are immutable. Weak keys let retained storage rows own the lifetime
-// while repeated projections of an advancing tail reuse their validated Prompt values.
-const decodedMessages = new WeakMap<object, Prompt.Prompt>();
-
-const decodePromptMessages = (messages: PersistedJson | Prompt.Prompt) =>
-  Effect.suspend(() => {
-    if (Prompt.isPrompt(messages)) return Effect.succeed(messages);
-    if (!Predicate.isObject(messages)) return decodePersistedPrompt(messages);
-    const cached = decodedMessages.get(messages);
-
-    return cached === undefined
-      ? decodePersistedPrompt(messages).pipe(
-          Effect.tap((prompt) =>
-            Effect.sync(() => {
-              decodedMessages.set(messages, prompt);
-            }),
-          ),
-        )
-      : Effect.succeed(cached);
-  });
 
 interface PendingSettledTool {
   readonly record: Pick<ToolCallSettled, "toolCallId" | "toolName" | "result" | "isFailure">;
@@ -424,6 +407,8 @@ export interface RunJournalProjection {
   readonly policyUsage: RunPolicyUsage;
   /** Canonical projection for the requested Run; may end at its resumable Tool declaration. */
   readonly prompt: Prompt.Prompt;
+  /** Prompt before the selected pending batch, retaining late edits to earlier history. */
+  readonly resumePrompt?: Prompt.Prompt | undefined;
   /** Prior-Run history with model-only unknown results closing incomplete application calls. */
   readonly historyBefore: Prompt.Prompt;
   /** Inclusive range after effective summarize/rollover coverage; earlier used facts stay retained. */
@@ -469,57 +454,6 @@ export const initialRunJournal = (history: Prompt.Prompt): RunJournalProjection 
   historyFrom: CanonicalSequence.make(1),
   committedTurns: 0,
 });
-
-interface ProjectedResponseUsage {
-  readonly modelCalls: number;
-  readonly inputTokens: number;
-  readonly outputTokens: number;
-  readonly costMicrousd: number;
-  readonly modelUsage: ReadonlyArray<ModelCallUsage>;
-}
-
-const projectedResponseUsage = (
-  response: ModelResponseRecorded,
-): Effect.Effect<ProjectedResponseUsage, RunJournalError> =>
-  Effect.gen(function* () {
-    const calls = response.modelUsage;
-
-    if (calls === undefined) {
-      return {
-        modelCalls: 1,
-        inputTokens: response.inputTokens ?? 0,
-        outputTokens: response.outputTokens ?? 0,
-        costMicrousd: response.costMicrousd ?? 0,
-        modelUsage: [],
-      };
-    }
-    if (calls.length === 0) {
-      return yield* journalError("A canonical modelUsage list must not be empty");
-    }
-
-    const summary = yield* summarizeModelUsage(calls).pipe(
-      Effect.mapError((cause) =>
-        journalError("Canonical model usage exceeds accounting bounds", cause),
-      ),
-    );
-
-    if (
-      (response.inputTokens !== undefined && response.inputTokens !== summary.inputTokens.total) ||
-      (response.outputTokens !== undefined &&
-        response.outputTokens !== summary.outputTokens.total) ||
-      (response.costMicrousd !== undefined && response.costMicrousd !== summary.costMicrousd)
-    ) {
-      return yield* journalError("Canonical detailed and aggregate model usage disagree");
-    }
-
-    return {
-      modelCalls: summary.modelCalls,
-      inputTokens: summary.inputTokens.total,
-      outputTokens: summary.outputTokens.total,
-      costMicrousd: summary.costMicrousd,
-      modelUsage: calls,
-    };
-  });
 
 const addProjectedUsage = (
   field: string,
@@ -662,6 +596,10 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
   savedContext?: RunJournalContext,
   preparedMetadata?: JournalMetadata,
   onEvidence?: (envelope: A) => void,
+  pendingBatch?: {
+    readonly responseRecordId: RecordId;
+    readonly declaredIds: ReadonlySet<string>;
+  },
 ): Effect.fn.Return<RunJournalProjection, RunJournalError | E, R> {
   if (savedContext !== undefined && savedContext.runId !== ownerRunId)
     return yield* journalError("Saved original context belongs to another Run");
@@ -683,6 +621,16 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     pendingToolsForRun: false,
     committedTurns: 0,
   };
+
+  // Derive the resume view only after the full fold. Earlier historical Tool slots can
+  // still receive late results after the selected response, so a prefix slice is insufficient.
+  const resume =
+    pendingBatch === undefined
+      ? undefined
+      : {
+          excluded: new Set<number>(),
+          partialTools: new Map<number, Prompt.Message>(),
+        };
 
   // RUN-026 pre-scan: valid compactions retire only their creator's Run view. A bound
   // stays below its own sequence and cannot split a visible response from its settled results.
@@ -1147,7 +1095,9 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
       );
     }
 
-    const responseUsage = yield* projectedResponseUsage(payload);
+    const responseUsage = yield* recordedResponseUsage(payload).pipe(
+      Effect.mapError((cause) => journalError("Invalid canonical model usage", cause)),
+    );
 
     unobservedModelCalls = yield* addProjectedUsage(
       "unobservedModelCalls",
@@ -1209,24 +1159,15 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     policyUsage.toolCalls += calls.length;
     if (payload.toolExposure !== undefined) toolSelection = payload.toolExposure.selection;
     if (incompleteToolTurns.has(record.recordId)) return;
-    for (const call of calls) {
-      const result = call.providerExecuted
-        ? messages.content
-            .flatMap((message) => (message.role === "assistant" ? message.content : []))
-            .find(
-              (part) => part.type === "tool-result" && part.providerExecuted && part.id === call.id,
-            )
-        : settledById.get(`tool-settled:${ownerRunId}:${payload.turn}:${call.id}`);
 
-      if (result === undefined || ("budgetRejected" in result && result.budgetRejected === true))
-        continue;
-      if (!("isFailure" in result)) continue;
-      if (!result.isFailure && "toolSelection" in result && result.toolSelection !== undefined)
-        toolSelection = result.toolSelection;
-      policyUsage.consecutiveToolFailures = result.isFailure
-        ? policyUsage.consecutiveToolFailures + 1
-        : 0;
-    }
+    const batch = completedToolBatch(
+      messages,
+      (id) => settledById.get(`tool-settled:${ownerRunId}:${payload.turn}:${id}`),
+      policyUsage.consecutiveToolFailures,
+    );
+
+    policyUsage.consecutiveToolFailures = batch.consecutiveToolFailures;
+    if (batch.toolSelection !== undefined) toolSelection = batch.toolSelection;
   });
 
   // Slots refer to the retained Prompt itself, not an additional history payload index.
@@ -1260,6 +1201,16 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     );
 
     const toolMessage = yield* toolMessageFromSettled(ordered);
+
+    if (resume !== undefined && pendingBatch !== undefined && current.pendingToolsForRun) {
+      const retained = ordered.filter(
+        ({ record }) => !pendingBatch.declaredIds.has(record.toolCallId),
+      );
+
+      if (retained.length === 0) resume.excluded.add(current.all.length);
+      else if (retained.length < ordered.length)
+        resume.partialTools.set(current.all.length, yield* toolMessageFromSettled(retained));
+    }
 
     current.all.push(toolMessage);
     if (!current.pendingToolsForRun) current.before.push(toolMessage);
@@ -1308,7 +1259,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
           return yield* journalError("Model restart reservations must advance once");
         policyUsage.modelRestarts = payload.restart;
 
-        const summary = yield* summarizeModelUsage(payload.modelUsage).pipe(
+        const summary = yield* continuationUsage(payload.modelUsage).pipe(
           Effect.mapError((cause) =>
             journalError("Aborted model usage exceeds accounting bounds", cause),
           ),
@@ -1322,12 +1273,12 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         usage.inputTokens = yield* addProjectedUsage(
           "inputTokens",
           usage.inputTokens,
-          summary.inputTokens.total,
+          summary.inputTokens,
         );
         usage.outputTokens = yield* addProjectedUsage(
           "outputTokens",
           usage.outputTokens,
-          summary.outputTokens.total,
+          summary.outputTokens,
         );
         usage.costMicrousd = yield* addProjectedUsage(
           "costMicrousd",
@@ -1512,6 +1463,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         state.all.length = 0;
         state.before.length = 0;
         historicalResults.clear();
+        resume?.excluded.clear();
+        resume?.partialTools.clear();
 
         for (const message of messages.content) {
           state.all.push(message);
@@ -1543,6 +1496,8 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
         : messages.content.filter((message) => message.role !== "system");
 
       for (const message of visibleMessages) {
+        if (forRun && envelope.record.recordId === pendingBatch?.responseRecordId)
+          resume?.excluded.add(state.all.length);
         state.all.push(message);
         if (!forRun) state.before.push(message);
       }
@@ -1622,10 +1577,24 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     ),
   );
 
+  const prompt = Prompt.fromMessages(state.all);
+
   return {
     ...(toolSelection === undefined ? {} : { toolSelection }),
     policyUsage: validatedPolicyUsage,
-    prompt: Prompt.fromMessages(state.all),
+    prompt,
+    ...(resume === undefined
+      ? {}
+      : {
+          resumePrompt:
+            resume.excluded.size === 0 && resume.partialTools.size === 0
+              ? prompt
+              : Prompt.fromMessages(
+                  state.all.flatMap((message, index) =>
+                    resume.excluded.has(index) ? [] : [resume.partialTools.get(index) ?? message],
+                  ),
+                ),
+        }),
     historyBefore: Prompt.fromMessages(state.before),
     historyFrom,
     committedTurns: state.committedTurns,
