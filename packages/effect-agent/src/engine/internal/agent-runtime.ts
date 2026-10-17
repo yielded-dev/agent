@@ -3911,6 +3911,18 @@ const stampProviderResultEvent = (
     }
   });
 
+const inputTokenLimit = (policy: AgentPolicy, bounds: ModelCallContext | undefined) =>
+  bounds === undefined
+    ? policy.contextTokenLimit
+    : Math.max(
+        0,
+        Math.min(
+          policy.contextTokenLimit ?? Infinity,
+          bounds.maxInputTokens ?? Infinity,
+          bounds.contextCapacity - bounds.outputReserveTokens,
+        ) - bounds.uncountedOverheadTokens,
+      );
+
 /**
  * RUN-026: deterministic estimate of the NEXT model call's live context.
  * Anchored on the last provider-reported call when the view has only grown
@@ -5601,26 +5613,18 @@ const makeTurn = <
         });
       }
 
+      const modelBounds = modelContext.modelCall?.context ?? (yield* ModelCallContext.current);
+
       const callContext =
-        modelContext.modelCall === undefined
+        modelBounds === undefined
           ? undefined
-          : yield* Schema.decodeEffect(ModelCallContext)(modelContext.modelCall.context).pipe(
+          : yield* Schema.decodeEffect(ModelCallContext)(modelBounds).pipe(
               Effect.mapError((cause) =>
                 CompactionError.make({ message: "Invalid resolved model context bounds", cause }),
               ),
             );
 
-      const contextTokenLimit =
-        callContext === undefined
-          ? policy.contextTokenLimit
-          : Math.max(
-              0,
-              Math.min(
-                policy.contextTokenLimit ?? Infinity,
-                callContext.maxInputTokens ?? Infinity,
-                callContext.contextCapacity - callContext.outputReserveTokens,
-              ) - callContext.uncountedOverheadTokens,
-            );
+      const contextTokenLimit = inputTokenLimit(policy, callContext);
 
       context.windowContextTokenLimit = contextTokenLimit;
       const toolSchemaTransformer = modelContext.modelCall?.toolSchemaTransformer;
@@ -8955,6 +8959,11 @@ function executeWithCompletion<
               // A Turn's Scope closes before its successor starts. There is one execution
               // loop, independent of public progress demand and without recursive Channels.
               const turns = Effect.gen(function* () {
+                context.windowContextTokenLimit = inputTokenLimit(
+                  agent.definition.policy,
+                  yield* ModelCallContext.current,
+                );
+
                 let request = pending;
 
                 while (request !== undefined) {
