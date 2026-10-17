@@ -141,10 +141,47 @@ import {
   type WorkerBudgetScope,
 } from "../../core/Worker.ts";
 import { MessagingHost } from "../MessagingHost.ts";
+import {
+  type RunOptions as ApplicationRunOptions,
+  CurrentToolFailureObserver,
+  AgentUpdateAcceptance,
+  ModelUsageAccounting,
+  type ProgrammaticToolFailure,
+  type RunToolFailureObserver,
+  type ChildEstablishStatus,
+  type CommandDrainPolicy,
+  type RunApprovalRequest,
+  type RunBufferLimits,
+  type RunResumeUsage,
+  type RunDurabilityHook,
+  RunResumeUsageSchema,
+  RunContextPreparation,
+  RunToolAuthorization,
+  type RunToolAuthorizationHook,
+  RunToolScheduling,
+  type PreparedRunContext,
+  type RunContextPreparationError,
+  type RunCostEstimateRequest,
+  type RunSchedulingHook,
+  type RunSubagentChildIdentity,
+  type RunSubagentEstablishRequest,
+  type RunSubagentHook,
+  type RunSubagentJoinRequest,
+  type RunCompactionCommit,
+  type RunToolCallDescriptor,
+  type RunTurnCommit,
+  type RunTurnCompletion,
+  type RunTurnResponse,
+  type RunTurnToolResult,
+  RunTurnResumeSettledCallSchema,
+  type RunTurnResume,
+  type RunUsageDelta,
+} from "../RunOptions.ts";
 import { SubagentHost } from "../SubagentHost.ts";
 import { ThreadHistory, ThreadHistoryError } from "../ThreadHistory.ts";
 import { CurrentToolCatalog, RunToolVisibility, type CatalogEntry } from "../ToolExposure.ts";
 import { boundedValueFootprint } from "./bounded-value.ts";
+import type { InterpreterOptions as RunOptions } from "./interpreter-options.ts";
 import { isTextOutput, outputSchemaContract, prepareModelPrompt } from "./output-contract.ts";
 import { capturePrimitiveTextPart } from "./primitive-delta.ts";
 import {
@@ -216,7 +253,6 @@ export type RuntimeBinding<
   OutputSchema extends Schema.Top,
   Instructions,
   Tools extends Record<string, Tool.Any>,
-  _Provider,
   ModelProvides,
   ModelRequires,
   InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
@@ -312,42 +348,6 @@ import {
   type RunEventSinkService,
   type SubagentEventPayload,
 } from "../RunEventSink.ts";
-import {
-  CurrentToolFailureObserver,
-  AgentUpdateAcceptance,
-  ModelUsageAccounting,
-  type ProgrammaticToolFailure,
-  type RunToolFailureObserver,
-  type ChildEstablishStatus,
-  type CommandDrainPolicy,
-  type RunApprovalRequest,
-  type RunBufferLimits,
-  type RunResumeUsage,
-  type RunDurabilityHook,
-  RunResumeUsageSchema,
-  RunContextPreparation,
-  RunToolAuthorization,
-  type RunToolAuthorizationHook,
-  RunToolScheduling,
-  type PreparedRunContext,
-  type RunContextPreparationError,
-  type RunOptions,
-  type RunCostEstimateRequest,
-  type RunSchedulingHook,
-  type RunSubagentChildIdentity,
-  type RunSubagentEstablishRequest,
-  type RunSubagentHook,
-  type RunSubagentJoinRequest,
-  type RunCompactionCommit,
-  type RunToolCallDescriptor,
-  type RunTurnCommit,
-  type RunTurnCompletion,
-  type RunTurnResponse,
-  type RunTurnToolResult,
-  RunTurnResumeSettledCallSchema,
-  type RunTurnResume,
-  type RunUsageDelta,
-} from "../RunOptions.ts";
 import {
   ToolBroker,
   ToolBrokerConfigurationError,
@@ -8470,7 +8470,6 @@ function executeWithCompletion<
   OutputSchema extends Schema.Top,
   Instructions,
   Tools extends Record<string, Tool.Any>,
-  Provider,
   ModelProvides,
   ModelRequires,
   CompletionError = never,
@@ -8492,7 +8491,6 @@ function executeWithCompletion<
         OutputSchema,
         Instructions,
         Tools,
-        Provider,
         ModelProvides,
         ModelRequires,
         InstructionError,
@@ -8506,7 +8504,6 @@ function executeWithCompletion<
         OutputSchema,
         Instructions,
         Tools,
-        Provider,
         ModelProvides,
         ModelRequires,
         InstructionError,
@@ -9624,7 +9621,8 @@ const startProgram = Effect.fn("AgentRuntime.start")(function* <A extends Agent.
 type ExecutableDefinition = Agent.AnyDefinition & {
   readonly instructions: InstructionSource<never, unknown, unknown>;
 };
-type ExecutableAgent =
+
+export type ExecutableAgent =
   | ExecutableDefinition
   | {
       readonly definition: ExecutableDefinition;
@@ -9646,21 +9644,6 @@ const streamUnknown = <A extends ExecutableAgent, H = never, R = never>(
       Layer.mergeAll(ModelUsageAccounting.layerEphemeral, AgentUpdateAcceptance.layerEphemeral),
     ),
   );
-
-/**
- * Host interpreter entry point with Attempt-local usage accounting and update acceptance in R.
- * Durable coordinators provide these services alongside their recovery hooks;
- * ordinary callers use streamUnknown's explicit ephemeral composition.
- */
-const streamWithUsageAccountingUnknown = <A extends ExecutableAgent, H = never, R = never>(
-  agent: A,
-  input: unknown,
-  options?: RunOptions<H, R>,
-): Stream.Stream<
-  RunEvent,
-  AgentRuntimeFailure<A, H>,
-  AgentRuntimeRequirements<A, R> | ModelUsageAccounting | AgentUpdateAcceptance
-> => streamWithCompletion(agent, input, options);
 
 /** Same interpreter without a progress publisher or public Stream adapter. */
 const executeWithUsageAccountingUnknown = <A extends ExecutableAgent, H = never, R = never>(
@@ -10996,6 +10979,12 @@ export interface SpawnDelegation {
  * identity and the Parent Link are spawner-owned and cannot be overridden.
  */
 export interface SpawnRunOptions<HookError = never, HookRequirements = never> extends Omit<
+  ApplicationRunOptions<HookError, HookRequirements>,
+  "threadId" | "runId"
+> {}
+
+/** Delegation-owned execution facts, unavailable through application child options. */
+export interface SpawnInterpreterOptions<HookError = never, HookRequirements = never> extends Omit<
   RunOptions<HookError, HookRequirements>,
   "threadId" | "runId" | "parentLink"
 > {}
@@ -11037,7 +11026,6 @@ const spawnWithParent = (
     OutputSchema extends Schema.Top,
     Instructions,
     Tools extends Record<string, Tool.Any>,
-    Provider,
     ModelProvides,
     ModelRequires,
     HookError = never,
@@ -11056,7 +11044,6 @@ const spawnWithParent = (
       OutputSchema,
       Instructions,
       Tools,
-      Provider,
       ModelProvides,
       ModelRequires,
       InstructionError,
@@ -11067,7 +11054,7 @@ const spawnWithParent = (
     >,
     input: unknown,
     delegation: SpawnDelegation,
-    options?: SpawnRunOptions<HookError, HookRequirements>,
+    options?: SpawnInterpreterOptions<HookError, HookRequirements>,
   ): Effect.fn.Return<
     SpawnedChildRun<
       Agent.Output<typeof binding>,
@@ -11137,7 +11124,6 @@ export interface AgentSpawnerService {
     OutputSchema extends Schema.Top,
     Instructions,
     Tools extends Record<string, Tool.Any>,
-    Provider,
     ModelProvides,
     ModelRequires,
     HookError = never,
@@ -11156,7 +11142,6 @@ export interface AgentSpawnerService {
       OutputSchema,
       Instructions,
       Tools,
-      Provider,
       ModelProvides,
       ModelRequires,
       InstructionError,
@@ -11167,7 +11152,7 @@ export interface AgentSpawnerService {
     >,
     input: unknown,
     delegation: SpawnDelegation,
-    options?: SpawnRunOptions<HookError, HookRequirements>,
+    options?: SpawnInterpreterOptions<HookError, HookRequirements>,
   ) => Effect.Effect<
     SpawnedChildRun<
       OutputSchema["Type"],
@@ -11177,7 +11162,6 @@ export interface AgentSpawnerService {
           OutputSchema,
           Instructions,
           Tools,
-          Provider,
           ModelProvides,
           ModelRequires,
           InstructionError,
@@ -11199,7 +11183,6 @@ export interface AgentSpawnerService {
             OutputSchema,
             Instructions,
             Tools,
-            Provider,
             ModelProvides,
             ModelRequires,
             InstructionError,
@@ -11251,70 +11234,6 @@ const makeAgentSpawner = (
   spawn: spawnWithParent(parent, depth, history, preparation, onChild),
 });
 
-/** Bound applied to the rendered defect message of `withTerminalDefectEvent` (SEC-013). */
-const DEFECT_MESSAGE_LIMIT = 2_048;
-
-/**
- * Opt-in boundary combinator (P7 §7(h), decision point 8): the engine keeps defects as
- * defects — `RunFailed` covers EXPECTED failures only, and a defect still fails the event
- * stream with its full Cause (AGENTS.md: errors are never silently widened, and a defect is
- * never converted into a typed failure by default). A host boundary that forwards Run Events
- * to a UI or transport can wrap the stream with this helper to append ONE bounded terminal
- * `RunFailed { errorTag: "Defect" }` event before the original cause is rethrown, so a viewer
- * always observes a terminal event even when the Run dies.
- *
- * Event contract:
- *
- * - typed failures and interruptions pass through untouched — the engine already emitted
- *   their terminal event, so nothing is duplicated;
- * - a cause carrying a defect first emits `RunFailed` with `errorTag: "Defect"` and a
- *   bounded string rendering of the defect (never the raw value; hosts owning stricter
- *   redaction apply it downstream), then RETHROWS the original cause unchanged;
- * - identity fields come from the last event already streamed (`sequence` advances by one);
- *   a defect BEFORE the first event has no Run identity to attribute, so it is rethrown
- *   without an event — the helper never fabricates identities.
- */
-export const withTerminalDefectEvent = <E, R>(
-  events: Stream.Stream<RunEvent, E, R>,
-): Stream.Stream<RunEvent, E, R> =>
-  Stream.suspend(() => {
-    let last: RunEvent | undefined;
-
-    return events.pipe(
-      Stream.tap((event) =>
-        Effect.sync(() => {
-          last = event;
-        }),
-      ),
-      Stream.catchCause((cause): Stream.Stream<RunEvent, E, R> => {
-        const base = last;
-
-        if (base === undefined || !Cause.hasDies(cause) || Cause.hasInterruptsOnly(cause)) {
-          return Stream.failCause(cause);
-        }
-
-        const terminal = Stream.fromEffect(
-          Effect.gen(function* () {
-            const timestamp = DateTime.makeUnsafe(yield* Clock.currentTimeMillis);
-
-            return RunFailed.make({
-              eventVersion: 1,
-              runId: base.runId,
-              threadId: base.threadId,
-              agentId: base.agentId,
-              sequence: base.sequence + 1,
-              timestamp,
-              errorTag: "Defect",
-              message: errorMessage(Cause.squash(cause)).slice(0, DEFECT_MESSAGE_LIMIT),
-            });
-          }),
-        );
-
-        return terminal.pipe(Stream.concat(Stream.failCause(cause)));
-      }),
-    );
-  });
-
 /**
  * Ephemeral Agent interpreter with one scoped Effect owner. `stream` observes
  * that owner through a bounded producer adapter; `run` executes without progress transport.
@@ -11322,22 +11241,15 @@ export const withTerminalDefectEvent = <E, R>(
  * Definitions consume native model services from the caller's Context. Explicit bindings
  * provide their model Layer locally; all remaining requirements stay visible
  * in the returned Effect or Stream. The interpreter owns no shared service or
- * Layer state. The two output helpers are the canonical revalidation seams for
- * durable thread adapters; they apply the same Schemas and projector as live
- * execution without invoking a Model or Tool Handler. The disposition helper
- * likewise reapplies the Definition selector and Schema.
+ * Layer state. Recovery and accounting entry points stay inside the interpreter boundary.
  */
 export {
-  decodeFinalOutput,
-  encodeRunDisposition,
-  projectCompletionOutput,
-  projectCompletionFromToolOutput,
   run,
   runUnknown,
   start,
   startUnknown,
   stream,
   streamUnknown,
-  streamWithUsageAccountingUnknown,
+  streamWithCompletion as streamWithUsageAccountingUnknown,
   executeWithUsageAccountingUnknown,
 };

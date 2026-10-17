@@ -1,6 +1,5 @@
 import { expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
-import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { RunId, ThreadId, TurnId } from "@yielded/agent/identifiers";
@@ -28,6 +27,8 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SchemaGetter from "effect/SchemaGetter";
 import * as Stream from "effect/Stream";
+
+import * as AgentRuntime from "../../src/engine/internal/agent-runtime.ts";
 
 let threadSequence = 0;
 

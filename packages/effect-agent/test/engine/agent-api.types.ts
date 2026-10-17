@@ -1,6 +1,5 @@
 import { AgentRuntime, Output } from "@yielded/agent";
 import * as Agent from "@yielded/agent/agent";
-import type { AgentOutputError } from "@yielded/agent/agent-error";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import {
   type AgentResult,
@@ -30,6 +29,8 @@ import * as SchemaGetter from "effect/SchemaGetter";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
+
+import { streamWithUsageAccountingUnknown } from "../../src/engine/internal/agent-runtime.ts";
 
 class Instructions extends Context.Service<Instructions, string>()("api-types/Instructions") {}
 class ProviderClient extends Context.Service<ProviderClient, string>()(
@@ -183,7 +184,7 @@ export const verifyPreservesEncodedInputOutputFailuresAndEveryUnsatisfiedService
 
   const stream = AgentRuntime.stream(planner, input);
 
-  const accounted = AgentRuntime.streamWithUsageAccountingUnknown(planner, input);
+  const accounted = streamWithUsageAccountingUnknown(planner, input);
 
   expectTypeOf<Stream.Services<typeof accounted>>().toEqualTypeOf<
     Stream.Services<typeof stream> | ModelUsageAccounting | AgentUpdateAcceptance
@@ -561,11 +562,7 @@ export const verifyTextOutputPreservesSchemaTransformationsErrorsAndDecoderRequi
   });
 
   const agent = Agent.withModel(definition, model);
-  const decoded = AgentRuntime.decodeFinalOutput(agent, "42");
 
-  expectTypeOf<Effect.Services<typeof decoded>>().toEqualTypeOf<Decoder>();
-  expectTypeOf<Effect.Error<typeof decoded>>().toEqualTypeOf<AgentOutputError>();
-  expectTypeOf<Effect.Success<typeof decoded>["decoded"]>().toEqualTypeOf<number>();
   const run = AgentRuntime.run(agent, "input");
 
   expectTypeOf<Effect.Services<typeof run>>().toEqualTypeOf<

@@ -1,7 +1,6 @@
 import { expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy, CompactionPolicy } from "@yielded/agent/agent-policy";
-import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import {
   CompactionError,
   ContextCompactor,
@@ -32,6 +31,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import * as AgentRuntime from "../../src/engine/internal/agent-runtime.ts";
 import {
   CLEARED_TOOL_RESULT,
   estimatePromptTokens,

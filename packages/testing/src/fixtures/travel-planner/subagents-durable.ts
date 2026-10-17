@@ -246,13 +246,12 @@ const researcherReportParts = (destination: string): ReadonlyArray<Response.Stre
 // ---------------------------------------------------------------------------
 
 /** Runtime wiring for the durable slice: the S1 delegation plus the S2 digest declaration. */
-export const durableDestinationResearchHandlersLayer = <Provider, ModelProvides, ModelRequires>(
+export const durableDestinationResearchHandlersLayer = <ModelProvides, ModelRequires>(
   childBinding: RuntimeBinding<
     typeof DestinationBrief,
     typeof DestinationReport,
     string,
     Toolkit.Tools<typeof DestinationResearcherToolkit>,
-    Provider,
     ModelProvides,
     ModelRequires
   >,
