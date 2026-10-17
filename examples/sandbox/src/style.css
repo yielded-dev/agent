@@ -76,7 +76,6 @@
     padding: 0 28px 24px;
   }
   header,
-  .heading,
   .bar {
     display: flex;
     align-items: center;
@@ -84,7 +83,9 @@
     gap: 12px;
   }
   header {
-    height: 72px;
+    min-height: 64px;
+    flex-wrap: wrap;
+    padding: 12px 0;
     border-bottom: 1px solid var(--border);
   }
   .brand {
@@ -100,9 +101,6 @@
   small,
   footer {
     font: 10px/1.6 var(--mono);
-  }
-  .heading {
-    margin-top: 28px;
   }
   h1 {
     font-size: clamp(25px, 3vw, 36px);
@@ -120,13 +118,11 @@
   .error {
     font-size: 12px;
   }
-  .app > .muted {
-    margin: 16px 0 24px;
-  }
   .workbench {
     display: grid;
     grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr);
-    height: max(570px, calc(100dvh - 260px));
+    height: max(570px, calc(100dvh - 104px));
+    margin-top: 16px;
     border: 1px solid var(--border);
     border-radius: 12px;
     overflow: hidden;
@@ -299,10 +295,6 @@
     }
     .files {
       height: 500px;
-    }
-    .heading {
-      align-items: flex-start;
-      flex-wrap: wrap;
     }
   }
   @media (max-width: 480px) {
