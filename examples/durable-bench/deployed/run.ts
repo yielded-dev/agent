@@ -277,11 +277,13 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     yield* update((value) => ({
       ...value,
       storageUsage: [
+        // Keep the latest known count and unavailable reason independently.
         ...(value.storageUsage ?? []).filter(
           (old) =>
             old.object !== row.object ||
             old.phase !== row.phase ||
-            old.incarnation !== row.incarnation,
+            old.incarnation !== row.incarnation ||
+            "unavailable" in old.usage !== "unavailable" in row.usage,
         ),
         row,
       ],
