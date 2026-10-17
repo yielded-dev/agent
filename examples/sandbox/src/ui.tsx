@@ -854,10 +854,21 @@ function Files({ id }: { id: string }) {
         <div className="viewer">
           <div className="file-tab shrink-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="min-w-0 flex-1">{selected ?? "File viewer"}</span>
+              <span
+                className="min-w-0 flex-1 truncate max-sm:basis-full"
+                title={selected ?? undefined}
+              >
+                {selected ?? "File viewer"}
+              </span>
               {canPreview &&
                 (preview !== null ? (
-                  <form action={preview.url} method="post" target="_blank" rel="noopener">
+                  <form
+                    className="ml-auto shrink-0 border-0 bg-transparent p-0"
+                    action={preview.url}
+                    method="post"
+                    target="_blank"
+                    rel="noopener"
+                  >
                     <input type="hidden" name="token" value={preview.token} />
                     <input type="hidden" name="expiresAt" value={preview.expiresAt} />
                     <input type="hidden" name="path" value={selected} />
@@ -873,6 +884,7 @@ function Files({ id }: { id: string }) {
                   </form>
                 ) : (
                   <Button
+                    className="ml-auto"
                     type="button"
                     variant="outline"
                     size="sm"

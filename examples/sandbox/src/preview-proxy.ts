@@ -13,7 +13,8 @@ import { PREVIEW_LIFETIME_MS, WorkspacePreviewGrant } from "./contract.ts";
 
 export const PREVIEW_HANDOFF_PATH = "/__preview/session";
 const cookieName = "__Host-yielded-preview";
-const bodyLimit = 8 * 1024;
+// A supported 1,024-code-unit path may need nine bytes per unit in a form body.
+const bodyLimit = 9 * 1024 + 256;
 
 const Configuration = Schema.Struct({
   applicationOrigin: Schema.String.check(
@@ -45,7 +46,7 @@ const Handoff = Schema.Struct({
   expiresAt: Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThan(0)),
   // The form carries a decoded relative file path; encode each segment only at redirect.
   path: Schema.String.check(
-    Schema.isMaxLength(4096),
+    Schema.isMaxLength(1024),
     Schema.makeFilter(
       (path: string) =>
         !path.startsWith("/") &&
