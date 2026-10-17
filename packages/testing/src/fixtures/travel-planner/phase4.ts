@@ -146,7 +146,6 @@ export const TravelPlannerPhase4 = Agent.make("travel-planner-phase-4", {
   }),
   description:
     "Durably plan one review-only itinerary from safe-to-repeat deterministic searches; supplier booking is not claimed safely replayable.",
-  metadata: { deploymentClass: "DN", phase: "P4" },
 });
 
 /**

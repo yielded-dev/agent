@@ -59,7 +59,8 @@ shows policies in a complete application.
 ## At the limit
 
 `onExhaustion: "final-answer"` allows at most one constrained finalization opportunity for
-turn, tool-call, or token exhaustion. A completed result carries
+turn, tool-call, or token exhaustion. A [designated completion tool](/guide/agents/) remains required.
+A completed result carries
 `finishReason: "budget-exhausted"` and the exhausted dimension. Use `"fail"` when a partial
 answer is not acceptable. Duration, estimated cost, and repeated failure limits always fail.
 

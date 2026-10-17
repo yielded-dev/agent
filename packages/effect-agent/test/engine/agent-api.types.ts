@@ -23,7 +23,6 @@ import * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SchemaGetter from "effect/SchemaGetter";
 import type * as Scope from "effect/Scope";
@@ -105,7 +104,7 @@ const model = Model.make(
   ),
 );
 
-export const verifyKeepsNativeFailureModeErrorAndServiceInferenceUnchangedByInspection = () => {
+export const verifyKeepsNativeFailureModeErrorAndServiceInference = () => {
   const returned = Tool.make("lookup", {
     parameters: Lookup.parametersSchema,
     success: Lookup.successSchema,
@@ -134,7 +133,7 @@ export const verifyPreservesCompletionCorrectionFailuresAndServicesInRunAndStrea
       output: Schema.String,
       instructions: "Look up the answer and complete alone.",
       toolkit,
-      completion: { tool: "lookup", required: true, project: ({ result }) => result },
+      completion: { tool: "lookup", project: ({ result }) => result },
     });
 
     const binding = Agent.withModel(completing, model);
@@ -349,7 +348,7 @@ export const verifyPreservesDisjointToolSchemasAndCallbacksWithDifferentInputTyp
     inputPrompt: ({ topic }) => Effect.map(TopicInstructions, (prefix) => `${prefix}: ${topic}`),
     toolkit: topicTools,
     policy: planner.policy,
-    completionFromTools: [{ tool: "complete", project: ({ result }) => Option.some(result) }],
+    completion: { tool: "complete", project: ({ result }) => result },
   });
 
   type Selected = typeof planner | typeof topic;

@@ -40,10 +40,8 @@ const definition = () =>
     toolkit: tools,
     completion: {
       tool: "complete",
-      required: true,
       project: ({ result }) => result,
     },
-    completionFromTools: undefined,
     policy: {
       maxTurns: 5,
       maxToolCalls: 10,

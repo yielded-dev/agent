@@ -2404,7 +2404,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const pendingToolBatchFor = Effect.fnUntraced(function* (
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     runId: ReturnType<typeof runIdForSubmission>,
-    completionTools: ReadonlyArray<string> = [],
+    completionTool?: string,
   ): Effect.fn.Return<PendingToolBatch | undefined, RunJournalError> {
     let lastResponse:
       | {
@@ -2533,7 +2533,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const projectSettledCompletion =
       declared.application.length === 1 &&
       completionCall !== undefined &&
-      completionTools.includes(completionCall.name) &&
+      completionCall.name === completionTool &&
       settledByCallId.get(completionCall.id)?.isFailure === false &&
       !records.some(
         ({ record }) => record.payload._tag === "RunCompleted" && record.payload.runId === runId,
@@ -5075,12 +5075,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         });
       }
 
-      const completionTools = [
-        ...(agent.definition.completion === undefined ? [] : [agent.definition.completion.tool]),
-        ...(agent.definition.completionFromTools?.map((declaration) => declaration.tool) ?? []),
-      ];
+      const completionTool = agent.definition.completion?.tool;
 
-      const pending = yield* pendingToolBatchFor(records, runId, completionTools);
+      const pending = yield* pendingToolBatchFor(records, runId, completionTool);
 
       const resumeProjection =
         pending === undefined
@@ -5133,11 +5130,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const applicationCalls = pending?.calls.filter((call) => !call.providerExecuted);
 
       // A single successful completion call can have its result committed before the terminal
-      // marker. Reuse that result for either completion mode, after verifying its original
-      // operation contract; no handler or provider call is needed to repeat output projection.
+      // marker. Reuse that result after verifying its original operation contract;
+      // no handler or provider call is needed to repeat output projection.
       const completionCandidate =
         applicationCalls?.length === 1 &&
-        completionTools.some((tool) => tool === applicationCalls[0]?.name) &&
+        applicationCalls[0]?.name === completionTool &&
         pending?.settled.some(
           (result) => result.id === applicationCalls[0]?.id && !result.isFailure,
         )

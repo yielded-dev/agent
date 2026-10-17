@@ -179,5 +179,4 @@ export const TravelPlanner = Agent.make("travel-planner", {
     toolConcurrency: 3,
   }),
   description: "Build one review-only itinerary from bounded parallel deterministic searches.",
-  metadata: { deploymentClass: "E", phase: "P1" },
 });

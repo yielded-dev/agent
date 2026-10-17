@@ -38,7 +38,6 @@ import * as Tracer from "effect/Tracer";
 import * as Agent from "../../core/Agent.ts";
 import {
   type CompletionToolDeclaration,
-  type CompletionFromToolDeclaration,
   type Definition,
   type InputPromptSource,
   type InstructionSource,
@@ -73,6 +72,11 @@ import {
 } from "../../core/Identifiers.ts";
 import { IdGenerator } from "../../core/IdGenerator.ts";
 import { nativeUpdateId } from "../../core/internal/agent-updates.ts";
+import {
+  CompletionMetadata,
+  completionMetadataCheck,
+  completionDispositionCheck,
+} from "../../core/internal/completion.ts";
 import { copyJson } from "../../core/internal/json.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { IdempotencyKey } from "../../core/Receipt.ts";
@@ -371,33 +375,28 @@ import {
 } from "./compaction.ts";
 import { errorMessage, errorTag } from "./error-diagnostic.ts";
 
+const AgentResultMetadata = Schema.Struct({
+  ...CompletionMetadata.fields,
+  /** Schema-encoded application disposition declared for an ordinary completed Run. */
+  runDisposition: Schema.optionalKey(Schema.Json),
+}).check(completionMetadataCheck, completionDispositionCheck);
+
 /** Schema factory for the terminal value produced by reducing a completed agent event stream. */
 export const AgentResultSchema = <Output extends Schema.Top>(output: Output) =>
-  Schema.Struct({
-    output,
-    threadId: ThreadId,
-    runId: RunId,
-    turns: Schema.Int.check(Schema.isGreaterThan(0)),
-    finishReason: Schema.Literals(["completed", "model-stop", "budget-exhausted"]),
-    /** Dimension that bound when the Run settled budget-exhausted (RUN-025; the grant-flow marker). */
-    exhausted: Schema.optionalKey(Schema.Literals(["tokens", "tool-calls", "turns"])),
-    /** Schema-encoded application disposition declared for an ordinary completed Run. */
-    runDisposition: Schema.optionalKey(Schema.Json),
-    /** Cumulative spend for the Run, as reported on its terminal event. */
-    usage: Schema.optionalKey(RunTotals),
-    /** Disjoint usage of attached descendants, including nested and failed children. */
-    delegatedUsage: Schema.optionalKey(RunTotals),
-  }).check(
-    Schema.makeFilter(
-      (result) =>
-        !("runDisposition" in result) ||
-        result.runDisposition === undefined ||
-        !("finishReason" in result) ||
-        result.finishReason !== "budget-exhausted",
-      {
-        expected: "runDisposition only when finishReason is not budget-exhausted",
-      },
-    ),
+  AgentResultMetadata.mapFields(
+    (fields) => ({
+      output,
+      threadId: ThreadId,
+      runId: RunId,
+      turns: Schema.Int.check(Schema.isGreaterThan(0)),
+      ...fields,
+      /** Cumulative spend for the Run, as reported on its terminal event. */
+      usage: Schema.optionalKey(RunTotals),
+      /** Disjoint usage of attached descendants, including nested and failed children. */
+      delegatedUsage: Schema.optionalKey(RunTotals),
+    }),
+    // Only add fields; both checks depend exclusively on the unchanged metadata fields.
+    { unsafePreserveChecks: true },
   );
 
 /** Direct usage only: budget counters never absorb descendant consumption. */
@@ -5257,13 +5256,13 @@ const encodeOutputCandidate = Effect.fnUntraced(function* <AgentValue extends Ag
   return { encoded: json, decoded };
 });
 
-const projectToolResult = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
+const projectCompletionOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
   agent: AgentValue,
-  declaration: CompletionToolDeclaration | CompletionFromToolDeclaration,
+  declaration: CompletionToolDeclaration,
   parameters: unknown,
   result: unknown,
 ): Effect.fn.Return<
-  unknown,
+  { readonly encoded: Schema.Json; readonly decoded: Agent.Output<AgentValue> },
   AgentOutputError | ModelProtocolError,
   AgentCompletionProjectionRequirements<AgentValue>
 > {
@@ -5304,38 +5303,7 @@ const projectToolResult = Effect.fnUntraced(function* <AgentValue extends Agent.
       }),
   });
 
-  return projected;
-});
-
-const projectCompletionOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
-  agent: AgentValue,
-  declaration: CompletionToolDeclaration,
-  parameters: unknown,
-  result: unknown,
-) {
-  return yield* encodeOutputCandidate(
-    agent,
-    yield* projectToolResult(agent, declaration, parameters, result),
-  );
-});
-
-/** Reconstruct optional action completion identically for live execution and canonical recovery. */
-const projectCompletionFromToolOutput = Effect.fnUntraced(function* <AgentValue extends Agent.Any>(
-  agent: AgentValue,
-  declaration: CompletionFromToolDeclaration,
-  parameters: unknown,
-  result: unknown,
-) {
-  const projected = yield* projectToolResult(agent, declaration, parameters, result);
-
-  if (!Option.isOption(projected)) {
-    return yield* AgentOutputError.make({
-      message: "Action completion projector did not return an Option",
-    });
-  }
-  if (Option.isNone(projected)) return Option.none();
-
-  return Option.some(yield* encodeOutputCandidate(agent, projected.value));
+  return yield* encodeOutputCandidate(agent, projected);
 });
 
 const encodeRunDispositionCandidate = Effect.fnUntraced(function* <
@@ -5481,6 +5449,44 @@ const nextTurn = (
   turn: number,
   toolCalls: number,
 ): Effect.Effect<TurnOutput> => Effect.succeed({ _tag: "NextTurn", prompt, turn, toolCalls });
+
+/**
+ * Classify control Tools before dispatch. Recovery considers only unfinished calls and an
+ * explicitly compatible settled completion; current annotations cannot reinterpret other
+ * settled results. Callers own correction versus fail-closed handling and provider closure.
+ */
+const classifyCompletionBatch = (
+  completionTool: string | undefined,
+  tools: Readonly<Record<string, Tool.Any>>,
+  applicationCallCount: number,
+  toolCallCount: number,
+  candidates: ReadonlyArray<{ readonly name: string }>,
+) => {
+  const declaresCompletion =
+    completionTool !== undefined && candidates.some((call) => call.name === completionTool);
+
+  const declaresRollover = candidates.some(
+    (call) =>
+      hasTool(tools, call.name) && Context.get(tools[call.name].annotations, ContextRolloverTool),
+  );
+
+  return {
+    completionBatch: declaresCompletion && applicationCallCount === 1,
+    completionBatchError:
+      declaresCompletion && applicationCallCount !== 1
+        ? ModelProtocolError.make({
+            message: `Completion Tool ${completionTool} must be the only application Tool Call in its batch`,
+          })
+        : undefined,
+    rolloverError:
+      declaresRollover && (toolCallCount !== 1 || declaresCompletion)
+        ? ModelProtocolError.make({
+            message:
+              "A context rollover Tool must be the only Tool Call and cannot complete the Run",
+          })
+        : undefined,
+  };
+};
 
 const makeTurn = <
   InputSchema extends Schema.Top,
@@ -5817,23 +5823,15 @@ const makeTurn = <
       const modelToolChoice = (): LanguageModel.ToolChoice<string> | undefined => {
         const terminalToolChoiceOnly =
           finalAnswerOnly ||
-          (agent.definition.completion?.required === true &&
+          (agent.definition.completion !== undefined &&
             policy.onExhaustion === "fail" &&
             turn === bounds.maxTurns);
 
         return terminalToolChoiceOnly
-          ? agent.definition.completion === undefined ||
-            (agent.definition.completion.required !== true &&
-              !catalog.some(
-                (entry) =>
-                  entry.kind === "native" &&
-                  entry.nativeToolName === agent.definition.completion?.tool,
-              ))
+          ? agent.definition.completion === undefined
             ? "none"
-            : agent.definition.completion.required === true
-              ? { tool: agent.definition.completion.tool }
-              : { mode: "auto", oneOf: [agent.definition.completion.tool] }
-          : agent.definition.completion?.required === true
+            : { tool: agent.definition.completion.tool }
+          : agent.definition.completion !== undefined
             ? "required"
             : undefined;
       };
@@ -6807,54 +6805,21 @@ const makeTurn = <
           }
           const completionTool = agent.definition.completion?.tool;
 
-          const declaresCompletion =
-            completionTool !== undefined &&
-            trace.applicationToolCalls.some((call) => call.name === completionTool);
-
-          const declaresActionCompletion = trace.applicationToolCalls.some((call) =>
-            agent.definition.completionFromTools?.some(
-              (declaration) => declaration.tool === call.name,
-            ),
+          const { completionBatch, completionBatchError, rolloverError } = classifyCompletionBatch(
+            completionTool,
+            agent.definition.toolkit.tools,
+            trace.applicationToolCalls.length,
+            trace.toolCalls.size,
+            trace.applicationToolCalls,
           );
 
-          const declaresRollover = trace.applicationToolCalls.some(
-            (call) =>
-              hasTool(agent.definition.toolkit.tools, call.name) &&
-              Context.get(
-                agent.definition.toolkit.tools[call.name].annotations,
-                ContextRolloverTool,
-              ),
-          );
-
-          if (
-            declaresRollover &&
-            (trace.toolCalls.size !== 1 || declaresCompletion || declaresActionCompletion)
-          ) {
-            return failExecution(
-              ModelProtocolError.make({
-                message:
-                  "A context rollover Tool must be the only Tool Call and cannot complete the Run",
-              }),
-            );
-          }
-
-          const completionBatchError =
-            (declaresCompletion || declaresActionCompletion) &&
-            trace.applicationToolCalls.length !== 1
-              ? ModelProtocolError.make({
-                  message: declaresCompletion
-                    ? `Completion Tool ${completionTool} must be the only application Tool Call in its batch`
-                    : "An action completion Tool must be the only application Tool Call in its batch",
-                })
-              : undefined;
+          if (rolloverError !== undefined) return failExecution(rolloverError);
 
           // Finalization cannot grant another correction turn. Completed provider work
           // is retained separately; only unexecuted application calls can be rejected.
           if (completionBatchError !== undefined && finalAnswerOnly) {
             return failExecution(completionBatchError);
           }
-
-          const completionBatch = declaresCompletion && trace.applicationToolCalls.length === 1;
 
           // Fail-closed (RUN-020): final-answer mode advertises either no
           // Tool or exactly the Definition-owned completion Tool. Any other
@@ -6901,7 +6866,7 @@ const makeTurn = <
               }),
             );
           }
-          if (agent.definition.completion?.required === true && trace.toolCalls.size === 0) {
+          if (agent.definition.completion !== undefined && trace.toolCalls.size === 0) {
             return failExecution(
               ModelProtocolError.make({
                 message: `Model stopped without required completion Tool ${agent.definition.completion.tool}`,
@@ -7040,7 +7005,7 @@ const makeTurn = <
                       // stop response with no APPLICATION calls can settle
                       // the breach directly unless completion is required (RUN-025).
                       if (
-                        agent.definition.completion?.required !== true &&
+                        agent.definition.completion === undefined &&
                         trace.applicationToolCalls.length === 0 &&
                         trace.finishReason === "stop"
                       ) {
@@ -7217,7 +7182,7 @@ const makeTurn = <
           });
 
           if (providerOnly && trace.finishReason === "stop") {
-            if (agent.definition.completion?.required === true) {
+            if (agent.definition.completion !== undefined) {
               const turnsBlocked =
                 policy.onExhaustion === "fail" ? turn >= bounds.maxTurns : turn > bounds.maxTurns;
 
@@ -7232,7 +7197,7 @@ const makeTurn = <
             }
 
             return afterValidatedResponse(
-              agent.definition.completion?.required === true
+              agent.definition.completion !== undefined
                 ? continueTurn(historyWithResponse())
                 : settleOrFollowUp(historyWithResponse()),
             );
@@ -7707,53 +7672,25 @@ const toolBatchContinuation = <
           ? orderedResults[0]
           : undefined;
 
-      const actionCompletion = agent.definition.completionFromTools?.find(
-        (declaration) => declaration.tool === successfulResult?.name,
+      const completionCall = trace.applicationCallDescriptors.find(
+        (call) => call.toolCallId === successfulResult?.id,
       );
 
-      let selectedOutput: Option.Option<{
-        readonly encoded: Schema.Json;
-        readonly decoded: Agent.Output<typeof agent>;
-      }> = Option.none();
-
-      if (
+      const selectedOutput =
+        completion !== undefined &&
         successfulResult !== undefined &&
-        trace.applicationCallDescriptors.some((call) => call.toolCallId === successfulResult.id) &&
-        (successfulResult.name === completion?.tool || actionCompletion !== undefined)
-      ) {
-        const call = trace.applicationCallDescriptors[0];
-
-        if (call === undefined) {
-          return failExecution(
-            ModelProtocolError.make({
-              message: "Completion Tool has no canonical call descriptor",
-            }),
-          );
-        }
-        if (actionCompletion !== undefined) {
-          selectedOutput = yield* prepareWithinDeadline(
-            context,
-            projectCompletionFromToolOutput(
-              agent,
-              actionCompletion,
-              copyJson(call.parameters),
-              successfulResult.encodedResult,
-            ),
-          );
-        } else if (completion !== undefined) {
-          selectedOutput = Option.some(
-            yield* prepareWithinDeadline(
+        successfulResult.name === completion.tool &&
+        completionCall !== undefined
+          ? yield* prepareWithinDeadline(
               context,
               projectCompletionOutput(
                 agent,
                 completion,
-                copyJson(call.parameters),
+                copyJson(completionCall.parameters),
                 successfulResult.encodedResult,
               ),
-            ),
-          );
-        }
-      }
+            )
+          : undefined;
 
       // A completion Tool can admit steering while its handler runs. Only claim it
       // when another ordinary Turn can cover it; otherwise keep it queued for a new Run.
@@ -7761,18 +7698,16 @@ const toolBatchContinuation = <
 
       const canContinue =
         turn < bounds.maxTurns &&
-        (completion?.required === true
-          ? toolCalls + context.programmaticToolCalls < bounds.maxToolCalls
-          : toolCalls + context.programmaticToolCalls <= bounds.maxToolCalls) &&
+        toolCalls + context.programmaticToolCalls < bounds.maxToolCalls &&
         !context.tokenExhausted &&
         !context.finalizationUsed &&
         (yield* Clock.currentTimeMillis) < context.durationDeadlineMillis;
 
       const steering =
-        Option.isSome(selectedOutput) && !canContinue ? [] : yield* drainInputs(context, options);
+        selectedOutput !== undefined && !canContinue ? [] : yield* drainInputs(context, options);
 
-      if (Option.isSome(selectedOutput) && steering.length === 0) {
-        const output = selectedOutput.value;
+      if (selectedOutput !== undefined && steering.length === 0) {
+        const output = selectedOutput;
 
         const exhausted = context.tokenExhausted
           ? "tokens"
@@ -8082,39 +8017,16 @@ const makeResumeTurn = <
         (call) => !recordedSettledIds.has(call.id) || resume.settledCompletion === call.id,
       );
 
-      const actionCompletionCall = completionCandidates.find((call) =>
-        agent.definition.completionFromTools?.some((declaration) => declaration.tool === call.name),
+      const { completionBatch, completionBatchError, rolloverError } = classifyCompletionBatch(
+        completionTool,
+        tools,
+        trace.applicationToolCalls.length,
+        trace.toolCalls.size,
+        completionCandidates,
       );
 
-      if (
-        (actionCompletionCall !== undefined ||
-          (completionTool !== undefined &&
-            completionCandidates.some((call) => call.name === completionTool))) &&
-        trace.applicationToolCalls.length !== 1
-      ) {
-        return failExecution(
-          ModelProtocolError.make({
-            message: "A completion Tool must be the only application Tool Call in its batch",
-          }),
-        );
-      }
-
-      const completionBatch =
-        completionTool !== undefined &&
-        trace.applicationToolCalls.length === 1 &&
-        completionCandidates[0]?.name === completionTool;
-
-      if (
-        (completionBatch &&
-          completionTool !== undefined &&
-          Context.get(tools[completionTool].annotations, ContextRolloverTool)) ||
-        (actionCompletionCall !== undefined &&
-          Context.get(tools[actionCompletionCall.name].annotations, ContextRolloverTool))
-      ) {
-        return failExecution(
-          ModelProtocolError.make({ message: "A context rollover Tool cannot complete the Run" }),
-        );
-      }
+      if (rolloverError !== undefined) return failExecution(rolloverError);
+      if (completionBatchError !== undefined) return failExecution(completionBatchError);
 
       if (context.finalizationUsed && (!completionBatch || trace.toolCalls.size !== 1)) {
         return failExecution(

@@ -56,7 +56,7 @@ Before finishing an action request, inspect the resulting page or cart and check
         ? Toolkit.make(OpenAiTool.WebSearch({ search_context_size: "medium" }))
         : Toolkit.empty,
     ),
-    completion: { tool: "finish", required: true, project: ({ parameters }) => parameters },
+    completion: { tool: "finish", project: ({ parameters }) => parameters },
     policy: {
       maxTurns: 120,
       maxToolCalls: 300,

@@ -23,8 +23,8 @@ import {
   type ToolCallId,
   type TurnId,
 } from "../core/Identifiers.ts";
+import type { CompletionMetadata } from "../core/internal/completion.ts";
 import { type MemoryRecallError } from "../core/MemoryReference.ts";
-import type { ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import {
   type SubagentBudgetReservation,
@@ -548,11 +548,9 @@ export interface RunTurnToolResult {
 }
 
 /** Encoded terminal values. They become authoritative after canonical acceptance. */
-export interface RunTurnCompletion {
+export interface RunTurnCompletion extends CompletionMetadata {
   readonly output: unknown;
   readonly runDisposition?: unknown;
-  readonly finishReason: "completed" | "model-stop" | "budget-exhausted";
-  readonly exhausted?: ExhaustedLimit | undefined;
 }
 
 interface RunTurnIdentity {

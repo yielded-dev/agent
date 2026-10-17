@@ -96,7 +96,6 @@ const replaySchemaProjections = new WeakMap<Schema.Top, Schema.Json>();
 type CachedFallbackContracts = {
   readonly tools: ReadonlyArray<Tool.Any>;
   readonly completionTool: string | undefined;
-  readonly completionFromTools: ReadonlyArray<string>;
   readonly version: PersistedJson;
   readonly contracts: Record<string, Digest>;
 };
@@ -122,7 +121,6 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
     try: () => {
       const tools = Object.values(definition.toolkit.tools);
       const completionTool = definition.completion?.tool;
-      const completionFromTools = definition.completionFromTools?.map(({ tool }) => tool) ?? [];
       // Object-valued versions may be mutable caller data. Only primitive fallback
       // versions can reuse a result, and only one result is retained per toolkit.
 
@@ -138,8 +136,6 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
         cached !== undefined &&
         cached.version === fallbackVersion &&
         cached.completionTool === completionTool &&
-        cached.completionFromTools.length === completionFromTools.length &&
-        cached.completionFromTools.every((tool, index) => tool === completionFromTools[index]) &&
         cached.tools.length === tools.length &&
         cached.tools.every((tool, index) => tool === tools[index])
       )
@@ -165,7 +161,6 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
         cacheable,
         tools,
         completionTool,
-        completionFromTools,
       };
     },
     catch: () =>
@@ -215,10 +210,6 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
             executionKind: getToolExecutionKind(tool.annotations),
             contextRollover: Context.get(tool.annotations, ContextRolloverTool),
             completion: definition.completion?.tool === tool.name,
-            completionFromTool:
-              definition.completionFromTools?.some(
-                (declaration) => declaration.tool === tool.name,
-              ) ?? false,
           },
         }),
         catch: invalidContracts,
@@ -238,7 +229,6 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
     cache.set(definition.toolkit.tools, {
       tools: prepared.tools,
       completionTool: prepared.completionTool,
-      completionFromTools: prepared.completionFromTools,
       version: fallbackVersion,
       contracts: { ...contracts },
     });
@@ -648,8 +638,7 @@ const registrationDefinitions = (entry: AgentRegistration): DefinitionDigestInpu
         initialToolNames: exposure === undefined ? null : [...(exposure.initialToolNames ?? [])],
         maxTools: exposure?.maxTools ?? 64,
         maxSchemaBytes: exposure?.maxSchemaBytes ?? 262_144,
-        requiredCompletion:
-          definition.completion?.required === true ? definition.completion.tool : null,
+        requiredCompletion: definition.completion?.tool ?? null,
         tools: Object.values(definition.toolkit.tools).map((tool) => ({
           name: tool.name,
           pinned: Context.get(tool.annotations, PinnedTool),
