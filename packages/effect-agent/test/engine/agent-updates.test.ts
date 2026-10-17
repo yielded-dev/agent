@@ -17,6 +17,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as AgentRuntime from "../../src/engine/AgentRuntime.ts";
+import { streamWithUsageAccountingUnknown } from "../../src/engine/internal/agent-runtime.ts";
 import { AgentUpdateAcceptance, ModelUsageAccounting } from "../../src/engine/RunOptions.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 
@@ -83,7 +84,7 @@ layer(base)("Agent updates", (it) => {
       const accepted = yield* Deferred.make<void>();
       const observed = yield* Ref.make<ReadonlyArray<string>>([]);
 
-      const fiber = yield* AgentRuntime.streamWithUsageAccountingUnknown(
+      const fiber = yield* streamWithUsageAccountingUnknown(
         Agent.withModel(definition, model("emit_update", { value: { candidateCount: "2" } })),
         "go",
       ).pipe(
@@ -219,7 +220,7 @@ layer(base)("Agent updates", (it) => {
         }),
       });
 
-      const events = yield* AgentRuntime.streamWithUsageAccountingUnknown(
+      const events = yield* streamWithUsageAccountingUnknown(
         Agent.withModel(agent, model("job", {})),
         "go",
       ).pipe(

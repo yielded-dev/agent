@@ -82,7 +82,6 @@ import {
 } from "../core/Usage.ts";
 import { FrameworkMessage } from "../core/Worker.ts";
 import type { WorkerError } from "../core/Worker.ts";
-import * as AgentRuntime from "../engine/AgentRuntime.ts";
 import {
   AgentChildPending,
   renderInputPrompt,
@@ -93,6 +92,8 @@ import {
 import { ContextCompactor, CompactionError } from "../engine/ContextCompactor.ts";
 import { ContextRolloverTool } from "../engine/ContextWindow.ts";
 import { getToolExecutionClass } from "../engine/DurableStep.ts";
+import { executeWithUsageAccountingUnknown } from "../engine/internal/agent-runtime.ts";
+import type { InterpreterOptions as RunOptions } from "../engine/internal/interpreter-options.ts";
 import { MessagingHost } from "../engine/MessagingHost.ts";
 import {
   CurrentToolFailureObserver,
@@ -110,7 +111,6 @@ import {
   type RunDurabilityHook,
   type RunInputCommand,
   type RunInputHook,
-  type RunOptions,
   type RunSubagentEstablishRequest,
   type RunSubagentHook,
   type RunSubagentJoinRequest,
@@ -4886,7 +4886,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       OutputSchema extends Schema.Top,
       Instructions,
       Tools extends Record<string, Tool.Any>,
-      Provider,
       ModelProvides,
       ModelRequires,
       InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
@@ -4904,7 +4903,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         OutputSchema,
         Instructions,
         Tools,
-        Provider,
         ModelProvides,
         ModelRequires,
         InstructionError,
@@ -7910,7 +7908,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         interruptedUsage = true;
       }
 
-      const consume = AgentRuntime.executeWithUsageAccountingUnknown(
+      const consume = executeWithUsageAccountingUnknown(
         agent,
         submission.inputPayload,
         options,
@@ -8236,7 +8234,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       OutputSchema extends Schema.Top,
       Instructions,
       Tools extends Record<string, Tool.Any>,
-      Provider,
       ModelProvides,
       ModelRequires,
       InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
@@ -8254,7 +8251,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         OutputSchema,
         Instructions,
         Tools,
-        Provider,
         ModelProvides,
         ModelRequires,
         InstructionError,
@@ -9339,7 +9335,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     OutputSchema extends Schema.Top,
     Instructions,
     Tools extends Record<string, Tool.Any>,
-    Provider,
     ModelProvides,
     ModelRequires,
     InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
@@ -9356,7 +9351,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       OutputSchema,
       Instructions,
       Tools,
-      Provider,
       ModelProvides,
       ModelRequires,
       InstructionError,
@@ -12673,7 +12667,6 @@ export class DurableAgentRuntime extends Context.Service<
       OutputSchema extends Schema.Top,
       Instructions,
       Tools extends Record<string, Tool.Any>,
-      Provider,
       ModelProvides,
       ModelRequires,
       InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
@@ -12691,7 +12684,6 @@ export class DurableAgentRuntime extends Context.Service<
         OutputSchema,
         Instructions,
         Tools,
-        Provider,
         ModelProvides,
         ModelRequires,
         InstructionError,
@@ -12710,7 +12702,6 @@ export class DurableAgentRuntime extends Context.Service<
           OutputSchema,
           Instructions,
           Tools,
-          Provider,
           ModelProvides,
           ModelRequires,
           InstructionError,

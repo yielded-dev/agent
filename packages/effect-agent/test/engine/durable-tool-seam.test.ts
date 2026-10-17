@@ -2,7 +2,6 @@ import { expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicyError } from "@yielded/agent/agent-error";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
-import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
@@ -27,6 +26,7 @@ import * as SchemaGetter from "effect/SchemaGetter";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
+import * as AgentRuntime from "../../src/engine/internal/agent-runtime.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 
 let threadSequence = 0;

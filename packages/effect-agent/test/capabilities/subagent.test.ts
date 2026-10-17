@@ -227,13 +227,12 @@ const coordinatorDefinition = Agent.make("coordinator", {
 const mapChildFailure = (failure: { readonly _tag: string }) =>
   ResearchDelegationFailed.make({ childErrorTag: failure._tag });
 
-const researchLayer = <Provider, ModelProvides, ModelRequires>(
+const researchLayer = <ModelProvides, ModelRequires>(
   childBinding: RuntimeBinding<
     typeof ChildInput,
     typeof ChildOutput,
     string,
     {},
-    Provider,
     ModelProvides,
     ModelRequires
   >,
@@ -729,7 +728,6 @@ type TypedChildFailure = SubagentChildRunFailure<
   typeof ChildOutput,
   string,
   Toolkit.Tools<typeof typedChildTools>,
-  "scripted",
   never,
   never,
   never,

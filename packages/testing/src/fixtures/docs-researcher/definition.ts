@@ -276,13 +276,12 @@ export const docsSummarizerDigestStrings = {
 } as const;
 
 /** Runtime wiring: the immutable delegation plus one explicit child Binding (S2 declaration). */
-export const docsSummaryHandlersLayer = <Provider, ModelProvides, ModelRequires>(
+export const docsSummaryHandlersLayer = <ModelProvides, ModelRequires>(
   childBinding: RuntimeBinding<
     typeof SummaryBrief,
     typeof DocumentSummary,
     string,
     Toolkit.Tools<typeof DocContentToolkit>,
-    Provider,
     ModelProvides,
     ModelRequires
   >,

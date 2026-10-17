@@ -268,13 +268,12 @@ export const mapResearchChildFailure = (failure: {
 }): DestinationResearchFailed => DestinationResearchFailed.make({ childErrorTag: failure._tag });
 
 /** Runtime wiring: pair the immutable delegation with one explicit child Binding. */
-export const destinationResearchHandlersLayer = <Provider, ModelProvides, ModelRequires>(
+export const destinationResearchHandlersLayer = <ModelProvides, ModelRequires>(
   childBinding: RuntimeBinding<
     typeof DestinationBrief,
     typeof DestinationReport,
     string,
     Toolkit.Tools<typeof DestinationResearcherToolkit>,
-    Provider,
     ModelProvides,
     ModelRequires
   >,

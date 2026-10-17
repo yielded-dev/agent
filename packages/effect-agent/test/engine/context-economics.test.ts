@@ -4,7 +4,6 @@ import { expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import { ContextBudgetError } from "@yielded/agent/agent-error";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
-import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { ModelCallContext } from "@yielded/agent/context-window";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
@@ -30,6 +29,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import * as AgentRuntime from "../../src/engine/internal/agent-runtime.ts";
 import { RunContextPreparationPassthrough } from "../../src/engine/RunOptions.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 
