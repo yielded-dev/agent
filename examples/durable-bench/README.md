@@ -34,6 +34,8 @@ Failed and interrupted runs retain their reservation; resuming reserves again. T
 conservative admission estimates, not an exact billing cap, and do not cover other machines
 or unrelated Workers. Raising either limit, selecting full mode, or requesting histories
 above 1,000 turns requires `--budget-reason` naming the decision the run supports.
+Raise a limit only within an operator-authorized spending budget; a recorded reason alone
+does not authorize extra spending.
 At [Cloudflare's current paid rate](https://developers.cloudflare.com/durable-objects/platform/pricing/),
 one million additional written rows costs $1 after the included allowance; other charges are separate.
 
@@ -434,6 +436,15 @@ history-build/recovery diagnostics, and uses its own harness-pinned bundle, so i
 isolated Effect startup or an additive cost of durability.
 
 ## Fixtures
+
+Create the default screen's fixture locally, then reuse that directory across candidates:
+
+```sh
+DURABLE_BENCH_FIXTURE_DIRECTORY=/path/to/saved-fixtures vp run -F @yielded/agent-example-durable-bench seed -- yielded 50
+```
+
+This performs no Cloudflare writes. Choose a new directory when the stored layout changes;
+the seeder preserves existing fixtures.
 
 Comparison requires `--fixture-directory <path>` naming pre-existing saved fixtures.
 Their key describes the stored layout, record format and SQLite schema. Before deployment,

@@ -58,9 +58,9 @@ export const writeReport = (result: Result): string => {
 
   return [
     `Write diagnostic: ${result.complete ? "complete" : "incomplete"}. Timing comparisons disabled.`,
-    `Observed native SQL rows: ${n(sql)}; KV/alarm writes: ${n(kv)}.`,
+    `Observed native SQL rows: ${known.size ? n(sql) : "unavailable"}; KV/alarm writes: ${known.size ? n(kv) : "unavailable"}.`,
     `Unavailable incarnations: ${unavailable.size}. Observed counts are partial; driver receipts, lost incarnations, cleanup and PITR are not fully metered.`,
-    `Reserved estimated rows: ${n(result.costPlan?.reservedRows ?? NaN)}. Reservations include failed attempts and are not refunded.`,
+    `Latest admission reservation: ${n(result.reservation?.rows ?? 0)} rows; planned estimate ${n(result.costPlan?.reservedRows ?? NaN)}. Reservations include failed attempts and are not refunded.`,
     "Per-phase cumulative snapshots and unavailable reasons are retained in JSON.",
     "",
   ].join("\n");
@@ -507,7 +507,7 @@ export const table = (result: Result): string => {
   const lines = [
     ...(result.costPlan
       ? [
-          `Write reservation: ${n(result.costPlan.reservedRows)} rows (setup ${n(result.costPlan.importRows)}; turns ${n(result.costPlan.turnRows)}; includes retry allowances). Estimated admission, not billed usage.`,
+          `Write plan: ${n(result.costPlan.reservedRows)} rows (setup ${n(result.costPlan.importRows)}; turns ${n(result.costPlan.turnRows)}; includes retry allowances). Latest admission reservation: ${n(result.reservation?.rows ?? 0)} rows. Estimated admission, not billed usage.`,
           "",
         ]
       : []),
