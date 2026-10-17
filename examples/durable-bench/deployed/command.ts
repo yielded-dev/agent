@@ -179,6 +179,10 @@ export const command = Command.make(
     ),
   },
   Effect.fnUntraced(function* (flags) {
+    if (flags.costOnly && (flags.teardown || Option.isSome(flags.resume)))
+      return yield* BenchError.make({
+        message: "--cost-only cannot be combined with --resume or --teardown.",
+      });
     if (flags.teardown) return yield* teardown.pipe(Effect.provide(Cloudflare.layer));
     const runName = Option.getOrUndefined(flags.resume);
 

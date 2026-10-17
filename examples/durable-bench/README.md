@@ -37,7 +37,7 @@ above 1,000 turns requires `--budget-reason` naming the decision the run support
 At [Cloudflare's current paid rate](https://developers.cloudflare.com/durable-objects/platform/pricing/),
 one million additional written rows costs $1 after the included allowance; other charges are separate.
 
-Use `--writes` for a separate diagnostic run with native SQL and KV/alarm counters.
+Use `--writes --targets yielded` for a separate diagnostic run with native SQL and KV/alarm counters.
 Its report omits timing comparisons because the counters add instrumentation. JSON preserves
 per-phase cumulative counts and explicitly unavailable measurements, including cleanup and
 lost incarnations. These counts do not constitute a complete Cloudflare invoice.
@@ -327,11 +327,11 @@ not a cold isolate, cold disk, or newly seeded conversation. Warm samples requir
 same live instance as the preceding verified turn.
 The driver collects metrics after its timer endpoints, before closing the text observer.
 A confirmed lost incarnation or a classified native Object storage reset/connection loss
-can replace the affected sample once. After the other Objects finish the pass, the controller
+can replace the affected sample, at most once per Object per pass. After the other Objects finish the pass, the controller
 restores and verifies the fixture, rebuilds the acknowledged prefix with fresh input IDs,
 then measures the replacement and continues. Prefix turns reestablish the cold/warm boundary
 and are excluded from timing and CPU comparisons. Original failures and replacement IDs
-remain in JSON; earlier valid measurements are retained. A second failure at the same sample,
+remain in JSON; earlier valid measurements are retained. A second recoverable failure in that Object's pass,
 a failed prefix rebuild, sample-key mismatch or wrong build stops the run.
 Each measured request has a durable Driver request ID and saved outcome. If the controller loses
 its response, it polls that outcome for up to five minutes with bounded backoff. Only a confirmed

@@ -12,7 +12,7 @@ const DAY = 86_400_000;
 
 /** Admission estimate, not an invoice. Reserve retries and recovery before any deployment.
  * Index entries and implicit UNIQUE/PRIMARY KEY indexes count as writes. The extra import
- * copy allows for cleanup/upgrade; unknown model/runtime writes have a per-turn allowance.
+ * copy funds one complete Object/pass recovery; runtime writes have a per-turn allowance.
  * Native counters in the result are evidence, not a substitute for Cloudflare billing.
  */
 export const planCost = (

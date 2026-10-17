@@ -880,7 +880,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     const isolateEpochs = new Map<string, number>();
 
     const poolCohorts = cohorts;
-    const retriedSamples = new Set<string>();
+    const retriedPasses = new Set<string>();
 
     const measureEpoch = Effect.fnUntraced(function* (
       epoch: number,
@@ -1744,20 +1744,20 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             error: IncarnationLost | TransientObjectTransport,
           ) {
             const sample = currentSample;
-            const key = `${objectKey(cohort)}/${epoch}/${sample?.repeat}`;
+            const key = `${objectKey(cohort)}/${epoch}`;
 
-            // Never retry against advanced storage. A failed prefix rebuild or a second
-            // failure at this logical index is fatal, even after another Object recovers.
+            // One complete recovery per Object/pass is funded by the write reservation.
+            // Never retry against advanced storage or repeatedly replay growing prefixes.
             if (
               !recoveryAvailable ||
               !sample ||
               sample.state === "recovery" ||
-              retriedSamples.has(key)
+              retriedPasses.has(key)
             )
               return yield* BenchError.make({
                 message: error.message + "; automatic sample recovery unavailable or exhausted.",
               });
-            retriedSamples.add(key);
+            retriedPasses.add(key);
             retryFrom.set(objectKey(cohort), sample.repeat);
             const reason = error._tag === "IncarnationLost" ? "incarnation-lost" : error.reason;
             const replacementSample = sampleName(epoch, sample.repeat, attempt + 1);
