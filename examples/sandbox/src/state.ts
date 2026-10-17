@@ -291,11 +291,11 @@ export const workspace = Atom.family((id: string) => {
     })
     .pipe(runtime.factory.withReactivity([filesKey]));
 
-  const savedFromEvents = Atom.make<typeof SavedFiles.Type | undefined>(undefined);
+  const savedFromServer = Atom.make<typeof SavedFiles.Type | undefined>(undefined);
 
-  // After the first status event, an older directory response cannot replace it.
+  // Status replies and events take precedence over older directory responses.
   const saved = Atom.make(
-    (get) => get(savedFromEvents) ?? AsyncResult.getOrElse(get(files), () => null)?.saved,
+    (get) => get(savedFromServer) ?? AsyncResult.getOrElse(get(files), () => null)?.saved,
   );
 
   const expired = Atom.make(
@@ -342,24 +342,33 @@ export const workspace = Atom.family((id: string) => {
       get.set(preparePreview, undefined);
   });
 
-  const fileAction = (action: "restore" | "save") =>
-    runtime.fn<void>()(
-      Effect.fnUntraced(function* (_, get) {
-        if (action === "restore") get.set(preparePreview, Atom.Reset);
+  const restore = runtime.fn<void>()(
+    Effect.fnUntraced(function* (_, get) {
+      get.set(preparePreview, Atom.Reset);
 
-        // Invalidate before awaiting files; runtime.fn reactivity keys run after this workflow.
-        const result = yield* Reactivity.mutation(json(action, SavedFiles, { workspaceId: id }), [
-          filesKey,
-        ]);
+      // Restoration must reload the directory to clear its expired state.
+      const result = yield* Reactivity.mutation(json("restore", SavedFiles, { workspaceId: id }), [
+        filesKey,
+      ]);
 
-        yield* get.result(files, { suspendOnWaiting: true });
+      yield* get.result(files, { suspendOnWaiting: true });
 
-        return result;
-      }),
-    );
+      return result;
+    }),
+  );
 
-  const restore = fileAction("restore");
-  const save = fileAction("save");
+  const save = runtime.fn<void>()(
+    Effect.fnUntraced(function* (_, get) {
+      const statusRevision = get(commandRevision);
+      const result = yield* json("save", SavedFiles, { workspaceId: id });
+
+      // Keep admission blocked by its reply unless an event has supplied newer status.
+      if (get(commandRevision) === statusRevision) get.set(savedFromServer, result);
+
+      return result;
+    }),
+    { reactivityKeys: [filesKey] },
+  );
 
   const fileOperation = Atom.make((get) => {
     if (get(restore).waiting) return "restoring";
@@ -517,7 +526,7 @@ export const workspace = Atom.family((id: string) => {
           Stream.runForEach((page) =>
             Effect.sync(() => {
               if ("_tag" in page) {
-                get.set(savedFromEvents, page.saved);
+                get.set(savedFromServer, page.saved);
                 get.set(commandRevision, get.once(commandRevision) + 1);
 
                 return;

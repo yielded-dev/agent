@@ -185,10 +185,20 @@ const make = Effect.gen(function* () {
       status: { min: 204, max: 204 },
     });
 
-    const ready = yield* sandbox.forwardPort(
-      STATIC_PREVIEW_PORT,
-      new Request(`http://preview.invalid${STATIC_PREVIEW_HEALTH_PATH}`, { method: "HEAD" }),
-    );
+    const ready = yield* sandbox
+      .forwardPort(
+        STATIC_PREVIEW_PORT,
+        new Request(`http://preview.invalid${STATIC_PREVIEW_HEALTH_PATH}`, { method: "HEAD" }),
+      )
+      .pipe(
+        Effect.timeoutOrElse({
+          duration: "30 seconds",
+          orElse: () =>
+            Effect.fail(
+              PreviewRejected.make({ message: "Preview preparation timed out. Try again." }),
+            ),
+        }),
+      );
 
     if (ready.status !== 204 || ready.headers.get("x-yielded-static-preview") !== processId)
       return yield* PreviewRejected.make({
@@ -226,20 +236,15 @@ const make = Effect.gen(function* () {
   });
 
   return {
-    open: serial.withPermit(mutations.withMutation(open, { invalidatesRecovery: false })).pipe(
-      Effect.timeoutOrElse({
-        duration: "30 seconds",
-        orElse: () =>
-          Effect.fail(
-            PreviewRejected.make({ message: "Preview preparation timed out. Try again." }),
-          ),
-      }),
-      Effect.mapError((cause) =>
-        cause._tag === "PreviewRejected" || cause._tag === "SandboxOperationError"
-          ? cause
-          : new SandboxOperationError({ operation: "preview.open", cause }),
+    open: serial
+      .withPermit(mutations.withMutation(open, { invalidatesRecovery: false }))
+      .pipe(
+        Effect.mapError((cause) =>
+          cause._tag === "PreviewRejected" || cause._tag === "SandboxOperationError"
+            ? cause
+            : new SandboxOperationError({ operation: "preview.open", cause }),
+        ),
       ),
-    ),
   };
 });
 

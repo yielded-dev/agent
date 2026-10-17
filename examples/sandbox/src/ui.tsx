@@ -930,7 +930,7 @@ function Files({ id }: { id: string }) {
             ) : (
               <div className="viewer-message space-y-3 text-center">
                 {preparedPreview.waiting ? (
-                  <p role="status">Preparing preview…</p>
+                  <p role="status">Opening preview…</p>
                 ) : (
                   <>
                     <p role={AsyncResult.isFailure(preparedPreview) ? "alert" : "status"}>
