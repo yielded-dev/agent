@@ -95,7 +95,10 @@ it needs a proxied wildcard DNS record and a certificate covering that hostname.
 Keep previews on a separate origin from the application. Their short-lived access
 is transferred by a form POST into a host-only HttpOnly cookie, never a URL token.
 
-Sandbox deployment is currently manual; merging a PR runs CI.
+Sandbox deploys automatically after successful push CI on `main`. The deployment
+workflow skips superseded revisions and uses the repository's Cloudflare credentials,
+preserving the Worker's existing model and auth secrets. The command above remains
+available for manual deployment.
 The checked-in Wrangler configuration owns the Sandbox route and its Thread,
 container, and account workspace-directory namespaces. It does not own the shared authentication gateway.
 Wrangler 4.151 is scoped to this example because it supports the native
