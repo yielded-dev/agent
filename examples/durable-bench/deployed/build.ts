@@ -1,6 +1,6 @@
 import { builtinModules } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { Effect, FileSystem, Schema } from "effect";
 import { ChildProcess } from "effect/process";
@@ -313,16 +313,6 @@ export const build = Effect.fnUntraced(function* (
   if (expectedEffect !== undefined && (entry === "target" || entry === "restore")) {
     const map = yield* read(outfile + ".map", SourceMap);
 
-    const versions = [
-      ...new Set(
-        map.sources.flatMap((source) => {
-          const match = /\/effect@([^/]+)\/node_modules\/effect\//.exec(source);
-
-          return match ? [match[1]] : [];
-        }),
-      ),
-    ];
-
     const frameworkRoots = [
       ...new Set(
         map.sources
@@ -330,6 +320,14 @@ export const build = Effect.fnUntraced(function* (
           .map((source) => source.split("/node_modules/effect/")[0]),
       ),
     ];
+
+    // Bun store directory names include a content hash; read the bundled package's version.
+    const versions = yield* Effect.forEach(frameworkRoots, (root) =>
+      read(
+        resolve(output, root, "node_modules/effect/package.json"),
+        Schema.Struct({ version: Schema.String }),
+      ).pipe(Effect.map((metadata) => metadata.version)),
+    );
 
     const isolatedVendorEffect = map.sources.some((source) =>
       source.includes("/third-party/node_modules/effect/"),
