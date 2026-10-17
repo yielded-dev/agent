@@ -93,6 +93,7 @@ export const Entry = Schema.Struct({
   id: Schema.String,
   kind: Schema.Literals(["user", "assistant", "reasoning", "tool", "result", "status"]),
   text: Schema.String,
+  detail: Schema.optionalKey(Schema.String),
   name: Schema.optionalKey(Schema.String),
   failed: Schema.optionalKey(Schema.Boolean),
   reviewRequired: Schema.optionalKey(Schema.Boolean),
@@ -137,17 +138,19 @@ export const EventPage = Schema.Struct({
 
 export type EventPage = typeof EventPage.Type;
 
-export const WorkspaceEvent = Schema.Union([
-  EventPage,
-  Schema.TaggedStruct("CommandHistoryChanged", {}),
-]);
-
 export const SavedFiles = Schema.Struct({
   savedAt: Schema.NullOr(Schema.Natural),
   phase: Schema.Literals(["idle", "saving", "restoring"]),
   saveFailed: Schema.Boolean,
   restoreFailed: Schema.Boolean,
 });
+
+export const WorkspaceEvent = Schema.Union([
+  EventPage,
+  Schema.TaggedStruct("CommandHistoryChanged", {
+    saved: Schema.optionalKey(SavedFiles),
+  }),
+]);
 
 export const FileActionReply = Schema.Union([
   Schema.Struct({ saved: SavedFiles }),

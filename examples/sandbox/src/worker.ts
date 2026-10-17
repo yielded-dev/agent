@@ -103,7 +103,7 @@ const boundedBody = Effect.fn("Sandbox.body")(function* (request: Request) {
   );
 });
 
-const FailedWorkspaceOperation = Schema.Struct({ errorTag: Schema.Literal("CodingToolError") });
+const RunFailure = Schema.Struct({ errorTag: Schema.String });
 
 /** Project canonical records; the UI owns no second execution journal. */
 const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
@@ -192,7 +192,9 @@ const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[
           toolCallId: p.toolCallId,
         },
       ];
-    case "SubmissionSettled":
+    case "SubmissionSettled": {
+      const failure = Schema.is(RunFailure)(p.result) ? p.result.errorTag : undefined;
+
       return [
         {
           id,
@@ -206,9 +208,17 @@ const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[
           submissionId: p.submissionId,
           ...(p.runId === undefined ? {} : { runId: p.runId }),
           failed: p.outcome === "failed",
-          reviewRequired: p.outcome === "failed" && Schema.is(FailedWorkspaceOperation)(p.result),
+          reviewRequired: p.outcome === "failed" && failure === "CodingToolError",
+          ...(p.outcome === "failed" &&
+          (failure === "ContextBudgetError" || failure === "ContextOverflowError")
+            ? {
+                detail:
+                  "The conversation exceeded this turn’s context limit. Send a new message to continue.",
+              }
+            : {}),
         },
       ];
+    }
     default:
       return [];
   }

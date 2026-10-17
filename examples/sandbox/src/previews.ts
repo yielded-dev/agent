@@ -226,15 +226,20 @@ const make = Effect.gen(function* () {
   });
 
   return {
-    open: serial
-      .withPermit(mutations.withMutation(open, { invalidatesRecovery: false }))
-      .pipe(
-        Effect.mapError((cause) =>
-          cause._tag === "PreviewRejected" || cause._tag === "SandboxOperationError"
-            ? cause
-            : new SandboxOperationError({ operation: "preview.open", cause }),
-        ),
+    open: serial.withPermit(mutations.withMutation(open, { invalidatesRecovery: false })).pipe(
+      Effect.timeoutOrElse({
+        duration: "30 seconds",
+        orElse: () =>
+          Effect.fail(
+            PreviewRejected.make({ message: "Preview preparation timed out. Try again." }),
+          ),
+      }),
+      Effect.mapError((cause) =>
+        cause._tag === "PreviewRejected" || cause._tag === "SandboxOperationError"
+          ? cause
+          : new SandboxOperationError({ operation: "preview.open", cause }),
       ),
+    ),
   };
 });
 

@@ -291,7 +291,12 @@ export const workspace = Atom.family((id: string) => {
     })
     .pipe(runtime.factory.withReactivity([filesKey]));
 
-  const saved = Atom.make((get) => AsyncResult.getOrElse(get(files), () => null)?.saved);
+  const savedFromEvents = Atom.make<typeof SavedFiles.Type | undefined>(undefined);
+
+  // After the first status event, an older directory response cannot replace it.
+  const saved = Atom.make(
+    (get) => get(savedFromEvents) ?? AsyncResult.getOrElse(get(files), () => null)?.saved,
+  );
 
   const expired = Atom.make(
     (get) => AsyncResult.getOrElse(get(files), () => null)?.expired ?? false,
@@ -411,10 +416,11 @@ export const workspace = Atom.family((id: string) => {
                 ? null
                 : current.error,
         });
-        get.set(revision, get.once(revision) + 1);
       };
 
       return Effect.gen(function* () {
+        // A failed command read must not prevent an independent file refresh.
+        get.set(revision, get.once(revision) + 1);
         let commands = yield* json(`commands?${query(id, "")}`, Schema.Array(ShellCommand));
         const current = get.once(state);
 
@@ -511,6 +517,7 @@ export const workspace = Atom.family((id: string) => {
           Stream.runForEach((page) =>
             Effect.sync(() => {
               if ("_tag" in page) {
+                get.set(savedFromEvents, page.saved);
                 get.set(commandRevision, get.once(commandRevision) + 1);
 
                 return;
