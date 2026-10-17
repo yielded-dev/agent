@@ -3,8 +3,11 @@ import { hostedModelAccess } from "@yielded/agent-example-auth/server";
 import { ThreadMaintenance } from "@yielded/agent-platform-cloudflare/alarm";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
+import { ContextCompactor } from "@yielded/agent/context-compactor";
+import * as ContextTools from "@yielded/agent/context-tools";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
+import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
 import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject, Rpc, WorkerEnvironment } from "effect-cf";
@@ -146,7 +149,13 @@ const registered = DurableAgentRuntime.layerRegistered([
         }),
       ),
   },
-]).pipe(Layer.provide(codingToolsLive), Layer.provide(codingReconciler));
+]).pipe(
+  Layer.provide(codingToolsLive),
+  Layer.provide(codingReconciler),
+  Layer.provide(ContextTools.layer),
+  Layer.provide(ThreadContextHistory.layer()),
+  Layer.provide(ContextCompactor.layerRollover),
+);
 
 // Share the owner's existing storage with tools; alarms use the registered runtime.
 const owner = ThreadWorkDiscovery.layer.pipe(
@@ -231,26 +240,24 @@ export class CodingThread extends ThreadObject.make(application, {
         const commands = yield* ShellCommands;
         const snapshots = yield* WorkspaceSnapshots;
 
-        const changed = yield* Schema.encodeEffect(Schema.fromJsonString(WorkspaceEvent))({
-          _tag: "CommandHistoryChanged",
-        });
-
         const lifetime = new CommandEventsLifetime();
 
         const stream = commands.watch.pipe(
           Stream.mapEffect((commands) =>
-            snapshots.status.pipe(
-              Effect.flatMap((saved) =>
-                Schema.encodeEffect(
-                  Schema.fromJsonString(
-                    Schema.Struct({ commands: Schema.Array(ShellCommand), saved: SavedFiles }),
-                  ),
-                )({ commands, saved }),
-              ),
+            snapshots.status.pipe(Effect.map((saved) => ({ commands, saved }))),
+          ),
+          Stream.changesWith(
+            Schema.toEquivalence(
+              Schema.Struct({ commands: Schema.Array(ShellCommand), saved: SavedFiles }),
             ),
           ),
-          Stream.changes,
-          Stream.as(`${changed}\n`),
+          Stream.mapEffect(({ saved }) =>
+            Schema.encodeEffect(Schema.fromJsonString(WorkspaceEvent))({
+              _tag: "CommandHistoryChanged",
+              saved,
+            }),
+          ),
+          Stream.map((changed) => `${changed}\n`),
           Stream.encodeText,
           Stream.toReadableStreamWith(yield* Effect.context(), {
             signal: lifetime.controller.signal,

@@ -302,6 +302,14 @@ function Workspace({ id }: { id: string }) {
     (entry) => entry.kind === "status" && Object.hasOwn(completionLabels, entry.text),
   );
 
+  const activeTool = entries.findLast(
+    (entry) => entry.kind === "tool" && entry.runId === state.runId && !results.has(toolKey(entry)),
+  );
+
+  const progressLabel = activeTool
+    ? `${toolTitle(activeTool.name)}…`
+    : "Waiting for the agent’s next response…";
+
   const busy =
     !state.historyReady ||
     expired ||
@@ -379,7 +387,7 @@ function Workspace({ id }: { id: string }) {
             {state.active && state.drafts.length === 0 && (
               <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
                 <LoaderCircle className="size-3.5 motion-safe:animate-spin" aria-hidden="true" />
-                Working…
+                {progressLabel}
               </p>
             )}
           </ConversationContent>
@@ -495,7 +503,7 @@ function Workspace({ id }: { id: string }) {
                   ? "Sending command…"
                   : "Command is running"
                 : state.active
-                  ? "Agent is working"
+                  ? progressLabel
                   : state.reviewRequired
                     ? "Review required"
                     : state.uncertain
@@ -631,7 +639,14 @@ const toolTitles: Readonly<Record<string, string>> = {
   edit_file: "Edit file",
   search: "Search files",
   bash: "Run Bash",
+  new_context: "Refresh context",
+  get_context_remaining: "Check context capacity",
+  search_context_windows: "Search conversation",
+  read_context_window: "Read conversation",
 };
+
+const toolTitle = (name?: string) =>
+  Object.hasOwn(toolTitles, name ?? "") ? toolTitles[name ?? ""] : (name ?? "Tool");
 
 function TranscriptEntry({
   entry,
@@ -649,11 +664,7 @@ function TranscriptEntry({
 
     return (
       <Tool
-        title={
-          Object.hasOwn(toolTitles, entry.name ?? "")
-            ? toolTitles[entry.name ?? ""]
-            : (entry.name ?? "Tool")
-        }
+        title={toolTitle(entry.name)}
         status={
           outcome ? (outcome.failed ? "failed" : "complete") : active ? "running" : "incomplete"
         }
@@ -665,12 +676,13 @@ function TranscriptEntry({
   if (entry.kind === "reasoning") return <Reasoning streaming={streaming}>{entry.text}</Reasoning>;
   if (entry.kind === "status")
     return (
-      <p
-        className={`flex items-center gap-2 text-xs ${entry.failed ? "text-destructive" : "text-muted-foreground"}`}
-      >
-        {entry.text === "Completed" && <Check className="size-3.5" aria-hidden="true" />}
-        {entry.text}
-      </p>
+      <div className={`text-xs ${entry.failed ? "text-destructive" : "text-muted-foreground"}`}>
+        <p className="flex items-center gap-2">
+          {entry.text === "Completed" && <Check className="size-3.5" aria-hidden="true" />}
+          {entry.text}
+        </p>
+        {entry.detail && <p className="mt-1">{entry.detail}</p>}
+      </div>
     );
 
   return (
@@ -918,7 +930,7 @@ function Files({ id }: { id: string }) {
             ) : (
               <div className="viewer-message space-y-3 text-center">
                 {preparedPreview.waiting ? (
-                  <p role="status">Preparing preview…</p>
+                  <p role="status">Opening preview…</p>
                 ) : (
                   <>
                     <p role={AsyncResult.isFailure(preparedPreview) ? "alert" : "status"}>

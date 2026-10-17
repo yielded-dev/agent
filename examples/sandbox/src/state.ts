@@ -282,16 +282,28 @@ export const workspace = Atom.family((id: string) => {
   const selectedFile = Atom.make<string | null>(null);
   const revision = Atom.make(0);
   const commandRevision = Atom.make(0);
+  const savedFromServer = Atom.make<typeof SavedFiles.Type | undefined>(undefined);
 
   const files = runtime
     .atom((get) => {
       get(revision);
+      const path = get(directory);
+      const statusAtRequest = get.once(savedFromServer);
 
-      return json(`files?${query(id, get(directory))}`, FileList);
+      return Effect.gen(function* () {
+        const result = yield* json(`files?${query(id, path)}`, FileList);
+
+        // Recover missed status events without overwriting one received during this read.
+        if (get.once(savedFromServer) === statusAtRequest) get.set(savedFromServer, result.saved);
+
+        return result;
+      });
     })
     .pipe(runtime.factory.withReactivity([filesKey]));
 
-  const saved = Atom.make((get) => AsyncResult.getOrElse(get(files), () => null)?.saved);
+  const saved = Atom.make(
+    (get) => get(savedFromServer) ?? AsyncResult.getOrElse(get(files), () => null)?.saved,
+  );
 
   const expired = Atom.make(
     (get) => AsyncResult.getOrElse(get(files), () => null)?.expired ?? false,
@@ -337,24 +349,33 @@ export const workspace = Atom.family((id: string) => {
       get.set(preparePreview, undefined);
   });
 
-  const fileAction = (action: "restore" | "save") =>
-    runtime.fn<void>()(
-      Effect.fnUntraced(function* (_, get) {
-        if (action === "restore") get.set(preparePreview, Atom.Reset);
+  const restore = runtime.fn<void>()(
+    Effect.fnUntraced(function* (_, get) {
+      get.set(preparePreview, Atom.Reset);
 
-        // Invalidate before awaiting files; runtime.fn reactivity keys run after this workflow.
-        const result = yield* Reactivity.mutation(json(action, SavedFiles, { workspaceId: id }), [
-          filesKey,
-        ]);
+      // Restoration must reload the directory to clear its expired state.
+      const result = yield* Reactivity.mutation(json("restore", SavedFiles, { workspaceId: id }), [
+        filesKey,
+      ]);
 
-        yield* get.result(files, { suspendOnWaiting: true });
+      yield* get.result(files, { suspendOnWaiting: true });
 
-        return result;
-      }),
-    );
+      return result;
+    }),
+  );
 
-  const restore = fileAction("restore");
-  const save = fileAction("save");
+  const save = runtime.fn<void>()(
+    Effect.fnUntraced(function* (_, get) {
+      const statusRevision = get(commandRevision);
+      const result = yield* json("save", SavedFiles, { workspaceId: id });
+
+      // Keep admission blocked by its reply unless an event has supplied newer status.
+      if (get(commandRevision) === statusRevision) get.set(savedFromServer, result);
+
+      return result;
+    }),
+    { reactivityKeys: [filesKey] },
+  );
 
   const fileOperation = Atom.make((get) => {
     if (get(restore).waiting) return "restoring";
@@ -411,10 +432,11 @@ export const workspace = Atom.family((id: string) => {
                 ? null
                 : current.error,
         });
-        get.set(revision, get.once(revision) + 1);
       };
 
       return Effect.gen(function* () {
+        // A failed command read must not prevent an independent file refresh.
+        get.set(revision, get.once(revision) + 1);
         let commands = yield* json(`commands?${query(id, "")}`, Schema.Array(ShellCommand));
         const current = get.once(state);
 
@@ -511,6 +533,7 @@ export const workspace = Atom.family((id: string) => {
           Stream.runForEach((page) =>
             Effect.sync(() => {
               if ("_tag" in page) {
+                get.set(savedFromServer, page.saved);
                 get.set(commandRevision, get.once(commandRevision) + 1);
 
                 return;
