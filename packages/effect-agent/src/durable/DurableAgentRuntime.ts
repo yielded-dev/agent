@@ -1460,8 +1460,12 @@ interface PendingToolBatch {
 }
 
 type ProgressWriter = Effect.Success<ReturnType<typeof makeProgressWriter>>;
-type AttemptAppendContext = RunWriter & { readonly progress: ProgressWriter };
-type ProgressSession = RunStorageSession & AttemptAppendContext;
+type AttemptAppendContext = RunWriter;
+
+/** Progress reservations and publication belong to one Thread's owning scope. */
+class CurrentRunProgress extends Context.Service<CurrentRunProgress, ProgressWriter>()(
+  "@effect-agent/thread/CurrentRunProgress",
+) {}
 
 interface RunTiming {
   readonly startedAt: DateTime.Utc;
@@ -1483,7 +1487,7 @@ class CurrentRunStart extends Context.Service<
 
 type PublishSettlement = (
   batch: CanonicalBatch,
-) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
+) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure, CurrentRunProgress>;
 
 /** What the resuming worker knows about the ownership period it superseded (durability §9). */
 interface AttemptLineage {
@@ -2609,6 +2613,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   const activeProgress = new Map<ThreadId, { readonly writer: ProgressWriter }>();
 
+  const progressLayer = (threadId: ThreadId) =>
+    Layer.effect(
+      CurrentRunProgress,
+      makeProgressWriter(threadId, config.deploymentId).pipe(
+        Effect.provideContext(journalServices),
+      ),
+    );
+
   const withProgress = Effect.fnUntraced(function* (writer: RunWriter) {
     const active = activeProgress.get(writer.threadId);
 
@@ -2620,7 +2632,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     const owned: AttemptAppendContext = {
       ...writer,
-      progress,
       append: (batch) =>
         progress.commit(batch).pipe(
           Effect.provideService(CurrentRunWriter, writer),
@@ -2629,7 +2640,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         ),
     };
 
-    return { owned, progress };
+    return owned;
   });
 
   const attemptContextAtTail = (threadId: ThreadId) =>
@@ -2637,15 +2648,16 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       Effect.provideService(ThreadStore, store),
       Effect.provideService(StorageOwner, storageOwner),
       Effect.flatMap(withProgress),
-      Effect.map(({ owned }) => owned),
     );
 
   const withProgressSession = Effect.fnUntraced(function* (
     session: RunStorageSession,
     originalInput?: () => InitialContextInput | undefined,
   ) {
-    const { owned, progress } = yield* withProgress(session);
+    const progress = yield* CurrentRunProgress;
 
+    // Only a claimed session exposes live reservations to concurrent update writers. Recovery
+    // without a claim never retains an old Attempt's disposable progress into its successor.
     activeProgress.set(session.threadId, { writer: progress });
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
@@ -2656,10 +2668,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     const inputWriter = { ...session, append: session.appendInput };
 
-    const wrapped: ProgressSession = {
+    const wrapped: RunStorageSession = {
       ...session,
-      progress,
-      append: owned.append,
+      append: (batch) =>
+        progress.commit(batch).pipe(
+          Effect.provideService(CurrentRunWriter, session),
+          Effect.tapError(() => session.checkActive),
+        ),
       appendInput: (batch: CommitBatch) =>
         storageOwner.withProgress(
           session.threadId,
@@ -2748,8 +2763,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       authority: SettlementPublicationAuthority,
     ): PublishSettlement =>
     (batch) =>
-      Effect.suspend(() => {
-        return ctx.progress.publish(batch).pipe(
+      Effect.gen(function* () {
+        const progress = yield* CurrentRunProgress;
+
+        return yield* progress.publish(batch).pipe(
           Effect.provideService(CurrentRunSettlement, {
             threadId: ctx.threadId,
             tail: ctx.tail,
@@ -3503,7 +3520,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     ctx: AttemptAppendContext,
     hostSettlement: SubmissionSettledRecord,
     joined: RecoverySnapshot,
-  ): Effect.fn.Return<Settlement, DurableWorkerFailure> {
+  ): Effect.fn.Return<Settlement, DurableWorkerFailure, CurrentRunProgress> {
     const hostSubmissionId = hostSettlement.submissionId;
     const outcome = hostSettlement.outcome;
     const submission = joined.submission;
@@ -3556,7 +3573,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const settleJoinedSubmissions = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     hostSettlement: SubmissionSettledRecord,
-  ): Effect.fn.Return<void, DurableWorkerFailure> {
+  ): Effect.fn.Return<void, DurableWorkerFailure, CurrentRunProgress> {
     const hostSubmissionId = hostSettlement.submissionId;
 
     const snapshot = yield* ledger.loadRecoverySnapshot(
@@ -3588,7 +3605,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     outcome: AttemptOutcome,
     includeRunId: boolean,
     afterCanonical?: Effect.Effect<void, DurableWorkerFailure>,
-  ): Effect.fn.Return<Settlement, DurableWorkerFailure> {
+  ): Effect.fn.Return<Settlement, DurableWorkerFailure, CurrentRunProgress> {
     const submissionId = submission.submissionId;
     const settlementId = submissionSettlementId(submissionId);
 
@@ -3692,7 +3709,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     intent: AbortIntent,
     evidence: RecoveryEvidence,
     knownIds: Set<string>,
-  ): Effect.fn.Return<Settlement, DurableWorkerFailure> {
+  ): Effect.fn.Return<Settlement, DurableWorkerFailure, CurrentRunProgress> {
     if (!evidence.abortRecorded) {
       yield* appendAbortRecord(ctx, intent);
     }
@@ -4897,6 +4914,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       runTiming: RunTiming,
       yieldAfter?: DateTime.Utc,
     ) {
+      const progress = yield* CurrentRunProgress;
       const submissionId = submission.submissionId;
 
       const runId = runIdForSubmission(submissionId);
@@ -5225,7 +5243,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             (committedUnobservedCalls.get(payload.turn) ?? 0) + (payload.unobservedModelCalls ?? 0),
           );
         }
-        ctx.progress.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
+        progress.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
       };
 
       const uncommittedModelUsage = () =>
@@ -5577,7 +5595,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       // Infrastructure errors can be wrapped by broker/Tool APIs. The interpreter checks this
       // authority before semantic work; progress delivery is not a coordinator checkpoint.
-      const checkProgress = ctx.progress
+      const checkProgress = progress
         .check(runId)
         .pipe(Effect.provideService(CurrentRunWriter, ctx));
 
@@ -6091,16 +6109,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               if (commit._tag === "Response" && commit.defer !== true && response !== undefined) {
                 // This read-only preflight proves that no append or Tool dispatch began.
                 // Append failures and recovered declarations retain their existing uncertainty.
-                const admissible = yield* ctx.progress
-                  .preflight(yield* turnResponseBatch(input))
-                  .pipe(
-                    Effect.provideService(CurrentRunWriter, ctx),
-                    Effect.as(true),
-                    Effect.catchCauseIf(
-                      (cause) => isPersistenceCapacityCause(cause),
-                      () => Effect.succeed(false),
-                    ),
-                  );
+                const admissible = yield* progress.preflight(yield* turnResponseBatch(input)).pipe(
+                  Effect.provideService(CurrentRunWriter, ctx),
+                  Effect.as(true),
+                  Effect.catchCauseIf(
+                    (cause) => isPersistenceCapacityCause(cause),
+                    () => Effect.succeed(false),
+                  ),
+                );
 
                 if (!admissible) return "capacity-refused" as const;
               }
@@ -6177,7 +6193,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   }),
                 };
 
-                const batch = yield* ctx.progress.defer(candidate.batch).pipe(
+                const batch = yield* progress.defer(candidate.batch).pipe(
                   Effect.provideService(CurrentRunWriter, ctx),
                   Effect.asSome,
                   Effect.catchCauseIf(
@@ -6291,7 +6307,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   ),
                 );
 
-                return yield* ctx.progress
+                return yield* progress
                   .reserve(
                     runId,
                     CanonicalBatch.make({
@@ -6361,7 +6377,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             const prior = stagedUsage.get(key);
 
             stagedUsage.set(key, [...(prior ?? []), usage.usage]);
-            ctx.progress.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
+            progress.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
           }),
         commitCompaction: Effect.fnUntraced(function* (commit) {
           const canonicalTurn = commit.turn;
@@ -9004,7 +9020,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         return Option.some(settlement);
       }
     },
-    (effect) => effect.pipe(Effect.scoped),
+    (effect, _registeredAgent, storageSession) =>
+      effect.pipe(Effect.scoped, Effect.provide(progressLayer(storageSession.threadId))),
   );
 
   /** A missing current binding leaves both roots and children owed, with their claims released. */
@@ -9021,7 +9038,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       .pipe(
         Effect.flatMap((claimed) =>
           Option.isNone(claimed)
-            ? Effect.succeed(Option.none<ProgressSession>())
+            ? Effect.succeed(Option.none<RunStorageSession>())
             : withProgressSession(claimed.value).pipe(Effect.map(Option.some)),
         ),
       );
@@ -9300,7 +9317,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const claimFor = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     decision: RecoveryDecision,
-  ): Effect.fn.Return<Option.Option<ProgressSession>, DurableWorkerFailure, Scope.Scope> {
+  ): Effect.fn.Return<
+    Option.Option<RunStorageSession>,
+    DurableWorkerFailure,
+    Scope.Scope | CurrentRunProgress
+  > {
     const head = yield* eligibleThreadHead(submission.threadId);
 
     if (Option.isNone(head) || head.value.submissionId !== submission.submissionId)
@@ -9353,7 +9374,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     evidence: RecoveryEvidence,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     decision: SettleAbortedDecision,
-  ): Effect.fn.Return<"repaired" | "deferred", DurableWorkerFailure, Scope.Scope> {
+  ): Effect.fn.Return<
+    "repaired" | "deferred",
+    DurableWorkerFailure,
+    Scope.Scope | CurrentRunProgress
+  > {
     const intent = snapshot.abortIntent;
 
     if (intent === undefined) return "deferred";
@@ -9486,7 +9511,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     evidence: RecoveryEvidence,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     decision: MarkUnknownDecision,
-  ): Effect.fn.Return<"repaired" | "deferred" | "unknown", DurableWorkerFailure, Scope.Scope> {
+  ): Effect.fn.Return<
+    "repaired" | "deferred" | "unknown",
+    DurableWorkerFailure,
+    Scope.Scope | CurrentRunProgress
+  > {
     const submission = snapshot.submission;
     const claimed = yield* claimFor(submission, decision);
 
@@ -9629,7 +9658,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     snapshot: RecoverySnapshot,
     evidence: RecoveryEvidence,
     decision: RecoveryDecision,
-  ): Effect.fn.Return<"repaired" | "deferred", DurableWorkerFailure, Scope.Scope> {
+  ): Effect.fn.Return<
+    "repaired" | "deferred",
+    DurableWorkerFailure,
+    Scope.Scope | CurrentRunProgress
+  > {
     const submission = snapshot.submission;
 
     if (submission.state === "suspended") return "deferred";
@@ -9682,7 +9715,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   ): Effect.fn.Return<
     "repaired" | "deferred" | "none" | "unknown",
     DurableWorkerFailure,
-    Scope.Scope
+    Scope.Scope | CurrentRunProgress
   > {
     const submission = snapshot.submission;
     const runId = runIdForSubmission(submission.submissionId);
@@ -9811,7 +9844,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         // its input append. Recovery must not revert claims a live host is still consuming.
         const claimed =
           host.value.state === "settled"
-            ? Option.none<ProgressSession>()
+            ? Option.none<RunStorageSession>()
             : yield* claimFor(host.value, decision);
 
         if (host.value.state !== "settled" && Option.isNone(claimed)) return "deferred";
@@ -10256,7 +10289,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       decision._tag === "ApplyInput" && snapshot.submission.state === "ready"
         ? "deferred"
         : yield* Effect.scoped(
-            executeRecoveryDecision(snapshot, evidence, decision, history.records, history),
+            executeRecoveryDecision(snapshot, evidence, decision, history.records, history).pipe(
+              Effect.provide(progressLayer(submission.threadId)),
+            ),
           );
 
     return RecoveryReport.make({
@@ -12131,7 +12166,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
     const disposition = yield* Effect.scoped(
-      executeRecoveryDecision(snapshot, evidence, decision, read.records, read),
+      executeRecoveryDecision(snapshot, evidence, decision, read.records, read).pipe(
+        Effect.provide(progressLayer(submission.threadId)),
+      ),
     );
 
     yield* wake.notify(submission.threadId);
