@@ -50,7 +50,7 @@ const Handoff = Schema.Struct({
     Schema.makeFilter(
       (path: string) =>
         !path.startsWith("/") &&
-        !/[\\%]/u.test(path) &&
+        !path.includes("\\") &&
         Array.from(path).every((char) => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127) &&
         path
           .split("/")

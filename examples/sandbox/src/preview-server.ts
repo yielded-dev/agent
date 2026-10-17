@@ -34,10 +34,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         sent = False
         try:
             target = urllib.parse.urlsplit(self.path)
+            # Decode once; remaining percent signs are literal filename characters.
             path = urllib.parse.unquote(target.path, encoding='utf-8', errors='strict')
             if target.scheme or target.netloc or not path.startswith('/'):
                 raise ValueError()
-            if any(ord(c) < 32 or ord(c) == 127 for c in path) or '\\' in path or '%' in path:
+            if any(ord(c) < 32 or ord(c) == 127 for c in path) or '\\' in path:
                 raise ValueError()
             parts = [part for part in path.split('/') if part]
             if any(part in ('.', '..') or part.startswith('.sandbox-agent') for part in parts):
