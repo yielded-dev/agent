@@ -9,11 +9,7 @@ import {
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
-import {
-  type RunCompactionCommit,
-  type RunContextHook,
-  type RunDurabilityHook,
-} from "@yielded/agent/run-options";
+import { type RunContextHook } from "@yielded/agent/run-options";
 import * as AiError from "effect/ai/AiError";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
@@ -37,6 +33,10 @@ import {
   estimatePromptTokens,
   initialCompactionState,
 } from "../../src/engine/internal/compaction.ts";
+import {
+  type RunCompactionCommit,
+  type RunDurabilityHook,
+} from "../../src/engine/internal/interpreter-options.ts";
 import { RunContextPreparationPassthrough } from "../../src/engine/RunOptions.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 

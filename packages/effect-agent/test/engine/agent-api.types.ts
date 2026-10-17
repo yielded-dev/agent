@@ -8,12 +8,7 @@ import {
   type AgentCompletionProjectionRequirements,
 } from "@yielded/agent/agent-runtime";
 import { ModelCallContext } from "@yielded/agent/context-window";
-import {
-  AgentUpdateAcceptance,
-  ModelUsageAccounting,
-  type RunBufferLimits,
-  type RunContextHook,
-} from "@yielded/agent/run-options";
+import { type RunBufferLimits, type RunContextHook } from "@yielded/agent/run-options";
 import { type ThreadHistory } from "@yielded/agent/thread-history";
 import { RunToolVisibility } from "@yielded/agent/tool-exposure";
 import * as LanguageModel from "effect/ai/LanguageModel";
@@ -30,6 +25,10 @@ import * as Stream from "effect/Stream";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 import { streamWithUsageAccountingUnknown } from "../../src/engine/internal/agent-runtime.ts";
+import {
+  AgentUpdateAcceptance,
+  ModelUsageAccounting,
+} from "../../src/engine/internal/interpreter-options.ts";
 
 class Instructions extends Context.Service<Instructions, string>()("api-types/Instructions") {}
 class ProviderClient extends Context.Service<ProviderClient, string>()(

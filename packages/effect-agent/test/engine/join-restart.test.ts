@@ -225,7 +225,7 @@ it.live("charges aborted usage before admitting a replacement against the cost b
 
       const fiber = yield* AgentRuntime.run(agent, "first", {
         input: { awaitJoin: Deferred.await(joined), drain: () => Effect.succeed([]) },
-        estimateCostMicrousd: () => Effect.succeed(2),
+        estimateCostMicrousd: () => Effect.succeed({ costMicrousd: 2 }),
       }).pipe(
         Effect.exit,
         Effect.provide(

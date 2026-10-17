@@ -8,7 +8,6 @@ import { ModelCallContext } from "@yielded/agent/context-window";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
-import { type RunDurabilityHook } from "@yielded/agent/run-options";
 import { ToolResultBounds, TruncatedToolResult } from "@yielded/agent/tool-result";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
@@ -30,6 +29,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as AgentRuntime from "../../src/engine/internal/agent-runtime.ts";
+import { type RunDurabilityHook } from "../../src/engine/internal/interpreter-options.ts";
 import { RunContextPreparationPassthrough } from "../../src/engine/RunOptions.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 

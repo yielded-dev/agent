@@ -493,7 +493,7 @@ describe("review output boundary", () => {
         const outcome = yield* makeReviewer({
           model,
           guidance: "Keep the exact source contracts.",
-          estimateCostMicrousd: () => Effect.succeed(123),
+          estimateCostMicrousd: () => Effect.succeed({ costMicrousd: 123 }),
         })
           .review(input)
           .pipe(

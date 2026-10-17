@@ -5,7 +5,7 @@ import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
-import { RunContextPreparationPassthrough, type RunTurnResume } from "@yielded/agent/run-options";
+import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
 import type * as Response from "effect/ai/Response";
@@ -27,6 +27,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as AgentRuntime from "../../src/engine/internal/agent-runtime.ts";
+import { type RunTurnResume } from "../../src/engine/internal/interpreter-options.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 
 let threadSequence = 0;

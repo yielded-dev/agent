@@ -25,7 +25,7 @@ import {
   contextWindowId,
   contextWindowMessage,
 } from "../engine/Compaction.ts";
-import type { RunTurnToolResult } from "../engine/RunOptions.ts";
+import { type RunTurnToolResult } from "../engine/internal/interpreter-options.ts";
 import { digestJson } from "./Digest.ts";
 import {
   makeJournalMetadata,
