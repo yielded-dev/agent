@@ -13,6 +13,11 @@ export class Workspace extends Context.Service<
   Workspace,
   {
     readonly identity: { readonly path: string; readonly id: string };
+    readonly instanceId: Effect.Effect<string | null, SandboxOperationError>;
+    readonly bind: (
+      instanceId?: string,
+    ) => Effect.Effect<SessionSandbox["Service"], SandboxOperationError>;
+    readonly retain: (instanceId: string) => Effect.Effect<void, SandboxOperationError>;
     readonly open: Effect.Effect<SessionSandbox["Service"], SandboxOperationError>;
     readonly existing: Effect.Effect<SessionSandbox["Service"] | null, SandboxOperationError>;
     readonly inspect: Effect.Effect<
@@ -88,7 +93,16 @@ export class Workspace extends Context.Service<
         return exact;
       }).pipe(Effect.mapError(failure));
 
-      return Workspace.of({ identity, open, existing, inspect });
+      return Workspace.of({
+        identity,
+        open,
+        existing,
+        inspect,
+        instanceId: saved.pipe(Effect.mapError(failure)),
+        bind,
+        retain: (instanceId) =>
+          state.storage.kv.put("workspace-instance", instanceId).pipe(Effect.mapError(failure)),
+      });
     }),
   ).pipe(Layer.provide(NativeSandboxNamespace.layer({ binding: "SANDBOXES" })));
 }

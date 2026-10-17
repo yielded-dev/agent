@@ -22,6 +22,8 @@ export const WorkspacePage = Schema.Struct({
 });
 
 export const CODING_ADMISSION_GROUP = "sandbox-coding";
+export const SHELL_ACTIVE_KEY = "shell-active";
+export const SHELL_COMMAND_PREFIX = "shell-command:";
 
 export const ModelSettings = Schema.Struct({
   model: Schema.Literals(["gpt-6.1-sol", "gpt-6-astra"]),
@@ -140,9 +142,22 @@ export const WorkspaceEvent = Schema.Union([
   Schema.TaggedStruct("CommandHistoryChanged", {}),
 ]);
 
+export const SavedFiles = Schema.Struct({
+  savedAt: Schema.NullOr(Schema.Natural),
+  phase: Schema.Literals(["idle", "saving", "restoring"]),
+  saveFailed: Schema.Boolean,
+  restoreFailed: Schema.Boolean,
+});
+
+export const FileActionReply = Schema.Union([
+  Schema.Struct({ saved: SavedFiles }),
+  Schema.Struct({ error: Schema.String }),
+]);
+
 export const FileList = Schema.Struct({
   entries: Schema.Array(Schema.Struct({ path: Schema.String, directory: Schema.Boolean })),
   expired: Schema.Boolean,
+  saved: Schema.optionalKey(SavedFiles),
 });
 
 export const FileContent = Schema.Struct({

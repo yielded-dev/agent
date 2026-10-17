@@ -23,6 +23,7 @@ import {
   CommandAccepted,
   CommandInput,
   EventPage,
+  FileActionReply,
   LIVE_TEXT_THREAD_HEADER,
   MAX_INPUT_BYTES,
   MessageInput,
@@ -37,9 +38,11 @@ import { CodingThread } from "./runtime.ts";
 import { AccountWorkspaces } from "./workspaces.ts";
 
 export { CodingThread, AccountWorkspaces };
+export { DirectoryBackupGateway } from "@yielded/sandbox/cloudflare";
 
 const containerOptions = {
   namespaceBinding: "SANDBOXES",
+  backupBucketBinding: "BACKUPS",
   idleMillis: 1_800_000,
   allowedHosts: () => ["registry.npmjs.org"],
 };
@@ -54,6 +57,7 @@ declare global {
       WORKSPACES: DurableObjectNamespace<AccountWorkspaces>;
       SANDBOXES: DurableObjectNamespace<CodingSandbox>;
       ASSETS: Fetcher;
+      BACKUPS: R2Bucket;
       RUN_LIMIT: RateLimit;
       OPENAI_API_KEY: string;
       AUTH_YIELDED_CLIENT_SECRET: string;
@@ -350,6 +354,29 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     );
   }
 
+  if (
+    request.method === "POST" &&
+    ["/sandbox/api/save", "/sandbox/api/restore"].includes(url.pathname)
+  ) {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId })),
+    )(yield* boundedBody(request));
+
+    const limit = yield* Effect.promise(() => env.RUN_LIMIT.limit({ key: session.accountId }));
+
+    if (!limit.success) return json({ message: "Please wait before trying again." }, 429);
+
+    const reply = yield* Schema.decodeEffect(FileActionReply)(
+      yield* Effect.tryPromise(
+        async () =>
+          await env.THREADS.getByName(address(input.workspaceId)).fileAction(
+            url.pathname.endsWith("/save") ? "save" : "restore",
+          ),
+      ),
+    );
+
+    return "error" in reply ? json({ message: reply.error }, 409) : json(reply.saved, 202);
+  }
   if (request.method === "POST" && url.pathname === "/sandbox/api/recover") {
     const input = yield* Schema.decodeEffect(
       Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId })),
@@ -721,7 +748,9 @@ export default Worker.make(Layer.empty, {
                     ? "Wait for the current message to finish before sending another."
                     : error.code === "sandbox-shell-active"
                       ? "Wait for the current command to finish before messaging the agent."
-                      : "This workspace is not accepting new work.",
+                      : error.code === "sandbox-files-active"
+                        ? "Wait for workspace files to finish saving or restoring."
+                        : "This workspace is not accepting new work.",
             },
             error.reason === "unavailable" ? 503 : 409,
           ),

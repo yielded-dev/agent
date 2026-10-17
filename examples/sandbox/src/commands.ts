@@ -14,13 +14,20 @@ import { DurableObjectState } from "effect-cf";
 import { SqlClient } from "effect/sql";
 
 import type { CommandInput } from "./contract.ts";
-import { CODING_ADMISSION_GROUP, CommandRejected, ShellCommand } from "./contract.ts";
+import {
+  CODING_ADMISSION_GROUP,
+  CommandRejected,
+  SHELL_ACTIVE_KEY,
+  SHELL_COMMAND_PREFIX,
+  ShellCommand,
+} from "./contract.ts";
+import { snapshotBusy, snapshotLane, WorkspaceSnapshots } from "./snapshots.ts";
 import { Allocation, allocateCommand, executeCommand, readCommandOutput } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
 const lane = "sandbox-shell";
-const activeKey = "shell-active";
-const prefix = "shell-command:";
+const activeKey = SHELL_ACTIVE_KEY;
+const prefix = SHELL_COMMAND_PREFIX;
 const commandKey = (id: string) => `${prefix}${id}`;
 const limit = 100;
 const timeoutMs = 30_000;
@@ -61,11 +68,17 @@ const stoppedOutput = {
 export const commandAdmission = Layer.effect(
   SubmissionAdmissionFence,
   Effect.gen(function* () {
-    const { storage } = yield* DurableObjectState.DurableObjectState;
+    const state = yield* DurableObjectState.DurableObjectState;
+    const { storage } = state;
+
+    const filesBusy = snapshotBusy.pipe(
+      Effect.provideService(DurableObjectState.DurableObjectState, state),
+    );
 
     return SubmissionAdmissionFence.of({
       check: (request) =>
         storage.kv.get(activeKey).pipe(
+          Effect.flatMap((active) => filesBusy.pipe(Effect.map((saving) => ({ active, saving })))),
           Effect.mapError((cause) =>
             AdmissionPolicyError.make({
               reason: "unavailable",
@@ -73,7 +86,7 @@ export const commandAdmission = Layer.effect(
               cause,
             }),
           ),
-          Effect.flatMap((active) =>
+          Effect.flatMap(({ active, saving }) =>
             request.admissionFence !== undefined
               ? Effect.fail(
                   AdmissionPolicyError.make({ reason: "refused", code: "unsupported-policy" }),
@@ -82,12 +95,12 @@ export const commandAdmission = Layer.effect(
                 ? Effect.fail(
                     AdmissionPolicyError.make({ reason: "refused", code: "sandbox-reload" }),
                   )
-                : active === undefined
+                : active === undefined && !saving
                   ? Effect.void
                   : Effect.fail(
                       AdmissionPolicyError.make({
                         reason: "occupied",
-                        code: "sandbox-shell-active",
+                        code: saving ? "sandbox-files-active" : "sandbox-shell-active",
                       }),
                     ),
           ),
@@ -97,7 +110,13 @@ export const commandAdmission = Layer.effect(
 );
 
 const make = Effect.gen(function* () {
-  const { storage } = yield* DurableObjectState.DurableObjectState;
+  const state = yield* DurableObjectState.DurableObjectState;
+  const { storage } = state;
+
+  const filesBusy = snapshotBusy.pipe(
+    Effect.provideService(DurableObjectState.DurableObjectState, state),
+  );
+
   const { threadId } = yield* ThreadObjectIdentity;
   const mutations = yield* ThreadMutationGate;
   const work = yield* ThreadWorkDiscovery;
@@ -158,6 +177,7 @@ const make = Effect.gen(function* () {
             return publicCommand(existing);
           }
           if ((yield* storage.kv.get(activeKey)) !== undefined) return yield* busy();
+          if (yield* filesBusy) return yield* busy();
           yield* store.materialize(ThreadMaterialization.make({ threadId }));
           const pending = yield* work.page({ threadId, limit: 1 });
 
@@ -205,7 +225,7 @@ const make = Effect.gen(function* () {
 
         yield* save(saved);
         if (complete) yield* storage.kv.delete(activeKey);
-        yield* mutations.recordProgress([lane]);
+        yield* mutations.recordProgress(complete ? [lane, snapshotLane] : [lane]);
 
         return saved;
       }),
@@ -344,6 +364,7 @@ export const commandMaintenance = Layer.effect(
   Effect.gen(function* () {
     const commands = yield* ShellCommands;
     const workspace = yield* Workspace;
+    const snapshots = yield* WorkspaceSnapshots;
 
     return {
       lanes: [
@@ -351,6 +372,21 @@ export const commandMaintenance = Layer.effect(
           id: lane,
           dispatchTimeoutMillis: 45_000,
           run: commands.run.pipe(Effect.provideService(Workspace, workspace)),
+        },
+        {
+          id: snapshotLane,
+          phase: "after-native" as const,
+          dispatchTimeoutMillis: 45_000,
+          run: snapshots.run.pipe(
+            Effect.as(Option.none<number>()),
+            Effect.mapError((cause) =>
+              DurableAlarmError.make({
+                operation: "sandbox-files",
+                message: "The retained workspace file operation could not finish.",
+                cause,
+              }),
+            ),
+          ),
         },
       ],
     };
