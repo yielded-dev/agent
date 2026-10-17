@@ -1,7 +1,7 @@
 import { fetchWithSession } from "@yielded/agent-example-auth/client";
 import { decodeLiveText } from "@yielded/agent-platform-cloudflare/live-text";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 
 import {
@@ -13,6 +13,7 @@ import {
   LIVE_TEXT_THREAD_HEADER,
   MessageInput,
   ModelSettings,
+  PreviewSession,
   RecoveryResult,
   SandboxError,
   SavedFiles,
@@ -305,9 +306,34 @@ export const workspace = Atom.family((id: string) => {
     })
     .pipe(runtime.factory.withReactivity([filesKey]));
 
+  const preparePreview = runtime.fn<void>()(
+    Effect.fnUntraced(function* (_, get) {
+      if (get(expired) || get(fileOperation) !== "idle")
+        return yield* problem("Wait for a live workspace before preparing its preview.");
+
+      return yield* json("preview", PreviewSession, { workspaceId: id });
+    }),
+  );
+
+  const preview = Atom.make((get) => {
+    const result = get(preparePreview);
+
+    if (!AsyncResult.isSuccess(result) || result.waiting) return null;
+    const remaining = result.value.expiresAt - DateTime.toEpochMillis(DateTime.nowUnsafe());
+
+    if (remaining <= 0) return null;
+    const timer = setTimeout(() => get.refreshSelf(), remaining);
+
+    get.addFinalizer(() => clearTimeout(timer));
+
+    return result.value;
+  });
+
   const fileAction = (action: "restore" | "save") =>
     runtime.fn<void>()(
       Effect.fnUntraced(function* (_, get) {
+        if (action === "restore") get.set(preparePreview, Atom.Reset);
+
         // Invalidate before awaiting files; runtime.fn reactivity keys run after this workflow.
         const result = yield* Reactivity.mutation(json(action, SavedFiles, { workspaceId: id }), [
           filesKey,
@@ -968,6 +994,8 @@ export const workspace = Atom.family((id: string) => {
     saved,
     expired,
     file,
+    preparePreview,
+    preview,
     restore,
     save,
     fileOperation,

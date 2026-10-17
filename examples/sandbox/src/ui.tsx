@@ -703,12 +703,17 @@ function Files({ id }: { id: string }) {
   const state = useAtomValue(atoms.state);
   const [restored, restore] = useAtom(atoms.restore);
   const [savedResult, save] = useAtom(atoms.save);
+  const [preparedPreview, preparePreview] = useAtom(atoms.preparePreview);
+  const preview = useAtomValue(atoms.preview);
   const refresh = useAtomSet(atoms.refresh);
   const listing = AsyncResult.getOrElse(files, () => null);
   const savedAt = saved?.savedAt ?? null;
   const hasSavedFiles = savedAt !== null;
   const restoreFailed = saved?.restoreFailed && !restored.waiting;
   const saveFailed = saved?.saveFailed && !savedResult.waiting;
+
+  const canPreview =
+    selected !== null && /\.html?$/i.test(selected) && listing !== null && !expired;
 
   const canSave =
     listing !== null &&
@@ -847,7 +852,69 @@ function Files({ id }: { id: string }) {
             ))}
         </nav>
         <div className="viewer">
-          <div className="file-tab">{selected ?? "File viewer"}</div>
+          <div className="file-tab shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span
+                className="min-w-0 flex-1 truncate max-sm:basis-full"
+                title={selected ?? undefined}
+              >
+                {selected ?? "File viewer"}
+              </span>
+              {canPreview &&
+                (preview !== null ? (
+                  <form
+                    className="ml-auto shrink-0 border-0 bg-transparent p-0"
+                    action={preview.url}
+                    method="post"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    <input type="hidden" name="token" value={preview.token} />
+                    <input type="hidden" name="expiresAt" value={preview.expiresAt} />
+                    <input type="hidden" name="path" value={selected} />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="sm"
+                      disabled={fileOperation !== "idle"}
+                    >
+                      Open preview <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                      <span className="sr-only">in a new tab</span>
+                    </Button>
+                  </form>
+                ) : (
+                  <Button
+                    className="ml-auto"
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={preparedPreview.waiting || fileOperation !== "idle"}
+                    onClick={() => preparePreview()}
+                  >
+                    {preparedPreview.waiting
+                      ? "Preparing…"
+                      : AsyncResult.isFailure(preparedPreview)
+                        ? "Retry preview"
+                        : AsyncResult.isSuccess(preparedPreview)
+                          ? "Refresh preview"
+                          : "Prepare preview"}
+                  </Button>
+                ))}
+            </div>
+            {canPreview && !preparedPreview.waiting && AsyncResult.isFailure(preparedPreview) && (
+              <p className="mt-2 text-destructive" role="alert">
+                Could not prepare preview. Try again.
+              </p>
+            )}
+            {canPreview &&
+              preview === null &&
+              !preparedPreview.waiting &&
+              AsyncResult.isSuccess(preparedPreview) && (
+                <p className="mt-2 text-muted-foreground" role="status">
+                  Preview expired. Refresh to open it again.
+                </p>
+              )}
+          </div>
           {selected === null ? (
             <p className="viewer-message muted">
               Select a file to read its contents.
