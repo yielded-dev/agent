@@ -242,7 +242,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     headers.set("referrer-policy", "strict-origin-when-cross-origin");
     headers.set(
       "content-security-policy",
-      `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.${env.PREVIEW_DOMAIN}`,
+      `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-src https://*.${env.PREVIEW_DOMAIN}; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.${env.PREVIEW_DOMAIN}`,
     );
 
     return new Response(asset.body, { status: asset.status, headers });

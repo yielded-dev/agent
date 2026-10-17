@@ -19,9 +19,9 @@ import {
 import { DateTime } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { ArrowLeft, ArrowUpRight, Check, FolderCode, LoaderCircle } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 
-import { type Entry, type ShellCommand } from "./contract";
+import { type Entry, type PreviewSession, type ShellCommand } from "./contract";
 import { signIn } from "./location";
 import { location, newWorkspace, workspace, workspaceList } from "./state";
 
@@ -94,12 +94,19 @@ function Account({ subject, signOut }: { subject: string; signOut: () => void })
     <div className="app">
       <header>
         <Brand />
-        <Button variant="outline" onClick={signOut}>
-          Sign out
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {route.page === "workspace" ? (
+            <WorkspaceActions key={route.id} id={route.id} />
+          ) : (
+            <CreateWorkspace />
+          )}
+          <Button variant="outline" size="sm" onClick={signOut}>
+            Sign out
+          </Button>
+        </div>
       </header>
       {route.page === "workspace" ? (
-        <AccountWorkspace key={route.id} id={route.id} />
+        <Workspace key={route.id} id={route.id} />
       ) : route.page === "list" ? (
         <WorkspaceList subject={subject} />
       ) : (
@@ -117,7 +124,12 @@ function CreateWorkspace({ disabled = false }: { disabled?: boolean }) {
 
   return (
     <div>
-      <Button variant="outline" disabled={disabled || result.waiting} onClick={() => create()}>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={disabled || result.waiting}
+        onClick={() => create()}
+      >
         {result.waiting ? "Creating…" : "＋ New workspace"}
       </Button>
       {AsyncResult.isFailure(result) && !result.waiting && (
@@ -139,12 +151,9 @@ function WorkspaceList({ subject }: { subject: string }) {
 
   return (
     <main className="mx-auto max-w-4xl pb-10">
-      <div className="heading">
-        <div>
-          <small>SANDBOX</small>
-          <h1>Your workspaces</h1>
-        </div>
-        <CreateWorkspace />
+      <div className="mt-7">
+        <small>SANDBOX</small>
+        <h1>Your workspaces</h1>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">{workspaceDescription}</p>
       <div className="my-6 flex items-center justify-between gap-3">
@@ -221,7 +230,7 @@ function WorkspaceList({ subject }: { subject: string }) {
   );
 }
 
-function AccountWorkspace({ id }: { id: string }) {
+function WorkspaceActions({ id }: { id: string }) {
   // Atom.family caches bundles weakly; retain this workspace while it is mounted.
   const atoms = useMemo(() => workspace(id), [id]);
   const state = useAtomValue(atoms.state);
@@ -230,23 +239,10 @@ function AccountWorkspace({ id }: { id: string }) {
 
   return (
     <>
-      <div className="heading">
-        <div>
-          <Button
-            className="-ml-2.5"
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onClick={() => navigate(null)}
-          >
-            <ArrowLeft className="size-3.5" /> Your workspaces
-          </Button>
-          <h1>Make something work.</h1>
-        </div>
-        <CreateWorkspace disabled={busy} />
-      </div>
-      <p className="muted">{workspaceDescription}</p>
-      <Workspace key={id} id={id} />
+      <Button variant="ghost" size="sm" disabled={busy} onClick={() => navigate(null)}>
+        <ArrowLeft className="size-3.5" /> Your workspaces
+      </Button>
+      <CreateWorkspace disabled={busy} />
     </>
   );
 }
@@ -705,6 +701,8 @@ function Files({ id }: { id: string }) {
   const [savedResult, save] = useAtom(atoms.save);
   const [preparedPreview, preparePreview] = useAtom(atoms.preparePreview);
   const preview = useAtomValue(atoms.preview);
+  const fileView = useAtomValue(atoms.fileView);
+  const changeFileView = useAtomSet(atoms.changeFileView);
   const refresh = useAtomSet(atoms.refresh);
   const listing = AsyncResult.getOrElse(files, () => null);
   const savedAt = saved?.savedAt ?? null;
@@ -860,62 +858,93 @@ function Files({ id }: { id: string }) {
               >
                 {selected ?? "File viewer"}
               </span>
-              {canPreview &&
-                (preview !== null ? (
-                  <form
-                    className="ml-auto shrink-0 border-0 bg-transparent p-0"
-                    action={preview.url}
-                    method="post"
-                    target="_blank"
-                    rel="noopener"
+              {canPreview && (
+                <div className="flex items-center gap-2">
+                  <div
+                    className="flex rounded-md border border-border p-0.5"
+                    role="group"
+                    aria-label="File view"
                   >
-                    <input type="hidden" name="token" value={preview.token} />
-                    <input type="hidden" name="expiresAt" value={preview.expiresAt} />
-                    <input type="hidden" name="path" value={selected} />
                     <Button
-                      type="submit"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs aria-pressed:bg-muted"
+                      aria-pressed={fileView === "source"}
+                      onClick={() => changeFileView("source")}
+                    >
+                      Source
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs aria-pressed:bg-muted"
+                      aria-pressed={fileView === "preview"}
+                      disabled={fileOperation !== "idle"}
+                      onClick={() => changeFileView("preview")}
+                    >
+                      Preview
+                    </Button>
+                  </div>
+                  {preview !== null && (
+                    <form
+                      className="shrink-0 border-0 bg-transparent p-0"
+                      action={preview.url}
+                      method="post"
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      <input type="hidden" name="token" value={preview.token} />
+                      <input type="hidden" name="expiresAt" value={preview.expiresAt} />
+                      <input type="hidden" name="path" value={selected} />
+                      <Button
+                        type="submit"
+                        variant="ghost"
+                        size="sm"
+                        disabled={fileOperation !== "idle"}
+                        aria-label="Open preview in a new tab"
+                        title="Open preview in a new tab"
+                      >
+                        <ArrowUpRight className="size-4" aria-hidden="true" />
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          {canPreview && fileView === "preview" ? (
+            preview !== null ? (
+              <FilePreview preview={preview} path={selected} />
+            ) : (
+              <div className="viewer-message space-y-3 text-center">
+                {preparedPreview.waiting ? (
+                  <p role="status">Preparing preview…</p>
+                ) : (
+                  <>
+                    <p role={AsyncResult.isFailure(preparedPreview) ? "alert" : "status"}>
+                      {AsyncResult.isFailure(preparedPreview)
+                        ? "Could not prepare preview. Try again."
+                        : AsyncResult.isSuccess(preparedPreview)
+                          ? "Preview expired. Refresh to open it again."
+                          : "Open a preview of this file."}
+                    </p>
+                    <Button
                       variant="outline"
                       size="sm"
                       disabled={fileOperation !== "idle"}
+                      onClick={() => preparePreview()}
                     >
-                      Open preview <ArrowUpRight className="size-3.5" aria-hidden="true" />
-                      <span className="sr-only">in a new tab</span>
-                    </Button>
-                  </form>
-                ) : (
-                  <Button
-                    className="ml-auto"
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={preparedPreview.waiting || fileOperation !== "idle"}
-                    onClick={() => preparePreview()}
-                  >
-                    {preparedPreview.waiting
-                      ? "Preparing…"
-                      : AsyncResult.isFailure(preparedPreview)
+                      {AsyncResult.isFailure(preparedPreview)
                         ? "Retry preview"
                         : AsyncResult.isSuccess(preparedPreview)
                           ? "Refresh preview"
                           : "Prepare preview"}
-                  </Button>
-                ))}
-            </div>
-            {canPreview && !preparedPreview.waiting && AsyncResult.isFailure(preparedPreview) && (
-              <p className="mt-2 text-destructive" role="alert">
-                Could not prepare preview. Try again.
-              </p>
-            )}
-            {canPreview &&
-              preview === null &&
-              !preparedPreview.waiting &&
-              AsyncResult.isSuccess(preparedPreview) && (
-                <p className="mt-2 text-muted-foreground" role="status">
-                  Preview expired. Refresh to open it again.
-                </p>
-              )}
-          </div>
-          {selected === null ? (
+                    </Button>
+                  </>
+                )}
+              </div>
+            )
+          ) : selected === null ? (
             <p className="viewer-message muted">
               Select a file to read its contents.
               <br />
@@ -944,5 +973,30 @@ function Files({ id }: { id: string }) {
       </div>
       <footer>Read-only file viewer · Files saved after work settles</footer>
     </section>
+  );
+}
+
+function FilePreview({ preview, path }: { preview: typeof PreviewSession.Type; path: string }) {
+  const frameName = useId();
+  const form = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    form.current?.requestSubmit();
+  }, [preview, path]);
+
+  return (
+    <>
+      <iframe
+        className="min-h-0 w-full flex-1 border-0 bg-white"
+        name={frameName}
+        title={`Preview of ${path}`}
+        sandbox="allow-scripts allow-same-origin"
+      />
+      <form ref={form} action={preview.url} method="post" target={frameName} hidden>
+        <input type="hidden" name="token" value={preview.token} />
+        <input type="hidden" name="expiresAt" value={preview.expiresAt} />
+        <input type="hidden" name="path" value={path} />
+      </form>
+    </>
   );
 }

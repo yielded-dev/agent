@@ -73,21 +73,6 @@ class RequestRejected extends Schema.TaggedError<RequestRejected>()("PreviewRequ
 const failure = (cause: unknown) =>
   new SandboxOperationError({ operation: "preview.proxy", cause });
 
-const secureHeaders = {
-  "cache-control": "private, no-store",
-  "referrer-policy": "no-referrer",
-  "x-content-type-options": "nosniff",
-  "x-frame-options": "DENY",
-  "cross-origin-opener-policy": "same-origin",
-  "cross-origin-resource-policy": "same-origin",
-  "origin-agent-cluster": "?1",
-  "content-security-policy":
-    "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'none'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; sandbox allow-scripts allow-same-origin",
-};
-
-const response = (status: number, headers?: Record<string, string>) =>
-  new Response(null, { status, headers: { ...secureHeaders, ...headers } });
-
 const readHandoff = Effect.fnUntraced(function* (request: Request) {
   if (
     request.headers.get("content-type")?.split(";", 1)[0]?.trim() !==
@@ -149,6 +134,19 @@ export class WorkspacePreviewProxy extends Context.Service<
       Effect.gen(function* () {
         const config = yield* Schema.decodeEffect(Configuration)(configuration);
         const namespace = yield* NativeSandboxNamespace;
+
+        const secureHeaders = {
+          "cache-control": "private, no-store",
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-resource-policy": "same-origin",
+          "origin-agent-cluster": "?1",
+          "content-security-policy": `default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'none'; object-src 'none'; frame-src 'none'; frame-ancestors ${config.applicationOrigin}; base-uri 'self'; form-action 'none'; sandbox allow-scripts allow-same-origin`,
+        };
+
+        const response = (status: number, headers?: Record<string, string>) =>
+          new Response(null, { status, headers: { ...secureHeaders, ...headers } });
 
         const originForHash = (hash: string) =>
           `https://p-${hash.slice(0, 32)}.${config.previewDomain}`;

@@ -329,6 +329,14 @@ export const workspace = Atom.family((id: string) => {
     return result.value;
   });
 
+  const fileView = Atom.make<"source" | "preview">("source");
+
+  const changeFileView = Atom.fnSync((view: "source" | "preview", get) => {
+    get.set(fileView, view);
+    if (view === "preview" && get(preview) === null && !get(preparePreview).waiting)
+      get.set(preparePreview, undefined);
+  });
+
   const fileAction = (action: "restore" | "save") =>
     runtime.fn<void>()(
       Effect.fnUntraced(function* (_, get) {
@@ -996,6 +1004,8 @@ export const workspace = Atom.family((id: string) => {
     file,
     preparePreview,
     preview,
+    fileView,
+    changeFileView,
     restore,
     save,
     fileOperation,
