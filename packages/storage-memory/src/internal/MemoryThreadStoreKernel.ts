@@ -27,12 +27,19 @@ import type {
 } from "@yielded/agent/thread-work";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
-import type * as Result from "effect/Result";
 import type * as Stream from "effect/Stream";
 
 export interface PreparedMemoryAppend {
   readonly request: PreparedAppend;
   readonly batchJson: string;
+}
+
+/** Hold the mutation gate from preparation through synchronous publication and notification. */
+export interface PreparedMemoryCommit {
+  readonly result: AppendResult;
+  /** All validation is complete; publish once, together with any paired ledger mutation. */
+  readonly publish: () => void;
+  readonly notify: Effect.Effect<void>;
 }
 
 /** Private storage, not a whole-Thread preparation value. Publication callbacks never yield. */
@@ -144,9 +151,10 @@ export class MemoryThreadStoreKernel extends Context.Service<
     ) => Effect.Effect<PreparedMemoryAppend, ThreadStoreFailure>;
     readonly appendPrepared: (
       prepared: PreparedMemoryAppend,
-      /** Validate before mutation; the returned publication never yields or rejects. */
-      preparePublication?: (result: AppendResult) => Result.Result<() => void, ThreadStoreFailure>,
     ) => Effect.Effect<AppendResult, ThreadStoreFailure>;
+    readonly prepareCommit: (
+      prepared: PreparedMemoryAppend,
+    ) => Effect.Effect<PreparedMemoryCommit, ThreadStoreFailure>;
     readonly record: (
       threadId: ThreadId,
       recordId: RecordId,

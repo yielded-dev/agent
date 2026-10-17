@@ -140,7 +140,6 @@ import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -153,6 +152,7 @@ import {
   type MemoryDeliveryImport,
   type MemoryWorkOwner,
   type PreparedMemoryAppend,
+  type PreparedMemoryCommit,
 } from "./internal/MemoryThreadStoreKernel.ts";
 import { boundedWorkSelection } from "./internal/WorkSelection.ts";
 
@@ -712,17 +712,6 @@ const prepareIndexes = (
   };
 };
 
-type AppendDecision =
-  | {
-      readonly _tag: "failure";
-      readonly error: ThreadStoreFailure;
-    }
-  | {
-      readonly _tag: "success";
-      readonly result: AppendResult;
-      readonly records: ReadonlyArray<CanonicalRecordEnvelope>;
-    };
-
 type MaterializeDecision =
   | { readonly _tag: "failure"; readonly error: ThreadStoreError }
   | { readonly _tag: "success" };
@@ -1207,11 +1196,11 @@ const makeThreadStore = Effect.gen(function* () {
     return { request, batchJson };
   });
 
-  const appendPrepared = Effect.fnUntraced(function* (
-    { request, batchJson }: PreparedMemoryAppend,
-    preparePublication?: (result: AppendResult) => Result.Result<() => void, ThreadStoreFailure>,
-  ) {
-    // Every caller holds the shared kernel mutation gate across validation and Ref publication.
+  const prepareCommit = Effect.fnUntraced(function* ({
+    request,
+    batchJson,
+  }: PreparedMemoryAppend): Effect.fn.Return<PreparedMemoryCommit, ThreadStoreFailure> {
+    // Every caller holds the shared kernel mutation gate across validation and publication.
     const current = yield* Ref.get(state);
     const thread = current.threads.get(request.threadId);
 
@@ -1333,153 +1322,86 @@ const makeThreadStore = Effect.gen(function* () {
           ).pipe(Effect.provideService(Crypto.Crypto, crypto))
         : undefined;
 
-    const decision = yield* Effect.uninterruptible(
-      Ref.modify(state, (current): readonly [AppendDecision, MemoryState] => {
-        const thread = current.threads.get(request.threadId);
-
-        if (thread === undefined) {
-          return [
-            {
-              _tag: "failure",
-              error: ThreadNotMaterialized.make({
-                threadId: request.threadId,
-              }),
-            },
-            current,
-          ];
-        }
-        const priorExecution = latestIntent;
-
-        if (priorExecution !== undefined) {
-          if (priorExecution.intent !== executionIntent)
-            return [
-              {
-                _tag: "failure",
-                error: AppendConflict.make({
-                  threadId: request.threadId,
-                  batchId: request.batch.batchId,
-                  reason: "batch-content",
-                }),
-              },
-              current,
-            ];
-
-          const result = AppendResult.make({ ...priorExecution.result, replayed: true });
-          const publication = preparePublication?.(result);
-
-          if (publication !== undefined && Result.isFailure(publication))
-            return [{ _tag: "failure", error: publication.failure }, current];
-          publication?.success();
-
-          return [
-            {
-              _tag: "success",
-              result,
-              records: [],
-            },
-            current,
-          ];
-        }
-        const previous = thread.batches.get(request.batch.batchId);
-
-        if (previous !== undefined) {
-          if (previous.batchJson !== batchJson) {
-            return [
-              {
-                _tag: "failure",
-                error: AppendConflict.make({
-                  threadId: request.threadId,
-                  batchId: request.batch.batchId,
-                  reason: "batch-content",
-                }),
-              },
-              current,
-            ];
-          }
-
-          const result = AppendResult.make({
-            firstSequence: previous.result.firstSequence,
-            lastSequence: previous.result.lastSequence,
-            replayed: true,
-          });
-
-          const publication = preparePublication?.(result);
-
-          if (publication !== undefined && Result.isFailure(publication))
-            return [{ _tag: "failure", error: publication.failure }, current];
-          publication?.success();
-
-          return [
-            {
-              _tag: "success",
-              result,
-              records: [],
-            },
-            current,
-          ];
-        }
-        if (request.expectedTailSequence !== thread.tailSequence) {
-          return [
-            {
-              _tag: "failure",
-              error: AppendConflict.make({
-                threadId: request.threadId,
-                batchId: request.batch.batchId,
-                reason: "tail",
-                actualTailSequence: thread.tailSequence,
-              }),
-            },
-            current,
-          ];
-        }
-        const batchRecordIds = new Set<RecordId>();
-
-        for (const record of request.batch.records) {
-          if (thread.byId.has(record.recordId) || batchRecordIds.has(record.recordId)) {
-            return [
-              {
-                _tag: "failure",
-                error: AppendConflict.make({
-                  threadId: request.threadId,
-                  batchId: request.batch.batchId,
-                  reason: "record-identity",
-                }),
-              },
-              current,
-            ];
-          }
-          batchRecordIds.add(record.recordId);
-        }
-
-        const records = batchEnvelopes(
-          request.threadId,
-          request.batch,
-          decodeCanonicalSequence(thread.tailSequence + 1),
-        );
-
-        const lastSequence = decodeCanonicalSequence(thread.tailSequence + records.length);
-
-        const result = AppendResult.make({
-          firstSequence: decodeCanonicalSequence(
-            thread.tailSequence + (records.length > 0 ? 1 : 0),
-          ),
-          lastSequence,
-          replayed: false,
+    if (thread === undefined)
+      return yield* ThreadNotMaterialized.make({ threadId: request.threadId });
+    if (latestIntent !== undefined) {
+      if (latestIntent.intent !== executionIntent)
+        return yield* AppendConflict.make({
+          threadId: request.threadId,
+          batchId: request.batch.batchId,
+          reason: "batch-content",
         });
 
-        const indexes = prepareIndexes(thread, records);
+      return {
+        result: AppendResult.make({ ...latestIntent.result, replayed: true }),
+        publish: () => {},
+        notify: Effect.void,
+      };
+    }
+    const previous = thread.batches.get(request.batch.batchId);
 
-        const next: StoredThread = {
-          ...thread,
-          ...indexes.indexes,
-          tailSequence: lastSequence,
-        };
+    if (previous !== undefined) {
+      if (previous.batchJson !== batchJson)
+        return yield* AppendConflict.make({
+          threadId: request.threadId,
+          batchId: request.batch.batchId,
+          reason: "batch-content",
+        });
 
-        const publication = preparePublication?.(result);
+      return {
+        result: AppendResult.make({
+          firstSequence: previous.result.firstSequence,
+          lastSequence: previous.result.lastSequence,
+          replayed: true,
+        }),
+        publish: () => {},
+        notify: Effect.void,
+      };
+    }
+    if (request.expectedTailSequence !== thread.tailSequence)
+      return yield* AppendConflict.make({
+        threadId: request.threadId,
+        batchId: request.batch.batchId,
+        reason: "tail",
+        actualTailSequence: thread.tailSequence,
+      });
+    const batchRecordIds = new Set<RecordId>();
 
-        if (publication !== undefined && Result.isFailure(publication))
-          return [{ _tag: "failure", error: publication.failure }, current];
+    for (const record of request.batch.records) {
+      if (thread.byId.has(record.recordId) || batchRecordIds.has(record.recordId))
+        return yield* AppendConflict.make({
+          threadId: request.threadId,
+          batchId: request.batch.batchId,
+          reason: "record-identity",
+        });
+      batchRecordIds.add(record.recordId);
+    }
 
+    const records = batchEnvelopes(
+      request.threadId,
+      request.batch,
+      decodeCanonicalSequence(thread.tailSequence + 1),
+    );
+
+    const lastSequence = decodeCanonicalSequence(thread.tailSequence + records.length);
+
+    const result = AppendResult.make({
+      firstSequence: decodeCanonicalSequence(thread.tailSequence + (records.length > 0 ? 1 : 0)),
+      lastSequence,
+      replayed: false,
+    });
+
+    const indexes = prepareIndexes(thread, records);
+
+    const next: StoredThread = {
+      ...thread,
+      ...indexes.indexes,
+      tailSequence: lastSequence,
+    };
+
+    return {
+      result,
+      publish: () => {
         // Every rejection and asynchronous validation precedes this synchronous publication.
         if (records.length > 0) {
           thread.batches.set(request.batch.batchId, { result, batchJson });
@@ -1504,21 +1426,17 @@ const makeThreadStore = Effect.gen(function* () {
         indexes.commit();
         if (preparedWork !== undefined) publishWork(request.threadId, preparedWork());
         current.threads.set(request.threadId, next);
-        publication?.success();
+      },
+      notify: records.length > 0 ? Effect.asVoid(PubSub.publish(updates, undefined)) : Effect.void,
+    };
+  });
 
-        return [{ _tag: "success", result, records }, current];
-      }).pipe(
-        Effect.tap((decision) =>
-          decision._tag === "success" && decision.records.length > 0
-            ? PubSub.publish(updates, undefined)
-            : Effect.void,
-        ),
-      ),
-    );
+  const appendPrepared = Effect.fnUntraced(function* (prepared: PreparedMemoryAppend) {
+    const commit = yield* prepareCommit(prepared);
 
-    if (decision._tag === "failure") return yield* decision.error;
+    yield* Effect.uninterruptible(Effect.sync(commit.publish).pipe(Effect.andThen(commit.notify)));
 
-    return decision.result;
+    return commit.result;
   });
 
   const append: ThreadStore["Service"]["append"] = Effect.fn("MemoryThreadStore.append")(
@@ -2912,6 +2830,7 @@ const makeThreadStore = Effect.gen(function* () {
         ),
       prepareAppend,
       appendPrepared,
+      prepareCommit,
       record: (threadId, recordId) =>
         Ref.get(state).pipe(
           Effect.map((current) => current.threads.get(threadId)?.byId.get(recordId)?.record),

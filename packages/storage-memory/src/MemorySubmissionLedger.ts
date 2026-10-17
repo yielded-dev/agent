@@ -1284,32 +1284,35 @@ const makeSubmissionLedger = Effect.fnUntraced(
                   message: "Original input belongs to another Thread",
                 });
 
-              return yield* journal.appendPrepared(prepared, (result) => {
-                const update = prepareInputApplied(
-                  current,
-                  MarkInputAppliedRequest.make({
-                    submissionId,
-                    recordId: record.recordId,
-                    sequence: result.firstSequence,
-                  }),
-                );
+              const commit = yield* journal.prepareCommit(prepared);
 
-                if (update._tag === "failure")
-                  return Result.fail(
-                    update.error._tag === "OwnershipLost"
-                      ? update.error
-                      : ThreadStoreError.make({
-                          operation,
-                          message: update.error.message,
-                          cause: update.error,
-                        }),
-                  );
+              const update = prepareInputApplied(
+                current,
+                MarkInputAppliedRequest.make({
+                  submissionId,
+                  recordId: record.recordId,
+                  sequence: commit.result.firstSequence,
+                }),
+              );
 
-                return Result.succeed(() => {
+              if (update._tag === "failure")
+                return yield* update.error._tag === "OwnershipLost"
+                  ? update.error
+                  : ThreadStoreError.make({
+                      operation,
+                      message: update.error.message,
+                      cause: update.error,
+                    });
+
+              yield* Effect.uninterruptible(
+                Effect.sync(() => {
+                  commit.publish();
                   if (update.value !== undefined)
                     MutableRef.set(state.ref, withSubmission(current, update.value));
-                });
-              });
+                }).pipe(Effect.andThen(commit.notify)),
+              );
+
+              return commit.result;
             }),
           ),
         );

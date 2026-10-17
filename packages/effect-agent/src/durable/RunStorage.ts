@@ -154,7 +154,7 @@ export class RunStorage extends Context.Service<
   }
 >()("@effect-agent/thread/RunStorage") {}
 
-/** Check captured input publication shape; adapters still enforce ownership atomically. */
+/** Check captured input publication and its checkpoint reference; adapters enforce ownership atomically. */
 export const validateInputPublication = Effect.fnUntraced(function* (
   submissionId: SubmissionId,
   request: PreparedAppend,
@@ -175,6 +175,7 @@ export const validateInputPublication = Effect.fnUntraced(function* (
     record.payload.runId !== runIdForSubmission(submissionId) ||
     record.recordId !== submissionInputRecordId(submissionId) ||
     request.batch.batchId !== submissionInputBatchId(submissionId) ||
+    request.executions[0]?.checkpoint.progress.originalInput.recordId !== record.recordId ||
     (context?.payload._tag === "RunContextRecorded" &&
       context.payload.historyThrough !== request.expectedTailSequence)
   )
