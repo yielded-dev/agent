@@ -6,7 +6,10 @@
   "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   "workers_dev": false,
   "preview_urls": false,
-  "routes": [{ "pattern": "agent.yielded.dev/sandbox*", "zone_name": "yielded.dev" }],
+  "routes": [
+    { "pattern": "agent.yielded.dev/sandbox*", "zone_name": "yielded.dev" },
+    { "pattern": "*.sandbox-preview.yielded.dev/*", "zone_name": "yielded.dev" },
+  ],
   "assets": { "directory": "dist", "binding": "ASSETS", "run_worker_first": true },
   "durable_objects": {
     "bindings": [
@@ -40,5 +43,6 @@
     "AUTH_REQUIRED_SCOPE": "agent:sandbox",
     "AUTH_HOSTED_MODEL_SCOPE": "agent:hosted-model",
     "SANDBOX_MAX_INSTANCES": "4",
+    "PREVIEW_DOMAIN": "sandbox-preview.yielded.dev",
   },
 }

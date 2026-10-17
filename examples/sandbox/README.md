@@ -46,6 +46,13 @@ workspaces without a saved snapshot cannot recover files that have already expir
 Commands have no production credentials; network access is limited to the public npm
 registry. The host caps concurrent containers at four.
 
+Select an HTML file in the file viewer to prepare and open a preview. It serves the
+workspace's HTML, scripts, CSS and images in a separate tab and origin, using
+Sandbox's native forwarding. External assets and dev servers are not supported.
+Preview access lasts up to 15 minutes; preparing it again replaces the previous grant.
+It permits reading workspace files, including through scripts in the HTML, and
+remains valid after app sign-out until it expires or the container stops.
+
 ## Development and deployment
 
 Use the repository's Bun/Vite+ setup:
@@ -81,6 +88,12 @@ binds it as `BACKUPS`. Keep this bucket private. A capture interrupted before it
 receipt reaches the Thread may leave an unreferenced object, because the Sandbox
 SDK allocates backup IDs during capture. Recovery keeps the last confirmed snapshot
 and does not repeat that capture automatically.
+
+For previews, configure `PREVIEW_DOMAIN` with a dedicated domain and route its
+wildcard to this Worker. The checked-in route uses `*.sandbox-preview.yielded.dev`;
+it needs a proxied wildcard DNS record and a certificate covering that hostname.
+Keep previews on a separate origin from the application. Their short-lived access
+is transferred by a form POST into a host-only HttpOnly cookie, never a URL token.
 
 Sandbox deployment is currently manual; merging a PR runs CI.
 The checked-in Wrangler configuration owns the Sandbox route and its Thread,
