@@ -22,6 +22,7 @@ import {
 } from "./protocol.ts";
 import { restore } from "./restore.ts";
 import { FixtureError, FixtureExport, importRows, RestoreStorage } from "./storage.ts";
+import { snapshotUsage } from "./usage.ts";
 
 export const COLD_ABORT = "durable-bench explicit cold";
 
@@ -43,6 +44,9 @@ export class Host {
     return actual;
   }
   readonly meter: Observation;
+  storageUsage() {
+    return this.env.WRITES === "true" ? { storageUsage: snapshotUsage(this.ctx.storage) } : {};
+  }
   constructor(
     readonly ctx: DurableObjectState,
     readonly env: Env,
@@ -113,7 +117,11 @@ export class Host {
           await this.ctx.storage.deleteAll();
           await this.ctx.storage.sync();
 
-          return Response.json({ ok: true, identity: this.meter.identity() });
+          return Response.json({
+            ok: true,
+            identity: this.meter.identity(),
+            ...this.storageUsage(),
+          });
         }
 
         const restored = await Effect.runPromise(
@@ -133,7 +141,11 @@ export class Host {
 
         if (url.pathname === "/restore/finalize") await handlers.restored?.();
 
-        return Response.json({ ...restored, identity: this.meter.identity() });
+        return Response.json({
+          ...restored,
+          identity: this.meter.identity(),
+          ...this.storageUsage(),
+        });
       }
       if (url.pathname === "/seed-progress") {
         this.meter.assertBuild(query);
@@ -244,7 +256,7 @@ export class Host {
         await this.ctx.storage.put(key, { completed: to, inFlight: false, batch });
         await this.ctx.storage.sync();
 
-        return Response.json(batch);
+        return Response.json({ ...batch, ...this.storageUsage() });
       }
       if (url.pathname === "/run") {
         // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch handler rejects this unsupported RPC path before invoking a target.
@@ -265,6 +277,7 @@ export class Host {
             reason: this.meter.query ? "sample-mismatch" : "incarnation-lost",
             identity: this.meter.identity(),
             requestedSample: query.sample,
+            ...this.storageUsage(),
             ...(this.meter.query ? { observedSample: this.meter.query.sample } : {}),
           });
 
@@ -287,6 +300,7 @@ export class Host {
           cpuInvocationIds: this.meter.cpuInvocations?.get(query.sample),
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,
+          ...this.storageUsage(),
         });
       }
 

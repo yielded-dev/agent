@@ -321,13 +321,18 @@ export const build = Effect.fnUntraced(function* (
       ),
     ];
 
-    // Bun store directory names include a content hash; read the bundled package's version.
-    const versions = yield* Effect.forEach(frameworkRoots, (root) =>
-      read(
-        resolve(output, root, "node_modules/effect/package.json"),
-        Schema.Struct({ version: Schema.String }),
-      ).pipe(Effect.map((metadata) => metadata.version)),
-    );
+    // Bun's shared-store directory may append a content hash to the version.
+    // Verify package metadata while still rejecting multiple physical Effect roots.
+    const versions = [
+      ...new Set(
+        yield* Effect.forEach(frameworkRoots, (root) =>
+          read(
+            resolve(output, root, "node_modules/effect/package.json"),
+            Schema.Struct({ version: Schema.String }),
+          ).pipe(Effect.map((metadata) => metadata.version)),
+        ),
+      ),
+    ];
 
     const isolatedVendorEffect = map.sources.some((source) =>
       source.includes("/third-party/node_modules/effect/"),

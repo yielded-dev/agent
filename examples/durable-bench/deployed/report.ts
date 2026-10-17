@@ -35,6 +35,37 @@ const bootstrapInterval = (values: readonly number[]) => {
 const n = (value: number) =>
   Number.isFinite(value) ? Math.round(value).toLocaleString("en-US") : "—";
 
+/** Sum the latest cumulative snapshot per incarnation; never add consecutive snapshots. */
+export const writeReport = (result: Result): string => {
+  const known = new Map<string, { sql: number; kv: number }>();
+  const unavailable = new Set<string>();
+
+  for (const row of result.storageUsage ?? []) {
+    const key = `${row.object}/${row.incarnation}`;
+
+    if ("unavailable" in row.usage) unavailable.add(key);
+    else {
+      const previous = known.get(key);
+
+      known.set(key, {
+        sql: Math.max(previous?.sql ?? 0, row.usage.sqlRowsWritten),
+        kv: Math.max(previous?.kv ?? 0, row.usage.kvRowsWritten),
+      });
+    }
+  }
+  const sql = [...known.values()].reduce((sum, value) => sum + value.sql, 0);
+  const kv = [...known.values()].reduce((sum, value) => sum + value.kv, 0);
+
+  return [
+    `Write diagnostic: ${result.complete ? "complete" : "incomplete"}. Timing comparisons disabled.`,
+    `Observed native SQL rows: ${known.size ? n(sql) : "unavailable"}; KV/alarm writes: ${known.size ? n(kv) : "unavailable"}.`,
+    `Unavailable incarnations: ${unavailable.size}. Observed counts are partial; driver receipts, lost incarnations, cleanup and PITR are not fully metered.`,
+    `Latest admission reservation: ${n(result.reservation?.rows ?? 0)} rows; planned estimate ${n(result.costPlan?.reservedRows ?? NaN)}. Reservations include failed attempts and are not refunded.`,
+    "Per-phase cumulative snapshots and unavailable reasons are retained in JSON.",
+    "",
+  ].join("\n");
+};
+
 const interval = (values: readonly number[]) =>
   values.length
     ? `${n(median(values))} [${n(quantile(values, 0.25))}–${n(quantile(values, 0.75))}]`
@@ -474,6 +505,12 @@ export const table = (result: Result): string => {
     );
 
   const lines = [
+    ...(result.costPlan
+      ? [
+          `Write plan: ${n(result.costPlan.reservedRows)} rows (setup ${n(result.costPlan.importRows)}; turns ${n(result.costPlan.turnRows)}; includes retry allowances). Latest admission reservation: ${n(result.reservation?.rows ?? 0)} rows. Estimated admission, not billed usage.`,
+          "",
+        ]
+      : []),
     ...(result.complete ? [] : ["INCOMPLETE RUN — diagnostic results only.", ""]),
     ...(result.samples.some((row) => row.status === "invalidated")
       ? [

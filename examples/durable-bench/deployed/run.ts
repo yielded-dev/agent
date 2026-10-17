@@ -24,6 +24,7 @@ import {
   type Message,
   type Turn,
 } from "../src/plan.ts";
+import { checkCost, planCost, reserveCost } from "./budget.ts";
 import { build, ensureVendor } from "./build.ts";
 import {
   Cloudflare,
@@ -56,7 +57,7 @@ import {
   workspace,
 } from "./platform.ts";
 import { prepareProfile, profileBatches } from "./profile.ts";
-import { median, retirementFailures, sampleCpu, table } from "./report.ts";
+import { median, retirementFailures, sampleCpu, table, writeReport } from "./report.ts";
 import { tailCpu } from "./tail-cpu.ts";
 import { PREAMBLE, responseText } from "./text.ts";
 import {
@@ -73,8 +74,36 @@ import {
   RestoreChunk,
   type Query,
 } from "./worker/protocol.ts";
+import type { UsageSnapshot } from "./worker/usage.ts";
 
 const COLD_PROPAGATION_DELAY = "180 seconds";
+
+const costInputs = Effect.fnUntraced(function* (options: Options) {
+  if (options.buildHistory) return { prepared: undefined, plan: planCost(options, [], new Map()) };
+  if (options.fixtureDirectory === undefined)
+    return yield* BenchError.make({
+      message: "Comparison requires --fixture-directory with saved, shared fixtures.",
+    });
+
+  const prepared = yield* prepareFixtures({
+    targets: options.targets,
+    sizes: options.sizes,
+    directory: options.fixtureDirectory,
+    ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
+  });
+
+  return { prepared, plan: planCost(options, prepared.fixtures, prepared.writeEstimates) };
+});
+
+export const previewCost = Effect.fnUntraced(function* (options: Options) {
+  const { plan } = yield* costInputs(options);
+
+  yield* Console.log(JSON.stringify(plan, null, 2));
+  yield* Console.error(
+    "Admission estimate includes retry/recovery allowances; it is not an invoice. No deployment or budget reservation was made.",
+  );
+  yield* checkCost(options, plan);
+}, Effect.scoped);
 
 class IncarnationLost extends Schema.TaggedError<IncarnationLost>()("IncarnationLost", {
   message: Schema.String,
@@ -127,6 +156,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
   const started = yield* Clock.currentTimeMillis;
   const seed = options.seed ?? nonce();
+  const { prepared: costFixtures, plan: costPlan } = yield* costInputs(options);
+
+  yield* checkCost(options, costPlan);
 
   const shuffle = <A>(values: readonly A[], phase: string): A[] =>
     values
@@ -224,6 +256,39 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
   let phaseStarted = started;
   let phaseName = "preparation";
+
+  const recordUsage = Effect.fnUntraced(function* (
+    object: string,
+    data: {
+      readonly identity?: { readonly incarnation: string };
+      readonly storageUsage?: typeof UsageSnapshot.Type;
+    },
+  ) {
+    if (!options.writes) return;
+
+    const row = {
+      phase: phaseName,
+      object,
+      incarnation: data.identity?.incarnation ?? "unknown",
+      at: yield* Clock.currentTimeMillis,
+      usage: data.storageUsage ?? { unavailable: "Response did not include native write counters" },
+    };
+
+    yield* update((value) => ({
+      ...value,
+      storageUsage: [
+        // Keep the latest known count and unavailable reason independently.
+        ...(value.storageUsage ?? []).filter(
+          (old) =>
+            old.object !== row.object ||
+            old.phase !== row.phase ||
+            old.incarnation !== row.incarnation ||
+            "unavailable" in old.usage !== "unavailable" in row.usage,
+        ),
+        row,
+      ],
+    }));
+  });
 
   const phase = Effect.fnUntraced(function* (next: string) {
     const now = yield* Clock.currentTimeMillis;
@@ -372,9 +437,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     };
     yield* save(output + ".json", result);
 
-    const report = result.diagnostic
-      ? `Snapshot CPU diagnostic: ${result.diagnostic.complete ? "complete" : "incomplete"}.\nSelected Object: ${result.diagnostic.query?.object ?? "not selected"}; sample: ${result.diagnostic.query?.sample ?? "not started"}.\nCoverage: ${result.diagnostic.coverage}. Matching module tokens do not prove profiler attachment survived Object abort; inspect constructor frames.\nNo timing comparison or inferential tables.\n`
-      : table(result);
+    const report = options.writes
+      ? writeReport(result)
+      : result.diagnostic
+        ? `Snapshot CPU diagnostic: ${result.diagnostic.complete ? "complete" : "incomplete"}.\nSelected Object: ${result.diagnostic.query?.object ?? "not selected"}; sample: ${result.diagnostic.query?.sample ?? "not started"}.\nCoverage: ${result.diagnostic.coverage}. Matching module tokens do not prove profiler attachment survived Object abort; inspect constructor frames.\nNo timing comparison or inferential tables.\n`
+        : table(result);
 
     yield* fs.writeFileString(output + ".md", report);
     yield* Console.log(report);
@@ -397,6 +464,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
   });
 
   yield* Effect.gen(function* () {
+    yield* update((value) => ({ ...value, costPlan }));
     if (!resumed) {
       if (
         (yield* git([
@@ -567,12 +635,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             "Comparison requires --fixture-directory with pre-existing shared fixtures; no arm may generate the other's history.",
         });
 
-      const prepared = yield* prepareFixtures({
-        targets: options.targets,
-        sizes: options.sizes,
-        ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
-        directory: options.fixtureDirectory,
-      });
+      const prepared = costFixtures;
+
+      if (!prepared) return yield* BenchError.make({ message: "Missing costed fixtures." });
 
       for (const label of labels) preparedByBuild.set(label, prepared);
       // The floor restores its ephemeral Prompt through the measurement implementation.
@@ -654,6 +719,12 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       ),
     }));
     yield* phase("infrastructure");
+    const reservation = yield* reserveCost(cloud.accountId, runName, options, costPlan);
+
+    yield* update((value) => ({ ...value, reservation }));
+    yield* Console.error(
+      `Reserved ${reservation.rows.toLocaleString("en-US")} estimated row writes; ${reservation.rollingRows.toLocaleString("en-US")}/${reservation.limit.toLocaleString("en-US")} in the shared rolling 24h budget.`,
+    );
     if (!resumed) {
       const reused = yield* deploy.infrastructure(options.cpu);
       const infrastructureBuild = yield* deploy.infrastructureBuild();
@@ -811,7 +882,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     const isolateEpochs = new Map<string, number>();
 
     const poolCohorts = cohorts;
-    const retriedSamples = new Set<string>();
+    const retriedPasses = new Set<string>();
 
     const measureEpoch = Effect.fnUntraced(function* (
       epoch: number,
@@ -923,6 +994,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           yield* assignments(items),
           persistent,
           probe,
+          options.writes ?? false,
         );
 
         yield* update((value) => ({
@@ -1402,6 +1474,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                           }
                           const batch = event.result;
 
+                          yield* recordUsage(`${cohort.target}/${cohort.object}`, batch);
+
                           if (
                             batch.from !== from ||
                             batch.to !== Math.min(from + 50, cohort.history) ||
@@ -1482,12 +1556,17 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 if (clear) {
                   yield* resetForBuild(cohort);
                   restoreRequests++;
-                  yield* request(
+
+                  const cleared = yield* request(
                     yield* url("/restore/clear", cohort),
                     deploy.token,
                     RestoreAck,
                     {},
                   );
+
+                  yield* recordUsage(`${cohort.target}/${cohort.object}`, cleared.value);
+                  // A new incarnation separates unmetered deleteAll from import accounting.
+                  if (options.writes) yield* resetForBuild(cohort);
                 }
 
                 restoreRequests++;
@@ -1498,6 +1577,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   RestoreAck,
                   fixture,
                 );
+
+                yield* recordUsage(`${cohort.target}/${cohort.object}`, start.value);
 
                 if (
                   fixture.actor &&
@@ -1513,12 +1594,15 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   });
                 for (const path of chunks.get(`${cohort.target}-${cohort.history}`) ?? []) {
                   restoreRequests++;
-                  yield* request(
+
+                  const restored = yield* request(
                     yield* url("/restore/rows", cohort),
                     deploy.token,
                     RestoreAck,
                     yield* read(path, RestoreChunk),
                   );
+
+                  yield* recordUsage(`${cohort.target}/${cohort.object}`, restored.value);
                 }
 
                 restoreRequests++;
@@ -1530,6 +1614,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   {},
                   "10 minutes",
                 )).value;
+
+                yield* recordUsage(`${cohort.target}/${cohort.object}`, seeded);
 
                 if (seeded.identity.build !== expectedBuild)
                   return yield* BenchError.make({
@@ -1660,20 +1746,20 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             error: IncarnationLost | TransientObjectTransport,
           ) {
             const sample = currentSample;
-            const key = `${objectKey(cohort)}/${epoch}/${sample?.repeat}`;
+            const key = `${objectKey(cohort)}/${epoch}`;
 
-            // Never retry against advanced storage. A failed prefix rebuild or a second
-            // failure at this logical index is fatal, even after another Object recovers.
+            // One complete recovery per Object/pass is funded by the write reservation.
+            // Never retry against advanced storage or repeatedly replay growing prefixes.
             if (
               !recoveryAvailable ||
               !sample ||
               sample.state === "recovery" ||
-              retriedSamples.has(key)
+              retriedPasses.has(key)
             )
               return yield* BenchError.make({
                 message: error.message + "; automatic sample recovery unavailable or exhausted.",
               });
-            retriedSamples.add(key);
+            retriedPasses.add(key);
             retryFrom.set(objectKey(cohort), sample.repeat);
             const reason = error._tag === "IncarnationLost" ? "incarnation-lost" : error.reason;
             const replacementSample = sampleName(epoch, sample.repeat, attempt + 1);
@@ -1863,6 +1949,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   });
 
                 const metrics = measured.value.metrics;
+
+                yield* recordUsage(`${cohort.target}/${cohort.object}`, metrics);
 
                 if (!metrics.ok) {
                   if (
