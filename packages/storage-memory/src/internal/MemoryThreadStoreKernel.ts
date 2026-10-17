@@ -12,6 +12,7 @@ import type {
 import type {
   AppendResult,
   AppendRequest,
+  PreparedAppend,
   ThreadStoreFailure,
   ThreadTail,
   ThreadAdmission,
@@ -26,10 +27,11 @@ import type {
 } from "@yielded/agent/thread-work";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
+import type * as Result from "effect/Result";
 import type * as Stream from "effect/Stream";
 
 export interface PreparedMemoryAppend {
-  readonly request: AppendRequest;
+  readonly request: PreparedAppend;
   readonly batchJson: string;
 }
 
@@ -142,6 +144,8 @@ export class MemoryThreadStoreKernel extends Context.Service<
     ) => Effect.Effect<PreparedMemoryAppend, ThreadStoreFailure>;
     readonly appendPrepared: (
       prepared: PreparedMemoryAppend,
+      /** Validate before mutation; the returned publication never yields or rejects. */
+      preparePublication?: (result: AppendResult) => Result.Result<() => void, ThreadStoreFailure>,
     ) => Effect.Effect<AppendResult, ThreadStoreFailure>;
     readonly record: (
       threadId: ThreadId,

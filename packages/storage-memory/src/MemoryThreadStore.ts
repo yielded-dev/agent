@@ -91,6 +91,7 @@ import {
   ThreadStore,
   ThreadReader,
   type ThreadCheckpoints,
+  type ThreadStoreFailure,
   ThreadStoreError,
   ThreadTail,
   ThreadTailRequest,
@@ -139,6 +140,7 @@ import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -713,7 +715,7 @@ const prepareIndexes = (
 type AppendDecision =
   | {
       readonly _tag: "failure";
-      readonly error: ThreadStoreError | ThreadNotMaterialized | AppendConflict;
+      readonly error: ThreadStoreFailure;
     }
   | {
       readonly _tag: "success";
@@ -1205,10 +1207,10 @@ const makeThreadStore = Effect.gen(function* () {
     return { request, batchJson };
   });
 
-  const appendPrepared = Effect.fnUntraced(function* ({
-    request,
-    batchJson,
-  }: PreparedMemoryAppend) {
+  const appendPrepared = Effect.fnUntraced(function* (
+    { request, batchJson }: PreparedMemoryAppend,
+    preparePublication?: (result: AppendResult) => Result.Result<() => void, ThreadStoreFailure>,
+  ) {
     // Every caller holds the shared kernel mutation gate across validation and Ref publication.
     const current = yield* Ref.get(state);
     const thread = current.threads.get(request.threadId);
@@ -1362,10 +1364,17 @@ const makeThreadStore = Effect.gen(function* () {
               current,
             ];
 
+          const result = AppendResult.make({ ...priorExecution.result, replayed: true });
+          const publication = preparePublication?.(result);
+
+          if (publication !== undefined && Result.isFailure(publication))
+            return [{ _tag: "failure", error: publication.failure }, current];
+          publication?.success();
+
           return [
             {
               _tag: "success",
-              result: AppendResult.make({ ...priorExecution.result, replayed: true }),
+              result,
               records: [],
             },
             current,
@@ -1388,14 +1397,22 @@ const makeThreadStore = Effect.gen(function* () {
             ];
           }
 
+          const result = AppendResult.make({
+            firstSequence: previous.result.firstSequence,
+            lastSequence: previous.result.lastSequence,
+            replayed: true,
+          });
+
+          const publication = preparePublication?.(result);
+
+          if (publication !== undefined && Result.isFailure(publication))
+            return [{ _tag: "failure", error: publication.failure }, current];
+          publication?.success();
+
           return [
             {
               _tag: "success",
-              result: AppendResult.make({
-                firstSequence: previous.result.firstSequence,
-                lastSequence: previous.result.lastSequence,
-                replayed: true,
-              }),
+              result,
               records: [],
             },
             current,
@@ -1458,6 +1475,11 @@ const makeThreadStore = Effect.gen(function* () {
           tailSequence: lastSequence,
         };
 
+        const publication = preparePublication?.(result);
+
+        if (publication !== undefined && Result.isFailure(publication))
+          return [{ _tag: "failure", error: publication.failure }, current];
+
         // Every rejection and asynchronous validation precedes this synchronous publication.
         if (records.length > 0) {
           thread.batches.set(request.batch.batchId, { result, batchJson });
@@ -1482,13 +1504,9 @@ const makeThreadStore = Effect.gen(function* () {
         indexes.commit();
         if (preparedWork !== undefined) publishWork(request.threadId, preparedWork());
         current.threads.set(request.threadId, next);
+        publication?.success();
 
-        const publication: readonly [AppendDecision, MemoryState] = [
-          { _tag: "success", result, records },
-          current,
-        ];
-
-        return publication;
+        return [{ _tag: "success", result, records }, current];
       }).pipe(
         Effect.tap((decision) =>
           decision._tag === "success" && decision.records.length > 0

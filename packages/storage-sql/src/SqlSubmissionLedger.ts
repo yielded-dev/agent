@@ -12,6 +12,7 @@ import {
   SettlementOutcome,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { validateInputPublication } from "@yielded/agent/run-storage";
 import type { SettlementPublication } from "@yielded/agent/settlement-publisher";
 import {
   SettlementPublicationResult,
@@ -98,12 +99,16 @@ import {
 } from "@yielded/agent/submission-ledger";
 import {
   AppendConflict,
+  type AppendRequest,
+  AppendResult,
+  PreparedAppend,
   ThreadAdmission,
   ThreadAbortFact,
   ThreadApprovalFact,
   ThreadResolutionFact,
   makeTransferFactCheck,
   transferPageFits,
+  ThreadStoreError,
   type ThreadStoreFailure,
 } from "@yielded/agent/thread-store";
 import * as Clock from "effect/Clock";
@@ -1702,6 +1707,64 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
 
     yield* inWriteTransaction(operation, mutation);
     yield* hitFailpoint("ledger:mark-input-applied:after", operation);
+  });
+
+  const appendInput = Effect.fn("SqlSubmissionLedger.appendInput")(function* (
+    submissionId: SubmissionId,
+    request: AppendRequest,
+  ) {
+    const operation = "append applied input";
+    const captured = yield* PreparedAppend.capture(request);
+    const record = yield* validateInputPublication(submissionId, captured);
+
+    const prepared = yield* prepareSqlAppend(captured, options.offsetPrefix).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
+    );
+
+    return yield* owner
+      .withProgress(
+        captured.threadId,
+        Effect.gen(function* () {
+          yield* options.hitFailpoint("append:before");
+
+          // Original input, active state and applied marker are one native transaction.
+          const appended = yield* journal.withWriteTransaction("append applied input transaction")(
+            Effect.gen(function* () {
+              if (!owner.hasOwner(captured.threadId, submissionId))
+                return yield* OwnershipLost.make({ submissionId });
+
+              yield* options.hitFailpoint("ledger:mark-input-applied:before");
+              const result = yield* journal.appendInTransaction(prepared);
+
+              yield* markInputAppliedInTransaction(
+                MarkInputAppliedRequest.make({
+                  submissionId,
+                  recordId: record.recordId,
+                  sequence: result.firstSequence,
+                }),
+              );
+
+              return result;
+            }),
+          );
+
+          yield* options.hitFailpoint("ledger:mark-input-applied:after");
+          const result = yield* Schema.decodeEffect(AppendResult)(appended);
+
+          yield* options.hitFailpoint("append:after");
+
+          return result;
+        }),
+      )
+      .pipe(
+        Effect.mapError((cause) =>
+          Schema.is(AppendConflict)(cause) ||
+          Schema.is(ThreadStoreError)(cause) ||
+          Schema.is(OwnershipLost)(cause)
+            ? cause
+            : ThreadStoreError.make({ operation, message: cause.message, cause }),
+        ),
+      );
   });
 
   const publishWithState = Effect.fn("SqlSubmissionLedger.publishSettlement")(function* (
@@ -3764,6 +3827,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     resolveFundingOwner,
     resolveAdmission,
     selectHead,
+    appendInput,
     markInputApplied: (request) => markInputAppliedKernel(request),
     finalizeSettlement: (request) => owner.withMutation(finalizeSettlement(request)),
     requestAbort,
@@ -3786,7 +3850,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     readAbortIntent: readAbortIntentForSubmission,
   });
 
-  return { ledger, publisher, publishWithState, markInputAppliedInTransaction };
+  return { ledger, publisher, publishWithState };
 });
 
 export const makeSqlSubmissionLedger = <

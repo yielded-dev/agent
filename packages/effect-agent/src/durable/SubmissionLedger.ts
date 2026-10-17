@@ -1118,10 +1118,10 @@ export class SubmissionLedger extends Context.Service<
     readonly selectHead: (
       request: ClaimRequest,
     ) => Effect.Effect<Option.Option<Claim>, LedgerError>;
-    /** Atomically publish a captured original input, active context and applied marker.
-     * Optional adapters retain the ordinary append-then-repair protocol. The captured input
-     * must be this owner's deterministic admission; a moved context boundary is refused. */
-    readonly appendInput?: (
+    /** Atomically publish a captured original input, active state and applied marker.
+     * The captured input must be this owner's deterministic admission. A moved original
+     * context boundary is refused; replays retain the original input position. */
+    readonly appendInput: (
       submissionId: SubmissionId,
       request: AppendRequest,
     ) => Effect.Effect<AppendResult, ThreadStoreFailure>;

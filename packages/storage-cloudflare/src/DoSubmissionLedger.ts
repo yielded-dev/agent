@@ -31,7 +31,7 @@ import {
   SettlementOutcome,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import { StorageOwner } from "@yielded/agent/run-storage";
+import { StorageOwner, validateInputPublication } from "@yielded/agent/run-storage";
 import {
   SettlementPublicationResult,
   SettlementPublisher,
@@ -110,8 +110,6 @@ import {
   UnknownResolutionKind,
   unknownResolutionKind,
   unknownResolutionMatchesResult,
-  submissionInputRecordId,
-  submissionInputBatchId,
   submissionAbortRecordId,
   submissionSettlementRecordId,
   submissionSettlementBatchId,
@@ -1745,7 +1743,7 @@ const makeServices = Effect.fnUntraced(function* () {
     },
   );
 
-  const appendInput: NonNullable<SubmissionLedger["Service"]["appendInput"]> = Effect.fnUntraced(
+  const appendInput: SubmissionLedger["Service"]["appendInput"] = Effect.fnUntraced(
     function* (submissionId, request) {
       const operation = "append original input and context";
 
@@ -1753,29 +1751,7 @@ const makeServices = Effect.fnUntraced(function* () {
         Effect.provideService(Crypto.Crypto, crypto),
       );
 
-      const record = prepared.request.batch.records[0];
-
-      const context = prepared.request.executions
-        ?.flatMap((update) => update.facts ?? [])
-        .find(({ payload }) => payload._tag === "RunContextRecorded");
-
-      if (
-        prepared.request.executions?.length !== 1 ||
-        prepared.request.executions[0]?.previousRevision !== 0 ||
-        prepared.request.batch.records.length !== 1 ||
-        record?.payload._tag !== "UserInputRecorded" ||
-        record.payload.kind !== "user" ||
-        record.payload.submissionId !== submissionId ||
-        record.payload.runId !== runIdForSubmission(submissionId) ||
-        record.recordId !== submissionInputRecordId(submissionId) ||
-        prepared.request.batch.batchId !== submissionInputBatchId(submissionId) ||
-        (context?.payload._tag === "RunContextRecorded" &&
-          context.payload.historyThrough !== prepared.request.expectedTailSequence)
-      )
-        return yield* ThreadStoreError.make({
-          operation,
-          message: "Original input publication has a different context boundary",
-        });
+      const record = yield* validateInputPublication(submissionId, prepared.request);
 
       const mapError = (cause: { readonly message: string }) =>
         ThreadStoreError.make({ operation, message: cause.message, cause });
