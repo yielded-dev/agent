@@ -1,11 +1,12 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
-import { Publisher, type Event } from "@yielded/agent/provisional-text";
+import { Publisher, Event } from "@yielded/agent/provisional-text";
 import { RpcTarget } from "cloudflare:workers";
 import * as Response from "effect/ai/Response";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import { HostProtocolError } from "./host-protocol-error.ts";
 import { Observation } from "./live-text-observation.ts";
@@ -44,7 +45,7 @@ interface Draft {
 
 interface Observer {
   readonly threadId: ThreadId;
-  readonly offer: (event: Event) => void;
+  readonly offer: (payload: Uint8Array) => void;
   readonly close: (error?: HostProtocolError) => void;
 }
 
@@ -69,6 +70,8 @@ export class LiveTextHub extends Context.Service<
         | undefined;
 
       const encode = Schema.encodeSync(Frame);
+      const encodeEvent = Schema.encodeSync(Event);
+      const encodeHeader = Schema.encodeSync(Frame.members[1].mapFields(Struct.omit(["event"])));
       const encoder = new TextEncoder();
 
       yield* Effect.addFinalizer(() =>
@@ -121,7 +124,14 @@ export class LiveTextHub extends Context.Service<
 
           if (event.part.type === "text-start" || event.part.type === "reasoning-start") {
             if (draft !== undefined || drafts.size >= MAX_DRAFT_PARTS) return fail(event.attemptId);
-            drafts.set(key, { start: event, text: "", ended: false });
+            drafts.set(key, {
+              start: {
+                ...event,
+                part: Response.makePart(event.part.type, { id: event.part.id }),
+              },
+              text: "",
+              ended: false,
+            });
           } else {
             // After invalidation, never expose an orphaned suffix as a complete prefix.
             if (draft === undefined) return false;
@@ -155,8 +165,21 @@ export class LiveTextHub extends Context.Service<
 
         // Fulfill native demand inline. A slow reader only fills its bounded buffer;
         // canonical execution never waits for a pull or a transport acknowledgement.
+        // Own one encoded payload per offer. Observers copy it into their own frames;
+        // neither later caller mutation nor a reader can mutate another reader's bytes.
+        let payload: Uint8Array | HostProtocolError | undefined;
+
         for (const observer of observers) {
-          if (observer.threadId === event.threadId) observer.offer(event);
+          if (observer.threadId !== event.threadId) continue;
+          if (payload === undefined) {
+            try {
+              payload = encoder.encode(JSON.stringify(encodeEvent(event)));
+            } catch {
+              payload = HostProtocolError.make({ message: "Provisional text frame is invalid" });
+            }
+          }
+          if (payload instanceof HostProtocolError) observer.close(payload);
+          else observer.offer(payload);
         }
 
         return true;
@@ -170,7 +193,7 @@ export class LiveTextHub extends Context.Service<
           return yield* HostProtocolError.make({
             message: "Provisional text observation capacity exceeded",
           });
-        const buffer: Event[] = [];
+        const buffer: Uint8Array[] = [];
         let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
         let pending: Generator<Frame> | undefined;
         let snapshotNeeded = true;
@@ -189,9 +212,9 @@ export class LiveTextHub extends Context.Service<
 
         const observer: Observer = {
           threadId,
-          offer(event) {
+          offer(payload) {
             if (buffer.length === BUFFER_SIZE) snapshotNeeded = true;
-            else buffer.push(event);
+            else buffer.push(payload);
             flush();
           },
           close(error) {
@@ -260,7 +283,8 @@ export class LiveTextHub extends Context.Service<
           // scheduled consumer fiber between an offered part and its enqueue.
           while (controller.desiredSize !== null && controller.desiredSize > 0) {
             if (snapshotNeeded) pending = snapshot();
-            let value: Frame;
+            let value: Frame | undefined;
+            let payload: Uint8Array | undefined;
 
             if (pending !== undefined) {
               const next = pending.next();
@@ -271,16 +295,33 @@ export class LiveTextHub extends Context.Service<
               }
               value = next.value;
             } else {
-              const event = buffer.shift();
+              payload = buffer.shift();
 
-              if (event === undefined) return;
-              value = frame(event);
+              if (payload === undefined) return;
             }
 
-            let json: string;
+            let bytes: Uint8Array;
 
             try {
-              json = JSON.stringify(encode(value));
+              if (value !== undefined) {
+                bytes = encoder.encode(JSON.stringify(encode(value)) + "\n");
+              } else if (payload !== undefined) {
+                const header = encodeHeader({
+                  _tag: "Event",
+                  schemaVersion: 1,
+                  streamId,
+                  sequence: ++sequence,
+                });
+
+                // Both fragments have passed their parts of the unchanged Frame schema.
+                const prefix = encoder.encode(`${JSON.stringify(header).slice(0, -1)},"event":`);
+
+                bytes = new Uint8Array(prefix.byteLength + payload.byteLength + 2);
+                bytes.set(prefix);
+                bytes.set(payload, prefix.byteLength);
+                bytes[bytes.length - 2] = 125; // }
+                bytes[bytes.length - 1] = 10; // newline
+              } else return;
             } catch {
               observer.close(
                 HostProtocolError.make({ message: "Provisional text frame is invalid" }),
@@ -288,8 +329,6 @@ export class LiveTextHub extends Context.Service<
 
               return;
             }
-            const bytes = encoder.encode(json + "\n");
-
             if (bytes.byteLength > MAX_FRAME_BYTES) {
               observer.close(
                 HostProtocolError.make({
