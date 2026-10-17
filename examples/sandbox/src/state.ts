@@ -282,18 +282,25 @@ export const workspace = Atom.family((id: string) => {
   const selectedFile = Atom.make<string | null>(null);
   const revision = Atom.make(0);
   const commandRevision = Atom.make(0);
+  const savedFromServer = Atom.make<typeof SavedFiles.Type | undefined>(undefined);
 
   const files = runtime
     .atom((get) => {
       get(revision);
+      const path = get(directory);
+      const statusAtRequest = get.once(savedFromServer);
 
-      return json(`files?${query(id, get(directory))}`, FileList);
+      return Effect.gen(function* () {
+        const result = yield* json(`files?${query(id, path)}`, FileList);
+
+        // Recover missed status events without overwriting one received during this read.
+        if (get.once(savedFromServer) === statusAtRequest) get.set(savedFromServer, result.saved);
+
+        return result;
+      });
     })
     .pipe(runtime.factory.withReactivity([filesKey]));
 
-  const savedFromServer = Atom.make<typeof SavedFiles.Type | undefined>(undefined);
-
-  // Status replies and events take precedence over older directory responses.
   const saved = Atom.make(
     (get) => get(savedFromServer) ?? AsyncResult.getOrElse(get(files), () => null)?.saved,
   );
