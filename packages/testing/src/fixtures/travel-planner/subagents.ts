@@ -91,7 +91,6 @@ export const DestinationResearcher = Agent.make("destination-researcher", {
     toolConcurrency: 1,
   }),
   description: "Research one candidate destination with the deterministic travel guide.",
-  metadata: { deploymentClass: "E", phase: "S1" },
 });
 
 // ---------------------------------------------------------------------------
@@ -329,7 +328,6 @@ export const TravelCoordinator = Agent.make("travel-coordinator", {
   }),
   description:
     "Coordinate bounded destination research through one declared attached delegation Tool.",
-  metadata: { deploymentClass: "E", phase: "S1" },
 });
 
 export const researchMission = Schema.decodeSync(ResearchMission)({

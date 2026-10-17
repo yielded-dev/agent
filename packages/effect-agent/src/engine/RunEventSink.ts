@@ -9,6 +9,7 @@ import {
   type RunId,
   type ToolCallId,
 } from "../core/Identifiers.ts";
+import type { CompletionMetadata } from "../core/internal/completion.ts";
 import { type DelegationDepth } from "../core/SubagentContract.ts";
 import { type RunTotals } from "../core/Usage.ts";
 
@@ -46,12 +47,9 @@ export interface SubagentProgressPayload extends SubagentEventBasePayload {
 }
 
 /** Pre-base payload for the core `SubagentCompleted` event; `turns` is a positive integer. */
-export interface SubagentCompletedPayload extends SubagentEventBasePayload {
+export interface SubagentCompletedPayload extends SubagentEventBasePayload, CompletionMetadata {
   readonly _tag: "SubagentCompleted";
   readonly turns: number;
-  readonly finishReason: "completed" | "model-stop" | "budget-exhausted";
-  /** Dimension that bound when the child settled budget-exhausted (the RUN-021 grant-flow marker). */
-  readonly exhausted?: "tokens" | "tool-calls" | "turns" | undefined;
   /** What the child spent, so a parent can account for delegated work. */
   readonly usage?: RunTotals | undefined;
   readonly delegatedUsage?: RunTotals | undefined;

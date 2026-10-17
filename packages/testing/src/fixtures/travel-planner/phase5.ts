@@ -392,7 +392,6 @@ export const TravelPlannerPhase5 = Agent.make("travel-planner-phase-5", {
   }),
   description:
     "Durably book one itinerary with prepared/settled supplier records, Unknown Outcomes, named Steps, and joined traveler input.",
-  metadata: { deploymentClass: "DN", phase: "P5" },
 });
 
 export class TravelPlannerBookingEvidenceError extends Schema.TaggedError<TravelPlannerBookingEvidenceError>()(

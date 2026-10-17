@@ -423,8 +423,8 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
     }),
   );
 
-  // Regression: f0c51b92 treats the exact tool-call cap as blocking a text-only turn.
-  it.effect("joins at the tool-call cap when an optional completion can continue in text", () =>
+  // Regression: f0c51b92. Required completion leaves a follow-up at the call cap for its own Run.
+  it.effect("leaves a follow-up at the tool-call cap for its own successful Run", () =>
     Effect.gen(function* () {
       const runtime = yield* DurableAgentRuntime;
 
@@ -432,14 +432,10 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
         Tool.make("answer", { parameters: Schema.Struct({}), success: Schema.String }),
       );
 
-      const scripted = yield* makeScriptedModel((call) =>
-        call === 0
-          ? [
-              { type: "tool-call", id: "answer-0", name: "answer", params: {} },
-              { type: "finish", reason: "tool-calls", usage },
-            ]
-          : finalParts('"covered"'),
-      );
+      const scripted = yield* makeScriptedModel((call) => [
+        { type: "tool-call", id: `answer-${call}`, name: "answer", params: {} },
+        { type: "finish", reason: "tool-calls", usage },
+      ]);
 
       const agent = Agent.withModel(
         Agent.make("exact-call-cap-join", {
@@ -467,9 +463,11 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
         Effect.provide(
           toolkit.toLayer({
             answer: Effect.fnUntraced(function* () {
-              followUp = yield* runtime
-                .submit(agent, { question: "follow-up" }, submitOptions(thread, "later"))
-                .pipe(Effect.orDie);
+              if (followUp === undefined) {
+                followUp = yield* runtime
+                  .submit(agent, { question: "follow-up" }, submitOptions(thread, "later"))
+                  .pipe(Effect.orDie);
+              }
 
               return "answered";
             }),
@@ -477,7 +475,7 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
         ),
       );
 
-      expect(settlements).toHaveLength(1);
+      expect(settlements.map((settled) => settled.outcome)).toEqual(["completed", "completed"]);
       expect((yield* runtime.awaitSettlement(followUp!)).outcome).toBe("completed");
       expect(scripted.prompts).toHaveLength(2);
       expect(promptOccurrences(scripted.prompts[1]!, "follow-up")).toBe(1);
@@ -504,7 +502,7 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
           output: Schema.String,
           instructions: "Answer the question.",
           toolkit,
-          completion: { tool: "answer", required: true, project: ({ result }) => result },
+          completion: { tool: "answer", project: ({ result }) => result },
           policy: { maxTurns: 1, maxToolCalls: 1, onExhaustion: "fail" },
         }),
         scripted.model,
@@ -691,7 +689,6 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
         const runtime = yield* DurableAgentRuntime;
 
         const toolkit = Toolkit.make(
-          Tool.make("handoff", { parameters: Schema.Struct({}), success: Schema.String }),
           Tool.make("answer", { parameters: Schema.Struct({}), success: Schema.String }),
         );
 
@@ -699,7 +696,7 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
           {
             type: "tool-call",
             id: `call-${call}`,
-            name: call === 0 ? "handoff" : "answer",
+            name: "answer",
             params: {},
           },
           { type: "finish", reason: "tool-calls", usage },
@@ -709,12 +706,9 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
           Agent.make("completion-join", {
             input: Schema.Struct({ question: Schema.String }),
             output: Schema.String,
-            instructions: "Hand off, then acknowledge any new instructions.",
+            instructions: "Answer the questions and acknowledge any new instructions.",
             toolkit,
-            completion: { tool: "answer", required: true, project: ({ result }) => result },
-            completionFromTools: [
-              { tool: "handoff", project: ({ result }) => Option.some(result) },
-            ],
+            completion: { tool: "answer", project: ({ result }) => result },
             policy: { maxTurns: 4, maxToolCalls: 4, maxDuration: "30 seconds" },
           }),
           scripted.model,
@@ -741,20 +735,27 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
         );
 
         let followUp: typeof host | undefined;
-        let handoffs = 0;
+        let answers = 0;
 
         const settlements = yield* runtime.processThread(agent, host.threadId).pipe(
           Effect.provide(
             toolkit.toLayer({
-              handoff: Effect.fnUntraced(function* () {
-                handoffs++;
-                followUp = yield* runtime
-                  .submit(agent, { question: "during-handoff" }, submitOptions(thread, "follow-up"))
-                  .pipe(Effect.orDie);
+              answer: Effect.fnUntraced(function* () {
+                answers++;
+                if (answers === 1) {
+                  followUp = yield* runtime
+                    .submit(
+                      agent,
+                      { question: "during-completion" },
+                      submitOptions(thread, "follow-up"),
+                    )
+                    .pipe(Effect.orDie);
 
-                return "delegated";
+                  return "initial answer";
+                }
+
+                return "all covered";
               }),
-              answer: () => Effect.succeed("all covered"),
             }),
           ),
         );
@@ -763,8 +764,8 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
         expect(scripted.prompts).toHaveLength(2);
         expect(promptOccurrences(scripted.prompts[0]!, "second")).toBe(1);
         expect(promptOccurrences(scripted.prompts[0]!, "third")).toBe(1);
-        expect(promptOccurrences(scripted.prompts[1]!, "during-handoff")).toBe(1);
-        expect(handoffs).toBe(1);
+        expect(promptOccurrences(scripted.prompts[1]!, "during-completion")).toBe(1);
+        expect(answers).toBe(2);
         expect(followUp).toBeDefined();
         const records = recordsById(yield* readLog(thread));
 

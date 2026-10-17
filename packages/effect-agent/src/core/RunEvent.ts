@@ -2,6 +2,11 @@ import * as Schema from "effect/Schema";
 
 import { Update } from "./AgentUpdates.ts";
 import { AgentId, ThreadId, DelegationId, RunId, ToolCallId, TurnId } from "./Identifiers.ts";
+import {
+  CompletionMetadata,
+  completionMetadataCheck,
+  completionDispositionCheck,
+} from "./internal/completion.ts";
 import { DelegationDepth } from "./SubagentContract.ts";
 import { Selection } from "./ToolExposure.ts";
 import { RunTotals } from "./Usage.ts";
@@ -178,26 +183,7 @@ export class CompactionPerformed extends Schema.TaggedClass<CompactionPerformed>
  * the re-delegation grant flow (RUN-021) consumes and the durable
  * `SubmissionSettled` record persists (RUN-011).
  */
-export const ExhaustedLimit = Schema.Literals(["tokens", "tool-calls", "turns"]);
-export type ExhaustedLimit = typeof ExhaustedLimit.Type;
-
-const CompletionFinishReason = Schema.Literals(["completed", "model-stop", "budget-exhausted"]);
-
-type CompletionMetadata = Readonly<{
-  finishReason: typeof CompletionFinishReason.Type;
-  exhausted?: ExhaustedLimit | undefined;
-}>;
-
-const validateCompletionMetadata = ({
-  exhausted,
-  finishReason,
-}: CompletionMetadata): string | undefined => {
-  const isBudgetExhausted = finishReason === "budget-exhausted";
-
-  return isBudgetExhausted === (exhausted !== undefined)
-    ? undefined
-    : '`exhausted` must be present exactly when `finishReason` is "budget-exhausted"';
-};
+export { ExhaustedLimit } from "./internal/completion.ts";
 
 const RunCompletedFields = Schema.Struct({
   ...RunEventBase,
@@ -205,22 +191,11 @@ const RunCompletedFields = Schema.Struct({
   /** Schema-encoded application disposition, present only for an ordinary completed Run. */
   runDisposition: Schema.optionalKey(Schema.Json),
   turns: Schema.Int.check(Schema.isGreaterThan(0)),
-  finishReason: CompletionFinishReason,
-  exhausted: Schema.optionalKey(ExhaustedLimit),
+  ...CompletionMetadata.fields,
   /** Own Run usage, excluding attached descendants. Missing legacy reports are unknown. */
   usage: Schema.optionalKey(RunTotals),
   delegatedUsage: Schema.optionalKey(RunTotals),
-}).check(
-  Schema.makeFilter((event) => validateCompletionMetadata(event)),
-  Schema.makeFilter((event) =>
-    event.finishReason === "budget-exhausted" && event.runDisposition !== undefined
-      ? {
-          path: ["runDisposition"],
-          issue: '`runDisposition` is not allowed when `finishReason` is "budget-exhausted"',
-        }
-      : undefined,
-  ),
-);
+}).check(completionMetadataCheck, completionDispositionCheck);
 
 /**
  * Successful terminal event carrying Schema-compatible output and the completed turn count.
@@ -304,14 +279,13 @@ export class SubagentCompleted extends Schema.TaggedClass<SubagentCompleted>()(
   Schema.Struct({
     ...SubagentEventBase,
     turns: Schema.Int.check(Schema.isGreaterThan(0)),
-    finishReason: CompletionFinishReason,
-    exhausted: Schema.optionalKey(ExhaustedLimit),
+    ...CompletionMetadata.fields,
     /**
      * The child's own observed usage. Delegated usage covers its attached descendants separately.
      */
     usage: Schema.optionalKey(RunTotals),
     delegatedUsage: Schema.optionalKey(RunTotals),
-  }).check(Schema.makeFilter((event) => validateCompletionMetadata(event))),
+  }).check(completionMetadataCheck),
 ) {}
 
 /** Records the child run's expected terminal failure using safe, serializable diagnostics. */

@@ -196,19 +196,12 @@ effects into named Steps. The handler may be re-entered after interruption.
 
 **Completion Tool**
 
-The single Definition-designated Tool whose successful call, as the sole application Tool Call,
-projects through the Agent output Schema and completes the Run immediately. It remains an ordinary
-external side effect for authorization and durability; the designation adds terminal semantics,
-not exactly-once execution.
-Provider-executed calls may accompany it only with recorded terminal results and still count toward
-Run budgets.
-
-**Action completion**
-
-An optional Definition-owned projection from an ordinary action Tool's successful canonical result
-to Agent output. The Tool is the sole application call, may accompany terminal provider results,
-and receives no completion-budget exemption. The pure projector may decline completion when the
-whole request remains unfinished.
+The Definition-designated Tool required to produce final output when `completion` is configured.
+Its successful result is projected through the Agent output Schema by a pure, deterministic
+projector; assistant text cannot complete the Run. The call must be the sole application Tool Call
+in its batch. Provider-executed calls may accompany it only with recorded terminal results and
+still count toward Run budgets. Ordinary authorization and durability rules apply; the designation
+does not guarantee exactly-once effects.
 
 **Step**  
 A deterministically named sub-operation within one Durable Tool Call. Its result is
@@ -395,10 +388,9 @@ showing Turns, Tool Calls, tokens against budget, last-call context, and elapsed
 projection-time output, never persisted as canonical history.
 
 **Token Soft Landing**  
-With `onExhaustion: "final-answer"`, a token-breaching response with decodable output settles the
-Run directly, and otherwise the Run takes at most one constrained grace Turn
-(`toolChoice: "none"`), completing with `finishReason: "budget-exhausted"` and the
-`exhausted` dimension marker instead of failing silently.
+With `onExhaustion: "final-answer"`, token exhaustion allows at most one constrained finalization
+opportunity. A completed result carries `finishReason: "budget-exhausted"` and the `exhausted`
+dimension marker. A designated Completion Tool remains required.
 
 ## Persistence concepts
 

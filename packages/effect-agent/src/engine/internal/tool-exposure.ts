@@ -161,7 +161,7 @@ export const exposureSnapshot = Effect.fnUntraced(function* (
     (tool) =>
       Context.get(tool.annotations, DiscoveryTool) ||
       Context.get(tool.annotations, ContextRolloverTool) ||
-      (definition.completion?.required === true && definition.completion.tool === tool.name),
+      definition.completion?.tool === tool.name,
   );
 
   if (

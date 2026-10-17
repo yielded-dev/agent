@@ -171,7 +171,6 @@ const makeReceiptCompletionFixture = (needsApproval = false) => {
     success: Schema.Struct({
       name: Schema.String,
       href: Schema.String,
-      complete: Schema.Boolean,
     }),
     needsApproval,
   });
@@ -186,7 +185,7 @@ const makeReceiptCompletionFixture = (needsApproval = false) => {
   const definition = Agent.make("durable-receipt-completion", {
     input: Schema.Struct({ question: Schema.String }),
     output: Schema.Struct({ answer: Schema.String }),
-    instructions: "Use create only when creation satisfies the whole request; otherwise respond.",
+    instructions: "Create the requested project and return its receipt.",
     toolkit: tools,
     policy: AgentPolicy.make({
       maxTurns: 3,
@@ -195,19 +194,9 @@ const makeReceiptCompletionFixture = (needsApproval = false) => {
       toolConcurrency: 1,
     }),
     completion: {
-      tool: "respond",
-      required: true,
-      project: ({ result }) => result,
+      tool: "create",
+      project: ({ result }) => ({ answer: `Created ${result.name}: ${result.href}` }),
     },
-    completionFromTools: [
-      {
-        tool: "create",
-        project: ({ result }) =>
-          result.complete
-            ? Option.some({ answer: `Created ${result.name}: ${result.href}` })
-            : Option.none(),
-      },
-    ],
   });
 
   return { definition, tools };
@@ -901,7 +890,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
       const toolLayer = tools.toLayer({
         create: () =>
           Ref.update(createCalls, (count) => count + 1).pipe(
-            Effect.as({ name: "Committed name", href: "/projects/created-1", complete: true }),
+            Effect.as({ name: "Committed name", href: "/projects/created-1" }),
           ),
         respond: (parameters) =>
           Ref.update(respondCalls, (count) => count + 1).pipe(Effect.as(parameters)),
@@ -988,7 +977,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
         const tools = fixture.tools.toLayer({
           create: () =>
             Ref.update(starts, (count) => count + 1).pipe(
-              Effect.as({ name: "Project", href: "/project/1", complete: true }),
+              Effect.as({ name: "Project", href: "/project/1" }),
             ),
           respond: () => Effect.die("Recorded provider work must not be replayed"),
         });
@@ -1016,7 +1005,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
             author: "operator",
             reason: "The authoritative product receipt confirms committed creation",
             resolution: ResolutionCompletedWithResult.make({
-              result: { name: "Project", href: "/project/1", complete: true },
+              result: { name: "Project", href: "/project/1" },
               isFailure: false,
             }),
           }),
@@ -1085,7 +1074,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
             output: Schema.String,
             instructions: "Research, then deliver alone.",
             toolkit: tools,
-            completion: { tool: "deliver", required: true, project: ({ result }) => result },
+            completion: { tool: "deliver", project: ({ result }) => result },
             policy: {
               maxTurns: 5,
               maxToolCalls: 8,

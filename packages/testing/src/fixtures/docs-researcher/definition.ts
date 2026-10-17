@@ -205,7 +205,6 @@ export const DocSummarizer = Agent.make("doc-summarizer", {
     toolConcurrency: 1,
   }),
   description: "Summarize one bounded research document fetched through MCP content tools.",
-  metadata: { deploymentClass: "DN", phase: "P7" },
 });
 
 // ---------------------------------------------------------------------------
@@ -328,7 +327,6 @@ export const DocsResearcher = Agent.make("docs-researcher", {
     toolConcurrency: 2,
   }),
   description: "Coordinate per-document summarization through one declared delegation Tool.",
-  metadata: { deploymentClass: "DN", phase: "P7" },
 });
 
 /** The default two-document research mission. */

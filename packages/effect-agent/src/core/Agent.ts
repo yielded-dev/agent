@@ -6,7 +6,6 @@ import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import type * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
-import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 import * as S from "effect/Schema";
 
@@ -89,8 +88,9 @@ export interface CompletionProjectionInput<Parameters = unknown, Result = unknow
 }
 
 /**
- * One application Tool whose successful result can complete its owning Agent when it is the
- * only application call. Provider-executed calls may accompany it only with terminal results.
+ * The required final Tool whenever configured. Every model Turn must use Tools, and only this
+ * Tool's successful result can complete the Agent when it is the sole application call.
+ * Provider-executed calls may accompany it only with terminal results, outside grace finalization.
  * Mixed, wholly unexecuted application batches are rejected with failed Tool results so the
  * model can correct them within ordinary Run budgets; completed provider results are retained.
  * Missing provider results and invalid pending resumed batches fail closed. The completion
@@ -102,8 +102,6 @@ export interface CompletionToolDeclaration<
   Output = unknown,
 > {
   readonly tool: string;
-  /** Require native Tool use on every model Turn and this Tool for final completion. */
-  readonly required?: boolean | undefined;
   /**
    * Pure, deterministic projection: recovery may reevaluate a recorded Tool result before
    * RunCompleted commits. Once committed, that stored output wins across later code changes.
@@ -113,30 +111,6 @@ export interface CompletionToolDeclaration<
 
 type CompletionToolFor<ToolkitValue extends Toolkit.Any, Output> = {
   readonly [Name in keyof ToolkitValue["tools"] & string]: CompletionToolDeclaration<
-    Tool.Parameters<ToolkitValue["tools"][Name]>,
-    Tool.Success<ToolkitValue["tools"][Name]>,
-    Output
-  > & { readonly tool: Name };
-}[keyof ToolkitValue["tools"] & string];
-
-/**
- * An ordinary action Tool whose canonical success may satisfy the whole request.
- * Projectors must be pure and deterministic: recovery re-evaluates them. None preserves
- * ordinary continuation; Some is validated as the Agent output. These Tools must be the sole
- * application call; terminal provider results may accompany them. They never receive the
- * required completion Tool's exhaustion allowance.
- */
-export interface CompletionFromToolDeclaration<
-  Parameters = unknown,
-  Result = unknown,
-  Output = unknown,
-> {
-  readonly tool: string;
-  readonly project: (input: CompletionProjectionInput<Parameters, Result>) => Option.Option<Output>;
-}
-
-type CompletionFromToolFor<ToolkitValue extends Toolkit.Any, Output> = {
-  readonly [Name in keyof ToolkitValue["tools"] & string]: CompletionFromToolDeclaration<
     Tool.Parameters<ToolkitValue["tools"][Name]>,
     Tool.Success<ToolkitValue["tools"][Name]>,
     Output
@@ -183,12 +157,10 @@ export interface Definition<
   readonly policy: AgentPolicy;
   /** Explicit policy fields, retained so delegated runs can inherit omitted fields. */
   readonly policyOverrides?: Partial<AgentPolicyInput> | undefined;
-  /** Optional successful Tool result that projects directly to the Agent output and settles. */
+  /** When configured, this Tool must succeed to produce final output; ordinary text cannot settle. */
   readonly completion?: CompletionToolDeclaration | undefined;
-  readonly completionFromTools?: ReadonlyArray<CompletionFromToolDeclaration> | undefined;
   readonly runDisposition?: RunDispositionValue | undefined;
   readonly description?: string | undefined;
-  readonly metadata?: Readonly<Record<string, string>> | undefined;
 }
 
 /** Options for a model-agnostic agent definition. */
@@ -213,12 +185,8 @@ export interface DefinitionOptions<
   readonly toolExposure?: Configuration | undefined;
   readonly policy?: Partial<AgentPolicyInput> | undefined;
   readonly completion?: CompletionToolFor<ToolkitValue, OutputSchema["Type"]> | undefined;
-  readonly completionFromTools?:
-    | ReadonlyArray<CompletionFromToolFor<ToolkitValue, OutputSchema["Type"]>>
-    | undefined;
   readonly runDisposition?: RunDispositionValue | undefined;
   readonly description?: string | undefined;
-  readonly metadata?: Readonly<Record<string, string>> | undefined;
 }
 
 type AnyDefinitionShape = Definition<
@@ -264,35 +232,6 @@ export interface Any {
   readonly definition: AnyDefinition;
   readonly model?: unknown;
 }
-
-/** Native Tool configuration for inspection; it does not predict an invocation's outcome. */
-export const ToolInspection = S.Struct({
-  name: S.String,
-  failureMode: S.Literals(["error", "return"]),
-  /** False for provider-executed Tools, whose results do not pass through local handlers. */
-  requiresHandler: S.Boolean,
-});
-
-export type ToolInspection = typeof ToolInspection.Type;
-
-/**
- * Inspect registered native Tools in declaration order without acquiring handlers or a Model.
- * This is the full Definition toolkit, before run-specific visibility or exposure filtering.
- * `failureMode` is Effect AI's configured mode, including its `"error"` default. Handler-level
- * recovery, programmatic invocation and Subagent containment can change where failures go;
- * consult execution diagnostics for the actual route. No arguments, results or services are read.
- */
-export const inspectTools = (agent: AnyDefinition | Any): ReadonlyArray<ToolInspection> => {
-  const definition = "definition" in agent ? agent.definition : agent;
-
-  return Object.values(definition.toolkit.tools).map((tool) =>
-    ToolInspection.make({
-      name: tool.name,
-      failureMode: tool.failureMode,
-      requiresHandler: !Tool.isProviderDefined(tool) || tool.requiresHandler,
-    }),
-  );
-};
 
 type DefinitionOf<AgentValue extends AnyDefinition | Any> = AgentValue extends {
   readonly definition: infer DefinitionValue extends AnyDefinition;
@@ -566,26 +505,10 @@ export function make(
     readonly toolExposure?: Configuration | undefined;
     readonly policy?: Partial<AgentPolicyInput> | undefined;
     readonly completion?: CompletionToolDeclaration | undefined;
-    readonly completionFromTools?: ReadonlyArray<CompletionFromToolDeclaration> | undefined;
     readonly runDisposition?: RunDispositionDeclaration<never, Schema.Top> | undefined;
     readonly description?: string | undefined;
-    readonly metadata?: Readonly<Record<string, string>> | undefined;
   },
 ): AnyDefinition {
-  const completionNames = new Set<string>();
-
-  for (const declaration of options.completionFromTools ?? []) {
-    if (declaration.tool === options.completion?.tool || completionNames.has(declaration.tool)) {
-      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Agent.make synchronously rejects duplicate completion declarations before constructing the Definition.
-      throw new Error(`Tool ${declaration.tool} has more than one completion declaration`);
-    }
-    if (!Object.hasOwn(options.toolkit.tools, declaration.tool)) {
-      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Agent.make synchronously rejects completion declarations for absent Tools.
-      throw new Error(`Unknown completion Tool ${declaration.tool}`);
-    }
-    completionNames.add(declaration.tool);
-  }
-
   const tools = Object.values(options.toolkit.tools);
 
   const readonlyTools = tools.map((tool) =>
@@ -613,15 +536,8 @@ export function make(
             initialToolNames: Object.freeze([...(options.toolExposure.initialToolNames ?? [])]),
           }),
     id: S.decodeSync(AgentId)(id),
-    metadata: options.metadata === undefined ? undefined : Object.freeze({ ...options.metadata }),
     completion:
       options.completion === undefined ? undefined : Object.freeze({ ...options.completion }),
-    completionFromTools:
-      options.completionFromTools === undefined
-        ? undefined
-        : Object.freeze(
-            options.completionFromTools.map((declaration) => Object.freeze({ ...declaration })),
-          ),
     runDisposition:
       options.runDisposition === undefined
         ? undefined

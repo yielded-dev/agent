@@ -94,5 +94,4 @@ export const TravelPlannerPhase2 = Agent.make("travel-planner-phase-2", {
   }),
   description:
     "Build a review-only itinerary and require approval before creating a temporary hold.",
-  metadata: { deploymentClass: "E", phase: "P2" },
 });

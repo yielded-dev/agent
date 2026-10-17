@@ -891,7 +891,6 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
         toolkit: Toolkit.merge(reviewToolkit, reviewRecording, researchCompletion, webToolkit),
         completion: {
           tool: "finish_research",
-          required: true,
           project: ({ parameters }) => parameters,
         },
         policy: AgentPolicy.make({
@@ -1001,12 +1000,10 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
           ),
           completion: {
             tool: "submit_review",
-            required: true,
             project: ({ parameters }) => parameters,
           },
           policy: reviewPolicy(options.costControl !== undefined, configuration.contextTokenLimit),
           description: "Review every admitted change and report concrete defects.",
-          metadata: { deploymentClass: "E", surface: "read-only" },
         }),
         options.model,
       );

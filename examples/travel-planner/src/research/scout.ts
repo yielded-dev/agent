@@ -28,7 +28,7 @@ export const updatingResearchScout = Agent.make("travel-research-scout-v4", {
     " Use emit_update after verifying your first useful finding and later material changes, before finishing the full pass. Include source URLs and uncertainty. Continue the remaining research after sending the milestone. Do not send generic status updates or private reasoning." +
     " Keep the finish_research summary below 4000 characters and the complete findings JSON below 8 KiB. Put source-specific evidence in source notes instead of repeating it in the summary. A rejected finish_research draft is not completion: correct it using the tool's feedback and submit again in this same pass. Preserve uncertainty and useful source links; do not restart research merely to shorten the answer." +
     " Call emit_update with { value: { summary, sources } } for at most three distinct useful sourced milestones per pass. A milestone is provisional, not completion. Never send waiting, plans, private reasoning, or repeated findings. Continue research if an update is refused; finish_research still delivers the final findings.",
-  completion: { tool: "finish_research", required: true, project: ({ result }) => result },
+  completion: { tool: "finish_research", project: ({ result }) => result },
 });
 
 export const UpdatingResearchScout = Subagent.make("research_scout", {

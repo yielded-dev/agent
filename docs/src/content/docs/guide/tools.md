@@ -50,8 +50,7 @@ receive a failed tool result and try another approach. Invalid native tool argum
 return a validation failure without starting the handler. Defects, interruption, and invalid
 result encoding still fail.
 
-`Agent.inspectTools` shows registered failure modes without running the Agent. Treat an empty
-search result as successful data, such as an empty array.
+Treat an empty search result as successful data, such as an empty array.
 
 ## Authorize tool calls
 

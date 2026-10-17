@@ -780,7 +780,7 @@ it.effect(
               fromOutput: () => "completed",
             },
             toolkit,
-            completion: { tool: "pay", required: true, project: ({ result }) => result },
+            completion: { tool: "pay", project: ({ result }) => result },
             policy: { maxTurns: 4, maxToolCalls: 4, maxDuration: "1 minute" },
           }),
           Model.make(

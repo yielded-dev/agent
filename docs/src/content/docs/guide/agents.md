@@ -31,23 +31,25 @@ and history services and runs it. One definition can serve many Threads.
 
 ## What the definition owns
 
-| Field                 | Purpose                                                                         |
-| --------------------- | ------------------------------------------------------------------------------- |
-| ID                    | Stable Agent identity; keep it independent of deployments                       |
-| `input` / `output`    | Effect Schemas for accepted input and validated final output                    |
-| `instructions`        | Static instructions or a function of decoded input; may return an Effect        |
-| `toolkit`             | Native Effect AI tools with application-provided handlers                       |
-| `policy`              | Execution limits; omitted values use [defaults](/concepts/budgets/)             |
-| `inputPrompt`         | Optional projection controlling what input reaches the model                    |
-| `completion`          | Optional tool whose successful result becomes final output                      |
-| `completionFromTools` | Optional pure projections from successful actions to completed output           |
-| `updates`             | Schema for intentional intermediate findings                                    |
-| `runDisposition`      | Schema and selector for ordinary completed output; omitted on budget exhaustion |
+| Field              | Purpose                                                                         |
+| ------------------ | ------------------------------------------------------------------------------- |
+| ID                 | Stable Agent identity; keep it independent of deployments                       |
+| `input` / `output` | Effect Schemas for accepted input and validated final output                    |
+| `instructions`     | Static instructions or a function of decoded input; may return an Effect        |
+| `toolkit`          | Native Effect AI tools with application-provided handlers                       |
+| `policy`           | Execution limits; omitted values use [defaults](/concepts/budgets/)             |
+| `inputPrompt`      | Optional projection controlling what input reaches the model                    |
+| `completion`       | Designated tool required for final output when configured                       |
+| `updates`          | Schema for intentional intermediate findings                                    |
+| `runDisposition`   | Schema and selector for ordinary completed output; omitted on budget exhaustion |
 
 Final output is schema-validated JSON by default. Use `Output.text(Schema.String)` for an
-ordinary text reply. `completion` can require a specific final tool; its projector must be
-pure and deterministic because recovery may reevaluate recorded results. Completion calls
-must be the sole application call in their batch.
+ordinary text reply. To require a final tool, set `completion: { tool, project }`. The Agent must
+then complete through that tool; assistant text cannot complete the Run.
+
+`project` receives the tool's `{ parameters, result }` and returns the Agent's output. It must
+be pure and deterministic because recovery may reevaluate recorded results. The completion tool
+must be the sole application call in its batch.
 
 ## Model and resource ownership
 
