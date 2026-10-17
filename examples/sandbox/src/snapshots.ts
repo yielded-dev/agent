@@ -92,7 +92,7 @@ const make = Effect.gen(function* () {
     })),
   );
 
-  const idle = Effect.fnUntraced(function* (allowUnknown = false) {
+  const idle = Effect.fnUntraced(function* (allowUnresolved = false) {
     const active = yield* storage.kv.get(SHELL_ACTIVE_KEY);
 
     if (active !== undefined) {
@@ -102,7 +102,7 @@ const make = Effect.gen(function* () {
         yield* storage.kv.get(`${SHELL_COMMAND_PREFIX}${id}`),
       );
 
-      if (!allowUnknown || command.status !== "unknown") return false;
+      if (!allowUnresolved || command.status !== "unknown") return false;
     }
     let cursor: ThreadWorkRequest["cursor"];
 
@@ -113,16 +113,9 @@ const make = Effect.gen(function* () {
         ...(cursor === undefined ? {} : { cursor }),
       });
 
-      if (
-        page.entries.some(
-          ({ owner, state, wait }) =>
-            !(
-              allowUnknown &&
-              owner._tag === "Operation" &&
-              (state === "unknown" || wait === "effect-resolution")
-            ),
-        )
-      )
+      // Nonterminal submissions retain Admission owners. After settlement,
+      // unresolved Operations can still be indexed as ready; restore preserves them.
+      if (page.entries.some(({ owner }) => !allowUnresolved || owner._tag !== "Operation"))
         return false;
       cursor = page.cursor;
     } while (cursor !== undefined);
