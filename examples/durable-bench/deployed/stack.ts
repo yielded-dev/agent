@@ -47,6 +47,7 @@ export default Alchemy.Stack(
     const build = yield* Config.NonEmptyString("DURABLE_BENCH_BUILD");
     const token = Config.Redacted("DURABLE_BENCH_TOKEN");
     const cpu = yield* Config.String("DURABLE_BENCH_CPU").pipe(Config.withDefault("false"));
+    const writes = yield* Config.String("DURABLE_BENCH_WRITES").pipe(Config.withDefault("false"));
 
     const resourcePrefix = yield* Config.NonEmptyString("DURABLE_BENCH_PREFIX").pipe(
       Config.withDefault("durable-bench"),
@@ -166,6 +167,7 @@ export default Alchemy.Stack(
               ...env,
               BUILD: assigned.build,
               CPU: cpu,
+              WRITES: writes,
               PROVIDER_URL: provider,
               ...(target === "effect-ai-floor"
                 ? {

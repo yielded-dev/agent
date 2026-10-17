@@ -2,6 +2,8 @@ import { Receipt } from "@yielded/agent/receipt";
 import { Settlement } from "@yielded/agent/submission-ledger";
 import { Schema } from "effect";
 
+import { UsageSnapshot } from "./usage.ts";
+
 export const TARGETS = ["yielded", "pi", "tardie", "effect-ai-floor"] as const;
 export const Target = Schema.Literals(TARGETS);
 export type Target = typeof Target.Type;
@@ -166,6 +168,7 @@ export const SeedResult = Schema.Struct({
   ...SeedBatch.fields,
   fingerprint: Schema.NonEmptyString,
   identity: Identity,
+  storageUsage: Schema.optionalKey(UsageSnapshot),
   providerColos: Schema.Array(Schema.String),
 });
 
@@ -200,6 +203,7 @@ export const ImportResult = Schema.Struct({
   compatibility: Schema.optionalKey(FixtureCompatibility),
   directoryTables: Schema.optionalKey(Counts),
   identity: Identity,
+  storageUsage: Schema.optionalKey(UsageSnapshot),
 });
 
 export type ImportResult = typeof ImportResult.Type;
@@ -296,6 +300,7 @@ export const Metrics = Schema.Struct({
   ok: Schema.Literal(true),
   query: Query,
   identity: Identity,
+  storageUsage: Schema.optionalKey(UsageSnapshot),
   directory: Schema.optionalKey(Identity),
   directoryUsed: Schema.optionalKey(Schema.Boolean),
   calls: Schema.Array(ProviderCall),
@@ -312,6 +317,7 @@ export const MetricsUnavailable = Schema.Struct({
   ok: Schema.Literal(false),
   reason: Schema.Literals(["incarnation-lost", "sample-mismatch"]),
   identity: Identity,
+  storageUsage: Schema.optionalKey(UsageSnapshot),
   requestedSample: Schema.String,
   observedSample: Schema.optionalKey(Schema.String),
 });
@@ -371,6 +377,7 @@ export interface Env {
   BENCH_TOKEN: string;
   PROVIDER_URL: string;
   CPU?: string | boolean;
+  WRITES?: string;
   VERSION?: { id: string };
 }
 
@@ -487,5 +494,7 @@ export type RestoreChunk = typeof RestoreChunk.Type;
 
 export const RestoreAck = Schema.Struct({
   ok: Schema.Literal(true),
+  identity: Schema.optionalKey(Identity),
+  storageUsage: Schema.optionalKey(UsageSnapshot),
   directoryTables: Schema.optionalKey(Counts),
 });

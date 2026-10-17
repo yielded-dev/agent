@@ -1,9 +1,11 @@
 import { Effect, Option, Schema } from "effect";
 import { Command, Flag } from "effect/cli";
 
-import { ProfileType } from "./model.ts";
+import { DEFAULT_ROW_LIMIT } from "./budget.ts";
+import { Cloudflare } from "./cloudflare.ts";
+import { type Options, ProfileType } from "./model.ts";
 import { BenchError } from "./platform.ts";
-import { resume, run, teardown } from "./run.ts";
+import { previewCost, resume, run, teardown } from "./run.ts";
 import { History, RESTORE_BYTES, Target } from "./worker/protocol.ts";
 
 const positive = (name: string) => Flag.Int(name).pipe(Flag.withSchema(History));
@@ -11,9 +13,31 @@ const positive = (name: string) => Flag.Int(name).pipe(Flag.withSchema(History))
 export const command = Command.make(
   "deployed",
   {
-    preset: Flag.Literals("preset", ["quick", "full"]).pipe(
-      Flag.withDefault("quick"),
-      Flag.withDescription("Paired screening (12 Objects) or balanced final matrix (30 Objects)"),
+    preset: Flag.Literals("preset", ["screen", "quick", "full"]).pipe(
+      Flag.withDefault("screen"),
+      Flag.withDescription("Exploratory screen (4 Objects, history 50), quick (12), or full (30)"),
+    ),
+    costOnly: Flag.Boolean("cost-only").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Print the write reservation estimate without building or deploying"),
+    ),
+    writes: Flag.Boolean("writes").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Diagnostic native write counters; excludes timing conclusions"),
+    ),
+    maxWrittenRows: positive("max-written-rows").pipe(
+      Flag.withDefault(DEFAULT_ROW_LIMIT),
+      Flag.withDescription("Maximum estimated row writes admitted for this run (default: 1000000)"),
+    ),
+    dailyWrittenRows: positive("daily-written-rows").pipe(
+      Flag.withDefault(DEFAULT_ROW_LIMIT),
+      Flag.withDescription(
+        "Shared local account reservation limit over 24 hours (default: 1000000)",
+      ),
+    ),
+    budgetReason: Flag.String("budget-reason").pipe(
+      Flag.optional,
+      Flag.withDescription("Decision supported by a large run or raised write budget"),
     ),
     restoreBytes: Flag.Int("restore-bytes").pipe(
       Flag.withSchema(
@@ -50,7 +74,9 @@ export const command = Command.make(
     ),
     sizes: Flag.String("sizes").pipe(
       Flag.optional,
-      Flag.withDescription("History lengths (quick/full: 1000; build-history: 50,250,1000,3500)"),
+      Flag.withDescription(
+        "History lengths (screen: 50; quick/full: 1000; build-history: 50,250,1000,3500)",
+      ),
     ),
     ttft: Flag.String("ttft").pipe(
       Flag.optional,
@@ -64,11 +90,15 @@ export const command = Command.make(
     ),
     objects: positive("objects").pipe(
       Flag.optional,
-      Flag.withDescription("Objects per target/cell (quick: 12; full: 30; build-history: 2)"),
+      Flag.withDescription(
+        "Objects per target/cell (screen: 4; quick: 12; full: 30; build-history: 2)",
+      ),
     ),
     repeats: positive("repeats").pipe(
       Flag.optional,
-      Flag.withDescription("Warm turns per Object (quick: 12; rigorous: 6; build-history: 9)"),
+      Flag.withDescription(
+        "Warm turns per Object (screen: 3; quick: 12; full: 6; build-history: 9)",
+      ),
     ),
     concurrency: positive("concurrency").pipe(
       Flag.optional,
@@ -149,11 +179,16 @@ export const command = Command.make(
     ),
   },
   Effect.fnUntraced(function* (flags) {
-    if (flags.teardown) return yield* teardown;
+    if (flags.costOnly && (flags.teardown || Option.isSome(flags.resume)))
+      return yield* BenchError.make({
+        message: "--cost-only cannot be combined with --resume or --teardown.",
+      });
+    if (flags.teardown) return yield* teardown.pipe(Effect.provide(Cloudflare.layer));
     const runName = Option.getOrUndefined(flags.resume);
 
-    if (runName !== undefined) return yield* resume(runName);
+    if (runName !== undefined) return yield* resume(runName).pipe(Effect.provide(Cloudflare.layer));
     const rigorous = flags.rigorous || flags.preset === "full";
+    const screen = !rigorous && flags.preset === "screen";
 
     const baseline = flags.buildHistory
       ? undefined
@@ -170,7 +205,9 @@ export const command = Command.make(
     );
 
     const sizes = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(History))(
-      Option.getOrElse(flags.sizes, () => (flags.buildHistory ? "50,250,1000,3500" : "1000"))
+      Option.getOrElse(flags.sizes, () =>
+        flags.buildHistory ? "50,250,1000,3500" : screen ? "50" : "1000",
+      )
         .split(",")
         .map(Number),
     );
@@ -205,6 +242,15 @@ export const command = Command.make(
 
     const profiles = [...new Set(flags.profile.flat())];
 
+    if (
+      flags.writes &&
+      (targets.length !== 1 || targets[0] !== "yielded" || profiles.length > 0 || flags.cpu)
+    )
+      return yield* BenchError.make({
+        message:
+          "--writes requires a single Yielded target without CPU or profiler instrumentation.",
+      });
+
     if (flags.coldSamples !== 2 && !flags.isolateCold)
       return yield* BenchError.make({ message: "Extra cold samples require --isolate-cold." });
 
@@ -227,7 +273,7 @@ export const command = Command.make(
     const profileAfter = Option.getOrUndefined(flags.profileAfter);
 
     const objects = Option.getOrElse(flags.objects, () =>
-      flags.buildHistory ? 2 : rigorous ? 30 : 12,
+      flags.buildHistory ? 2 : rigorous ? 30 : screen ? 4 : 12,
     );
 
     if (
@@ -254,7 +300,9 @@ export const command = Command.make(
         message: "Counterbalanced comparison requires an even Object count.",
       });
 
-    const concurrency = Option.getOrElse(flags.concurrency, () => (flags.buildHistory ? 6 : 12));
+    const concurrency = Option.getOrElse(flags.concurrency, () =>
+      flags.buildHistory ? 6 : screen ? 4 : 12,
+    );
 
     if (!flags.buildHistory && concurrency < 2)
       return yield* BenchError.make({
@@ -292,7 +340,12 @@ export const command = Command.make(
     if (flags.buildHistory && profiles.length > 0 && profileAfter === undefined)
       return yield* BenchError.make({ message: "History profiling requires --profile-after." });
 
-    return yield* run({
+    const options: Options = {
+      writes: flags.writes,
+      costOnly: flags.costOnly,
+      maxWrittenRows: flags.maxWrittenRows,
+      dailyWrittenRows: flags.dailyWrittenRows,
+      ...(Option.isSome(flags.budgetReason) ? { budgetReason: flags.budgetReason.value } : {}),
       ...(Option.isSome(flags.seed) ? { seed: flags.seed.value } : {}),
       ...(Option.isSome(flags.fixtureDirectory)
         ? { fixtureDirectory: flags.fixtureDirectory.value }
@@ -306,7 +359,9 @@ export const command = Command.make(
       ttft: [...new Set(ttft)],
       textStreaming: flags.textStreaming,
       objects,
-      repeats: Option.getOrElse(flags.repeats, () => (flags.buildHistory ? 9 : rigorous ? 6 : 12)),
+      repeats: Option.getOrElse(flags.repeats, () =>
+        flags.buildHistory ? 9 : rigorous ? 6 : screen ? 3 : 12,
+      ),
       concurrency,
       buildConcurrency,
       cold: true,
@@ -319,7 +374,11 @@ export const command = Command.make(
       rigorous,
       ...(baseline === undefined ? {} : { baseline }),
       ...(candidate === undefined ? {} : { candidate }),
-    });
+    };
+
+    return yield* flags.costOnly
+      ? previewCost(options)
+      : run(options).pipe(Effect.provide(Cloudflare.layer));
   }),
 ).pipe(
   Command.withDescription(

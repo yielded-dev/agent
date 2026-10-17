@@ -85,6 +85,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
   const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "durable-bench-restore-" });
   const fixtures: BulkFixture[] = [];
   const chunks = new Map<string, string[]>();
+  const writeEstimates = new Map<string, number>();
   const formats = new Set<string>();
 
   for (const target of (options.targets ?? ["yielded"]).filter(
@@ -179,6 +180,22 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         try: () => dumpDatabase(db),
         catch: () => FixtureError.make({ message: `Read ${name} schema` }),
       });
+
+      // Count occupied table/index cells, including partial and implicit indexes.
+      // Multiplying every row by every partial index grossly overestimates these fixtures.
+      const entries = yield* Effect.try({
+        try: () =>
+          Schema.decodeUnknownSync(Schema.Struct({ rows: Schema.Natural }))(
+            db
+              .prepare(
+                `SELECT COALESCE(SUM(d.ncell), 0) AS rows FROM dbstat d JOIN sqlite_master s ON s.name = d.name WHERE s.tbl_name IN (${exported.tables.map(() => "?").join(",")})`,
+              )
+              .get(...exported.tables.map((table) => table.name)),
+          ).rows,
+        catch: () => FixtureError.make({ message: `Cannot estimate ${name} table/index writes` }),
+      });
+
+      writeEstimates.set(name, entries);
 
       // Describe persisted bytes, not the source code that happens to open them.
       // Each frozen arm must still pass the native open/upgrade preflight.
@@ -320,5 +337,10 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
       chunks.set(`effect-ai-floor-${history}`, []);
     }
 
-  return { fixtures, chunks, formatKey: hash([...formats].sort().join("\n")).slice(0, 16) };
+  return {
+    fixtures,
+    chunks,
+    writeEstimates,
+    formatKey: hash([...formats].sort().join("\n")).slice(0, 16),
+  };
 });

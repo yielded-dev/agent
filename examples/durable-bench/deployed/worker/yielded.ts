@@ -23,6 +23,7 @@ import { INSTRUCTIONS } from "../text.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
 import { type Env, type Query } from "./protocol.ts";
+import { installUsage } from "./usage.ts";
 
 export const tools = Toolkit.make(
   Tool.make("lookup", {
@@ -94,6 +95,7 @@ export class YieldedDO extends YieldedDOBase {
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
     const constructedMs = Date.now();
 
+    if (env.WRITES === "true") installUsage(ctx.storage);
     super(ctx, env);
     this.host = new Host(ctx, env, "yielded", constructedMs);
   }
