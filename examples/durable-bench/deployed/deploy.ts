@@ -38,6 +38,7 @@ export const deployments = Effect.gen(function* () {
     bundle: Schema.String,
     build: Schema.String,
     cpu: Schema.Boolean,
+    writes: Schema.optionalKey(Schema.Boolean),
     workers: Schema.optionalKey(Workers),
     workerBuilds: Schema.optionalKey(Schema.Record(Name, WorkerBuild)),
     namespaceLayout: Schema.optionalKey(Schema.Literal("selected-target")),
@@ -167,6 +168,7 @@ export const deployments = Effect.gen(function* () {
         DURABLE_BENCH_BUILD: stack.build,
         DURABLE_BENCH_TOKEN: state.token,
         DURABLE_BENCH_CPU: String(stack.cpu),
+        DURABLE_BENCH_WRITES: String(stack.writes ?? false),
         DURABLE_BENCH_PROVIDER: provider,
         DURABLE_BENCH_SUBDOMAIN: cloud.subdomain,
       },
@@ -355,6 +357,7 @@ export const deployments = Effect.gen(function* () {
     workerBuilds: Readonly<Record<string, WorkerBuild>>,
     persistent = false,
     probe = true,
+    writes = false,
   ) {
     yield* Schema.decodeEffect(Name)(name);
     const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(workers);
@@ -416,6 +419,7 @@ export const deployments = Effect.gen(function* () {
         ),
       ),
       cpu,
+      writes,
       workers: names,
       workerBuilds: retainedBuilds,
       namespaceLayout: "selected-target",

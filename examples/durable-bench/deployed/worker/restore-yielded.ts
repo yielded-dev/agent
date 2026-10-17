@@ -6,9 +6,11 @@ import { errorText, Failure, readQuery, type Env } from "./protocol.ts";
 import { RestoreDO } from "./restore-worker.ts";
 import { restore } from "./restore.ts";
 import { FixtureError, FixtureExport, RestoreStorage } from "./storage.ts";
+import { installUsage } from "./usage.ts";
 
 export class YieldedDO extends RestoreDO {
   constructor(ctx: DurableObjectState, env: Env) {
+    if (env.WRITES === "true") installUsage(ctx.storage);
     super(ctx, env, "yielded");
   }
   override async fetch(request: Request): Promise<Response> {
@@ -39,7 +41,11 @@ export class YieldedDO extends RestoreDO {
         ),
       );
 
-      return Response.json({ ...restored, identity: this.host.meter.identity() });
+      return Response.json({
+        ...restored,
+        identity: this.host.meter.identity(),
+        ...this.host.storageUsage(),
+      });
     } catch (cause) {
       return Response.json(
         Schema.encodeSync(Failure)({

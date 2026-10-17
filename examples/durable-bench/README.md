@@ -14,13 +14,35 @@ Dependencies for pi and tardie are installed
 in the isolated `third-party` workspace automatically on first use. Repository checks do not
 require that optional install.
 
-From the repository root, screen a candidate against `origin/main`:
+Use local correctness checks and saved fixtures to select candidates before deploying.
+From the repository root, preview the write budget for a candidate against `origin/main`:
 
 ```sh
-DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --preset quick --candidate HEAD --fixture-directory /path/to/saved-fixtures
+DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --cost-only --candidate HEAD --fixture-directory /path/to/saved-fixtures
 ```
 
-Quick defaults to Yielded, 1,000 historical turns, TTFT 0 and 12 Objects. Each build
+Remove `--cost-only` to run. The default `screen` preset uses Yielded, 50 historical turns,
+TTFT 0, four Objects and three warm turns. This is exploratory evidence; use a larger
+sample for small differences and select long histories only when the question requires them.
+`--cost-only` reads local fixtures without credentials, builds, deployment or a reservation.
+
+Each run must fit `--max-written-rows` and the shared rolling 24-hour
+`--daily-written-rows` allowance, both defaulting to 1,000,000 rows. Reservations count
+table and index entries, setup retries, and a per-turn allowance. All prefixes and worktrees
+on this machine share the account ledger in `~/.local/state/durable-bench-budget`.
+Failed and interrupted runs retain their reservation; resuming reserves again. These are
+conservative admission estimates, not an exact billing cap, and do not cover other machines
+or unrelated Workers. Raising either limit, selecting full mode, or requesting histories
+above 1,000 turns requires `--budget-reason` naming the decision the run supports.
+At [Cloudflare's current paid rate](https://developers.cloudflare.com/durable-objects/platform/pricing/),
+one million additional written rows costs $1 after the included allowance; other charges are separate.
+
+Use `--writes` for a separate diagnostic run with native SQL and KV/alarm counters.
+Its report omits timing comparisons because the counters add instrumentation. JSON preserves
+per-phase cumulative counts and explicitly unavailable measurements, including cleanup and
+lost incarnations. These counts do not constitute a complete Cloudflare invoice.
+
+`--preset quick` uses 1,000 historical turns, TTFT 0 and 12 Objects. Each build
 runs one excluded preparation turn, restarts the Object, then measures a cold turn,
 twelve sequential warm turns and a second cold turn after another reset. Preparation
 awaits native post-settlement writers so revision-specific derived state exists. Both builds
@@ -34,7 +56,7 @@ includes Object medians, paired differences and ratios with Object-level bootstr
 the first-pass minus second-pass order effect, and setup, measurement and teardown wall times. Screening does not establish a small
 optimization when the interval includes zero.
 
-Quick runs retain one per-Object Worker pool per prefix. Changing pool options destroys
+Screen and quick runs retain one per-Object Worker pool per prefix. Changing pool options destroys
 the previous pool before allocating its replacement. Each Worker declares only its target's
 namespaces (one for Yielded or pi, two for Tardie); the Driver adds one namespace for durable
 measurement receipts. Immediately before each deploy, a live
@@ -56,7 +78,8 @@ DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench
 ```
 
 Use `--preset full` (or `--rigorous`) for 30 Objects, six warm repeats
-and the balanced ABBA/BAAB sequence. Add `--cpu` for invocation CPU in either preset. Both presets preserve the driver timer, cold
+and the balanced ABBA/BAAB sequence, after reviewing its estimate and setting explicit budgets.
+Add `--cpu` for invocation CPU. All presets preserve the driver timer, cold
 restart acknowledgement, warm residency and transcript checks. Each cohort has a
 separate Worker; isolate sharing rejects its measurements. Independent cells run
 concurrently, with `--concurrency` limiting measured Objects and `--build-concurrency`
@@ -69,8 +92,8 @@ the assigned arms and records any missing peers. Seeded setup order is independe
 measurement order.
 
 ```sh
-vp run deployed -- --preset full --baseline origin/main --candidate HEAD --fixture-directory /path/to/saved-fixtures
-vp run deployed -- --sizes 1000,10000 --ttft 0,400 --objects 8 --fixture-directory /path/to/saved-fixtures
+vp run deployed -- --cost-only --preset full --budget-reason "Confirm the screened candidate" --baseline origin/main --candidate HEAD --fixture-directory /path/to/saved-fixtures
+vp run deployed -- --cost-only --sizes 1000,10000 --budget-reason "Check history scaling" --ttft 0,400 --objects 8 --fixture-directory /path/to/saved-fixtures
 vp run deployed -- --targets yielded,pi --text-streaming --ttft 400 --fixture-directory /path/to/saved-fixtures
 vp run deployed -- --targets yielded,effect-ai-floor --text-streaming --cpu --fixture-directory /path/to/saved-fixtures
 ```
@@ -98,7 +121,7 @@ reported colos remain ingress metadata, not proof of either Object's physical lo
 building history, cold turn, warm turn and SQLite storage. It skips local fixtures entirely.
 
 ```sh
-vp run deployed -- --build-history --build-concurrency 24 --concurrency 3
+vp run deployed -- --build-history --targets yielded --sizes 50 --objects 1 --concurrency 1
 ```
 
 Defaults are 50, 250, 1,000 and 3,500 historical turns, two independent Objects per

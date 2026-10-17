@@ -17,6 +17,7 @@ import {
   Target,
   WorkerStart,
 } from "./worker/protocol.ts";
+import { UsageSnapshot } from "./worker/usage.ts";
 
 export const DriverRequestId = Schema.NonEmptyString.check(Schema.isMaxLength(512));
 
@@ -28,6 +29,22 @@ export const DriverRecovery = Schema.Struct({
 });
 
 export const ProfileType = Schema.Literals(["cpu", "memory"]);
+
+export const CostPlan = Schema.Struct({
+  imports: Schema.Natural,
+  importRows: Schema.Natural,
+  turns: Schema.Natural,
+  turnRows: Schema.Natural,
+  reservedRows: Schema.Natural,
+});
+
+export const Reservation = Schema.Struct({
+  id: Schema.String,
+  rows: Schema.Natural,
+  rollingRows: Schema.Natural,
+  limit: Schema.Natural,
+  at: Schema.Number,
+});
 
 export const Profile = Schema.Struct({
   type: ProfileType,
@@ -50,6 +67,11 @@ export const Profile = Schema.Struct({
 export type Profile = typeof Profile.Type;
 
 export const Options = Schema.Struct({
+  writes: Schema.optionalKey(Schema.Boolean),
+  costOnly: Schema.optionalKey(Schema.Boolean),
+  maxWrittenRows: Schema.optionalKey(Schema.Natural),
+  dailyWrittenRows: Schema.optionalKey(Schema.Natural),
+  budgetReason: Schema.optionalKey(Schema.String),
   seed: Schema.optionalKey(Schema.NonEmptyString),
   verifyIncarnationRecovery: Schema.optionalKey(Schema.Boolean),
   fixtureDirectory: Schema.optionalKey(Schema.String),
@@ -232,6 +254,19 @@ export type HistoryBuild = typeof HistoryBuild.Type;
 
 export const Result = Schema.Struct({
   version: Schema.Literal(4),
+  costPlan: Schema.optionalKey(CostPlan),
+  reservation: Schema.optionalKey(Reservation),
+  storageUsage: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        phase: Schema.String,
+        object: Schema.String,
+        incarnation: Schema.String,
+        at: Schema.Number,
+        usage: UsageSnapshot,
+      }),
+    ),
+  ),
   run: Schema.String,
   revision: Schema.String,
   dirty: Schema.Boolean,
