@@ -56,7 +56,8 @@ export const COMPACTION_INSTRUCTION = [
   "Next steps:",
   "Critical context:",
   "Be terse. Preserve exact file paths, identifiers, and values needed to",
-  "continue. Do not continue the thread; output only the summary.",
+  "continue. Keep the summary under 20,000 characters.",
+  "Do not continue the thread; output only the summary.",
 ].join("\n");
 
 /**

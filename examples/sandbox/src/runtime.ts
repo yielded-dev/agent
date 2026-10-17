@@ -5,6 +5,7 @@ import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudfl
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
 import * as ContextTools from "@yielded/agent/context-tools";
+import { ModelCallContext } from "@yielded/agent/context-window";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
@@ -14,7 +15,7 @@ import { DurableObject, Rpc, WorkerEnvironment } from "effect-cf";
 import { AiError, LanguageModel, Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 
-import { codingAgent, definitions, modelOptions } from "./agent.ts";
+import { codingAgent, definitions, modelContext, modelOptions } from "./agent.ts";
 import { commandAdmission, commandMaintenance, ShellCommands } from "./commands.ts";
 import {
   CodingInput,
@@ -104,7 +105,10 @@ const model = Layer.unwrap(
 
     const { model, ...config } = modelOptions(selected.success);
 
-    return OpenAiLanguageModel.model(model, config);
+    return Layer.merge(
+      OpenAiLanguageModel.model(model, config),
+      Layer.succeed(ModelCallContext.current, modelContext(selected.success)),
+    );
   }),
 ).pipe(Layer.provide(provider));
 
@@ -154,7 +158,7 @@ const registered = DurableAgentRuntime.layerRegistered([
   Layer.provide(codingReconciler),
   Layer.provide(ContextTools.layer),
   Layer.provide(ThreadContextHistory.layer()),
-  Layer.provide(ContextCompactor.layerRollover),
+  Layer.provide(ContextCompactor.layer),
 );
 
 // Share the owner's existing storage with tools; alarms use the registered runtime.

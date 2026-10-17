@@ -197,6 +197,18 @@ const defaultCompactor = (model?: CompactionModelLayer): ContextCompaction => ({
 
                 const text = yield* request.summarize(prompt, model);
 
+                // Current-Run coverage uses the existing durable window boundary, which
+                // preserves its original input, usage and settled Tool receipts on recovery.
+                if (state.protectedEnd >= 0 && through > state.protectedEnd) {
+                  const handoff = yield* Schema.decodeEffect(ContextHandoff)(text.trim()).pipe(
+                    Effect.mapError((cause) =>
+                      CompactionError.make({ message: "Invalid context summary", cause }),
+                    ),
+                  );
+
+                  return Stream.succeed<CompactionDecision>({ kind: "rollover", through, handoff });
+                }
+
                 return Stream.succeed({
                   kind: "summarize",
                   through,

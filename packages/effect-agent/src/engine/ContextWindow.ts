@@ -44,7 +44,13 @@ export class ModelCallContext extends Schema.Class<ModelCallContext>("ModelCallC
   maxInputTokens: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
   outputReserveTokens: Schema.Natural,
   uncountedOverheadTokens: Schema.Natural,
-}) {}
+}) {
+  /** Supply bounds with a native Model Layer; a prepared modelCall takes precedence. */
+  static readonly current = Context.Reference<ModelCallContext | undefined>(
+    "@effect-agent/engine/ModelCallContext",
+    { defaultValue: () => undefined },
+  );
+}
 
 /**
  * Definition-owned control annotation. A successful singleton application Tool carrying this

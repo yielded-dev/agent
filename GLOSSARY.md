@@ -356,7 +356,8 @@ summary prompt, and Model. `ContextCompactor.layer` supplies the bounded default
 Thread Objects install the same service through a scoped `ContextCompactor` Layer,
 rebuilt after eviction. The interpreter owns metering, protected messages, events, and commits;
 the durable coordinator maps actual covered messages to complete canonical records. Pruning and
-summarization cover prior-Run records; rollover can cover settled batches in the current Run.
+summarization cover prior-Run records; summaries of settled work in the current Run
+use a rollover boundary.
 
 **Context Window**
 

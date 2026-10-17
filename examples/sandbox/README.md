@@ -17,8 +17,11 @@ last settings used there.
 The example exposes `read_file`, `write_file`, `edit_file`, `list_files`, `search`
 and `bash`. Tool execution is serialized. Process tickets and results use Agent's
 Durable Steps, and retries retain the original deadline and workspace identity.
-Long tasks can start fresh context windows while retaining conversation history and
-files. Context tools let the agent leave a handoff and look up earlier work.
+Long tasks automatically summarize context and continue with the summary, recent
+messages and existing files. The selected model supplies its context capacity
+(Sol 500k, Astra 272k), with room reserved for the response. Conversation history is
+kept. Each request can run for up to one hour and 1,000 model/tool calls; there is no
+cumulative token cap.
 The browser reconciles live assistant text and provider reasoning summaries with
 canonical history, so reconnecting never resubmits work. `@yielded/ui` renders the
 conversation, Markdown, and paired tool results; the example owns its Tailwind theme.
