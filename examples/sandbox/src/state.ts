@@ -2,7 +2,7 @@ import { fetchWithSession } from "@yielded/agent-example-auth/client";
 import { decodeLiveText } from "@yielded/agent-platform-cloudflare/live-text";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { Effect, Layer, Schema, Stream } from "effect";
-import { AsyncResult, Atom } from "effect/reactivity";
+import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 
 import {
   Accepted,
@@ -15,6 +15,7 @@ import {
   ModelSettings,
   RecoveryResult,
   SandboxError,
+  SavedFiles,
   ShellCommand,
   WorkspaceEvent,
   WorkspaceId,
@@ -241,6 +242,7 @@ interface Workspace {
 
 export const workspace = Atom.family((id: string) => {
   const recoveryKey = `sandbox-recovery:${id}`;
+  const filesKey = `sandbox-files:${id}`;
 
   const state = Atom.make<Workspace>({
     historyReady: false,
@@ -265,11 +267,14 @@ export const workspace = Atom.family((id: string) => {
 
   const settings = Atom.make((get) => get(settingsDraft) ?? get(state).acceptedSettings);
 
-  const changeSettings = Atom.fnSync((change: Partial<Record<keyof ModelSettings, string>>, get) =>
-    get.set(
-      settingsDraft,
-      Schema.decodeUnknownSync(ModelSettings)({ ...get(settings), ...change }),
-    ),
+  const changeSettings = Atom.fnSync(
+    (change: Partial<Record<keyof ModelSettings, string>>, get) => {
+      if (get(fileOperation) !== "idle") return;
+      get.set(
+        settingsDraft,
+        Schema.decodeUnknownSync(ModelSettings)({ ...get(settings), ...change }),
+      );
+    },
   );
 
   const directory = Atom.make("");
@@ -277,23 +282,51 @@ export const workspace = Atom.family((id: string) => {
   const revision = Atom.make(0);
   const commandRevision = Atom.make(0);
 
-  const files = runtime.atom((get) => {
-    get(revision);
+  const files = runtime
+    .atom((get) => {
+      get(revision);
 
-    return json(`files?${query(id, get(directory))}`, FileList);
-  });
+      return json(`files?${query(id, get(directory))}`, FileList);
+    })
+    .pipe(runtime.factory.withReactivity([filesKey]));
 
-  const expired = Atom.make((get) => {
-    const listing = get(files);
+  const saved = Atom.make((get) => AsyncResult.getOrElse(get(files), () => null)?.saved);
 
-    return AsyncResult.isSuccess(listing) && listing.value.expired;
-  });
+  const expired = Atom.make(
+    (get) => AsyncResult.getOrElse(get(files), () => null)?.expired ?? false,
+  );
 
-  const file = runtime.atom((get) => {
-    get(revision);
-    const path = get(selectedFile);
+  const file = runtime
+    .atom((get) => {
+      get(revision);
+      const path = get(selectedFile);
 
-    return path === null ? Effect.succeed(null) : json(`file?${query(id, path)}`, FileContent);
+      return path === null ? Effect.succeed(null) : json(`file?${query(id, path)}`, FileContent);
+    })
+    .pipe(runtime.factory.withReactivity([filesKey]));
+
+  const fileAction = (action: "restore" | "save") =>
+    runtime.fn<void>()(
+      Effect.fnUntraced(function* (_, get) {
+        // Invalidate before awaiting files; runtime.fn reactivity keys run after this workflow.
+        const result = yield* Reactivity.mutation(json(action, SavedFiles, { workspaceId: id }), [
+          filesKey,
+        ]);
+
+        yield* get.result(files, { suspendOnWaiting: true });
+
+        return result;
+      }),
+    );
+
+  const restore = fileAction("restore");
+  const save = fileAction("save");
+
+  const fileOperation = Atom.make((get) => {
+    if (get(restore).waiting) return "restoring";
+    if (get(save).waiting) return "saving";
+
+    return get(saved)?.phase ?? "idle";
   });
 
   const refresh = Atom.fnSync((_, get) => get.set(revision, get(revision) + 1));
@@ -680,6 +713,7 @@ export const workspace = Atom.family((id: string) => {
       if (
         !message ||
         get(expired) ||
+        get(fileOperation) !== "idle" ||
         current.active ||
         current.reviewRequired ||
         current.admissionRequestId ||
@@ -846,6 +880,7 @@ export const workspace = Atom.family((id: string) => {
       const retry = current.uncertain && current.pending && !current.pending.command;
 
       if (
+        get.get(fileOperation) !== "idle" ||
         current.active ||
         current.reviewRequired ||
         current.admissionRequestId ||
@@ -930,8 +965,12 @@ export const workspace = Atom.family((id: string) => {
     directory,
     selectedFile,
     files,
+    saved,
     expired,
     file,
+    restore,
+    save,
+    fileOperation,
     events,
     commandEvents,
     reconnectCommand,

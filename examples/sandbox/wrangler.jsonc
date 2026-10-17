@@ -20,6 +20,7 @@
     { "tag": "v2", "new_sqlite_classes": ["AccountWorkspaces"] },
   ],
   "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "yielded-agent-sandbox-workspaces" }],
   "containers": [
     {
       "name": "yielded-agent-sandbox",
