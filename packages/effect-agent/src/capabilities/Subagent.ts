@@ -48,6 +48,10 @@ import {
 } from "../engine/AgentRuntime.ts";
 import type { SpawnInterpreterOptions } from "../engine/internal/agent-runtime.ts";
 import {
+  type RunSubagentChildIdentity,
+  type RunSubagentDigests,
+} from "../engine/internal/interpreter-options.ts";
+import {
   RunEventSink,
   type SubagentEventBasePayload,
   type SubagentEventPayload,
@@ -55,8 +59,6 @@ import {
 import {
   type RunContextPreparation,
   type RunBudgetHook,
-  type RunSubagentChildIdentity,
-  type RunSubagentDigests,
   type RunUsageDelta,
 } from "../engine/RunOptions.ts";
 import { type ThreadHistory } from "../engine/ThreadHistory.ts";
@@ -1212,7 +1214,7 @@ type SubagentHandler<
  * `SubagentDurability` service mode:
  *
  * - **ephemeral** (the explicit engine default when no durable coordinator
- *   supplied `RunOptions.subagent`): the S1 path unchanged — preflight, an
+ *   supplied `InterpreterOptions.subagent`): the S1 path unchanged — preflight, an
  *   in-process scoped child Run (SUB-011/012), stable lifecycle events,
  *   total-mapped expected child failures, and Scope-finalizer reservation
  *   settlement on every exit path.

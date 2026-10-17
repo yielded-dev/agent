@@ -69,6 +69,10 @@ prepaid provider spending caps. A strict monetary ceiling requires host admissio
 possible charges before calling the provider. Cost budgets require the host's
 `estimateCostMicrousd`; a missing estimator or unknown pricing fails with a typed cost-policy error.
 
+The estimator receives one request with `usage`, `provider`, and `model`, plus optional
+`response`, `finishMetadata`, `purpose`, and `webSearchCalls`. It returns an Effect containing
+`{ costMicrousd, pricingStatus?, serviceTier?, pricingVersion? }`.
+
 Durable `maxDuration` uses the original allowance for each active Attempt; eviction,
 suspension, and missing-binding waits do not consume it. An actual duration exhaustion remains
 terminal across recovery. Other cumulative counters do not reset.
@@ -79,6 +83,10 @@ marked readonly. Backoff counts toward the active deadline; streamed content pre
 ## Caller and delegation limits
 
 `turnAllowance` and `toolCallAllowance` can tighten one Run's policy, never raise it.
+Set `scheduling: { runOverride: 1 }` on a Run to execute its application tools sequentially.
+`runOverride` accepts a positive integer and only tightens `policy.toolConcurrency`.
+Tools that require sequential execution still run alone within their batch.
+
 Subagents reserve from a shared pool with their own count, concurrency, duration, and result
 bounds. Unknown usage stays charged conservatively. See the [subagent reference](/reference/subagents/).
 

@@ -147,45 +147,49 @@ import {
 import { MessagingHost } from "../MessagingHost.ts";
 import {
   type RunOptions as ApplicationRunOptions,
+  RunSchedulingOverride,
   CurrentToolFailureObserver,
-  AgentUpdateAcceptance,
-  ModelUsageAccounting,
   type ProgrammaticToolFailure,
   type RunToolFailureObserver,
-  type ChildEstablishStatus,
   type CommandDrainPolicy,
   type RunApprovalRequest,
   type RunBufferLimits,
-  type RunResumeUsage,
-  type RunDurabilityHook,
-  RunResumeUsageSchema,
   RunContextPreparation,
   RunToolAuthorization,
   type RunToolAuthorizationHook,
   RunToolScheduling,
   type PreparedRunContext,
   type RunContextPreparationError,
+  type RunCostEstimate,
   type RunCostEstimateRequest,
   type RunSchedulingHook,
-  type RunSubagentChildIdentity,
-  type RunSubagentEstablishRequest,
-  type RunSubagentHook,
-  type RunSubagentJoinRequest,
-  type RunCompactionCommit,
   type RunToolCallDescriptor,
-  type RunTurnCommit,
-  type RunTurnCompletion,
-  type RunTurnResponse,
-  type RunTurnToolResult,
-  RunTurnResumeSettledCallSchema,
-  type RunTurnResume,
   type RunUsageDelta,
 } from "../RunOptions.ts";
 import { SubagentHost } from "../SubagentHost.ts";
 import { ThreadHistory, ThreadHistoryError } from "../ThreadHistory.ts";
 import { CurrentToolCatalog, RunToolVisibility, type CatalogEntry } from "../ToolExposure.ts";
 import { boundedValueFootprint } from "./bounded-value.ts";
-import type { InterpreterOptions as RunOptions } from "./interpreter-options.ts";
+import {
+  AgentUpdateAcceptance,
+  ModelUsageAccounting,
+  type ChildEstablishStatus,
+  type RunResumeUsage,
+  type RunDurabilityHook,
+  RunResumeUsageSchema,
+  type RunSubagentChildIdentity,
+  type RunSubagentEstablishRequest,
+  type RunSubagentHook,
+  type RunSubagentJoinRequest,
+  type RunCompactionCommit,
+  type RunTurnCommit,
+  type RunTurnCompletion,
+  type RunTurnResponse,
+  type RunTurnToolResult,
+  RunTurnResumeSettledCallSchema,
+  type RunTurnResume,
+  type InterpreterOptions as RunOptions,
+} from "./interpreter-options.ts";
 import { isTextOutput, outputSchemaContract, prepareModelPrompt } from "./output-contract.ts";
 import { capturePrimitiveTextPart } from "./primitive-delta.ts";
 import {
@@ -2975,6 +2979,8 @@ const executeToolBatch = Effect.fnUntraced(function* <
   });
 });
 
+const decodeSchedulingOverride = Schema.decodeUnknownEffect(RunSchedulingOverride);
+
 const schedulingConcurrency = Effect.fnUntraced(function* (
   configured: number,
   explicit: RunSchedulingHook | undefined,
@@ -2985,17 +2991,17 @@ const schedulingConcurrency = Effect.fnUntraced(function* (
   if (override === undefined) {
     return configured;
   }
-  if (override.mode === "sequential") {
-    return 1;
-  }
-  if (!Number.isInteger(override.concurrency) || override.concurrency <= 0) {
-    return yield* AgentPolicyError.make({
-      limit: "usage",
-      message: "Run Tool concurrency override must be a positive integer",
-    });
-  }
 
-  return Math.min(configured, override.concurrency);
+  const concurrency = yield* decodeSchedulingOverride(override).pipe(
+    Effect.mapError(() =>
+      AgentPolicyError.make({
+        limit: "usage",
+        message: "Run Tool concurrency override must be a positive integer",
+      }),
+    ),
+  );
+
+  return Math.min(configured, concurrency);
 });
 
 /**
@@ -3503,10 +3509,10 @@ const consumeUsage = Effect.fnUntracedEager(function* <
   const provider = yield* Model.ProviderName;
   const model = yield* Model.ModelName;
 
-  const estimate =
+  const estimate: RunCostEstimate =
     options.estimateCostMicrousd === undefined
-      ? 0
-      : yield* options.estimateCostMicrousd(usage, {
+      ? { costMicrousd: 0, pricingStatus: "unknown" }
+      : yield* options.estimateCostMicrousd({
           provider,
           model,
           usage,
@@ -3514,7 +3520,7 @@ const consumeUsage = Effect.fnUntracedEager(function* <
           webSearchCalls,
         });
 
-  const costMicrousd = typeof estimate === "number" ? estimate : estimate.costMicrousd;
+  const { costMicrousd, serviceTier, pricingVersion } = estimate;
 
   if (!Number.isSafeInteger(costMicrousd) || costMicrousd < 0) {
     return yield* AgentPolicyError.make({
@@ -3522,15 +3528,7 @@ const consumeUsage = Effect.fnUntracedEager(function* <
       message: "Model cost estimation must produce a non-negative integer number of microdollars",
     });
   }
-  const serviceTier = typeof estimate === "number" ? undefined : estimate.serviceTier;
-  const pricingVersion = typeof estimate === "number" ? undefined : estimate.pricingVersion;
-
-  const pricingStatus =
-    options.estimateCostMicrousd === undefined
-      ? "unknown"
-      : typeof estimate === "number"
-        ? "estimated"
-        : (estimate.pricingStatus ?? "estimated");
+  const pricingStatus = estimate.pricingStatus ?? "estimated";
 
   const validPricingIdentity = (value: string | undefined): boolean =>
     value === undefined || (value.length > 0 && value.length <= 256);
@@ -7767,7 +7765,7 @@ const toolBatchContinuation = <
 
 /**
  * Resume one canonically declared Tool batch without re-invoking the model
- * (the durable batch-resume seam consumed via `RunOptions.resume`).
+ * (the durable batch-resume seam consumed via `InterpreterOptions.resume`).
  *
  * Only unfinished calls are validated through their current parameter Schemas before
  * execution. Settled siblings retain bounded canonical JSON without looking up old Tools.
@@ -10504,7 +10502,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
 });
 
 /**
- * Ephemeral pass-through `DurableStep` provided when `RunOptions.durability`
+ * Ephemeral pass-through `DurableStep` provided when `InterpreterOptions.durability`
  * is absent: each Step body executes exactly once in-process and nothing is
  * recorded. Durable Tools stay runnable on the ephemeral runtime with honest
  * (weaker) semantics — the durable claim attaches to the runtime, not the
@@ -10732,7 +10730,7 @@ export class SubagentDurabilityError extends Schema.TaggedError<SubagentDurabili
 
 /**
  * Explicit ephemeral mode: no durable coordinator supplied
- * `RunOptions.subagent`, so no durable claim is being made and the delegation
+ * `InterpreterOptions.subagent`, so no durable claim is being made and the delegation
  * handler keeps the S1 in-process spawn semantics honestly.
  */
 export interface SubagentDurabilityEphemeral {
@@ -10773,7 +10771,7 @@ export type SubagentDurabilityService = SubagentDurabilityEphemeral | SubagentDu
 
 /**
  * Engine-owned durable-Subagent seam provided locally to every Tool batch,
- * constructed from `RunOptions.subagent` when present and the explicit
+ * constructed from `InterpreterOptions.subagent` when present and the explicit
  * ephemeral-mode default when absent. Like the other engine-provided Tool
  * services it is excluded from the runtime's public requirements and MUST NOT
  * be satisfied from an application Layer; handlers resolve it per call (the
@@ -10896,10 +10894,13 @@ export interface SpawnRunOptions<HookError = never, HookRequirements = never> ex
 > {}
 
 /** Delegation-owned execution facts, unavailable through application child options. */
-export interface SpawnInterpreterOptions<HookError = never, HookRequirements = never> extends Omit<
-  RunOptions<HookError, HookRequirements>,
-  "threadId" | "runId" | "parentLink"
-> {}
+export interface SpawnInterpreterOptions<HookError = never, HookRequirements = never>
+  extends
+    SpawnRunOptions<HookError, HookRequirements>,
+    Pick<
+      RunOptions<HookError, HookRequirements>,
+      "subagentGrant" | "delegationDepth" | "subagentBudget" | "subagentBudgetScope"
+    > {}
 
 /**
  * Handle to one spawned Attached Child: its preallocated child identity, its

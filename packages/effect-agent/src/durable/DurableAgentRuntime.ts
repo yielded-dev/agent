@@ -93,27 +93,29 @@ import { ContextCompactor, CompactionError } from "../engine/ContextCompactor.ts
 import { ContextRolloverTool } from "../engine/ContextWindow.ts";
 import { getToolExecutionClass } from "../engine/DurableStep.ts";
 import { executeWithUsageAccountingUnknown } from "../engine/internal/agent-runtime.ts";
-import type { InterpreterOptions as RunOptions } from "../engine/internal/interpreter-options.ts";
+import {
+  AgentUpdateAcceptance,
+  ModelUsageAccounting,
+  type ChildEstablishStatus,
+  type RunDurabilityHook,
+  type RunSubagentEstablishRequest,
+  type RunSubagentHook,
+  type RunSubagentJoinRequest,
+  type InterpreterOptions as RunOptions,
+} from "../engine/internal/interpreter-options.ts";
 import { MessagingHost } from "../engine/MessagingHost.ts";
 import {
   CurrentToolFailureObserver,
-  AgentUpdateAcceptance,
-  ModelUsageAccounting,
   RunContextPreparation,
   RunToolAuthorization,
   RunToolScheduling,
   RunContextPreparationPassthrough,
   type RunContextPreparationError,
-  type ChildEstablishStatus,
   type RunApprovalHook,
   type RunContextHook,
   type RunCostEstimator,
-  type RunDurabilityHook,
   type RunInputCommand,
   type RunInputHook,
-  type RunSubagentEstablishRequest,
-  type RunSubagentHook,
-  type RunSubagentJoinRequest,
   type RunToolAuthorizationHook,
   type RunToolAuthorizationRequest,
 } from "../engine/RunOptions.ts";

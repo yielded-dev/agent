@@ -187,10 +187,10 @@ it.effect("answers with one hosted search and carries sources through the next c
     });
 
     const first = yield* AgentRuntime.run(agent, "weather today", {
-      estimateCostMicrousd: (_usage, request) => {
+      estimateCostMicrousd: (request) => {
         expect(request).toMatchObject({ webSearchCalls: requests.length === 1 ? 1 : 0 });
 
-        return Effect.succeed(1);
+        return Effect.succeed({ costMicrousd: 1 });
       },
     }).pipe(Effect.provide(handlers));
 
