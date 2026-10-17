@@ -10,7 +10,11 @@ import { ThreadId, SubmissionId, ToolCallId } from "@yielded/agent/identifiers";
 import { CanonicalSequence, type CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { toolCallSettledRecordId } from "@yielded/agent/run-journal";
 import { AbortCommand, Principal, IdempotencyKey } from "@yielded/agent/submission-ledger";
-import { makeSandboxAgentContainer, makeSandboxAgentOutbound } from "@yielded/sandbox/cloudflare";
+import {
+  makeSandboxAgentContainer,
+  makeSandboxAgentOutbound,
+  NativeSandboxNamespace,
+} from "@yielded/sandbox/cloudflare";
 import { Cause, Deferred, Effect, Layer, Schedule, Schema, Stream } from "effect";
 import { Rpc, Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
@@ -27,6 +31,7 @@ import {
   LIVE_TEXT_THREAD_HEADER,
   MAX_INPUT_BYTES,
   MessageInput,
+  PreviewReply,
   WorkspaceId,
   WorkspacePage,
   WorkspaceSummary,
@@ -34,6 +39,7 @@ import {
   type ShellCommand,
 } from "./contract.ts";
 import { workspaceIdFromPath } from "./location.ts";
+import { WorkspacePreviewProxy } from "./preview-proxy.ts";
 import { CodingThread } from "./runtime.ts";
 import { AccountWorkspaces } from "./workspaces.ts";
 
@@ -58,6 +64,7 @@ declare global {
       SANDBOXES: DurableObjectNamespace<CodingSandbox>;
       ASSETS: Fetcher;
       BACKUPS: R2Bucket;
+      PREVIEW_DOMAIN: string;
       RUN_LIMIT: RateLimit;
       OPENAI_API_KEY: string;
       AUTH_YIELDED_CLIENT_SECRET: string;
@@ -214,6 +221,9 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
   const request = yield* Worker.NativeRequest;
   const env = yield* WorkerEnvironment;
   const url = new URL(request.url);
+  const preview = yield* (yield* WorkspacePreviewProxy).handle(request);
+
+  if (preview !== null) return preview;
 
   if (url.pathname === "/sandbox") return Response.redirect(`${url.origin}/sandbox/`, 308);
   if (!url.pathname.startsWith("/sandbox/")) return new Response("Not found", { status: 404 });
@@ -229,10 +239,10 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     const headers = new Headers(asset.headers);
 
     headers.set("x-content-type-options", "nosniff");
-    headers.set("referrer-policy", "same-origin");
+    headers.set("referrer-policy", "strict-origin-when-cross-origin");
     headers.set(
       "content-security-policy",
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+      `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.${env.PREVIEW_DOMAIN}`,
     );
 
     return new Response(asset.body, { status: asset.status, headers });
@@ -354,6 +364,27 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     );
   }
 
+  if (request.method === "POST" && url.pathname === "/sandbox/api/preview") {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId })),
+    )(yield* boundedBody(request));
+
+    const limit = yield* Effect.promise(() => env.RUN_LIMIT.limit({ key: session.accountId }));
+
+    if (!limit.success)
+      return json({ message: "Please wait before opening another preview." }, 429);
+
+    const reply = yield* Schema.decodeEffect(PreviewReply)(
+      yield* Effect.tryPromise(
+        async () => await env.THREADS.getByName(address(input.workspaceId)).preview(),
+      ),
+    );
+
+    if ("error" in reply) return json({ message: reply.error }, 409);
+    const proxy = yield* WorkspacePreviewProxy;
+
+    return json({ ...reply.grant, url: yield* proxy.handoffUrl(reply.grant.token) });
+  }
   if (
     request.method === "POST" &&
     ["/sandbox/api/save", "/sandbox/api/restore"].includes(url.pathname)
@@ -716,7 +747,18 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
   return new Response("Not found", { status: 404 });
 });
 
-export default Worker.make(Layer.empty, {
+const previewProxy = Layer.unwrap(
+  Effect.gen(function* () {
+    const env = yield* WorkerEnvironment;
+
+    return WorkspacePreviewProxy.layer({
+      applicationOrigin: env.AUTH_RESOURCE ?? "",
+      previewDomain: env.PREVIEW_DOMAIN,
+    }).pipe(Layer.provide(NativeSandboxNamespace.layer({ binding: "SANDBOXES" })));
+  }),
+);
+
+export default Worker.make(previewProxy, {
   fetch: handle().pipe(
     Effect.catchTags({
       AccountError: Effect.fnUntraced(function* (error) {

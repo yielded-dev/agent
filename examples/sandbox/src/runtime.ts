@@ -25,6 +25,7 @@ import {
   WorkspaceEvent,
   WorkspaceId,
 } from "./contract.ts";
+import { WorkspacePreviews } from "./previews.ts";
 import { codingReconciler, recoverWorkspace, workspaceRecoveryRequired } from "./recovery.ts";
 import { snapshotLane, WorkspaceSnapshots } from "./snapshots.ts";
 import { codingToolsLive } from "./tools.ts";
@@ -160,6 +161,7 @@ const application = Layer.fresh(ThreadMaintenance.layer).pipe(
   Layer.provideMerge(commandMaintenance),
   Layer.provideMerge(ShellCommands.layer),
   Layer.provideMerge(WorkspaceSnapshots.layer),
+  Layer.provideMerge(WorkspacePreviews.layer),
   Layer.provideMerge(registered),
   Layer.provideMerge(owner),
   Layer.provideMerge(Workspace.layer),
@@ -180,6 +182,15 @@ export class CodingThread extends ThreadObject.make(application, {
   maxQueueDepthPerLane: 1,
   maxInputBytes: MAX_INPUT_BYTES,
 }) {
+  preview() {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        return { grant: yield* (yield* WorkspacePreviews).open };
+      }).pipe(
+        Effect.catchTag("PreviewRejected", (error) => Effect.succeed({ error: error.message })),
+      ),
+    );
+  }
   fileAction(action: "save" | "restore") {
     return this[DurableObject.RunSymbol](
       Effect.gen(function* () {

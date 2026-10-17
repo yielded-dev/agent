@@ -166,6 +166,23 @@ export const FileContent = Schema.Struct({
   truncated: Schema.Boolean,
 });
 
+export const PREVIEW_LIFETIME_MS = 15 * 60_000;
+
+export const WorkspacePreviewGrant = Schema.Struct({
+  token: Schema.String.check(Schema.isPattern(/^[a-f0-9]{32}$/u)),
+  expiresAt: Schema.Natural,
+});
+
+export const PreviewSession = Schema.Struct({
+  ...WorkspacePreviewGrant.fields,
+  url: Schema.String,
+});
+
+export const PreviewReply = Schema.Union([
+  Schema.Struct({ grant: WorkspacePreviewGrant }),
+  Schema.Struct({ error: Schema.String }),
+]);
+
 export class SandboxError extends Schema.TaggedError<SandboxError>()("SandboxError", {
   message: Schema.String,
 }) {}
