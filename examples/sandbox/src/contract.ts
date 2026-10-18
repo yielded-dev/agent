@@ -94,6 +94,9 @@ export const Entry = Schema.Struct({
   kind: Schema.Literals(["user", "assistant", "reasoning", "tool", "result", "status"]),
   text: Schema.String,
   detail: Schema.optionalKey(Schema.String),
+  sources: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ url: Schema.String, title: Schema.String })),
+  ),
   name: Schema.optionalKey(Schema.String),
   failed: Schema.optionalKey(Schema.Boolean),
   reviewRequired: Schema.optionalKey(Schema.Boolean),

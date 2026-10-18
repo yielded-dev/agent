@@ -694,7 +694,25 @@ function TranscriptEntry({
       {entry.kind === "user" ? (
         <p className="whitespace-pre-wrap">{entry.text}</p>
       ) : (
-        <MessageResponse streaming={streaming}>{entry.text}</MessageResponse>
+        <>
+          <MessageResponse streaming={streaming}>{entry.text}</MessageResponse>
+          {entry.sources && entry.sources.length > 0 && (
+            <ul aria-label="Sources" className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              {entry.sources.map((source) => (
+                <li key={source.url}>
+                  <a
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground underline underline-offset-4"
+                  >
+                    {source.title || source.url}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </Message>
   );

@@ -1,4 +1,5 @@
 import { BrowserCrypto } from "@effect/platform-browser";
+import { WebSearch } from "@yielded/agent";
 import {
   authenticateRequest,
   hostedModelAccess,
@@ -105,6 +106,18 @@ const boundedBody = Effect.fn("Sandbox.body")(function* (request: Request) {
 
 const RunFailure = Schema.Struct({ errorTag: Schema.String });
 
+const sourcesFor = (part: Prompt.TextPart) => {
+  const sources = new Map<string, { url: string; title: string }>();
+
+  for (const annotation of part.options.openai?.annotations ?? []) {
+    if (annotation.type === "url_citation" && Schema.is(WebSearch.Source)(annotation)) {
+      sources.set(annotation.url, { url: annotation.url, title: annotation.title });
+    }
+  }
+
+  return [...sources.values()];
+};
+
 /** Project canonical records; the UI owns no second execution journal. */
 const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
   const id = String(sequence);
@@ -142,6 +155,7 @@ const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[
                         id: `${id}-${messageIndex}-${index}`,
                         kind: part.type === "text" ? "assistant" : "reasoning",
                         text: part.text,
+                        ...(part.type === "text" ? { sources: sourcesFor(part) } : {}),
                         runId: p.runId,
                         turnId: p.turnId,
                       },
