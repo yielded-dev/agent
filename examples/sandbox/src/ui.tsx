@@ -638,6 +638,7 @@ const toolTitles: Readonly<Record<string, string>> = {
   write_file: "Write file",
   edit_file: "Edit file",
   search: "Search files",
+  OpenAiWebSearch: "Search the web",
   bash: "Run Bash",
   new_context: "Refresh context",
   get_context_remaining: "Check context capacity",
