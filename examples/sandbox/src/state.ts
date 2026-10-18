@@ -8,6 +8,8 @@ import {
   Accepted,
   CommandInput,
   defaultModelSettings,
+  DIAGNOSTIC_PAGE_SIZE,
+  DiagnosticsPage,
   FileContent,
   FileList,
   LIVE_TEXT_THREAD_HEADER,
@@ -262,6 +264,45 @@ export const workspace = Atom.family((id: string) => {
     uncertain: false,
     reviewRequired: false,
   }).pipe(Atom.setIdleTTL("5 minutes"));
+
+  const diagnosticAfter = Atom.make<number | null>(null);
+
+  const diagnostics = runtime
+    .atom((get) => {
+      const after =
+        get(diagnosticAfter) ?? Math.max(0, get.once(state).cursor - DIAGNOSTIC_PAGE_SIZE);
+
+      return json(
+        `diagnostics?${new URLSearchParams({ workspaceId: id, after: String(after) })}`,
+        DiagnosticsPage,
+      );
+    })
+    .pipe(Atom.setIdleTTL(0));
+
+  const refreshDiagnostics = Atom.fnSync((_, get) => {
+    get.set(diagnosticAfter, null);
+    get.refresh(diagnostics);
+  });
+
+  const copyDiagnostics = runtime.fn<void>()(
+    Effect.fnUntraced(function* (_, get) {
+      const page = yield* get.result(diagnostics);
+
+      const text = yield* Schema.encodeEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            workspaceId: WorkspaceId,
+            ...DiagnosticsPage.fields,
+          }),
+        ),
+      )({ workspaceId: id, ...page });
+
+      yield* Effect.tryPromise({
+        try: () => navigator.clipboard.writeText(text),
+        catch: () => problem("Could not copy diagnostics. Try again."),
+      });
+    }),
+  );
 
   const draft = Atom.make("").pipe(Atom.setIdleTTL("5 minutes"));
   const settingsDraft = Atom.make<ModelSettings | null>(null);
@@ -1019,6 +1060,10 @@ export const workspace = Atom.family((id: string) => {
     draft,
     settings,
     changeSettings,
+    diagnostics,
+    diagnosticAfter,
+    refreshDiagnostics,
+    copyDiagnostics,
     directory,
     selectedFile,
     files,

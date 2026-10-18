@@ -27,6 +27,8 @@ import {
   CODING_ADMISSION_GROUP,
   CommandAccepted,
   CommandInput,
+  DIAGNOSTIC_PAGE_SIZE,
+  DiagnosticsPage,
   EventPage,
   FileActionReply,
   LIVE_TEXT_THREAD_HEADER,
@@ -39,6 +41,7 @@ import {
   type Entry,
   type ShellCommand,
 } from "./contract.ts";
+import { diagnosticRows } from "./diagnostics.ts";
 import { workspaceIdFromPath } from "./location.ts";
 import { WorkspacePreviewProxy } from "./preview-proxy.ts";
 import { CodingThread } from "./runtime.ts";
@@ -51,7 +54,8 @@ const containerOptions = {
   namespaceBinding: "SANDBOXES",
   backupBucketBinding: "BACKUPS",
   idleMillis: 1_800_000,
-  allowedHosts: () => ["registry.npmjs.org"],
+  allowedHosts: () => [],
+  enableInternet: true,
 };
 
 export class CodingSandbox extends makeSandboxAgentContainer(containerOptions) {}
@@ -563,6 +567,28 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     );
 
     const threadId = address(workspaceId);
+
+    if (url.pathname === "/sandbox/api/diagnostics") {
+      const after = yield* Schema.decodeEffect(CanonicalSequence)(
+        Number(url.searchParams.get("after") ?? "0"),
+      );
+
+      const records = yield* Effect.flatMap(CloudflareThreadClient, (client) =>
+        client.readPage(threadId, { afterSequence: after, limit: DIAGNOSTIC_PAGE_SIZE }),
+      ).pipe(
+        Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed([])),
+        Effect.provide(clientLayer),
+      );
+
+      return json(
+        yield* Schema.encodeEffect(DiagnosticsPage)({
+          after,
+          through: records.at(-1)?.sequence ?? after,
+          hasMore: records.length === DIAGNOSTIC_PAGE_SIZE,
+          rows: diagnosticRows(records),
+        }),
+      );
+    }
 
     if (url.pathname === "/sandbox/api/commands") {
       const commands = yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commands());

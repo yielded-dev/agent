@@ -128,6 +128,32 @@ export const RecoveryResult = Schema.Struct({
   reviewRequired: Schema.Boolean,
 });
 
+export const DIAGNOSTIC_PAGE_SIZE = 128;
+
+export const DiagnosticRow = Schema.Struct({
+  id: Schema.String,
+  at: Schema.Natural,
+  label: Schema.String,
+  detail: Schema.String,
+  status: Schema.String,
+  failed: Schema.Boolean,
+  runId: Schema.optionalKey(Schema.String),
+  toolCallId: Schema.optionalKey(Schema.String),
+  durationMs: Schema.optionalKey(Schema.Natural),
+  inputTokens: Schema.optionalKey(Schema.Natural),
+  outputTokens: Schema.optionalKey(Schema.Natural),
+  responseIds: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+export type DiagnosticRow = typeof DiagnosticRow.Type;
+
+export const DiagnosticsPage = Schema.Struct({
+  after: Schema.Natural,
+  through: Schema.Natural,
+  hasMore: Schema.Boolean,
+  rows: Schema.Array(DiagnosticRow),
+});
+
 export const EventPage = Schema.Struct({
   cursor: Schema.Int,
   caughtUp: Schema.optionalKey(Schema.Boolean),
