@@ -15,8 +15,11 @@ Each message retains its settings for recovery; reopening a workspace restores t
 last settings used there.
 
 The example exposes `read_file`, `write_file`, `edit_file`, `list_files`, `search`
-and `bash`. Tool execution is serialized. Process tickets and results use Agent's
-Durable Steps, and retries retain the original deadline and workspace identity.
+and `bash`, plus OpenAI’s native web search for current documentation and outside
+information. Search runs in the coding model’s own response and retains citations;
+it does not grant the container additional network access. Local tool execution is
+serialized. Process tickets and results use Agent's Durable Steps, and retries
+retain the original deadline and workspace identity.
 Long tasks automatically summarize context and continue with the summary, recent
 messages and existing files. The selected model supplies its context capacity
 (Sol 500k, Astra 272k), with room reserved for the response. Conversation history is

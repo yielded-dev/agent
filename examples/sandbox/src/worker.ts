@@ -1,4 +1,5 @@
 import { BrowserCrypto } from "@effect/platform-browser";
+import { WebSearch } from "@yielded/agent";
 import {
   authenticateRequest,
   hostedModelAccess,
@@ -105,6 +106,18 @@ const boundedBody = Effect.fn("Sandbox.body")(function* (request: Request) {
 
 const RunFailure = Schema.Struct({ errorTag: Schema.String });
 
+const sourcesFor = (part: Prompt.TextPart) => {
+  const sources = new Map<string, { url: string; title: string }>();
+
+  for (const annotation of part.options.openai?.annotations ?? []) {
+    if (annotation.type === "url_citation" && Schema.is(WebSearch.Source)(annotation)) {
+      sources.set(annotation.url, { url: annotation.url, title: annotation.title });
+    }
+  }
+
+  return [...sources.values()];
+};
+
 /** Project canonical records; the UI owns no second execution journal. */
 const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
   const id = String(sequence);
@@ -142,6 +155,7 @@ const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[
                         id: `${id}-${messageIndex}-${index}`,
                         kind: part.type === "text" ? "assistant" : "reasoning",
                         text: part.text,
+                        ...(part.type === "text" ? { sources: sourcesFor(part) } : {}),
                         runId: p.runId,
                         turnId: p.turnId,
                       },
@@ -154,11 +168,24 @@ const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[
                     name: part.name,
                     text: JSON.stringify(part.params, null, 2),
                     toolCallId: part.id,
-                    toolResultId: toolCallSettledRecordId(
-                      p.runId,
-                      p.turn,
-                      ToolCallId.make(part.id),
-                    ),
+                    toolResultId: part.providerExecuted
+                      ? `${id}-${part.id}`
+                      : toolCallSettledRecordId(p.runId, p.turn, ToolCallId.make(part.id)),
+                    runId: p.runId,
+                    turnId: p.turnId,
+                  },
+                ];
+
+              if (part.type === "tool-result" && part.providerExecuted)
+                return [
+                  {
+                    id: `${id}-${messageIndex}-${index}`,
+                    kind: "result",
+                    name: part.name,
+                    text: JSON.stringify(part.result, null, 2),
+                    failed: part.isFailure,
+                    toolCallId: part.id,
+                    toolResultId: `${id}-${part.id}`,
                     runId: p.runId,
                     turnId: p.turnId,
                   },
@@ -210,10 +237,14 @@ const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[
           failed: p.outcome === "failed",
           reviewRequired: p.outcome === "failed" && failure === "CodingToolError",
           ...(p.outcome === "failed" &&
-          (failure === "ContextBudgetError" || failure === "ContextOverflowError")
+          (failure === "CompactionError" ||
+            failure === "ContextBudgetError" ||
+            failure === "ContextOverflowError")
             ? {
                 detail:
-                  "The conversation exceeded this turn’s context limit. Send a new message to continue.",
+                  failure === "CompactionError"
+                    ? "The agent couldn’t compact the conversation. Send a new message to continue."
+                    : "The conversation exceeded this turn’s context limit. Send a new message to continue.",
               }
             : {}),
         },
