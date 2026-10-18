@@ -483,12 +483,8 @@ storage locator. Ranges share one Thread order and local owner. Archiving change
 not model context, grants, Run budgets, or unresolved obligations.
 
 **Projection**  
-A materialized view derived from Canonical Records, such as transcript, active resources, state, or
-client messages. Projections are rebuildable.
-
-**Checkpoint**  
-An application-owned optimization containing a Projection through a verified log offset. It is
-disposable and distinct from the authoritative Execution Checkpoint of an unfinished Run.
+A rebuildable read model derived from Canonical Records, such as a transcript or client messages.
+Applications own their query projections.
 
 **Owner Generation**
 A process-local capability for one scoped Attempt. Closing it permanently rejects its late

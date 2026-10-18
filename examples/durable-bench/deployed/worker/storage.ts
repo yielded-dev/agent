@@ -311,11 +311,21 @@ export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) 
   )
     return yield* fail("Imported transcript fingerprint differs from local fixture");
   const counts = tables(storage.sql);
+  const expectedTables = { ...fixture.tables };
 
-  if (Object.keys(counts).sort().join("\n") !== Object.keys(fixture.tables).sort().join("\n"))
+  // Layout 29 retires this disposable cache; every retained table must still match the seed.
+  if (
+    fixture.target === "yielded" &&
+    fixture.storageFormat !== undefined &&
+    fixture.storageFormat.layoutVersion <= 28 &&
+    CurrentDoStorageVersion >= 29
+  )
+    delete expectedTables.effect_agent_checkpoints;
+
+  if (Object.keys(counts).sort().join("\n") !== Object.keys(expectedTables).sort().join("\n"))
     return yield* fail("Initialized table inventory differs from local source fixture");
 
-  for (const [table, expected] of Object.entries(fixture.tables)) {
+  for (const [table, expected] of Object.entries(expectedTables)) {
     if (counts[table] !== expected)
       return yield* fail(
         `Initialized ${table} count ${counts[table]} differs from source ${expected}`,

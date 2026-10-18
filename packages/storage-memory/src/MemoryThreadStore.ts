@@ -1,5 +1,9 @@
 import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
-import { ThreadId, RunId, SubmissionId as importSubmissionId } from "@yielded/agent/identifiers";
+import {
+  type ThreadId,
+  RunId,
+  SubmissionId as importSubmissionId,
+} from "@yielded/agent/identifiers";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
 import {
   ExportBatch,
@@ -74,13 +78,11 @@ import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
 import {
   type AppendRequest,
   type ExecutionCheckpoint,
-  type ThreadCheckpoint,
   ThreadPeerCountRequest,
   ThreadIdentity,
   ThreadIdentityRequest,
   AppendConflict,
   AppendResult,
-  CheckpointRejected,
   ThreadExportRecord,
   ThreadExportRejected,
   ThreadMaterialization,
@@ -90,14 +92,11 @@ import {
   ThreadPromptRead,
   ThreadStore,
   ThreadReader,
-  type ThreadCheckpoints,
   ThreadStoreError,
   ThreadTail,
   ThreadTailRequest,
   PreparedAppend,
   type CommitBatch,
-  LoadCheckpointRequest,
-  SaveCheckpointRequest,
   PROMPT_EVIDENCE_TAGS,
   ThreadVerificationRequest,
   ThreadWorkerCapacityRequest,
@@ -157,7 +156,6 @@ import { boundedWorkSelection } from "./internal/WorkSelection.ts";
 const MAX_THREADS = 256;
 const RECORD_CHUNK_SIZE = 1_024;
 const READ_PAGE_SIZE = 8;
-const MAX_CHECKPOINTS_PER_THREAD = 1_024;
 
 const ThreadCapacity = Context.Reference<number>(
   "@effect-agent/storage-memory/MemoryThreadStore/ThreadCapacity",
@@ -201,22 +199,12 @@ interface StoredThread {
     { readonly batchId: BatchId; readonly intent: string; readonly result: AppendResult }
   >;
   readonly batchesByFirst: Map<number, BatchId>;
-  readonly checkpoints: Map<CanonicalSequence, ThreadCheckpoint>;
 }
 
 const storedRecord = (thread: StoredThread, sequence: number) =>
   thread.chunks.get(Math.floor((sequence - 1) / RECORD_CHUNK_SIZE))?.records[
     (sequence - 1) % RECORD_CHUNK_SIZE
   ];
-
-const isBatchBoundary = (thread: StoredThread, sequence: CanonicalSequence): boolean => {
-  if (sequence === 0) return true;
-  const record = storedRecord(thread, sequence);
-
-  return (
-    record !== undefined && thread.batches.get(record.batchId)?.result.lastSequence === sequence
-  );
-};
 
 const storedBytes = (thread: StoredThread, sequence: number) =>
   thread.chunks.get(Math.floor((sequence - 1) / RECORD_CHUNK_SIZE))?.bytes[
@@ -725,13 +713,6 @@ type MaterializeDecision =
   | { readonly _tag: "failure"; readonly error: ThreadStoreError }
   | { readonly _tag: "success" };
 
-type CheckpointDecision =
-  | {
-      readonly _tag: "failure";
-      readonly error: ThreadNotMaterialized | ThreadStoreError | CheckpointRejected;
-    }
-  | { readonly _tag: "success" };
-
 const storeError = (operation: string, message: string, cause?: unknown): ThreadStoreError =>
   cause === undefined
     ? ThreadStoreError.make({ operation, message })
@@ -804,28 +785,6 @@ const findThread = Effect.fnUntraced(function* (
   return yield* thread === undefined
     ? Effect.fail(ThreadNotMaterialized.make({ threadId }))
     : Effect.succeed(thread);
-});
-
-const CheckpointVersionEnvelope = Schema.Struct({
-  checkpoint: Schema.Struct({
-    threadId: ThreadId,
-    schemaVersion: Schema.Natural,
-  }),
-});
-
-const validateCheckpointVersion = Effect.fnUntraced(function* (
-  value: unknown,
-): Effect.fn.Return<void, ThreadStoreError | CheckpointRejected> {
-  const envelope = yield* Schema.decodeUnknownEffect(CheckpointVersionEnvelope)(value).pipe(
-    Effect.mapError(() => storeError("saveCheckpoint", "Invalid saveCheckpoint request")),
-  );
-
-  if (envelope.checkpoint.schemaVersion !== 1) {
-    return yield* CheckpointRejected.make({
-      threadId: envelope.checkpoint.threadId,
-      reason: "unsupported-version",
-    });
-  }
 });
 
 const makeThreadStore = Effect.gen(function* () {
@@ -1171,7 +1130,6 @@ const makeThreadStore = Effect.gen(function* () {
             batches: new Map(),
             executions: new Map(),
             executionCommits: new Map(),
-            checkpoints: new Map(),
           });
 
           publishWork(request.threadId, emptyWorkIndex());
@@ -1905,7 +1863,6 @@ const makeThreadStore = Effect.gen(function* () {
     executions: new Map(),
     executionCommits: new Map(),
     batchesByFirst: new Map(),
-    checkpoints: new Map(),
   });
 
   const makeExportReader = (idleOnly: boolean) =>
@@ -2129,7 +2086,6 @@ const makeThreadStore = Effect.gen(function* () {
                       existing.batches.size > 0 ||
                       existing.executions.size > 0 ||
                       existing.executionCommits.size > 0 ||
-                      existing.checkpoints.size > 0 ||
                       existing.ranges.size > 0 ||
                       existing.archiveContents.size > 0)) ||
                   (existingWork !== undefined &&
@@ -2403,94 +2359,6 @@ const makeThreadStore = Effect.gen(function* () {
       );
     },
   );
-
-  const saveCheckpoint: ThreadCheckpoints["save"] = Effect.fnUntraced(function* (unvalidated) {
-    yield* validateCheckpointVersion(unvalidated);
-    const request = yield* validate(SaveCheckpointRequest, "saveCheckpoint", unvalidated);
-
-    const decision = yield* Ref.modify(
-      state,
-      (current): readonly [CheckpointDecision, MemoryState] => {
-        const checkpoint = request.checkpoint;
-        const thread = current.threads.get(checkpoint.threadId);
-
-        if (thread === undefined) {
-          return [
-            {
-              _tag: "failure",
-              error: ThreadNotMaterialized.make({
-                threadId: checkpoint.threadId,
-              }),
-            },
-            current,
-          ];
-        }
-        if (checkpoint.throughSequence > thread.tailSequence) {
-          return [
-            {
-              _tag: "failure",
-              error: CheckpointRejected.make({
-                threadId: checkpoint.threadId,
-                reason: "ahead-of-tail",
-              }),
-            },
-            current,
-          ];
-        }
-        if (!isBatchBoundary(thread, checkpoint.throughSequence)) {
-          return [
-            {
-              _tag: "failure",
-              error: CheckpointRejected.make({
-                threadId: checkpoint.threadId,
-                reason: "not-batch-boundary",
-              }),
-            },
-            current,
-          ];
-        }
-        const checkpoints = thread.checkpoints;
-
-        checkpoints.set(checkpoint.throughSequence, checkpoint);
-        // Checkpoints are disposable cache entries; history never fails when this cache fills.
-        if (checkpoints.size > MAX_CHECKPOINTS_PER_THREAD) {
-          let oldest = checkpoint.throughSequence;
-
-          for (const sequence of checkpoints.keys()) if (sequence < oldest) oldest = sequence;
-          checkpoints.delete(oldest);
-        }
-
-        return [{ _tag: "success" }, current];
-      },
-    );
-
-    if (decision._tag === "failure") return yield* decision.error;
-  });
-
-  const loadCheckpoint: ThreadCheckpoints["load"] = Effect.fnUntraced(function* (unvalidated) {
-    const request = yield* validate(LoadCheckpointRequest, "loadCheckpoint", unvalidated);
-
-    const thread = yield* Ref.get(state).pipe(
-      Effect.flatMap((current) => findThread(current, request.threadId)),
-    );
-
-    const maximum = request.atOrBeforeSequence ?? thread.tailSequence;
-    let selected: ThreadCheckpoint | undefined;
-
-    for (const [sequence, checkpoint] of thread.checkpoints) {
-      if (sequence <= maximum && (selected === undefined || sequence > selected.throughSequence)) {
-        selected = checkpoint;
-      }
-    }
-    if (selected !== undefined && !isBatchBoundary(thread, selected.throughSequence)) {
-      return yield* CheckpointRejected.make({
-        threadId: request.threadId,
-        reason: "not-batch-boundary",
-      });
-    }
-
-    return Option.fromNullishOr(selected);
-  });
 
   // Range contents remain volatile RAM. Publishing an archive locator adds no durability.
   const verifyRange = Effect.fnUntraced(function* (
@@ -2766,16 +2634,6 @@ const makeThreadStore = Effect.gen(function* () {
             Stream.map((runId) => Schema.decodeSync(RunId)(runId)),
           );
 
-          const checkpoint = yield* loadCheckpoint(
-            LoadCheckpointRequest.make({ threadId: id }),
-          ).pipe(
-            Effect.mapError((cause) =>
-              Schema.is(CheckpointRejected)(cause)
-                ? storeError("verify checkpoint", "Invalid checkpoint anchor", cause)
-                : cause,
-            ),
-          );
-
           return yield* verifyThreadInvariants({
             threadId: id,
             runs,
@@ -2789,8 +2647,6 @@ const makeThreadStore = Effect.gen(function* () {
                   : cause,
               ),
             ),
-            ...(Option.isNone(checkpoint) ? {} : { checkpoint: checkpoint.value }),
-            checkpointsSupported: true,
             ...(request.requireAllSettled === undefined
               ? {}
               : { requireAllSettled: request.requireAllSettled }),
@@ -2828,7 +2684,6 @@ const makeThreadStore = Effect.gen(function* () {
     export: (request) =>
       checkExportSource(request.threadId).pipe(Effect.andThen(withMutation(exportThread(request)))),
     inspectTail,
-    checkpoints: { save: (request) => withMutation(saveCheckpoint(request)), load: loadCheckpoint },
   });
 
   return Context.make(ThreadStore, threadStore).pipe(

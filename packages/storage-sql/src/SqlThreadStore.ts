@@ -17,40 +17,29 @@ import {
 import {
   AppendConflict,
   AppendResult,
-  CheckpointRejected,
-  ThreadCheckpoint,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadObservation,
   ThreadReadRequest,
   ThreadStore,
-  type ThreadCheckpoints,
   ThreadStoreError,
   ThreadExport,
   ThreadTail,
   ThreadTailRequest,
   type AppendRequest,
   PreparedAppend,
-  LoadCheckpointRequest,
-  SaveCheckpointRequest,
   canonicalBatchFitsTransfer,
 } from "@yielded/agent/thread-store";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 
 import { capturePreparedRecordStorage } from "./SqlCanonicalStorage.ts";
-import {
-  type RawAppendRequest,
-  RawCheckpoint,
-  RawReadRequest,
-  type SqlJournal,
-} from "./SqlJournal.ts";
+import { type RawAppendRequest, RawReadRequest, type SqlJournal } from "./SqlJournal.ts";
 import { formatObservationOffset, makeObservationOffsetParser } from "./SqlObservationOffset.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
@@ -157,7 +146,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const OFFSET_PREFIX = options.offsetPrefix;
   const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
   const isAppendConflict = Schema.is(AppendConflict);
-  const isCheckpointRejected = Schema.is(CheckpointRejected);
 
   const decodeThreadId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.threadId);
   const decodeBatchId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.batchId);
@@ -182,15 +170,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     });
 
   const parseOffset = makeObservationOffsetParser(OFFSET_PREFIX, schemaStoreError);
-
-  const encodeCheckpoint = (
-    checkpoint: ThreadCheckpoint,
-  ): Effect.Effect<string, ThreadStoreError> =>
-    Effect.suspend(() =>
-      Schema.encodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpoint).pipe(
-        Effect.mapError((error) => schemaStoreError("encode checkpoint", error)),
-      ),
-    );
 
   // Scalar decoders resolve immediately; eager error mapping preserves that fast path between
   // the full canonical JSON decode and envelope construction, within the enclosing read span.
@@ -231,15 +210,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     );
   });
 
-  const decodeCheckpoint = (
-    checkpointJson: string,
-  ): Effect.Effect<ThreadCheckpoint, ThreadStoreError> =>
-    Effect.suspend(() =>
-      Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpointJson).pipe(
-        Effect.mapError((error) => schemaStoreError("decode checkpoint", error)),
-      ),
-    );
-
   const requireThread = Effect.fnUntraced(function* (
     journal: SqlJournal<S, C, W, F>,
     threadId: ThreadMaterialization["threadId"],
@@ -253,23 +223,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     }
 
     return rows[0];
-  });
-
-  const requireBatchBoundary = Effect.fnUntraced(function* (
-    journal: SqlJournal<S, C, W, F>,
-    threadId: ThreadMaterialization["threadId"],
-    sequence: CanonicalSequence,
-  ) {
-    const valid = yield* journal
-      .isBatchBoundary(threadId, sequence)
-      .pipe(Effect.mapError((error) => storeError("read checkpoint boundary", error)));
-
-    if (!valid) {
-      return yield* CheckpointRejected.make({
-        threadId,
-        reason: "not-batch-boundary",
-      });
-    }
   });
 
   const config = options;
@@ -467,11 +420,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
           ),
         );
 
-      for (const name of [
-        "effect_agent_canonical_records",
-        "effect_agent_canonical_batches",
-        "effect_agent_checkpoints",
-      ])
+      for (const name of ["effect_agent_canonical_records", "effect_agent_canonical_batches"])
         if (
           (yield* query(sql`SELECT thread_id FROM ${table(name)} orphan WHERE NOT EXISTS
           (SELECT 1 FROM ${table("effect_agent_threads")} t WHERE t.thread_id=orphan.thread_id) LIMIT 1`))
@@ -568,55 +517,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
             }),
           ),
         );
-        let afterCheckpoint = -1;
-
-        while (true) {
-          const checkpoints = yield* decode(
-            Schema.Array(
-              Schema.Struct({
-                through_sequence: SqlInteger,
-                checkpoint_json: Schema.String,
-              }),
-            ),
-            yield* query(
-              sql`SELECT through_sequence, checkpoint_json FROM ${table("effect_agent_checkpoints")} WHERE thread_id=${thread.thread_id}
-              AND through_sequence>${afterCheckpoint} ORDER BY through_sequence LIMIT 1`,
-            ),
-          );
-
-          const row = checkpoints[0];
-
-          if (row === undefined) break;
-
-          const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(
-            row.checkpoint_json,
-          ).pipe(
-            Effect.mapError((e) =>
-              options.errors.corruption({
-                table: "effect_agent_checkpoints",
-                rowKey: `${thread.thread_id}/${row.through_sequence}`,
-                message: e.message,
-              }),
-            ),
-          );
-
-          const bound = yield* journal.isBatchBoundary(
-            thread.thread_id,
-            CanonicalSequence.make(row.through_sequence),
-          );
-
-          if (
-            checkpoint.threadId !== thread.thread_id ||
-            checkpoint.throughSequence !== row.through_sequence ||
-            !bound
-          )
-            return yield* options.errors.corruption({
-              table: "effect_agent_checkpoints",
-              rowKey: `${thread.thread_id}/${row.through_sequence}`,
-              message: "Checkpoint is not bound to a canonical batch tail",
-            });
-          afterCheckpoint = row.through_sequence;
-        }
         if (snapshotArchives !== undefined) {
           let afterSequence: CanonicalSequence | undefined;
 
@@ -667,85 +567,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     });
   });
 
-  const saveCheckpoint: ThreadCheckpoints["save"] = Effect.fnUntraced(function* (
-    request: SaveCheckpointRequest,
-  ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(SaveCheckpointRequest))(
-      request,
-    ).pipe(Effect.mapError((error) => schemaStoreError("validate checkpoint", error)));
-
-    const thread = yield* requireThread(journal, validated.checkpoint.threadId);
-
-    if (validated.checkpoint.throughSequence > thread.tail_sequence) {
-      return yield* CheckpointRejected.make({
-        threadId: validated.checkpoint.threadId,
-        reason: "ahead-of-tail",
-      });
-    }
-
-    yield* requireBatchBoundary(
-      journal,
-      validated.checkpoint.threadId,
-      validated.checkpoint.throughSequence,
-    );
-    const checkpointJson = yield* encodeCheckpoint(validated.checkpoint);
-
-    const raw = RawCheckpoint.make({
-      threadId: validated.checkpoint.threadId,
-      throughSequence: validated.checkpoint.throughSequence,
-      checkpointJson,
-    });
-
-    yield* hitFailpoint("save-checkpoint:before");
-    yield* journal
-      .saveCheckpoint(raw)
-      .pipe(
-        Effect.mapError((error) =>
-          isCheckpointRejected(error) ? error : storeError("save checkpoint", error),
-        ),
-      );
-    yield* hitFailpoint("save-checkpoint:after");
-  });
-
-  const loadCheckpoint: ThreadCheckpoints["load"] = Effect.fnUntraced(function* (
-    request: LoadCheckpointRequest,
-  ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(LoadCheckpointRequest))(
-      request,
-    ).pipe(Effect.mapError((error) => schemaStoreError("validate checkpoint lookup", error)));
-
-    const thread = yield* requireThread(journal, validated.threadId);
-
-    const rows = yield* journal
-      .loadCheckpoint(validated.threadId, validated.atOrBeforeSequence ?? thread.tail_sequence)
-      .pipe(Effect.mapError((error) => storeError("load checkpoint", error)));
-
-    if (rows.length === 0) return Option.none();
-    if (rows.length !== 1) {
-      return yield* ThreadStoreError.make({
-        operation: "load checkpoint",
-        message: `Expected at most one checkpoint row but found ${rows.length}.`,
-      });
-    }
-    const row = rows[0];
-    const checkpoint = yield* decodeCheckpoint(row.checkpoint_json);
-
-    if (
-      row.thread_id !== validated.threadId ||
-      checkpoint.threadId !== row.thread_id ||
-      checkpoint.throughSequence !== row.through_sequence
-    ) {
-      return yield* ThreadStoreError.make({
-        operation: "load checkpoint",
-        message: "Stored checkpoint metadata does not match its canonical row.",
-      });
-    }
-
-    yield* requireBatchBoundary(journal, checkpoint.threadId, checkpoint.throughSequence);
-
-    return Option.some(checkpoint);
-  });
-
   const selectedReads = yield* makeSelectedReads(decodeEnvelope, options.namespace);
   const readExecution = yield* makeExecutionRead(options.namespace);
 
@@ -769,7 +590,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     observe,
     read,
     readPrompt: (request) => Stream.fromIterableEffect(selectedReads.readPrompt(request)),
-    checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
   });
 
   return {

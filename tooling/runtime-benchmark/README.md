@@ -304,8 +304,8 @@ revisions predating these APIs.
 Each worker executes one uncertain mutation, interrupts its owner, archives the original Run's
 canonical input/model evidence, and settles a later Run. Its evaluated context remains in the
 authoritative active checkpoint on current builds; historical builds retain it in canonical history.
-The later Run must leave that unresolved state unchanged. The worker removes disposable recovery
-projections, appends 256 unrelated
+The later Run must leave that unresolved state unchanged. For historical layouts, the worker clears
+the disposable generic checkpoint cache when its table exists. It then appends 256 unrelated
 `RepairAnnotated` facts, and closes the SQLite database before copying it. The same unfinished Run
 then ages to 131,328 unrelated facts in the source database. Each sample resumes fresh copies of
 both closed snapshots under a changed binding, preserving identical original Run and Receipt IDs.
@@ -328,7 +328,7 @@ construction; adapter-native ledger SQL and explicit setup/verification reads ar
 guard. Current execution reads are included in the guard: their logical progress/operational record
 counts and full encoded checkpoint bytes must remain bounded and identical in shape across ages.
 Payload bytes describe returned evidence, not process heap. The case uses each revision's public
-archive and checkpoint ports without rewriting canonical or active state.
+archive and active-execution ports without rewriting canonical or active state.
 
 Select `long-thread-store-size` for the same factual-resolution and resumption operation with
 the selected Thread fixed at exactly 100,000 canonical records and a separate Thread containing

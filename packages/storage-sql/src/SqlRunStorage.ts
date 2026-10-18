@@ -207,7 +207,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       bind(owner.withProgress(request.append.threadId, ledgerKernel.publisher.publish(request))),
   });
 
-  const checkpoints = rawStore.checkpoints;
   const promptCheckpoints = rawStore.promptCheckpoints;
   const countPeerMessages = rawStore.countPeerMessages;
   const work = rawStore.work;
@@ -255,13 +254,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
     readExecution: (request) => bind(rawStore.readExecution(request)),
     countPeerMessages:
       countPeerMessages === undefined ? undefined : (request) => bind(countPeerMessages(request)),
-    checkpoints:
-      checkpoints === undefined
-        ? undefined
-        : {
-            save: (request) => bind(checkpoints.save(request)),
-            load: (request) => bind(checkpoints.load(request)),
-          },
     promptCheckpoints:
       promptCheckpoints === undefined
         ? undefined

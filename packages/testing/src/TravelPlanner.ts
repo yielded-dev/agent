@@ -69,9 +69,6 @@ export {
   phase3TravelPlannerCompletionBatch,
   phase3TravelPlannerBatches,
   phase3TravelPlannerEncodedFixture,
-  TravelPlannerProjectionError,
-  travelPlanFromProjection,
-  makePhase3TravelPlannerCheckpoint,
 } from "./fixtures/travel-planner/phase3.ts";
 
 export {

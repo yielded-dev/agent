@@ -10,10 +10,7 @@ import {
   UserInputRecorded,
   type CanonicalRecordPayload,
 } from "@yielded/agent/records";
-import {
-  threadStoreConformanceCases,
-  threadCheckpointConformanceCases,
-} from "@yielded/agent/testing/thread-store-conformance";
+import { threadStoreConformanceCases } from "@yielded/agent/testing/thread-store-conformance";
 import {
   type AppendResult,
   ThreadMaterialization,
@@ -169,9 +166,6 @@ describe("MemoryThreadStore", () => {
           Effect.provide(testLayer),
         ),
       );
-    }
-    for (const conformanceCase of threadCheckpointConformanceCases) {
-      it.effect(conformanceCase.name, () => conformanceCase.run.pipe(Effect.provide(testLayer)));
     }
   });
 

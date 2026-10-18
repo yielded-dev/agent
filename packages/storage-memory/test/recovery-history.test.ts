@@ -90,7 +90,6 @@ const countingThreadStoreLayer = Layer.effectContext(
       observe: store.observe,
       export: store.export,
       inspectTail: store.inspectTail,
-      checkpoints: store.checkpoints,
     });
 
     return Context.make(ThreadStore, counted).pipe(

@@ -360,8 +360,6 @@ export const IntegrityCheckName = Schema.Literals([
   "terminal-uniqueness",
   /** Ledger terminal state agrees with the canonical settlement record (DUR-015). */
   "ledger-canonical-agreement",
-  /** The stored checkpoint identifies a complete canonical batch boundary. */
-  "checkpoint-binding",
   /** Convergence mode only: every known Submission is settled. */
   "all-settled",
 ]);

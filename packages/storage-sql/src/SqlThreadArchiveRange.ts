@@ -16,7 +16,6 @@ import {
 import {
   ThreadNotMaterialized,
   ThreadStoreError,
-  ThreadCheckpoint,
   type ThreadExportBatch,
 } from "@yielded/agent/thread-store";
 import * as Effect from "effect/Effect";
@@ -604,7 +603,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
               AND r.state='archived' AND r.locator IS NOT NULL AND b.first_sequence>=r.first_sequence
               AND b.last_sequence<=r.last_sequence)`,
         ],
-        ["effect_agent_checkpoints", sql`FALSE`],
       ] as const;
 
       for (const [name, excluded] of checks) {
@@ -671,50 +669,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           if (hot === undefined) return yield* failure("archive verification missing hot suffix");
           yield* verifyInTransaction(hot);
           after = hot.last_sequence;
-        }
-        let checkpointAfter: number | undefined;
-
-        while (true) {
-          const plans = yield* query<{ through_sequence: number; byte_count: number }>(sql`
-            SELECT through_sequence, ${sql.onDialectOrElse({ pg: () => sql`octet_length(checkpoint_json)`, orElse: () => sql`length(CAST(checkpoint_json AS BLOB))` })} AS byte_count
-            FROM ${table("effect_agent_checkpoints")} WHERE thread_id=${threadId}
-            ${checkpointAfter === undefined ? sql`` : sql`AND through_sequence>${checkpointAfter}`}
-            ORDER BY through_sequence LIMIT ${MAX_ARCHIVE_RANGE_PAGE}`);
-
-          for (const plan of plans) {
-            if (Number(plan.byte_count) > MAX_CANONICAL_BATCH_BYTES)
-              return yield* failure("checkpoint verification bound");
-
-            const [payload] = yield* query<{ checkpoint_json: string }>(sql`
-              SELECT checkpoint_json FROM ${table("effect_agent_checkpoints")}
-              WHERE thread_id=${threadId} AND through_sequence=${plan.through_sequence}`);
-
-            if (payload === undefined) return yield* failure("checkpoint verification missing");
-
-            const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(
-              payload.checkpoint_json,
-            ).pipe(Effect.mapError((cause) => failure("checkpoint verification decode", cause)));
-
-            const sequence = Number(plan.through_sequence);
-
-            const boundary =
-              sequence === 0 ||
-              (yield* query(sql`
-                SELECT 1 FROM ${table("effect_agent_canonical_batches")}
-                WHERE thread_id=${threadId} AND first_sequence BETWEEN ${Math.max(1, sequence - 255)} AND ${sequence}
-                  AND last_sequence=${sequence} LIMIT 2
-              `)).length === 1;
-
-            if (
-              checkpoint.threadId !== threadId ||
-              checkpoint.throughSequence !== sequence ||
-              sequence > header.tail_sequence ||
-              !boundary
-            )
-              return yield* failure("checkpoint verification anchor");
-            checkpointAfter = sequence;
-          }
-          if (plans.length < MAX_ARCHIVE_RANGE_PAGE) break;
         }
       }),
     );

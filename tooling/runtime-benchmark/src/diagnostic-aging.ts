@@ -34,7 +34,6 @@ import {
 } from "@yielded/agent/submission-ledger";
 import {
   AppendRequest,
-  LoadCheckpointRequest,
   ThreadReader,
   ThreadMaterialization,
   ThreadRead,
@@ -462,8 +461,14 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
         "Later Run changed the unresolved Run's original state or accounting",
       );
     }
-    // Disposable checkpoints are deliberately absent; no canonical or archive data is removed.
-    yield* sql`DELETE FROM effect_agent_checkpoints WHERE thread_id = ${threadId}`;
+
+    // Historical comparison builds may retain a disposable generic checkpoint table.
+    const legacyCheckpointTables = yield* sql`
+      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_agent_checkpoints'
+    `;
+
+    if (legacyCheckpointTables.length > 0)
+      yield* sql`DELETE FROM effect_agent_checkpoints WHERE thread_id = ${threadId}`;
     const beforePadding = yield* raw.inspectTail(tailRequest);
     const padding = storeSize ? selectedThreadRecords - beforePadding.tailSequence : ages[0];
     const lowTail = yield* appendPadding(0, padding);
@@ -601,6 +606,7 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
     yield* Effect.gen(function* () {
       const raw = yield* ThreadStore;
       const ledger = yield* SubmissionLedger;
+      const sql = yield* SqlClient;
       const before = yield* raw.inspectTail(tailRequest);
       const runId = runIdForSubmission(seed.older.submissionId);
       const current = typeof raw.readExecution === "function";
@@ -641,12 +647,17 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
         pending.submission.state === "unknown",
         "Snapshot already resolved the original Run",
       );
-      if (raw.checkpoints === undefined)
-        return yield* BenchmarkError.make({ message: "Missing SQLite checkpoint port" });
-      yield* check(
-        Option.isNone(yield* raw.checkpoints.load(LoadCheckpointRequest.make({ threadId }))),
-        "Aging recovery retained a disposable checkpoint",
-      );
+
+      const legacyCheckpointTables = yield* sql`
+        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_agent_checkpoints'
+      `;
+
+      if (legacyCheckpointTables.length > 0)
+        yield* check(
+          (yield* sql`SELECT 1 FROM effect_agent_checkpoints WHERE thread_id = ${threadId} LIMIT 1`)
+            .length === 0,
+          "Aging recovery retained a disposable checkpoint",
+        );
       const reads: Array<{ tag: string; records: number; bytes: number }> = [];
       let maxPageRecords = 0;
       let maxPageBytes = 0;

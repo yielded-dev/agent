@@ -76,15 +76,6 @@ export class DoAppendConflict extends Schema.TaggedError<DoAppendConflict>()("Do
   actualTailSequence: Schema.optionalKey(CanonicalSequence),
 }) {}
 
-/** A checkpoint conflicts with a previously stored checkpoint at the same offset. */
-export class DoCheckpointConflict extends Schema.TaggedError<DoCheckpointConflict>()(
-  "DoCheckpointConflict",
-  {
-    reason: Schema.Literals(["ahead-of-tail", "not-batch-boundary", "corrupt"]),
-    message: Schema.String,
-  },
-) {}
-
 /**
  * Deterministic fault-injection locations at Durable Object storage operation boundaries.
  *
@@ -102,8 +93,6 @@ export const DoStorageFailpointLocation = Schema.Literals([
   "append:after-tail-update",
   "append:after",
   "export:after-thread-read",
-  "save-checkpoint:before",
-  "save-checkpoint:after",
   "ledger:admit:before",
   "ledger:admit:after",
   "ledger:mark-ready:before",

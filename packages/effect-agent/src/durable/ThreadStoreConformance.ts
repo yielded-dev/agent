@@ -43,8 +43,6 @@ import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 import {
   type AppendResult,
   AppendConflict,
-  CheckpointRejected,
-  ThreadCheckpoint,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadIdentityRequest,
@@ -59,8 +57,6 @@ import {
   readWorkerState,
   ThreadTailRequest,
   AppendRequest,
-  LoadCheckpointRequest,
-  SaveCheckpointRequest,
   type ThreadStoreFailure,
   type ThreadExportRejected,
 } from "./ThreadStore.ts";
@@ -77,7 +73,6 @@ export class ThreadStoreConformanceViolation extends Schema.TaggedError<ThreadSt
 export type ThreadStoreConformanceFailure =
   | ThreadStoreFailure
   | ThreadExportRejected
-  | CheckpointRejected
   | ThreadStoreConformanceViolation;
 
 /**
@@ -151,7 +146,6 @@ const DEFINITION_DIGEST = Digest.make("0".repeat(64));
 
 const EMPTY_TAIL = { lastSequence: ZERO_SEQUENCE } as const;
 const isAppendConflict = Schema.is(AppendConflict);
-const isCheckpointRejected = Schema.is(CheckpointRejected);
 const isThreadNotMaterialized = Schema.is(ThreadNotMaterialized);
 
 const record = (recordId: string, input: string): RecordEnvelope =>
@@ -206,15 +200,6 @@ const readAll = Effect.fn("ThreadStoreConformance.readAll")(function* (threadId:
 
   return yield* store.read(ThreadRead.make({ threadId, limit: 1_024 })).pipe(Stream.runCollect);
 });
-
-const checkpointAt = (threadId: ThreadId, throughSequence: CanonicalSequence): ThreadCheckpoint =>
-  ThreadCheckpoint.make({
-    schemaVersion: 1,
-    threadId,
-    throughSequence,
-    state: { conformance: true },
-    createdAt: CONFORMANCE_CREATED_AT,
-  });
 
 const conformanceCase = (
   name: string,
@@ -459,101 +444,6 @@ const offsetResumability = conformanceCase(
         fromStart.map((envelope) => envelope.record.recordId).join(",") ===
           committed.map((envelope) => envelope.record.recordId).join(","),
         "Observation without an offset must deliver the full log in order",
-      );
-    }),
-);
-
-const checkpointBoundaries = conformanceCase(
-  "enforces checkpoint save and load boundary rules",
-  ({ ensure, expectFailure }) =>
-    Effect.gen(function* () {
-      const threadId = decodeThreadId("conformance-checkpoints");
-      const store = yield* ThreadStore;
-      const checkpoints = store.checkpoints;
-
-      if (checkpoints === undefined) {
-        return yield* ThreadStoreConformanceViolation.make({
-          caseName: "enforces checkpoint save and load boundary rules",
-          message: "The optional checkpoint suite requires checkpoint support",
-        });
-      }
-
-      const missing = [
-        yield* expectFailure(
-          "saving a checkpoint for an unmaterialized Thread",
-          checkpoints.save(
-            SaveCheckpointRequest.make({
-              checkpoint: checkpointAt(threadId, ZERO_SEQUENCE),
-            }),
-          ),
-        ),
-        yield* expectFailure(
-          "loading a checkpoint for an unmaterialized Thread",
-          checkpoints.load(LoadCheckpointRequest.make({ threadId })),
-        ),
-      ];
-
-      yield* ensure(
-        missing.every(isThreadNotMaterialized),
-        "Checkpoints require a materialized Thread",
-      );
-      yield* materialize(threadId);
-
-      const first = yield* append(
-        threadId,
-        batch("checkpoint-batch-1", [record("checkpoint-record-1", "Kyoto")]),
-      );
-
-      const aheadOfTail = yield* expectFailure(
-        "a checkpoint claiming a sequence beyond the committed tail",
-        checkpoints.save(
-          SaveCheckpointRequest.make({
-            checkpoint: checkpointAt(threadId, decodeSequence(first.lastSequence + 1)),
-          }),
-        ),
-      );
-
-      yield* ensure(
-        isCheckpointRejected(aheadOfTail) && aheadOfTail.reason === "ahead-of-tail",
-        "A checkpoint ahead of the tail must be rejected with reason ahead-of-tail",
-      );
-
-      yield* ensure(
-        Option.isNone(yield* checkpoints.load(LoadCheckpointRequest.make({ threadId }))),
-        "Rejected checkpoints must not become loadable",
-      );
-
-      const valid = checkpointAt(threadId, first.lastSequence);
-
-      yield* checkpoints.save(SaveCheckpointRequest.make({ checkpoint: valid }));
-      yield* checkpoints.save(SaveCheckpointRequest.make({ checkpoint: valid }));
-
-      const loaded = yield* checkpoints.load(LoadCheckpointRequest.make({ threadId }));
-
-      yield* ensure(
-        Option.isSome(loaded) && loaded.value.throughSequence === first.lastSequence,
-        "A valid checkpoint must load bound to its canonical sequence",
-      );
-
-      const beforeCheckpoint = yield* checkpoints.load(
-        LoadCheckpointRequest.make({ threadId, atOrBeforeSequence: ZERO_SEQUENCE }),
-      );
-
-      yield* ensure(
-        Option.isNone(beforeCheckpoint),
-        "Checkpoint lookup must respect the atOrBeforeSequence bound",
-      );
-
-      yield* append(
-        threadId,
-        batch("checkpoint-batch-2", [record("checkpoint-record-2", "Nara")]),
-        first,
-      );
-      const afterAppend = yield* checkpoints.load(LoadCheckpointRequest.make({ threadId }));
-
-      yield* ensure(
-        Option.isSome(afterAppend) && afterAppend.value.throughSequence === first.lastSequence,
-        "An older checkpoint must remain loadable after later appends",
       );
     }),
 );
@@ -1017,9 +907,4 @@ export const threadStoreConformanceCases: ReadonlyArray<ThreadStoreConformanceCa
   offsetResumability,
   tailInspection,
   notMaterializedOperations,
-];
-
-/** Additional contract cases only for adapters advertising `ThreadStore.checkpoints`. */
-export const threadCheckpointConformanceCases: ReadonlyArray<ThreadStoreConformanceCase> = [
-  checkpointBoundaries,
 ];
