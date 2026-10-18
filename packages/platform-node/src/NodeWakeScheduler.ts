@@ -1,5 +1,5 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
-import type { ThreadStore } from "@yielded/agent/thread-store";
+import type { ThreadStore, ThreadStoreError } from "@yielded/agent/thread-store";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
 import { makeWakeSubscriptionHub, WakeScheduler } from "@yielded/agent/wake-scheduler";
 import * as Clock from "effect/Clock";
@@ -89,6 +89,6 @@ const makeWakeScheduler = Effect.gen(function* () {
  */
 export const nodeWakeSchedulerLayer: Layer.Layer<
   WakeScheduler,
-  never,
+  ThreadStoreError,
   ThreadStore | NodeWakeSchedulerConfig
 > = Layer.effect(WakeScheduler)(makeWakeScheduler);

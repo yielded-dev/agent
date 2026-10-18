@@ -117,6 +117,7 @@ import { PreparedInput } from "../Subscription.ts";
 import {
   ThreadIdentityRequest,
   ThreadStore,
+  ThreadStoreError,
   ThreadReader,
   getRecord,
   getRunInput,
@@ -310,6 +311,14 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     wake: yield* Effect.serviceOption(WakeScheduler),
     status: Option.getOrUndefined(admission)?.submissionStatus ?? control.status,
   };
+
+  const readWorkerCapacity = deps.store.readWorkerCapacity?.bind(deps.store);
+
+  if (readWorkerCapacity === undefined)
+    return yield* ThreadStoreError.make({
+      operation: "construct worker runtime",
+      message: "The storage adapter has no worker-capacity port",
+    });
 
   const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
     Effect.provideService(effect, Crypto.Crypto, deps.crypto);
@@ -1432,39 +1441,34 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           : Math.min(caps.maxConcurrentChildren ?? Infinity, source.policy.toolConcurrency),
       );
 
-      if (deps.store.readWorkerCapacity === undefined)
-        return yield* failure("start", "unavailable");
-
       const pendingLimit =
         admission.reportKind === "update"
           ? (deps.limits.maxPendingUpdateInputsPerWorker ?? 32)
           : deps.limits.maxPendingInputsPerWorker;
 
-      const capacity = yield* deps.store
-        .readWorkerCapacity({
-          threadId: origin.source.threadId,
-          workerThreadId: origin.worker.threadId,
-          expectedTailSequence: current.tailSequence,
+      const capacity = yield* readWorkerCapacity({
+        threadId: origin.source.threadId,
+        workerThreadId: origin.worker.threadId,
+        expectedTailSequence: current.tailSequence,
 
-          update: admission.reportKind === "update",
-          activeLimit,
-          pendingLimit,
-        })
-        .pipe(
-          Effect.map(Option.some),
-          Effect.catchTag("ThreadStoreError", (cause) =>
-            deps.store
-              .inspectTail(ThreadTailRequest.make({ threadId: origin.source.threadId }))
-              .pipe(
-                Effect.flatMap((tail) =>
-                  tail.tailSequence !== current.tailSequence
-                    ? Effect.succeed(Option.none<ThreadWorkerCapacity>())
-                    : Effect.fail(cause),
-                ),
+        update: admission.reportKind === "update",
+        activeLimit,
+        pendingLimit,
+      }).pipe(
+        Effect.map(Option.some),
+        Effect.catchTag("ThreadStoreError", (cause) =>
+          deps.store
+            .inspectTail(ThreadTailRequest.make({ threadId: origin.source.threadId }))
+            .pipe(
+              Effect.flatMap((tail) =>
+                tail.tailSequence !== current.tailSequence
+                  ? Effect.succeed(Option.none<ThreadWorkerCapacity>())
+                  : Effect.fail(cause),
               ),
-          ),
-          Effect.mapError(storageFailure("start")),
-        );
+            ),
+        ),
+        Effect.mapError(storageFailure("start")),
+      );
 
       if (Option.isNone(capacity)) continue;
       const live = capacity.value;

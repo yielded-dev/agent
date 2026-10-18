@@ -60,6 +60,7 @@ import {
   ThreadTailRequest,
   ThreadStore,
   ThreadReader,
+  ThreadStoreError,
 } from "../ThreadStore.ts";
 import {
   definitionDigestsEqual,
@@ -95,6 +96,14 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
     maxMessagesPerSource: yield* PeerMessageCapacity,
     failpoint: yield* MessageDeliveryFailpoint,
   };
+
+  const countPeerMessages = deps.store.countPeerMessages?.bind(deps.store);
+
+  if (countPeerMessages === undefined)
+    return yield* ThreadStoreError.make({
+      operation: "construct messaging runtime",
+      message: "The storage adapter has no peer-message capacity port",
+    });
 
   const digest = (value: Schema.Json) =>
     digestJson(value).pipe(
@@ -329,16 +338,12 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
           });
           yield* authorizeEnvelope(saved, operation);
         } else {
-          if (deps.store.countPeerMessages === undefined)
-            return yield* failure(operation, "unavailable");
           if (
-            (yield* deps.store
-              .countPeerMessages({
-                threadId,
-                nowMillis: yield* Clock.currentTimeMillis,
-                limit: maxMessages,
-              })
-              .pipe(Effect.mapError(mapStore(operation)))) >= maxMessages
+            (yield* countPeerMessages({
+              threadId,
+              nowMillis: yield* Clock.currentTimeMillis,
+              limit: maxMessages,
+            }).pipe(Effect.mapError(mapStore(operation)))) >= maxMessages
           )
             return yield* failure(operation, "capacity");
           let destinationThread: ThreadId;

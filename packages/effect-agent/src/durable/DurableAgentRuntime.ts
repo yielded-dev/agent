@@ -1396,6 +1396,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const ledger = yield* SubmissionLedger;
   const submissionScheduling = yield* SubmissionScheduling;
   const store = yield* ThreadStore;
+  const verification = store.verification;
+
+  if (verification === undefined)
+    return yield* ThreadStoreError.make({
+      operation: "construct durable runtime",
+      message: "This adapter does not provide snapshot-bound streaming verification",
+    });
+
   const reader = ThreadReader.fromStore(store);
   const promptHistory = yield* makePromptHistoryCache();
 
@@ -12152,13 +12160,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yield* operationAuthorizer.authorize(
       OperationAuthorizationRequest.make({ operation: "verify", threadId }),
     );
-    if (store.verification === undefined)
-      return yield* ThreadStoreError.make({
-        operation: "verify Thread",
-        message: "This adapter does not provide snapshot-bound streaming verification",
-      });
 
-    return yield* store.verification.verify({ threadId });
+    return yield* verification.verify({ threadId });
   });
 
   /**
@@ -12496,6 +12499,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
  * SubmissionLedger, ThreadStore, and WakeScheduler ports so that once `submit` returns a
  * Receipt, the Submission settles exactly once (DUR-001/DUR-002) while every external effect
  * remains at-least-once (DUR-003) — this runtime never claims exactly-once side effects.
+ * Construction requires work discovery, streaming verification, worker-capacity reads and
+ * peer-message counts; a missing port fails with ThreadStoreError before exposing the runtime.
+ * Prompt checkpoints and fresh-admission accelerators remain optional.
  *
  * - `submit(agent, input, options)` — durable admission → Thread materialization →
  *   `ThreadCreated` → readiness → Receipt, with failpoints between the steps; a retry with
@@ -12791,7 +12797,7 @@ export class DurableAgentRuntime extends Context.Service<
   /** Captures optional context preparation; Tool authorization remains required in `R`. */
   static readonly layerWithServices: Layer.Layer<
     DurableAgentRuntime,
-    never,
+    ThreadStoreError,
     | SubmissionLedger
     | ThreadStore
     | RunStorage
@@ -12807,7 +12813,7 @@ export class DurableAgentRuntime extends Context.Service<
   /** Compatible defaults: no host prompt transformation and allow-all Tool authorization. */
   static readonly layer: Layer.Layer<
     DurableAgentRuntime,
-    never,
+    ThreadStoreError,
     | SubmissionLedger
     | ThreadStore
     | RunStorage
