@@ -1,7 +1,6 @@
 import { OAuthScope, OAuthServer } from "@yielded/auth";
 import * as Portable from "@yielded/crypto/Portable";
 import { Jwk } from "@yielded/jose";
-import { waitUntil } from "cloudflare:workers";
 import { Clock, Effect, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
@@ -64,6 +63,7 @@ const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, 
 
   if (current.snapshot && current.snapshot.expiresAt > now && current.snapshot.kids.includes(kid))
     return current.snapshot.publicKeys;
+  const { waitUntil } = yield* Effect.promise(() => import("cloudflare:workers"));
 
   // Native promise reactions resume in each waiting Worker's request context.
   // Effect semaphore observers resume in the releasing request instead.
