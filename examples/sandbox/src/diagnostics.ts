@@ -74,7 +74,13 @@ export const diagnosticRows = (records: ReadonlyArray<CanonicalRecordEnvelope>) 
           label: p.toolName,
           runId: p.runId,
           toolCallId: p.toolCallId,
-          detail: [started?.detail, output?.stderr.slice(0, 2048)].filter(Boolean).join("\n\n"),
+          detail: [
+            started?.detail,
+            output?.stderr.slice(0, 2048),
+            failed ? output?.stdout.slice(-2048) : undefined,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
           failed,
           status: output?.timedOut
             ? "Timed out"
