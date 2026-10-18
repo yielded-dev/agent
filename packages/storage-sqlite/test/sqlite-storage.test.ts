@@ -406,6 +406,59 @@ describe("SqliteThreadStore", () => {
     }
   });
 
+  // Regression: https://github.com/yielded-dev/agent/commit/8b88036d879da7bbab88bb9918ac6f1f87f2930a
+  it.effect("rejects undeclared schema-header triggers before opening storage", () =>
+    withTemporaryDatabase((filename) =>
+      Effect.gen(function* () {
+        yield* withStorage(
+          filename,
+          Effect.gen(function* () {
+            const store = yield* ThreadStore;
+
+            yield* store.materialize(ThreadMaterialization.make({ threadId }));
+            yield* append(store, batch("header-trigger", [inputRecord("header-trigger", "Osaka")]));
+          }),
+        );
+        yield* withSql(
+          filename,
+          Effect.gen(function* () {
+            const sql = yield* SqlClientService.SqlClient;
+
+            yield* sql`CREATE TRIGGER application_header_observer
+              AFTER UPDATE OF layout_version ON effect_agent_schema BEGIN
+                UPDATE effect_agent_canonical_records
+                SET created_at_json = '"2000-01-01T00:00:00.000Z"';
+              END`;
+          }),
+        );
+
+        const snapshot = withSql(
+          filename,
+          Effect.gen(function* () {
+            const sql = yield* SqlClientService.SqlClient;
+
+            return {
+              schema: yield* sql`SELECT * FROM sqlite_master ORDER BY name`,
+              version: yield* sql`PRAGMA user_version`,
+              header: yield* sql`SELECT * FROM effect_agent_schema`,
+              records:
+                yield* sql`SELECT * FROM effect_agent_canonical_records ORDER BY thread_id, sequence`,
+            };
+          }),
+        );
+
+        const before = yield* snapshot;
+        const opened = yield* withStorage(filename, ThreadStore).pipe(Effect.exit);
+
+        expect(yield* snapshot).toEqual(before);
+        expect(Exit.isFailure(opened)).toBe(true);
+        if (Exit.isFailure(opened)) {
+          expect(Cause.squash(opened.cause)).toBeInstanceOf(SqliteStorageCompatibilityError);
+        }
+      }),
+    ),
+  );
+
   it.effect("rejects an unsupported storage version before creating canonical tables", () =>
     withTemporaryDatabase((filename) =>
       Effect.gen(function* () {
