@@ -9,6 +9,7 @@ import { fingerprint, type Message } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
 import {
   expectedSeed,
+  expectedRestoredTables,
   StorageFormat,
   type FixtureCompatibility,
   type BulkFixture,
@@ -311,16 +312,7 @@ export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) 
   )
     return yield* fail("Imported transcript fingerprint differs from local fixture");
   const counts = tables(storage.sql);
-  const expectedTables = { ...fixture.tables };
-
-  // Layout 29 retires this disposable cache; every retained table must still match the seed.
-  if (
-    fixture.target === "yielded" &&
-    fixture.storageFormat !== undefined &&
-    fixture.storageFormat.layoutVersion <= 28 &&
-    CurrentDoStorageVersion >= 29
-  )
-    delete expectedTables.effect_agent_checkpoints;
+  const expectedTables = expectedRestoredTables(fixture, compatibility);
 
   if (Object.keys(counts).sort().join("\n") !== Object.keys(expectedTables).sort().join("\n"))
     return yield* fail("Initialized table inventory differs from local source fixture");
