@@ -63,6 +63,7 @@ const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, 
 
   if (current.snapshot && current.snapshot.expiresAt > now && current.snapshot.kids.includes(kid))
     return current.snapshot.publicKeys;
+  const { waitUntil } = yield* Effect.promise(() => import("cloudflare:workers"));
 
   // Native promise reactions resume in each waiting Worker's request context.
   // Effect semaphore observers resume in the releasing request instead.
@@ -76,6 +77,8 @@ const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, 
     current.pending = new Promise<void>((resolve) => {
       complete = resolve;
     });
+    // Finish the bounded refresh even if its initiating request disconnects.
+    waitUntil(current.pending);
 
     return Effect.succeed(() => {
       current.pending = undefined;

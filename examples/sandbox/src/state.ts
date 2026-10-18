@@ -776,7 +776,13 @@ export const workspace = Atom.family((id: string) => {
         [
           Effect.gen(function* () {
             while (true) {
-              yield* pages.pipe(Effect.scoped, Effect.ignore);
+              yield* pages.pipe(
+                Effect.scoped,
+                Effect.catchIf(
+                  (error) => !Schema.is(RequestRejected)(error) || error.status !== 401,
+                  () => Effect.void,
+                ),
+              );
               get.set(state, {
                 ...get.once(state),
                 historyReady: false,
@@ -788,7 +794,14 @@ export const workspace = Atom.family((id: string) => {
           }),
           Effect.gen(function* () {
             while (true) {
-              yield* previews.pipe(Effect.ensuring(clearDrafts), Effect.scoped, Effect.ignore);
+              yield* previews.pipe(
+                Effect.ensuring(clearDrafts),
+                Effect.scoped,
+                Effect.catchIf(
+                  (error) => !Schema.is(RequestRejected)(error) || error.status !== 401,
+                  () => Effect.void,
+                ),
+              );
               yield* Effect.sleep("2 seconds");
             }
           }),
