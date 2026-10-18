@@ -1,6 +1,7 @@
 import { OAuthScope, OAuthServer } from "@yielded/auth";
 import * as Portable from "@yielded/crypto/Portable";
 import { Jwk } from "@yielded/jose";
+import { waitUntil } from "cloudflare:workers";
 import { Clock, Effect, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
@@ -76,6 +77,8 @@ const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, 
     current.pending = new Promise<void>((resolve) => {
       complete = resolve;
     });
+    // Finish the bounded refresh even if its initiating request disconnects.
+    waitUntil(current.pending);
 
     return Effect.succeed(() => {
       current.pending = undefined;

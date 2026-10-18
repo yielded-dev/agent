@@ -44,6 +44,11 @@ export const fetchWithSession = Effect.fnUntraced(function* (
   });
 
   notify();
+  if (refresh.status === 429 || refresh.status >= 500)
+    return yield* AccountError.make({
+      code: "unavailable",
+      message: "Session refresh is unavailable.",
+    });
   if (refresh.status !== 200) return response;
   yield* Effect.promise(async () => {
     await response.body?.cancel();
@@ -118,6 +123,7 @@ export const accountLifetime = Atom.make((get) => {
 /** Refresh near expiry, and recheck after another tab can have changed the host cookie. */
 export const sessionObservation = Atom.make((get) => {
   if (typeof window === "undefined") return;
+  get.mount(refreshSession);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const recheck = () => {
