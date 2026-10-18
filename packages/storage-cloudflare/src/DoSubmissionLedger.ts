@@ -16,18 +16,20 @@ import {
   SqlStorageProgress,
   type SqlStorageProgressKind,
 } from "@yielded/agent-storage-sql/sql-storage-progress";
+import {
+  BoundedIdentifier,
+  BoundedTimestamp,
+  makeSubmissionRowFields,
+} from "@yielded/agent-storage-sql/sql-submission-rows";
 import { canonicalRecordJson } from "@yielded/agent-storage-sql/sql-thread-archive-range";
 import type { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { InputMessage } from "@yielded/agent/messaging";
 import {
-  ApprovalDecision,
   CanonicalSequence,
   DefinitionDigests,
-  Digest,
   PersistedJson,
   WorkerAdmission,
   RecordEnvelope,
-  RecordId,
   SettlementOutcome,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
@@ -49,7 +51,6 @@ import {
   AdmissionAdmitted,
   AdmissionConflict,
   AdmissionFence,
-  AdmissionGroup,
   AdmissionPolicyError,
   AdmissionNotAdmitted,
   AdmissionRequest,
@@ -65,7 +66,6 @@ import {
   ChildBudgetReservationRequest,
   ChildBudgetReservationSnapshot,
   ChildReservationConflict,
-  ChildReservationStatus,
   ChildSettledNotification,
   Claim,
   ClaimJoiningRequest,
@@ -98,7 +98,6 @@ import {
   FundingOwnerRequest,
   FundingOwner,
   SubmissionWorkItem,
-  SubmissionState,
   settlementFailureFromRecord,
   SuspendRequest,
   SuspensionReason,
@@ -107,7 +106,6 @@ import {
   UnknownResolutionCommand,
   UnknownResolutionConflict,
   UnknownResolutionIntent,
-  UnknownResolutionKind,
   unknownResolutionKind,
   unknownResolutionMatchesResult,
   submissionInputRecordId,
@@ -164,8 +162,12 @@ type SubmissionId = SubmissionSnapshot["submissionId"];
  * `maxStoredValueBytes` (see do-journal.ts).
  */
 const BoundedStoredText = Schema.String.check(Schema.isMaxLength(2_000_000));
-const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
-const BoundedTimestamp = Schema.NonEmptyString.check(Schema.isMaxLength(128));
+
+const rowFields = makeSubmissionRowFields({
+  storedText: BoundedStoredText,
+  queueSequence: QueueSequence,
+  canonicalSequence: CanonicalSequence,
+});
 
 const SCAN_PAGE_SIZE = 256;
 const admissionFitsTransfer = makeTransferFactCheck(AdmissionRequest);
@@ -176,38 +178,7 @@ const STILL_WAITING: ChildSettledOutcome = "still-waiting";
 const WOKEN: ChildSettledOutcome = "woken";
 const MAX_IDENTIFIER_LENGTH = 1_024;
 
-class SubmissionRow extends Schema.Class<SubmissionRow>("SubmissionRow")({
-  submission_id: BoundedIdentifier,
-  thread_id: BoundedIdentifier,
-  queue_sequence: QueueSequence,
-  principal: BoundedIdentifier,
-  idempotency_key: BoundedIdentifier,
-  agent_id: BoundedIdentifier,
-  agent_digests_json: BoundedStoredText,
-  deployment_id: BoundedIdentifier,
-  input_json: BoundedStoredText,
-  input_digest: Digest,
-  receipt_id: BoundedIdentifier,
-  state: SubmissionState,
-  settled_outcome: Schema.NullOr(SettlementOutcome),
-  settled_record_id: Schema.NullOr(BoundedIdentifier.pipe(Schema.decodeTo(RecordId))),
-  finalized_at: Schema.NullOr(BoundedTimestamp),
-  created_at: BoundedTimestamp,
-  ready_at: Schema.NullOr(BoundedTimestamp),
-  input_applied_record_id: Schema.NullOr(BoundedIdentifier),
-  input_applied_sequence: Schema.NullOr(CanonicalSequence),
-  joined_host_submission_id: Schema.NullOr(BoundedIdentifier),
-  suspended_reason_json: Schema.NullOr(BoundedStoredText),
-  suspended_at: Schema.NullOr(BoundedTimestamp),
-  unknown_reason: Schema.NullOr(BoundedStoredText),
-  unknown_tool_call_ids_json: Schema.NullOr(BoundedStoredText),
-  parent_submission_id: Schema.NullOr(BoundedIdentifier),
-  parent_tool_call_id: Schema.NullOr(BoundedIdentifier),
-  admission_group: Schema.NullOr(AdmissionGroup),
-  admission_fence_json: Schema.NullOr(BoundedStoredText),
-  worker_admission_json: Schema.NullOr(BoundedStoredText),
-  message_admission_json: Schema.NullOr(BoundedStoredText),
-}) {}
+class SubmissionRow extends Schema.Class<SubmissionRow>("SubmissionRow")(rowFields.submission) {}
 
 // Discovery retains identity and state, never every queued input payload.
 const SubmissionWorkRow = Schema.Struct({
@@ -221,19 +192,9 @@ const SubmissionWorkRow = Schema.Struct({
   state: SubmissionRow.fields.state,
 });
 
-class ChildReservationRow extends Schema.Class<ChildReservationRow>("ChildReservationRow")({
-  reservation_id: BoundedIdentifier,
-  parent_submission_id: BoundedIdentifier,
-  parent_tool_call_id: BoundedIdentifier,
-  child_submission_id: Schema.NullOr(BoundedIdentifier),
-  status: ChildReservationStatus,
-  allocation_json: BoundedStoredText,
-  allocation_digest: Digest,
-  accounting_json: Schema.NullOr(BoundedStoredText),
-  reserved_at: BoundedTimestamp,
-  release_began_at: Schema.NullOr(BoundedTimestamp),
-  released_at: Schema.NullOr(BoundedTimestamp),
-}) {}
+class ChildReservationRow extends Schema.Class<ChildReservationRow>("ChildReservationRow")(
+  rowFields.childReservation,
+) {}
 
 class ChildSettlementMarkerRow extends Schema.Class<ChildSettlementMarkerRow>(
   "ChildSettlementMarkerRow",
@@ -244,32 +205,17 @@ class ChildSettlementMarkerRow extends Schema.Class<ChildSettlementMarkerRow>(
   recorded_at: BoundedTimestamp,
 }) {}
 
-class ApprovalDecisionRow extends Schema.Class<ApprovalDecisionRow>("ApprovalDecisionRow")({
-  submission_id: BoundedIdentifier,
-  tool_call_id: BoundedIdentifier,
-  decision: ApprovalDecision,
-  resolver: BoundedIdentifier,
-  reason: BoundedStoredText,
-  decided_at: BoundedTimestamp,
-}) {}
+class ApprovalDecisionRow extends Schema.Class<ApprovalDecisionRow>("ApprovalDecisionRow")(
+  rowFields.approvalDecision,
+) {}
 
-class UnknownResolutionRow extends Schema.Class<UnknownResolutionRow>("UnknownResolutionRow")({
-  submission_id: BoundedIdentifier,
-  tool_call_id: BoundedIdentifier,
-  resolution_kind: UnknownResolutionKind,
-  author: BoundedIdentifier,
-  reason: BoundedStoredText,
-  resolution_json: BoundedStoredText,
-  resolved_at: BoundedTimestamp,
-}) {}
+class UnknownResolutionRow extends Schema.Class<UnknownResolutionRow>("UnknownResolutionRow")(
+  rowFields.unknownResolution,
+) {}
 
-class AbortIntentRow extends Schema.Class<AbortIntentRow>("AbortIntentRow")({
-  submission_id: BoundedIdentifier,
-  author: BoundedIdentifier,
-  reason: BoundedStoredText,
-  requested_at: BoundedTimestamp,
-  canonical_record_id: Schema.NullOr(BoundedIdentifier),
-}) {}
+class AbortIntentRow extends Schema.Class<AbortIntentRow>("AbortIntentRow")(
+  rowFields.abortIntent,
+) {}
 
 class WorkerStopRow extends Schema.Class<WorkerStopRow>("WorkerStopRow")({
   thread_id: BoundedIdentifier,

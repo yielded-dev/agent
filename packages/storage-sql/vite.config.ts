@@ -15,6 +15,8 @@ export default defineConfig({
       "src/SqlThreadStore.ts",
       "src/SqlThreadWork.ts",
       "src/SqlSubmissionLedger.ts",
+      "src/SqlSubmissionRows.ts",
+      "src/SqlObservationOffset.ts",
       "src/SqlAdmissionFacts.ts",
       "src/SqlActivityStore.ts",
       "src/SqlScheduleStore.ts",

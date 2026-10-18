@@ -1,15 +1,11 @@
 import type { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { InputMessage } from "@yielded/agent/messaging";
 import {
-  ApprovalDecision,
   CanonicalSequence,
   DefinitionDigests,
-  Digest,
   PersistedJson,
   WorkerAdmission,
   RecordEnvelope,
-  RecordId,
-  SettlementOutcome,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import type { SettlementPublication } from "@yielded/agent/settlement-publisher";
@@ -30,7 +26,6 @@ import {
   AdmissionAdmitted,
   AdmissionConflict,
   AdmissionFence,
-  AdmissionGroup,
   AdmissionPolicyError,
   AdmissionNotAdmitted,
   AdmissionRequest,
@@ -46,7 +41,6 @@ import {
   ChildBudgetReservationRequest,
   ChildBudgetReservationSnapshot,
   ChildReservationConflict,
-  ChildReservationStatus,
   ChildSettledNotification,
   Claim,
   ClaimJoiningRequest,
@@ -79,7 +73,6 @@ import {
   FundingOwnerRequest,
   FundingOwner,
   SubmissionWorkItem,
-  SubmissionState,
   settlementFailureFromRecord,
   SuspendRequest,
   SuspensionReason,
@@ -88,7 +81,6 @@ import {
   UnknownResolutionCommand,
   UnknownResolutionConflict,
   UnknownResolutionIntent,
-  UnknownResolutionKind,
   unknownResolutionKind,
   unknownResolutionMatchesResult,
   submissionAbortRecordId,
@@ -134,13 +126,22 @@ import {
   type SqlStorageFailpoint,
 } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
+import {
+  BoundedIdentifier,
+  BoundedTimestamp,
+  makeSubmissionRowFields,
+} from "./SqlSubmissionRows.ts";
 import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 import { prepareSqlAppend } from "./SqlThreadStore.ts";
 type SubmissionId = SubmissionSnapshot["submissionId"];
 
 const BoundedStoredText = Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024));
-const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
-const BoundedTimestamp = Schema.NonEmptyString.check(Schema.isMaxLength(128));
+
+const rowFields = makeSubmissionRowFields({
+  storedText: BoundedStoredText,
+  queueSequence: SqlInteger.pipe(Schema.decodeTo(QueueSequence)),
+  canonicalSequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
+});
 
 const transferCapacityError = (operation: string) =>
   LedgerError.make({
@@ -172,71 +173,19 @@ const NOT_WAITING: ChildSettledOutcome = "not-waiting";
 const STILL_WAITING: ChildSettledOutcome = "still-waiting";
 const WOKEN: ChildSettledOutcome = "woken";
 
-class SubmissionRow extends Schema.Class<SubmissionRow>("SubmissionRow")({
-  submission_id: BoundedIdentifier,
-  thread_id: BoundedIdentifier,
-  queue_sequence: SqlInteger.pipe(Schema.decodeTo(QueueSequence)),
-  principal: BoundedIdentifier,
-  idempotency_key: BoundedIdentifier,
-  agent_id: BoundedIdentifier,
-  agent_digests_json: BoundedStoredText,
-  deployment_id: BoundedIdentifier,
-  input_json: BoundedStoredText,
-  input_digest: Digest,
-  receipt_id: BoundedIdentifier,
-  state: SubmissionState,
-  settled_outcome: Schema.NullOr(SettlementOutcome),
-  settled_record_id: Schema.NullOr(BoundedIdentifier.pipe(Schema.decodeTo(RecordId))),
-  finalized_at: Schema.NullOr(BoundedTimestamp),
-  created_at: BoundedTimestamp,
-  ready_at: Schema.NullOr(BoundedTimestamp),
-  input_applied_record_id: Schema.NullOr(BoundedIdentifier),
-  input_applied_sequence: Schema.NullOr(SqlInteger.pipe(Schema.decodeTo(CanonicalSequence))),
-  joined_host_submission_id: Schema.NullOr(BoundedIdentifier),
-  suspended_reason_json: Schema.NullOr(BoundedStoredText),
-  suspended_at: Schema.NullOr(BoundedTimestamp),
-  unknown_reason: Schema.NullOr(BoundedStoredText),
-  unknown_tool_call_ids_json: Schema.NullOr(BoundedStoredText),
-  parent_submission_id: Schema.NullOr(BoundedIdentifier),
-  parent_tool_call_id: Schema.NullOr(BoundedIdentifier),
-  admission_group: Schema.NullOr(AdmissionGroup),
-  admission_fence_json: Schema.NullOr(BoundedStoredText),
-  worker_admission_json: Schema.NullOr(BoundedStoredText),
-  message_admission_json: Schema.NullOr(BoundedStoredText),
-}) {}
+class SubmissionRow extends Schema.Class<SubmissionRow>("SubmissionRow")(rowFields.submission) {}
 
-class ChildReservationRow extends Schema.Class<ChildReservationRow>("ChildReservationRow")({
-  reservation_id: BoundedIdentifier,
-  parent_submission_id: BoundedIdentifier,
-  parent_tool_call_id: BoundedIdentifier,
-  child_submission_id: Schema.NullOr(BoundedIdentifier),
-  status: ChildReservationStatus,
-  allocation_json: BoundedStoredText,
-  allocation_digest: Digest,
-  accounting_json: Schema.NullOr(BoundedStoredText),
-  reserved_at: BoundedTimestamp,
-  release_began_at: Schema.NullOr(BoundedTimestamp),
-  released_at: Schema.NullOr(BoundedTimestamp),
-}) {}
+class ChildReservationRow extends Schema.Class<ChildReservationRow>("ChildReservationRow")(
+  rowFields.childReservation,
+) {}
 
-class ApprovalDecisionRow extends Schema.Class<ApprovalDecisionRow>("ApprovalDecisionRow")({
-  submission_id: BoundedIdentifier,
-  tool_call_id: BoundedIdentifier,
-  decision: ApprovalDecision,
-  resolver: BoundedIdentifier,
-  reason: BoundedStoredText,
-  decided_at: BoundedTimestamp,
-}) {}
+class ApprovalDecisionRow extends Schema.Class<ApprovalDecisionRow>("ApprovalDecisionRow")(
+  rowFields.approvalDecision,
+) {}
 
-class UnknownResolutionRow extends Schema.Class<UnknownResolutionRow>("UnknownResolutionRow")({
-  submission_id: BoundedIdentifier,
-  tool_call_id: BoundedIdentifier,
-  resolution_kind: UnknownResolutionKind,
-  author: BoundedIdentifier,
-  reason: BoundedStoredText,
-  resolution_json: BoundedStoredText,
-  resolved_at: BoundedTimestamp,
-}) {}
+class UnknownResolutionRow extends Schema.Class<UnknownResolutionRow>("UnknownResolutionRow")(
+  rowFields.unknownResolution,
+) {}
 
 // Selection and readiness need lane state, not the retained input and recovery metadata.
 // Keep the ordering keys in the decoded projection because they govern claim authority.
@@ -256,13 +205,9 @@ const ClaimSubmissionRows = Schema.Array(
   ),
 );
 
-class AbortIntentRow extends Schema.Class<AbortIntentRow>("AbortIntentRow")({
-  submission_id: BoundedIdentifier,
-  author: BoundedIdentifier,
-  reason: BoundedStoredText,
-  requested_at: BoundedTimestamp,
-  canonical_record_id: Schema.NullOr(BoundedIdentifier),
-}) {}
+class AbortIntentRow extends Schema.Class<AbortIntentRow>("AbortIntentRow")(
+  rowFields.abortIntent,
+) {}
 
 class MaxQueueSequenceRow extends Schema.Class<MaxQueueSequenceRow>("MaxQueueSequenceRow")({
   max_queue_sequence: SqlInteger.check(Schema.isGreaterThanOrEqualTo(0)),

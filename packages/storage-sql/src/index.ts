@@ -3,6 +3,8 @@ export * as SqlStorageFailpoint from "./SqlStorageFailpoint.ts";
 export * as SqlJournal from "./SqlJournal.ts";
 export * as SqlThreadStore from "./SqlThreadStore.ts";
 export * as SqlSubmissionLedger from "./SqlSubmissionLedger.ts";
+export * as SqlSubmissionRows from "./SqlSubmissionRows.ts";
+export * as SqlObservationOffset from "./SqlObservationOffset.ts";
 export * as SqlAdmissionFacts from "./SqlAdmissionFacts.ts";
 export * as SqlActivityStore from "./SqlActivityStore.ts";
 export * as SqlScheduleStore from "./SqlScheduleStore.ts";
