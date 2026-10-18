@@ -16,7 +16,7 @@ import {
   NativeSandboxNamespace,
 } from "@yielded/sandbox/cloudflare";
 import { Cause, Deferred, Effect, Layer, Schedule, Schema, Stream } from "effect";
-import { Rpc, Worker, WorkerEnvironment } from "effect-cf";
+import { CloudflareTracer, Rpc, Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 
@@ -49,6 +49,7 @@ export { DirectoryBackupGateway } from "@yielded/sandbox/cloudflare";
 const containerOptions = {
   namespaceBinding: "SANDBOXES",
   backupBucketBinding: "BACKUPS",
+  eventLayer: CloudflareTracer.layer,
   idleMillis: 1_800_000,
   allowedHosts: () => ["registry.npmjs.org"],
 };
