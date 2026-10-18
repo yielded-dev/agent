@@ -132,6 +132,7 @@
     "examples/sandbox": {
       "name": "@yielded/agent-example-sandbox",
       "dependencies": {
+        "@base-ui/react": "catalog:",
         "@effect/ai-openai": "catalog:",
         "@effect/atom-react": "catalog:",
         "@effect/platform-browser": "catalog:",

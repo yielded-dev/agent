@@ -6,6 +6,7 @@
     "dev": "vp dev"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
     "@effect/ai-openai": "catalog:",
     "@effect/atom-react": "catalog:",
     "@effect/platform-browser": "catalog:",

@@ -17,9 +17,10 @@ last settings used there.
 The example exposes `read_file`, `write_file`, `edit_file`, `list_files`, `search`
 and `bash`, plus OpenAI’s native web search for current documentation and outside
 information. Search runs in the coding model’s own response and retains citations;
-it does not grant the container additional network access. Local tool execution is
-serialized. Process tickets and results use Agent's Durable Steps, and retries
-retain the original deadline and workspace identity.
+the container also has public internet access for dependencies, documentation and
+public repositories. Local tool execution is serialized. Process tickets and
+results use Agent's Durable Steps, and retries retain the original deadline and
+workspace identity.
 Long tasks automatically summarize context and continue with the summary, recent
 messages and existing files. The selected model supplies its context capacity
 (Sol 500k, Astra 272k), with room reserved for the response. Conversation history is
@@ -51,8 +52,17 @@ process receipts. An unresolved command stays unresolved after restoration.
 
 Changes since the last successful save can be lost when a container stops. Older
 workspaces without a saved snapshot cannot recover files that have already expired.
-Commands have no production credentials; network access is limited to the public npm
-registry. The host caps concurrent containers at four.
+Commands have no production credentials. The host caps concurrent containers at four.
+The image includes Node, Bun, Python with pip/venv, Git, ripgrep and common shell tools.
+Playwright Test and matching headless Chromium, system libraries and fonts are
+preinstalled. New projects can import `@playwright/test` or `playwright` and run
+`playwright test` without installing a browser. Existing projects keep their own
+package manager and dependencies.
+
+Open **Diagnostics** in the workspace header to inspect saved model responses,
+token counts, tool timings and failures, or copy a page with its run and response
+IDs. It reads existing history on demand. Tool elapsed time includes startup and
+recording overhead; it is shown only when both boundaries are in the page.
 
 Select an HTML file and switch between **Source** and **Preview** in the file viewer.
 The preview embeds the workspace's HTML, scripts, CSS and images from an isolated

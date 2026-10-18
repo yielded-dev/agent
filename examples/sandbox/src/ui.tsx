@@ -22,6 +22,7 @@ import { ArrowLeft, ArrowUpRight, Check, FolderCode, LoaderCircle } from "lucide
 import { useEffect, useId, useMemo, useRef } from "react";
 
 import { type Entry, type PreviewSession, type ShellCommand } from "./contract";
+import { WorkspaceDiagnostics } from "./diagnostics-view";
 import { signIn } from "./location";
 import { location, newWorkspace, workspace, workspaceList } from "./state";
 
@@ -242,6 +243,7 @@ function WorkspaceActions({ id }: { id: string }) {
       <Button variant="ghost" size="sm" disabled={busy} onClick={() => navigate(null)}>
         <ArrowLeft className="size-3.5" /> Your workspaces
       </Button>
+      <WorkspaceDiagnostics id={id} />
       <CreateWorkspace disabled={busy} />
     </>
   );
