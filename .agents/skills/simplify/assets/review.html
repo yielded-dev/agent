@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>[Name] Simplify Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Summary on top, a before/after diagram per subsystem, one card per change with its code, then the reviewer's decisions. */
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --sunken: #eef0f3; --fg: #161a1f; --soft: #3d4651; --muted: #69737e;
+    --line: #dfe3e8; --edge: #c3cad2; --arrow: #9aa4ae; --shadow: rgb(15 20 25 / 0.18);
+    --del: #c0362c; --del-wash: #fdebe9; --add: #17803d; --add-wash: #e3f4e8;
+    --ask: #b25407; --ask-wash: #fdf2e3; --on-ask: #ffffff;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1215; --panel: #171b20; --sunken: #12161a; --fg: #eceff2; --soft: #c3cad1; --muted: #8d97a2;
+      --line: #262c33; --edge: #39414a; --arrow: #59636e; --shadow: rgb(0 0 0 / 0.55);
+      --del: #ff8378; --del-wash: #3a1a19; --add: #5fd283; --add-wash: #12301d;
+      --ask: #f2a444; --ask-wash: #2e2211; --on-ask: #1b1205; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1215; --panel: #171b20; --sunken: #12161a; --fg: #eceff2; --soft: #c3cad1; --muted: #8d97a2;
+    --line: #262c33; --edge: #39414a; --arrow: #59636e; --shadow: rgb(0 0 0 / 0.55);
+    --del: #ff8378; --del-wash: #3a1a19; --add: #5fd283; --add-wash: #12301d;
+    --ask: #f2a444; --ask-wash: #2e2211; --on-ask: #1b1205; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--sans); }
+  main { max-width: 1160px; margin: 0 auto; padding-block: 56px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--edge); }
+  a:hover { text-decoration-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; border-radius: 3px; }
+  code { font-family: var(--mono); font-size: 0.88em; }
+  p { margin: 0; }
+  .del { color: var(--del); }
+  .add { color: var(--add); }
+  .n { font: 600 13px/1 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* Summary */
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px 56px; align-items: end; padding-bottom: 40px; border-bottom: 1px solid var(--line); }
+  .eyebrow { font: 600 12px/1.4 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 12px 0 16px; font-size: clamp(30px, 5vw, 50px); line-height: 1.06; letter-spacing: -0.035em; font-weight: 700; text-wrap: balance; }
+  .lead { max-width: 62ch; font-size: 18px; color: var(--soft); }
+  .rev { margin-top: 18px; font: 13px/1.4 var(--mono); color: var(--muted); }
+  .score .big { display: block; font-size: 72px; line-height: 0.95; font-weight: 700; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+  .score .unit { display: block; margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .bars { display: grid; gap: 10px; margin-top: 20px; }
+  .bar { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 12px; align-items: center; font: 12px/1 var(--mono); }
+  .bar i { position: relative; height: 8px; border-radius: 4px; background: var(--sunken); overflow: hidden; }
+  .bar i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: 4px; background: currentColor; }
+
+  section { margin-top: 64px; }
+  h2 { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; font: 650 12px/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+  h2::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+
+  /* Before/after: one row per subsystem, flows read top to bottom */
+  .arch { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+  .arch-head, .arch-row { display: grid; grid-template-columns: 200px minmax(0, 1fr) minmax(0, 1fr); }
+  .arch-head { border-radius: 13px 13px 0 0; background: var(--sunken); }
+  .arch-head span { padding: 12px 24px; font: 650 12px/1.4 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .arch-row { border-top: 1px solid var(--line); }
+  .arch-row > * { min-width: 0; padding: 28px 24px; }
+  .arch-row .flow + .flow { border-left: 1px solid var(--line); }
+  .arch-row h3 { margin: 0 0 8px; font-size: 16px; line-height: 1.3; }
+  .flow { display: flex; flex-direction: column; align-items: center; margin: 0; list-style: none; }
+  .flow li { position: relative; width: min(100%, 270px); padding: 9px 22px; border: 1px solid var(--edge); border-radius: 9px; background-color: var(--panel); font-size: 14px; font-weight: 550; line-height: 1.3; text-align: center; overflow-wrap: anywhere; }
+  .flow li small { display: block; margin-top: 3px; font: 400 12px/1.3 var(--mono); color: var(--muted); }
+  .flow li + li { margin-top: 28px; }
+  .flow li + li::before { content: ""; position: absolute; left: 50%; top: -28px; height: 21px; border-left: 1.5px solid var(--arrow); }
+  .flow li + li::after { content: ""; position: absolute; left: calc(50% - 4.25px); top: -8px; border: 5px solid transparent; border-top-color: var(--arrow); border-bottom: 0; }
+  .flow .gone { border-style: dashed; border-color: var(--del); background-color: var(--del-wash); color: var(--del); text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); }
+  .flow .gone small { color: inherit; opacity: 0.8; }
+  .flow .new { border-color: var(--add); background-color: var(--add-wash); color: var(--add); }
+  .flow .new small { color: inherit; opacity: 0.85; }
+
+  /* Step details: hover, keyboard focus, or tap */
+  .flow li:has(> .tip) { cursor: pointer; background-image: radial-gradient(circle at calc(100% - 10px) 10px, currentColor 0 2.5px, transparent 3px); }
+  .flow li:has(> .tip):not(.gone, .new) { background-image: radial-gradient(circle at calc(100% - 10px) 10px, var(--arrow) 0 2.5px, transparent 3px); }
+  .flow li:is(:hover, :focus-visible, .open) { z-index: 3; }
+  .tip { display: none; position: absolute; z-index: 10; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); width: min(300px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); box-shadow: 0 16px 36px -14px var(--shadow); color: var(--soft); font: 400 13px/1.5 var(--sans); text-align: left; cursor: auto; }
+  .tip::before { content: ""; position: absolute; inset: -12px 0 auto; height: 12px; }
+  .tip b { display: block; margin-bottom: 2px; color: var(--fg); font-weight: 650; }
+  .tip a { display: inline-block; margin-top: 6px; font: 12px/1.4 var(--mono); color: var(--fg); }
+  .flow li:is(:hover, :focus-visible, .open, :has(.tip a:focus-visible)) > .tip { display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .legend i { width: 18px; height: 12px; border-radius: 3px; border: 1px solid var(--edge); background: var(--panel); }
+  .legend .gone { border: 1px dashed var(--del); background: var(--del-wash); }
+  .legend .new { border-color: var(--add); background: var(--add-wash); }
+  .legend .dot { width: 6px; height: 6px; border: 0; border-radius: 50%; background: var(--arrow); }
+
+  /* Changes: reasoning on the left, code on the right */
+  .change { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 24px 40px; padding: 36px 0; border-top: 1px solid var(--line); }
+  .change:first-of-type { border-top: 0; padding-top: 4px; }
+  .change-text { display: grid; gap: 12px; align-content: start; }
+  .tag { font: 650 11px/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+  .change h3 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -0.015em; }
+  .change .why { color: var(--soft); }
+  .risk { padding: 12px 14px; border-radius: 9px; background: var(--sunken); font-size: 14px; color: var(--soft); }
+  .risk b { color: var(--fg); }
+  summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+  .evidence { display: grid; gap: 8px; margin: 10px 0 0; padding-left: 18px; font-size: 14px; color: var(--soft); }
+  .evidence code { color: var(--fg); }
+  .diff { margin: 0; padding: 14px 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); font: 12px/1.7 var(--mono); tab-size: 2; }
+  .diff > span { display: inline-block; min-width: 100%; padding: 0 18px; }
+  .diff .f { padding-bottom: 6px; color: var(--muted); }
+  .diff .d { background: var(--del-wash); color: var(--del); }
+  .diff .a { background: var(--add-wash); color: var(--add); }
+
+  /* Decisions: pick an answer per question, then copy them back */
+  .decide-lead { margin: -6px 0 8px; font-size: 17px; color: var(--soft); }
+  .decision { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 18px 40px; padding: 30px 0; border-top: 1px solid var(--line); }
+  .decision:first-of-type { border-top: 0; }
+  .ask-text { display: grid; gap: 10px; align-content: start; }
+  .ask-tag { font: 650 11px/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--ask); }
+  .q { margin: 0; font-size: 21px; line-height: 1.25; letter-spacing: -0.012em; text-wrap: balance; }
+  .ask-text p { font-size: 15px; color: var(--soft); }
+  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start; }
+  .option { position: relative; display: grid; gap: 6px; align-content: start; padding: 16px 18px 16px 48px; border: 1.5px solid var(--edge); border-radius: 12px; background: var(--panel); cursor: pointer; transition: border-color 0.15s, background-color 0.15s; }
+  .option:hover { border-color: var(--ask); }
+  .option input { position: absolute; left: 18px; top: 17px; width: 18px; height: 18px; margin: 0; accent-color: var(--ask); }
+  .option:has(input:checked) { border-color: var(--ask); background: var(--ask-wash); }
+  .option:has(input:focus-visible) { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .opt-title { font-size: 16px; font-weight: 650; line-height: 1.3; }
+  .opt-effect { font-size: 14px; color: var(--soft); }
+  .opt-effect .n { display: block; margin-top: 6px; }
+  .cta-bar { position: sticky; z-index: 20; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin-top: 12px; padding: 14px 14px 14px 22px; border-radius: 14px; background: var(--fg); color: var(--bg); box-shadow: 0 18px 40px -16px var(--shadow); }
+  .cta-bar p { font-size: 15px; font-weight: 550; }
+  .cta { padding: 11px 20px; border: 0; border-radius: 9px; background: var(--ask); color: var(--on-ask); font: 650 15px/1.2 var(--sans); cursor: pointer; }
+  .cta:hover { filter: brightness(1.08); }
+  .fallback { width: 100%; min-height: 120px; margin-top: 12px; padding: 12px; border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); color: var(--fg); font: 13px/1.5 var(--mono); }
+
+  .closing { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+  .closing ul { display: grid; gap: 10px; margin: 0; padding-left: 18px; font-size: 15px; color: var(--soft); }
+  .closing b { color: var(--fg); }
+
+  @media (prefers-reduced-motion: reduce) { .option { transition: none; } }
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; }
+    .score { max-width: 360px; }
+    .change, .decision { grid-template-columns: 1fr; }
+    .arch-head, .arch-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .arch-head span:first-child { display: none; }
+    .arch-row > div:first-child { grid-column: 1 / -1; padding-bottom: 0; }
+    .arch-row h3 { display: inline; margin-right: 10px; }
+  }
+  @media (max-width: 560px) {
+    .arch-row > * { padding: 22px 12px; }
+    .flow li { padding: 8px 16px; font-size: 13px; }
+    .flow .tip { left: 0; transform: none; }
+    .flow + .flow .tip { left: auto; right: 0; }
+    .options, .closing { grid-template-columns: 1fr; }
+    .score .big { font-size: 60px; }
+  }
+</style>
+</head>
+<body>
+<!--
+  Copy this file and replace the bracketed text. Repeat or delete rows, steps, changes, and decisions; drop empty sections.
+  Steps: class="gone" when removed, class="new" when new or taking over, no class when unchanged. Give a step tabindex="0"
+  and a <span class="tip"> to show details in place; leave both out when the label says enough.
+  Bars: removed uses --w: 100%; added uses --w: (added ÷ removed × 100)%.
+  Diffs: one <span> per line, written at column 0, with class "f" (file), "d" (removed), "a" (added), or none (context). Escape <, >, and &.
+  Decisions: one radio group per question; each option's value is the answer copied back to the agent. Keep the script as is.
+-->
+<main>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Simplify review · [repo] · [PR or branch]</p>
+      <h1>[What to cut, in one line]</h1>
+      <p class="lead">[One or two sentences: the smaller design and what stays.]</p>
+      <p class="rev">[base] → [head] · [scope]</p>
+    </div>
+    <div class="score">
+      <span class="big">−[net]</span>
+      <span class="unit">net production lines</span>
+      <div class="bars">
+        <div class="bar del" style="--w: 100%"><i></i><span>−[removed]</span></div>
+        <div class="bar add" style="--w: [added ÷ removed]%"><i></i><span>+[added]</span></div>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>Before → after</h2>
+    <div class="arch">
+      <div class="arch-head"><span></span><span>Before</span><span>After</span></div>
+      <div class="arch-row">
+        <div>
+          <h3>[Subsystem]</h3>
+          <span class="n"><span class="del">−[N]</span> <span class="add">+[M]</span></span>
+        </div>
+        <ol class="flow">
+          <li>[Step]<small>[owner or detail]</small></li>
+          <li class="gone" tabindex="0">[Step that goes]<small>[owner or detail]</small>
+            <span class="tip" role="tooltip"><b>[Step that goes]</b>[What it does and why it can go.] <a href="[revision-pinned URL]">[path:line]</a></span></li>
+          <li>[Step]</li>
+        </ol>
+        <ol class="flow">
+          <li>[Step]<small>[owner or detail]</small></li>
+          <li class="new" tabindex="0">[Step that takes over]<small>[owner or detail]</small>
+            <span class="tip" role="tooltip"><b>[Step that takes over]</b>[What changes here.]</span></li>
+        </ol>
+      </div>
+    </div>
+    <p class="legend"><span><i class="gone"></i>Removed</span><span><i class="new"></i>New or takes over</span><span><i></i>Unchanged</span><span><i class="dot"></i>Hover or tap for details</span></p>
+  </section>
+
+  <section>
+    <h2>Changes</h2>
+    <article class="change" id="[change-id]">
+      <div class="change-text">
+        <p class="tag">[Subsystem]</p>
+        <h3>[What goes]</h3>
+        <span class="n"><span class="del">−[N]</span> <span class="add">+[M]</span></span>
+        <p class="why">[Why it can go and what replaces it, in two sentences.]</p>
+        <p class="risk"><b>Risk:</b> [what could break, and the check that shows it does not.]</p>
+        <details>
+          <summary>Evidence</summary>
+          <ul class="evidence">
+            <li><a href="[revision-pinned URL]"><code>[path:line]</code></a> [what it shows]</li>
+          </ul>
+        </details>
+      </div>
+<pre class="diff"><span class="f">[path]</span>
+<span>  [context line]</span>
+<span class="d">- [removed line]</span>
+<span class="a">+ [added line]</span>
+</pre>
+    </article>
+  </section>
+
+  <section>
+    <h2>Your call</h2>
+    <form class="decide">
+      <p class="decide-lead">[N] decisions need you. Pick an answer for each, then copy them back to the agent.</p>
+      <div class="decision" role="radiogroup" aria-labelledby="q1">
+        <div class="ask-text">
+          <p class="ask-tag">Decision 1 · [topic]</p>
+          <h3 class="q" id="q1">[Question the reviewer must answer?]</h3>
+          <p>[What happens today, in one sentence.]</p>
+        </div>
+        <div class="options">
+          <label class="option"><input type="radio" name="q1" id="q1-yes" value="[Answer as the agent should read it.]"><span class="opt-title">[Yes, …]</span><span class="opt-effect">[What happens.]<span class="n"><span class="del">−N</span> <span class="add">+M</span></span></span></label>
+          <label class="option"><input type="radio" name="q1" id="q1-no" value="[Answer as the agent should read it.]"><span class="opt-title">[No, …]</span><span class="opt-effect">[What happens.]</span></label>
+        </div>
+      </div>
+      <div class="cta-bar">
+        <p class="progress">0 of 1 answered</p>
+        <button type="button" class="cta">Copy answers</button>
+      </div>
+      <textarea class="fallback" id="answers" aria-label="Answers to copy" readonly hidden></textarea>
+    </form>
+  </section>
+
+  <section class="closing">
+    <div>
+      <h2>Keep</h2>
+      <ul><li><b>[Mechanism]:</b> [the requirement that needs it].</li></ul>
+    </div>
+    <div>
+      <h2>Not reviewed</h2>
+      <ul><li>[Area]: [why].</li></ul>
+    </div>
+  </section>
+</main>
+<script>
+  // Tap a step to pin its details; tap elsewhere or press Escape to close.
+  const closeSteps = (except) => document.querySelectorAll(".flow li.open").forEach((step) => step !== except && step.classList.remove("open"));
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".tip")) return;
+    const step = event.target.closest(".flow li");
+    closeSteps(step);
+    if (step?.querySelector(":scope > .tip")) step.classList.toggle("open");
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    closeSteps();
+    if (document.activeElement?.closest(".flow")) document.activeElement.blur();
+  });
+
+  // Count answered decisions and copy them as text for the agent.
+  const decide = document.querySelector(".decide");
+  if (decide) {
+    const groups = [...decide.querySelectorAll(".decision")];
+    const progress = decide.querySelector(".progress");
+    const button = decide.querySelector(".cta");
+    const fallback = decide.querySelector(".fallback");
+    const update = () => {
+      const answered = groups.filter((group) => group.querySelector("input:checked")).length;
+      progress.textContent = `${answered} of ${groups.length} answered`;
+    };
+    decide.addEventListener("change", update);
+    update();
+    button.addEventListener("click", async () => {
+      const answers = groups.map((group, index) => {
+        const choice = group.querySelector("input:checked");
+        return `${index + 1}. ${group.querySelector(".q").textContent.trim()}\n   ${choice ? choice.value : "No answer yet."}`;
+      });
+      const text = [`${document.querySelector("h1").textContent.trim()}: my answers`, ...answers].join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "Copied";
+        setTimeout(() => { button.textContent = "Copy answers"; }, 2000);
+      } catch {
+        fallback.hidden = false;
+        fallback.value = text;
+        fallback.select();
+      }
+    });
+  }
+</script>
+</body>
+</html>
