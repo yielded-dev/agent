@@ -33,6 +33,7 @@ import { WorkspacePreviews } from "./previews.ts";
 import { codingReconciler, recoverWorkspace, workspaceRecoveryRequired } from "./recovery.ts";
 import { snapshotLane, WorkspaceSnapshots } from "./snapshots.ts";
 import { codingToolsLive } from "./tools.ts";
+import { webLive } from "./web.ts";
 import { Workspace } from "./workspace.ts";
 
 const Address = Schema.String.check(Schema.isPattern(/^([0-9a-f-]{36})--([0-9a-f-]{36})$/i));
@@ -157,6 +158,7 @@ const registered = DurableAgentRuntime.layerRegistered([
   },
 ]).pipe(
   Layer.provide(codingToolsLive),
+  Layer.provide(webLive),
   Layer.provide(codingReconciler),
   Layer.provide(ContextTools.layer),
   Layer.provide(ThreadContextHistory.layer()),

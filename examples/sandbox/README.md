@@ -15,10 +15,15 @@ Each message retains its settings for recovery; reopening a workspace restores t
 last settings used there.
 
 The example exposes `read_file`, `write_file`, `edit_file`, `list_files`, `search`
-and `bash`, plus OpenAI’s native web search for current documentation and outside
-information. Search runs in the coding model’s own response and retains citations;
-the container also has public internet access for dependencies, documentation and
-public repositories. Local tool execution is serialized. Process tickets and
+and `bash`, plus OpenAI’s native web search, `read_web_page`, `scrape_web_page` and
+`screenshot_web_page`. The agent can research arbitrary HTTPS pages and inspect
+visual references before coding, without starting its container. Page reading and
+scraping use Cloudflare Kitesurf; screenshots also offer Chromium. Captured images
+are shown to the model on its next turn and remain accessible in the conversation.
+They are stored privately in `BACKUPS`, scoped to the signed-in account and workspace.
+Search runs in the coding model’s own response and retains citations. The container
+also has public internet access for dependencies, documentation and public
+repositories. Local tool execution is serialized. Process tickets and
 results use Agent's Durable Steps, and retries retain the original deadline and
 workspace identity.
 Long tasks automatically summarize context and continue with the summary, recent
@@ -97,7 +102,7 @@ Docker is required to build and run the native container locally. Authentication
 uses the shared Yielded gateway; local native verification supplies a controlled
 issuer, never a production bypass.
 
-The host owns the Cloudflare account, routes, model key and auth client secret.
+The host owns the Cloudflare account, routes, model key, browser binding and auth client secret.
 Set Worker secrets `OPENAI_API_KEY` and `AUTH_YIELDED_CLIENT_SECRET`; the latter
 must match the gateway's existing Agent client secret. The gateway must grant
 `agent:sandbox` and recognize `/sandbox/` as a login destination. Model requests

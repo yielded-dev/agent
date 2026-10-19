@@ -36,6 +36,9 @@ import {
   MAX_INPUT_BYTES,
   MessageInput,
   PreviewReply,
+  ScreenshotEvidence,
+  ScreenshotId,
+  screenshotKey,
   WorkspaceId,
   WorkspacePage,
   WorkspaceSummary,
@@ -70,6 +73,7 @@ declare global {
       SANDBOXES: DurableObjectNamespace<CodingSandbox>;
       ASSETS: Fetcher;
       BACKUPS: R2Bucket;
+      BROWSER: BrowserRun;
       PREVIEW_DOMAIN: string;
       RUN_LIMIT: RateLimit;
       OPENAI_API_KEY: string;
@@ -124,7 +128,7 @@ const sourcesFor = (part: Prompt.TextPart) => {
 };
 
 /** Project canonical records; the UI owns no second execution journal. */
-const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
+const entriesForRecord = ({ sequence, record, threadId }: CanonicalRecordEnvelope): Entry[] => {
   const id = String(sequence);
   const p = record.payload;
 
@@ -207,6 +211,16 @@ const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[
           kind: "result",
           name: p.toolName,
           text: JSON.stringify(p.result, null, 2),
+          ...(!p.isFailure &&
+          p.toolName === "screenshot_web_page" &&
+          Schema.is(ScreenshotEvidence)(p.result)
+            ? {
+                screenshot: {
+                  url: `/sandbox/api/screenshots/${threadId.split("--")[1]}/${p.result.imageId}`,
+                  source: p.result.url,
+                },
+              }
+            : {}),
           failed: p.isFailure,
           toolCallId: p.toolCallId,
           toolResultId: record.recordId,
@@ -301,6 +315,27 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
   const address = (id: string) =>
     ThreadId.make(`${session.accountId.toLowerCase()}--${id.toLowerCase()}`);
+
+  const screenshotPath = /^\/sandbox\/api\/screenshots\/([^/]+)\/([^/]+)$/.exec(url.pathname);
+
+  if (request.method === "GET" && screenshotPath !== null) {
+    const workspaceId = yield* Schema.decodeEffect(WorkspaceId)(screenshotPath[1]);
+    const imageId = yield* Schema.decodeEffect(ScreenshotId)(screenshotPath[2]);
+
+    const object = yield* Effect.tryPromise(() =>
+      env.BACKUPS.get(screenshotKey(address(workspaceId), imageId)),
+    );
+
+    if (object === null) return json({ message: "Screenshot not found." }, 404);
+
+    return new Response(object.body, {
+      headers: {
+        "content-type": "image/png",
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }
 
   const directory = env.WORKSPACES.getByName(session.accountId.toLowerCase());
   const titleFor = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 120) || null;

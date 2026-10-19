@@ -163,9 +163,10 @@ interface WebCaptureSharedOptions {
   /**
    * Allowed target hosts: bare host names (`docs.example.com`) or one-level
    * wildcards (`*.example.com`, matching the apex and every subdomain). The
-   * list must be non-empty — capture is deny-by-default (security spec §9).
+   * list must be non-empty. `"*"` explicitly permits arbitrary HTTPS pages
+   * and subresources; it does not provide private-network isolation.
    */
-  readonly urls: ReadonlyArray<string>;
+  readonly urls: ReadonlyArray<string> | "*";
   /** Rendering engine; defaults to `chromium`. */
   readonly engine?: PageCaptureEngine | undefined;
   /**
@@ -248,7 +249,8 @@ const allActions: ReadonlyArray<WebCaptureAction> = ["markdown", "content", "lin
 
 const HOST_PATTERN = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
-const compileUrlPolicy = (patterns: ReadonlyArray<string>): ReadonlyArray<string> => {
+const compileUrlPolicy = (patterns: ReadonlyArray<string> | "*"): ReadonlyArray<string> => {
+  if (patterns === "*") return Object.freeze(["*"]);
   if (patterns.length === 0) {
     // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebCapture constructors synchronously require an explicit host allowlist.
     throw new Error(
@@ -275,6 +277,7 @@ const compileUrlPolicy = (patterns: ReadonlyArray<string>): ReadonlyArray<string
 const compileResourcePolicy = (patterns: ReadonlyArray<string>): PageResourcePolicy =>
   PageResourcePolicy.make({
     allowRequestPatterns: patterns.map((pattern) => {
+      if (pattern === "*") return "^https://";
       const wildcard = pattern.startsWith("*.");
       const escapedHost = (wildcard ? pattern.slice(2) : pattern).replaceAll(".", "\\.");
       const subdomains = wildcard ? "(?:[a-z0-9-]+\\.)*" : "";
@@ -298,6 +301,7 @@ const validateMaxResponseBytes = (value: number | undefined): number => {
 };
 
 const hostMatches = (host: string, pattern: string): boolean => {
+  if (pattern === "*") return true;
   if (pattern.startsWith("*.")) {
     const base = pattern.slice(2);
 
@@ -376,7 +380,7 @@ const policyContract = (
   patterns: ReadonlyArray<string>,
   maxResponseBytes: number,
 ): string =>
-  `Allowed actions: ${actionsText}. Allowed hosts: ${patterns.join(", ")} (https:// only). Responses are bounded to ${maxResponseBytes} bytes; a larger page fails with a typed result you can react to.`;
+  `Allowed actions: ${actionsText}. ${patterns.includes("*") ? "Any HTTPS page is allowed." : `Allowed hosts: ${patterns.join(", ")} (https:// only).`} Responses are bounded to ${maxResponseBytes} bytes; a larger page fails with a typed result you can react to.`;
 
 const captureAction = (action: WebCaptureAction): PageCaptureAction => {
   switch (action) {

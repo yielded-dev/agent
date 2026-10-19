@@ -11,6 +11,7 @@
     { "pattern": "*.sandbox-preview.yielded.dev/*", "zone_name": "yielded.dev" },
   ],
   "assets": { "directory": "dist", "binding": "ASSETS", "run_worker_first": true },
+  "browser": { "binding": "BROWSER", "remote": true },
   "durable_objects": {
     "bindings": [
       { "name": "THREADS", "class_name": "CodingThread" },

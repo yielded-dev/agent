@@ -111,10 +111,15 @@ const pngResponse = (body: BodyInit | null, init: ResponseInit = {}): Response =
 describe("Browser Run PNG screenshot adapter", () => {
   it("stops an oversized stream on the first violating chunk, then cancels and unlocks", async () => {
     const tracked = repeatedChunks(512);
+    let browser: BrowserRunScreenshotOptions["browser"];
 
     const error = await captureError(
-      makeClient(() => Effect.succeed(pngResponse(tracked.stream))),
-      request({ maxOutputBytes: 1_024 }),
+      makeClient((options) => {
+        browser = options.browser;
+
+        return Effect.succeed(pngResponse(tracked.stream));
+      }),
+      request({ engine: "kitesurf", maxOutputBytes: 1_024 }),
     );
 
     expect(error).toMatchObject({
@@ -122,6 +127,7 @@ describe("Browser Run PNG screenshot adapter", () => {
       limit: 1_024,
       observed: 1_536,
     });
+    expect(browser).toBe("kitesurf");
     expect(tracked.reads()).toBe(3);
     expect(tracked.cancelled()).toBe(true);
     expect(tracked.stream.locked).toBe(false);
