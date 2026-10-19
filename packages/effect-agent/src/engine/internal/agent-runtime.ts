@@ -1058,6 +1058,10 @@ const defersToolParameters = (tool: Tool.Any): boolean =>
   !(Tool.isProviderDefined(tool) && !tool.requiresHandler) &&
   !(Tool.isDynamic(tool) && tool.jsonSchema !== undefined);
 
+// Tool setters return new declarations. Share only transport wrappers: decoding still
+// runs with the current request's services, and discarded Tool identities can be collected.
+const deferredParameterTools = new WeakMap<Tool.Any, Tool.Any>();
+
 const deferredToolParameterToolkit = <Tools extends Record<string, Tool.Any>>(
   toolkit: Toolkit.Toolkit<Tools>,
 ): Toolkit.Toolkit<Record<string, Tool.Any>> => {
@@ -1067,27 +1071,34 @@ const deferredToolParameterToolkit = <Tools extends Record<string, Tool.Any>>(
     return toolkit as unknown as Toolkit.Toolkit<Record<string, Tool.Any>>;
 
   return Toolkit.make(
-    ...Object.values(toolkit.tools).map((tool) =>
-      !defersToolParameters(tool)
-        ? tool
-        : tool.setParameters(
-            Schema.declareConstructor<unknown>()(
-              [],
-              () => (input) =>
-                Schema.decodeUnknownEffect(Schema.toEncoded(tool.parametersSchema))(input).pipe(
-                  Effect.orElseSucceed(() => input),
-                ),
-              {
-                description: Tool.getDescription(tool),
-                toCodecJson: () =>
-                  Schema.link<unknown>()(Schema.toEncoded(tool.parametersSchema), {
-                    decode: SchemaGetter.passthrough(),
-                    encode: SchemaGetter.passthrough(),
-                  }),
-              },
+    ...Object.values(toolkit.tools).map((tool) => {
+      if (!defersToolParameters(tool)) return tool;
+      const cached = deferredParameterTools.get(tool);
+
+      if (cached !== undefined) return cached;
+
+      const deferred = tool.setParameters(
+        Schema.declareConstructor<unknown>()(
+          [],
+          () => (input) =>
+            Schema.decodeUnknownEffect(Schema.toEncoded(tool.parametersSchema))(input).pipe(
+              Effect.orElseSucceed(() => input),
             ),
-          ),
-    ),
+          {
+            description: Tool.getDescription(tool),
+            toCodecJson: () =>
+              Schema.link<unknown>()(Schema.toEncoded(tool.parametersSchema), {
+                decode: SchemaGetter.passthrough(),
+                encode: SchemaGetter.passthrough(),
+              }),
+          },
+        ),
+      );
+
+      deferredParameterTools.set(tool, deferred);
+
+      return deferred;
+    }),
   );
 };
 
