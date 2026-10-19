@@ -263,6 +263,7 @@ function Workspace({ id }: { id: string }) {
   const expired = useAtomValue(atoms.expired);
   const saved = useAtomValue(atoms.saved);
   const fileOperation = useAtomValue(atoms.fileOperation);
+  const starting = useAtomValue(atoms.starting);
   const settings = useAtomValue(atoms.settings);
   const changeSettings = useAtomSet(atoms.changeSettings);
 
@@ -308,9 +309,11 @@ function Workspace({ id }: { id: string }) {
     (entry) => entry.kind === "tool" && entry.runId === state.runId && !results.has(toolKey(entry)),
   );
 
-  const progressLabel = activeTool
-    ? `${toolTitle(activeTool.name)}…`
-    : "Waiting for the agent’s next response…";
+  const progressLabel = starting
+    ? "Starting workspace…"
+    : activeTool
+      ? `${toolTitle(activeTool.name)}…`
+      : "Waiting for the agent’s next response…";
 
   const busy =
     !state.historyReady ||
@@ -364,6 +367,7 @@ function Workspace({ id }: { id: string }) {
                   entry={entry}
                   result={results.get(toolKey(entry))}
                   active={state.active !== null && entry.runId === state.runId}
+                  waiting={starting && entry === activeTool}
                 />
               ) : command ? (
                 <CommandEntry key={`command:${command.requestId}`} command={command} />
@@ -660,11 +664,13 @@ function TranscriptEntry({
   entry,
   result,
   active = false,
+  waiting = false,
   streaming = false,
 }: {
   readonly entry: Entry;
   readonly result?: Entry;
   readonly active?: boolean;
+  readonly waiting?: boolean;
   readonly streaming?: boolean;
 }) {
   if (entry.kind === "tool" || entry.kind === "result") {
@@ -674,7 +680,15 @@ function TranscriptEntry({
       <Tool
         title={toolTitle(entry.name)}
         status={
-          outcome ? (outcome.failed ? "failed" : "complete") : active ? "running" : "incomplete"
+          outcome
+            ? outcome.failed
+              ? "failed"
+              : "complete"
+            : active
+              ? waiting
+                ? "pending"
+                : "running"
+              : "incomplete"
         }
         input={entry.kind === "tool" ? entry.text : undefined}
         output={outcome?.text}

@@ -5,7 +5,7 @@ import {
   SandboxOperationError,
   type SessionSandbox,
 } from "@yielded/sandbox/cloudflare";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema, type Stream, SubscriptionRef } from "effect";
 import { DurableObjectState } from "effect-cf";
 
 /** Tools and direct commands may create a workspace; readers require its retained instance. */
@@ -13,6 +13,7 @@ export class Workspace extends Context.Service<
   Workspace,
   {
     readonly identity: { readonly path: string; readonly id: string };
+    readonly starting: Stream.Stream<boolean>;
     readonly instanceId: Effect.Effect<string | null, SandboxOperationError>;
     readonly bind: (
       instanceId?: string,
@@ -33,6 +34,7 @@ export class Workspace extends Context.Service<
       const state = yield* DurableObjectState.DurableObjectState;
       const namespace = yield* NativeSandboxNamespace;
       const identity = { path: "/workspace/.sandbox-agent-materialization", id: threadId };
+      const starting = yield* SubscriptionRef.make(false);
 
       const bind = (instanceId?: string) =>
         makeNativeSandbox(threadId, {
@@ -79,10 +81,8 @@ export class Workspace extends Context.Service<
         };
       }).pipe(Effect.mapError(failure));
 
-      const open = Effect.gen(function* () {
-        const retained = yield* existing;
-
-        if (retained !== null) return retained;
+      const create = Effect.gen(function* () {
+        yield* SubscriptionRef.set(starting, true);
         const initial = yield* bind();
         const { instanceId } = yield* initial.ensure();
         const exact = yield* bind(instanceId);
@@ -91,10 +91,17 @@ export class Workspace extends Context.Service<
         yield* state.storage.kv.put("workspace-instance", instanceId);
 
         return exact;
+      }).pipe(Effect.ensuring(SubscriptionRef.set(starting, false)));
+
+      const open = Effect.gen(function* () {
+        const retained = yield* existing;
+
+        return retained ?? (yield* create);
       }).pipe(Effect.mapError(failure));
 
       return Workspace.of({
         identity,
+        starting: SubscriptionRef.changes(starting),
         open,
         existing,
         inspect,

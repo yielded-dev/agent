@@ -1,12 +1,22 @@
 import { Collapsible } from "@base-ui/react/collapsible";
-import { Brain, Check, ChevronDown, CircleAlert, LoaderCircle, Minus, Wrench } from "lucide-react";
+import {
+  Brain,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  Clock,
+  LoaderCircle,
+  Minus,
+  Wrench,
+} from "lucide-react";
 
 import { cn } from "./class-names.ts";
 import { MessageResponse } from "./message.tsx";
 
-export type ToolStatus = "running" | "complete" | "failed" | "incomplete";
+export type ToolStatus = "pending" | "running" | "complete" | "failed" | "incomplete";
 
 const statusLabels = {
+  pending: "Waiting",
   running: "Running",
   complete: "Completed",
   failed: "Failed",
@@ -14,6 +24,7 @@ const statusLabels = {
 };
 
 const statusIcons = {
+  pending: Clock,
   running: LoaderCircle,
   complete: Check,
   failed: CircleAlert,

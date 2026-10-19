@@ -178,6 +178,7 @@ export const WorkspaceEvent = Schema.Union([
   EventPage,
   Schema.TaggedStruct("CommandHistoryChanged", {
     saved: Schema.optionalKey(SavedFiles),
+    starting: Schema.optionalKey(Schema.Boolean),
   }),
 ]);
 
