@@ -21,7 +21,7 @@ import {
   SHELL_COMMAND_PREFIX,
   ShellCommand,
 } from "./contract.ts";
-import { snapshotBusy, snapshotLane, WorkspaceSnapshots } from "./snapshots.ts";
+import { snapshotRestoring, snapshotLane, WorkspaceSnapshots } from "./snapshots.ts";
 import { Allocation, allocateCommand, executeCommand, readCommandOutput } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -71,14 +71,16 @@ export const commandAdmission = Layer.effect(
     const state = yield* DurableObjectState.DurableObjectState;
     const { storage } = state;
 
-    const filesBusy = snapshotBusy.pipe(
+    const filesRestoring = snapshotRestoring.pipe(
       Effect.provideService(DurableObjectState.DurableObjectState, state),
     );
 
     return SubmissionAdmissionFence.of({
       check: (request) =>
         storage.kv.get(activeKey).pipe(
-          Effect.flatMap((active) => filesBusy.pipe(Effect.map((saving) => ({ active, saving })))),
+          Effect.flatMap((active) =>
+            filesRestoring.pipe(Effect.map((restoring) => ({ active, restoring }))),
+          ),
           Effect.mapError((cause) =>
             AdmissionPolicyError.make({
               reason: "unavailable",
@@ -86,7 +88,7 @@ export const commandAdmission = Layer.effect(
               cause,
             }),
           ),
-          Effect.flatMap(({ active, saving }) =>
+          Effect.flatMap(({ active, restoring }) =>
             request.admissionFence !== undefined
               ? Effect.fail(
                   AdmissionPolicyError.make({ reason: "refused", code: "unsupported-policy" }),
@@ -95,12 +97,12 @@ export const commandAdmission = Layer.effect(
                 ? Effect.fail(
                     AdmissionPolicyError.make({ reason: "refused", code: "sandbox-reload" }),
                   )
-                : active === undefined && !saving
+                : active === undefined && !restoring
                   ? Effect.void
                   : Effect.fail(
                       AdmissionPolicyError.make({
                         reason: "occupied",
-                        code: saving ? "sandbox-files-active" : "sandbox-shell-active",
+                        code: restoring ? "sandbox-files-active" : "sandbox-shell-active",
                       }),
                     ),
           ),
@@ -113,7 +115,7 @@ const make = Effect.gen(function* () {
   const state = yield* DurableObjectState.DurableObjectState;
   const { storage } = state;
 
-  const filesBusy = snapshotBusy.pipe(
+  const filesRestoring = snapshotRestoring.pipe(
     Effect.provideService(DurableObjectState.DurableObjectState, state),
   );
 
@@ -177,7 +179,7 @@ const make = Effect.gen(function* () {
             return publicCommand(existing);
           }
           if ((yield* storage.kv.get(activeKey)) !== undefined) return yield* busy();
-          if (yield* filesBusy) return yield* busy();
+          if (yield* filesRestoring) return yield* busy();
           yield* store.materialize(ThreadMaterialization.make({ threadId }));
           const pending = yield* work.page({ threadId, limit: 1 });
 
@@ -238,6 +240,7 @@ const make = Effect.gen(function* () {
     let command = yield* read(yield* Schema.decodeUnknownEffect(Schema.String)(id));
 
     if (command === null || command.status === "unknown") return Option.none<number>();
+    yield* (yield* WorkspaceSnapshots).beforeExecution;
 
     let allocation = command.allocation;
 
@@ -371,7 +374,10 @@ export const commandMaintenance = Layer.effect(
         {
           id: lane,
           dispatchTimeoutMillis: 45_000,
-          run: commands.run.pipe(Effect.provideService(Workspace, workspace)),
+          run: commands.run.pipe(
+            Effect.provideService(Workspace, workspace),
+            Effect.provideService(WorkspaceSnapshots, snapshots),
+          ),
         },
         {
           id: snapshotLane,

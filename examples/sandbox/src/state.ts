@@ -311,7 +311,7 @@ export const workspace = Atom.family((id: string) => {
 
   const changeSettings = Atom.fnSync(
     (change: Partial<Record<keyof ModelSettings, string>>, get) => {
-      if (get(fileOperation) !== "idle") return;
+      if (get(fileOperation) === "restoring") return;
       get.set(
         settingsDraft,
         Schema.decodeUnknownSync(ModelSettings)({ ...get(settings), ...change }),
@@ -410,7 +410,7 @@ export const workspace = Atom.family((id: string) => {
       const statusRevision = get(commandRevision);
       const result = yield* json("save", SavedFiles, { workspaceId: id });
 
-      // Keep admission blocked by its reply unless an event has supplied newer status.
+      // Retain the reply unless an event has supplied newer status.
       if (get(commandRevision) === statusRevision) get.set(savedFromServer, result);
 
       return result;
@@ -824,7 +824,7 @@ export const workspace = Atom.family((id: string) => {
       if (
         !message ||
         get(expired) ||
-        get(fileOperation) !== "idle" ||
+        get(fileOperation) === "restoring" ||
         current.active ||
         current.reviewRequired ||
         current.admissionRequestId ||
@@ -991,7 +991,7 @@ export const workspace = Atom.family((id: string) => {
       const retry = current.uncertain && current.pending && !current.pending.command;
 
       if (
-        get.get(fileOperation) !== "idle" ||
+        get.get(fileOperation) === "restoring" ||
         current.active ||
         current.reviewRequired ||
         current.admissionRequestId ||

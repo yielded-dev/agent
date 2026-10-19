@@ -858,7 +858,7 @@ export default Worker.make(previewProxy, {
                     : error.code === "sandbox-shell-active"
                       ? "Wait for the current command to finish before messaging the agent."
                       : error.code === "sandbox-files-active"
-                        ? "Wait for workspace files to finish saving or restoring."
+                        ? "Wait for workspace files to finish restoring."
                         : "This workspace is not accepting new work.",
             },
             error.reason === "unavailable" ? 503 : 409,
