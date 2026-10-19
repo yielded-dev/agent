@@ -27,6 +27,7 @@ import { hotRecordJson, recordBatchId, storedBatchHeader } from "./SqlCanonicalS
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 
 const bytes = utf8ByteLength;
+const maxVerificationPageBytes = 1024 * 1024;
 
 const failure = (operation: string, cause?: unknown) =>
   ThreadStoreError.make({
@@ -344,6 +345,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     // Plan scalar sizes before fetching any payloads, so corrupt contents cannot allocate an unbounded range.
     const batchText = archive ? sql`a.batch_json` : canonicalBatchJson(sql, namespace, "c");
     const recordText = archive ? sql.literal("a.record_json") : hotRecordJson(sql, namespace, "c");
+    const hotRecordText = archive ? hotRecordJson(sql, namespace, "c") : sql`NULL`;
 
     const size = (text: ReturnType<typeof sql.literal>) => textBytes(sql, text);
     const batchSize = archive ? size(batchText) : canonicalBatchBytes(sql, namespace, "c");
@@ -361,7 +363,18 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       record_id: Schema.fromJsonString(Schema.String),
       batch_id: Schema.fromJsonString(Schema.String),
       byte_count: SqlInteger,
+      hot_byte_count: Schema.NullOr(SqlInteger),
     });
+
+    const RecordContent = Schema.Struct({
+      sequence: SqlInteger,
+      record_json: Schema.String,
+      hot_record_json: Schema.NullOr(Schema.String),
+    });
+
+    const decodeRecordContents = Schema.decodeUnknownEffect(
+      Schema.Array(RecordContent).check(Schema.isMaxLength(MAX_ARCHIVE_RANGE_PAGE + 1)),
+    );
 
     const batchJoin = archive
       ? sql`LEFT JOIN ${table("effect_agent_archive_batches")} a ON a.thread_id=c.thread_id AND a.batch_id=c.batch_id AND a.range_first_sequence=${row.first_sequence}`
@@ -381,7 +394,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
     const records = yield* Schema.decodeUnknownEffect(Schema.Array(RecordPlan))(
       yield* query(sql`
-      SELECT c.sequence, c.record_id, ${recordBatchId(sql, namespace, "c")} AS batch_id, ${size(recordText)} AS byte_count FROM ${table("effect_agent_canonical_records")} c ${recordJoin}
+      SELECT c.sequence, c.record_id, ${recordBatchId(sql, namespace, "c")} AS batch_id, ${size(recordText)} AS byte_count, ${size(hotRecordText)} AS hot_byte_count FROM ${table("effect_agent_canonical_records")} c ${recordJoin}
       WHERE c.thread_id=${row.thread_id} AND c.sequence>=${row.first_sequence} AND c.sequence<=${row.last_sequence}
       ORDER BY c.sequence LIMIT ${MAX_ARCHIVE_RANGE_RECORDS + 1}`),
     ).pipe(Effect.mapError((cause) => failure("archive record plan", cause)));
@@ -404,6 +417,14 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         row.byte_count
     )
       return yield* failure("archive size or count");
+    if (
+      records.some(
+        (record) =>
+          record.hot_byte_count !== null &&
+          (record.hot_byte_count < 1 || record.hot_byte_count > MAX_CANONICAL_BATCH_BYTES),
+      )
+    )
+      return yield* failure("archive record wire");
     let sequence = row.first_sequence;
     let recordIndex = 0;
 
@@ -434,6 +455,9 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         batch.last_sequence !== sequence + decoded.records.length - 1
       )
         return yield* failure("archive batch identity");
+      let rawRecords: ReadonlyArray<typeof RecordContent.Type> = [];
+      let rawIndex = 0;
+
       for (const record of decoded.records) {
         const plan = records[recordIndex++];
 
@@ -445,18 +469,45 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         )
           return yield* failure("archive record identity");
 
-        const [raw] = yield* Schema.decodeUnknownEffect(
-          Schema.Tuple([
-            Schema.Struct({
-              record_json: Schema.String,
-              hot_record_json: Schema.NullOr(Schema.String),
-            }),
-          ]),
-        )(
-          yield* query(sql`
-          SELECT ${recordText} AS record_json, ${archive ? hotRecordJson(sql, namespace, "c") : sql`NULL`} AS hot_record_json FROM ${table("effect_agent_canonical_records")} c ${recordJoin}
-          WHERE c.thread_id=${row.thread_id} AND c.sequence=${sequence}`),
-        ).pipe(Effect.mapError((cause) => failure("archive record content", cause)));
+        if (rawIndex === rawRecords.length) {
+          // The scalar plan and payload reads share the caller's transaction. Charge both
+          // copies before hydration; one larger valid record runs alone. Never prefetch
+          // another batch, and release the consumed page before acquiring its successor.
+          rawRecords = [];
+          rawIndex = 0;
+          let last = plan;
+          let count = 1;
+          let pageBytes = plan.byte_count + (plan.hot_byte_count ?? 0);
+
+          for (let at = recordIndex; at < records.length && count < MAX_ARCHIVE_RANGE_PAGE; at++) {
+            const next = records[at];
+
+            if (
+              next === undefined ||
+              next.sequence > batch.last_sequence ||
+              pageBytes + next.byte_count + (next.hot_byte_count ?? 0) > maxVerificationPageBytes
+            )
+              break;
+            if (next.sequence !== sequence + count || next.batch_id !== batch.batch_id)
+              return yield* failure("archive record identity");
+            pageBytes += next.byte_count + (next.hot_byte_count ?? 0);
+            last = next;
+            count++;
+          }
+
+          rawRecords = yield* decodeRecordContents(
+            yield* query(sql`
+            SELECT c.sequence, ${recordText} AS record_json, ${hotRecordText} AS hot_record_json FROM ${table("effect_agent_canonical_records")} c ${recordJoin}
+            WHERE c.thread_id=${row.thread_id} AND c.sequence BETWEEN ${sequence} AND ${last.sequence}
+            ORDER BY c.sequence LIMIT ${count + 1}`),
+          ).pipe(Effect.mapError((cause) => failure("archive record content", cause)));
+
+          if (rawRecords.length !== count) return yield* failure("archive record content");
+        }
+        const raw = rawRecords[rawIndex++];
+
+        if (raw === undefined || raw.sequence !== sequence)
+          return yield* failure("archive record content");
 
         const encoded = yield* Schema.encodeEffect(ExportRecord)(record).pipe(
           Effect.mapError((cause) => failure("archive record encode", cause)),
