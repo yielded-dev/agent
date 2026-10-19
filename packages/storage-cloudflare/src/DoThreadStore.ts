@@ -1,5 +1,9 @@
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
+import {
+  formatObservationOffset,
+  makeObservationOffsetParser,
+} from "@yielded/agent-storage-sql/sql-observation-offset";
 import { makeSqlThreadImport } from "@yielded/agent-storage-sql/sql-thread-import";
 import {
   makeSelectedReads,
@@ -102,7 +106,6 @@ export type DoStorageInitializationError =
   | DoStorageCorruptionError
   | DoStorageError;
 
-const OffsetText = Schema.String.check(Schema.isMaxLength(4 * 1024));
 const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
 const isDoAppendConflict = Schema.is(DoAppendConflict);
 const isDoCheckpointConflict = Schema.is(DoCheckpointConflict);
@@ -138,37 +141,7 @@ const schemaStoreError = (operation: string, error: Schema.SchemaError) =>
     }),
   });
 
-const parseOffset = Effect.fnUntraced(function* (
-  threadId: ThreadMaterialization["threadId"],
-  offset: ObservationOffset | undefined,
-): Effect.fn.Return<CanonicalSequence, ThreadStoreError> {
-  if (offset === undefined) return ZERO_CANONICAL_SEQUENCE;
-
-  const text = yield* Schema.decodeEffect(OffsetText)(offset).pipe(
-    Effect.mapError((error) => schemaStoreError("decode observation offset", error)),
-  );
-
-  const threadPrefix = `${DO_OFFSET_PREFIX}${encodeURIComponent(threadId)}:`;
-
-  if (!text.startsWith(threadPrefix)) {
-    return yield* ThreadStoreError.make({
-      operation: "decode observation offset",
-      message: "The observation offset belongs to a different adapter, storage version, or Thread.",
-    });
-  }
-  const sequenceText = text.slice(threadPrefix.length);
-
-  if (!/^(0|[1-9][0-9]*)$/.test(sequenceText)) {
-    return yield* ThreadStoreError.make({
-      operation: "decode observation offset",
-      message: "The observation offset is malformed.",
-    });
-  }
-
-  return yield* Schema.decodeEffect(CanonicalSequence)(Number(sequenceText)).pipe(
-    Effect.mapError((error) => schemaStoreError("decode observation offset", error)),
-  );
-});
+const parseOffset = makeObservationOffsetParser(DO_OFFSET_PREFIX, schemaStoreError);
 
 const encodeCheckpoint = (checkpoint: ThreadCheckpoint): Effect.Effect<string, ThreadStoreError> =>
   Schema.encodeEffect(ThreadCheckpointJson)(checkpoint).pipe(
@@ -215,7 +188,7 @@ const decodeEnvelope = Effect.fnUntraced(function* (row: {
   const { thread_id: threadId, batch_id: batchId } = row;
 
   const offset = ObservationOffset.make(
-    `${DO_OFFSET_PREFIX}${encodeURIComponent(threadId)}:${row.sequence}`,
+    formatObservationOffset(DO_OFFSET_PREFIX, threadId, row.sequence),
   );
 
   const envelope = CanonicalRecordEnvelope.make(

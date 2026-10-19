@@ -23,6 +23,8 @@
     "./sql-thread-work": "./src/SqlThreadWork.ts",
     "./sql-thread-store": "./src/SqlThreadStore.ts",
     "./sql-submission-ledger": "./src/SqlSubmissionLedger.ts",
+    "./sql-submission-rows": "./src/SqlSubmissionRows.ts",
+    "./sql-observation-offset": "./src/SqlObservationOffset.ts",
     "./sql-admission-facts": "./src/SqlAdmissionFacts.ts",
     "./sql-activity-store": "./src/SqlActivityStore.ts",
     "./sql-schedule-store": "./src/SqlScheduleStore.ts",

@@ -51,6 +51,7 @@ import {
   RawReadRequest,
   type SqlJournal,
 } from "./SqlJournal.ts";
+import { formatObservationOffset, makeObservationOffsetParser } from "./SqlObservationOffset.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlStorage.ts";
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
@@ -153,7 +154,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   W extends Diagnostic,
   F extends Diagnostic,
 >(journal: SqlJournal<S, C, W, F>, options: SqlThreadStoreOptions<S, C, F>) {
-  const OffsetText = Schema.String.check(Schema.isMaxLength(4 * 1024));
   const OFFSET_PREFIX = options.offsetPrefix;
   const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
   const isAppendConflict = Schema.is(AppendConflict);
@@ -181,38 +181,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
       message: error.message,
     });
 
-  const parseOffset = Effect.fnUntraced(function* (
-    threadId: ThreadMaterialization["threadId"],
-    offset: ObservationOffset | undefined,
-  ): Effect.fn.Return<CanonicalSequence, ThreadStoreError> {
-    if (offset === undefined) return ZERO_CANONICAL_SEQUENCE;
-
-    const text = yield* Schema.decodeEffect(OffsetText)(offset).pipe(
-      Effect.mapError((error) => schemaStoreError("decode observation offset", error)),
-    );
-
-    const threadPrefix = `${OFFSET_PREFIX}${encodeURIComponent(threadId)}:`;
-
-    if (!text.startsWith(threadPrefix)) {
-      return yield* ThreadStoreError.make({
-        operation: "decode observation offset",
-        message:
-          "The observation offset belongs to a different adapter, storage version, or Thread.",
-      });
-    }
-    const sequenceText = text.slice(threadPrefix.length);
-
-    if (!/^(0|[1-9][0-9]*)$/.test(sequenceText)) {
-      return yield* ThreadStoreError.make({
-        operation: "decode observation offset",
-        message: "The observation offset is malformed.",
-      });
-    }
-
-    return yield* Schema.decodeEffect(CanonicalSequence)(Number(sequenceText)).pipe(
-      Effect.mapError((error) => schemaStoreError("decode observation offset", error)),
-    );
-  });
+  const parseOffset = makeObservationOffsetParser(OFFSET_PREFIX, schemaStoreError);
 
   const encodeCheckpoint = (
     checkpoint: ThreadCheckpoint,
@@ -249,7 +218,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     );
 
     const offset = yield* decodeObservationOffset(
-      `${OFFSET_PREFIX}${encodeURIComponent(threadId)}:${sequence}`,
+      formatObservationOffset(OFFSET_PREFIX, threadId, sequence),
     ).pipe(Effect.mapErrorEager((error) => schemaStoreError("encode observation offset", error)));
 
     const batchId = yield* decodeBatchId(row.batch_id).pipe(
