@@ -2,7 +2,8 @@ import { authenticateRequest } from "@yielded/agent-example-auth/cloudflare";
 import type { Authentication } from "@yielded/agent-example-auth/server";
 import { DurableObject } from "cloudflare:workers";
 import { Effect, Schema } from "effect";
-import { Worker, type WorkerEnvironment } from "effect-cf";
+import type { Worker } from "effect-cf";
+import { type WorkerEnvironment } from "effect-cf";
 
 import { AccountId, type AccountError, type AccountSession } from "./account";
 
@@ -141,12 +142,7 @@ export const authenticate: (
   AccountError,
   WorkerEnvironment | Authentication | Worker.WorkerContext
 > = Effect.fn("Planner.requireSession")(function* (request: Request) {
-  const context = yield* Worker.WorkerContext;
-
-  const { subjectId, accountId, displayName } = yield* authenticateRequest(
-    request,
-    (verification) => context.waitUntil(verification),
-  );
+  const { subjectId, accountId, displayName } = yield* authenticateRequest(request);
 
   return { subjectId, accountId, displayName };
 });

@@ -293,11 +293,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     return new Response(asset.body, { status: asset.status, headers });
   }
-  const context = yield* Worker.WorkerContext;
-
-  const session = yield* authenticateRequest(request, (verification) =>
-    context.waitUntil(verification),
-  );
+  const session = yield* authenticateRequest(request);
 
   if (request.method !== "GET" && request.headers.get("origin") !== url.origin)
     return json({ message: "Origin not allowed." }, 403);

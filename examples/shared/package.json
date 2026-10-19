@@ -12,6 +12,7 @@
     "@yielded/auth": "catalog:",
     "@yielded/crypto": "catalog:",
     "@yielded/jose": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "effect-cf": "catalog:"
   }
 }

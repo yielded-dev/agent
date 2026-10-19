@@ -1,4 +1,4 @@
-import { authenticateRequest } from "@yielded/agent-example-auth/cloudflare";
+import { authenticateDurableObjectRequest } from "@yielded/agent-example-auth/cloudflare";
 import {
   Authentication,
   hostedModelAccess,
@@ -59,20 +59,19 @@ export class HostedAccounts extends Context.Service<
     readonly read: (request: Request) => Effect.Effect<Account | null>;
   }
 >()("browser-speed/HostedAccounts") {
-  static readonly layer = (
-    env: Env,
-    retain: (verification: Effect.Effect<boolean>) => Effect.Effect<void>,
-  ) =>
+  static readonly layer = (env: Env) =>
     Layer.effect(
       HostedAccounts,
       Effect.gen(function* () {
         const authentication = yield* Authentication;
+        const state = yield* EffectDurableObjectState.DurableObjectState;
 
         return {
           read: Effect.fnUntraced(
             function* (request: Request) {
-              const session = yield* authenticateRequest(request, retain).pipe(
+              const session = yield* authenticateDurableObjectRequest(request).pipe(
                 Effect.provideService(Authentication, authentication),
+                Effect.provideService(EffectDurableObjectState.DurableObjectState, state),
               );
 
               const funded =
@@ -92,15 +91,18 @@ export class BrowserLab extends DurableObject<Env> {
   private readonly owner;
   private readonly traces;
   private readonly authentication;
-  private readonly retainAuthentication;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.authentication = ManagedRuntime.make(Authentication.layer(env));
-    const state = EffectDurableObjectState.fromDurableObjectState(ctx);
-
-    this.retainAuthentication = (verification: Effect.Effect<boolean>) =>
-      state.waitUntil(verification);
+    this.authentication = ManagedRuntime.make(
+      Layer.merge(
+        Authentication.layer(env),
+        Layer.succeed(
+          EffectDurableObjectState.DurableObjectState,
+          EffectDurableObjectState.fromDurableObjectState(ctx),
+        ),
+      ),
+    );
     const hit = (location: string) => this.failpoint(location);
 
     ctx.storage.sql.exec(
@@ -352,18 +354,24 @@ export class BrowserLab extends DurableObject<Env> {
 
     const routes = HttpApiBuilder.layer(LabApi).pipe(
       Layer.provide(handlers),
-      HttpRouter.provideRequest(HostedAccounts.layer(this.env, this.retainAuthentication)),
+      HttpRouter.provideRequest(HostedAccounts.layer(this.env)),
       Layer.provide(HttpServer.layerServices),
     );
 
     return this.authentication.runPromise(
       Effect.gen(function* () {
         const authentication = yield* Authentication;
+        const state = yield* EffectDurableObjectState.DurableObjectState;
 
         const web = yield* Effect.acquireRelease(
           Effect.sync(() =>
             HttpRouter.toWebHandler(
-              routes.pipe(Layer.provide(Layer.succeed(Authentication, authentication))),
+              routes.pipe(
+                Layer.provide([
+                  Layer.succeed(Authentication, authentication),
+                  Layer.succeed(EffectDurableObjectState.DurableObjectState, state),
+                ]),
+              ),
               { disableLogger: true },
             ),
           ),

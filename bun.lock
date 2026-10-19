@@ -173,6 +173,7 @@
         "@yielded/crypto": "catalog:",
         "@yielded/jose": "catalog:",
         "effect": "catalog:",
+        "effect-cf": "catalog:",
       },
     },
     "examples/travel-planner": {
