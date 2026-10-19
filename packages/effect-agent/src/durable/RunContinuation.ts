@@ -12,7 +12,11 @@ import type { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { resolveEvidence } from "./internal/evidence.ts";
-import { continuationUsage } from "./internal/usage-totals.ts";
+import {
+  completedToolBatch,
+  continuationUsage,
+  recordedResponseUsage,
+} from "./internal/usage-totals.ts";
 export { reference, resolveEvidence } from "./internal/evidence.ts";
 import {
   captureRecord,
@@ -726,21 +730,18 @@ const advanceFacts = Effect.fnUntraced(function* (
             : [],
         );
 
-        const summary =
-          payload.modelUsage === undefined
-            ? undefined
-            : yield* continuationUsage(payload.modelUsage).pipe(
-                Effect.mapError((cause) => failure("Invalid usage evidence", cause)),
-              );
+        const summary = yield* recordedResponseUsage(payload).pipe(
+          Effect.mapError((cause) => failure("Invalid usage evidence", cause)),
+        );
 
         accounting.committedTurns = payload.turn;
         accounting.toolCalls += calls.length;
-        accounting.modelCalls += summary?.modelCalls ?? 1;
-        accounting.inputTokens += summary?.inputTokens ?? payload.inputTokens ?? 0;
-        accounting.outputTokens += summary?.outputTokens ?? payload.outputTokens ?? 0;
-        accounting.costMicrousd += summary?.costMicrousd ?? payload.costMicrousd ?? 0;
-        accounting.lastInputTokens = summary?.inputTokens ?? payload.inputTokens ?? 0;
-        accounting.lastOutputTokens = summary?.outputTokens ?? payload.outputTokens ?? 0;
+        accounting.modelCalls += summary.modelCalls;
+        accounting.inputTokens += summary.inputTokens;
+        accounting.outputTokens += summary.outputTokens;
+        accounting.costMicrousd += summary.costMicrousd;
+        accounting.lastInputTokens = summary.inputTokens;
+        accounting.lastOutputTokens = summary.outputTokens;
         accounting.unobservedModelCalls += payload.unobservedModelCalls ?? 0;
         latestResponse = EvidenceReference.make({ recordId: fact.recordId });
         response = payload;
@@ -851,28 +852,13 @@ const advanceFacts = Effect.fnUntraced(function* (
     response.turn > accounting.accountedToolTurn &&
     response.toolOperations.every((operation) => results.has(operation.toolCallId))
   ) {
-    const parts = response.messages.content.flatMap((message) =>
-      message.role === "assistant" && typeof message.content !== "string" ? message.content : [],
+    const batch = completedToolBatch(
+      response.messages,
+      (id) => results.get(ToolCallId.make(id)),
+      accounting.consecutiveToolFailures,
     );
 
-    for (const call of parts) {
-      if (call.type !== "tool-call") continue;
-
-      const result = call.providerExecuted
-        ? parts.find((part) => part.type === "tool-result" && part.id === call.id)
-        : results.get(ToolCallId.make(call.id));
-
-      if (
-        result === undefined ||
-        !("isFailure" in result) ||
-        // Only canonical application settlements carry budget-rejection authority.
-        (!call.providerExecuted && "budgetRejected" in result && result.budgetRejected === true)
-      )
-        continue;
-      accounting.consecutiveToolFailures = result.isFailure
-        ? accounting.consecutiveToolFailures + 1
-        : 0;
-    }
+    accounting.consecutiveToolFailures = batch.consecutiveToolFailures;
     accounting.accountedToolTurn = response.turn;
     results.clear();
     if (position !== "settling" && position !== "settled") position = "awaiting-model";
