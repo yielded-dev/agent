@@ -1722,9 +1722,8 @@ export function layer<
 
       const parentRunId = spawner.parent.runId;
 
-      yield* reservations
-        .registerParent(parentRunId, caps)
-        .pipe(
+      yield* Effect.acquireRelease(
+        reservations.registerParent(parentRunId, caps).pipe(
           Effect.catchTag("SubagentParentBudgetConflict", () =>
             Effect.fail(
               prestartDenied(
@@ -1733,7 +1732,10 @@ export function layer<
               ),
             ),
           ),
-        );
+          Effect.asVoid,
+        ),
+        () => reservations.retireParent(parentRunId).pipe(Effect.orDie),
+      ).pipe(Scope.provide(spawner.scope));
 
       const reservationId = makeBudgetReservationId(parentRunId, toolCallId);
       const startedAt = yield* Ref.make<number | undefined>(undefined);

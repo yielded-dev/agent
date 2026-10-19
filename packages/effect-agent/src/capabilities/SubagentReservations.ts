@@ -73,12 +73,8 @@ export class SubagentAvailableAmounts extends Schema.Class<SubagentAvailableAmou
   "@effect-agent/capabilities/SubagentAvailableAmounts",
 )(OptionalAmountFields) {}
 
-/** Reservation lifecycle: absent → reserved → releasePending → released. */
-export const SubagentReservationStatus = Schema.Literals([
-  "reserved",
-  "releasePending",
-  "released",
-]);
+/** In-process release freezes accounting and refunds unused allocation atomically. */
+export const SubagentReservationStatus = Schema.Literals(["reserved", "released"]);
 
 export type SubagentReservationStatus = typeof SubagentReservationStatus.Type;
 
@@ -221,17 +217,9 @@ export class SubagentReservations extends Context.Service<
       usage: SubagentObservedUsage,
     ) => Effect.Effect<SubagentReservationView, SubagentReservationUnknown>;
     /**
-     * `reserved → releasePending`: freeze the settlement decision. A dimension
-     * with no observed usage conservatively consumes its reserved amount.
-     * Idempotent once settlement has begun.
-     */
-    readonly beginRelease: (
-      reservationId: BudgetReservationId,
-    ) => Effect.Effect<SubagentReservationView, SubagentReservationUnknown>;
-    /**
-     * `releasePending → released`: return the unused allocation to the parent
-     * exactly once. Called on a still-reserved reservation it settles through
-     * `releasePending` in the same atomic update. Idempotent once released.
+     * Freeze accounting and return unused allocation to the parent in one
+     * atomic update. Unreported dimensions consume their full allocation.
+     * Idempotent once released; later observations remain overrun.
      */
     readonly release: (
       reservationId: BudgetReservationId,
@@ -647,7 +635,7 @@ const observeTransition = (
  * Freeze the settlement decision. A dimension that was never observed
  * conservatively consumes its full reserved amount.
  */
-const freezeSettlement = (reservation: ReservationState): ReservationState => {
+const settleReservation = (reservation: ReservationState): ReservationState => {
   const observed: { [K in ReservableDimensionKey]?: number } = { ...reservation.observed };
   const covered: Record<ReservableDimensionKey, number> = { ...reservation.covered };
 
@@ -658,32 +646,7 @@ const freezeSettlement = (reservation: ReservationState): ReservationState => {
     }
   }
 
-  return { ...reservation, status: "releasePending", observed, covered };
-};
-
-const beginReleaseTransition = (
-  ledger: ReservationLedger,
-  reservationId: BudgetReservationId,
-): readonly [
-  TransitionResult<SubagentReservationView, SubagentReservationUnknown>,
-  ReservationLedger,
-] => {
-  const reservation = ledger.reservations.get(reservationId);
-
-  if (reservation === undefined) {
-    return [fail(SubagentReservationUnknown.make({ reservationId })), ledger];
-  }
-  if (reservation.status !== "reserved") {
-    return [ok(reservationView(reservationId, reservation)), ledger];
-  }
-  const frozen = freezeSettlement(reservation);
-
-  const next: ReservationLedger = {
-    parents: ledger.parents,
-    reservations: new Map(ledger.reservations).set(reservationId, frozen),
-  };
-
-  return [ok(reservationView(reservationId, frozen)), next];
+  return { ...reservation, status: "released", observed, covered };
 };
 
 const releaseTransition = (
@@ -706,8 +669,8 @@ const releaseTransition = (
   if (parent === undefined) {
     return [corruptParent(reservation.parentRunId), ledger];
   }
-  const frozen = reservation.status === "reserved" ? freezeSettlement(reservation) : reservation;
-  const unused = unusedAllocation(frozen);
+  const settled = settleReservation(reservation);
+  const unused = unusedAllocation(settled);
   const nextAvailable: { [K in ReservableDimensionKey]?: number } = { ...parent.available };
 
   for (const spec of dimensionSpecs) {
@@ -717,7 +680,6 @@ const releaseTransition = (
       nextAvailable[spec.key] = available + unused[spec.key];
     }
   }
-  const settled: ReservationState = { ...frozen, status: "released" };
 
   const next: ReservationLedger = {
     parents: new Map(ledger.parents).set(parent.parentRunId, {
@@ -794,13 +756,6 @@ export const SubagentReservationsMemoryLive: Layer.Layer<SubagentReservations> =
       observe: Effect.fnUntraced(function* (reservationId, usage) {
         const result = yield* Ref.modify(state, (ledger) =>
           observeTransition(ledger, reservationId, usage),
-        );
-
-        return yield* resolve(result);
-      }),
-      beginRelease: Effect.fnUntraced(function* (reservationId) {
-        const result = yield* Ref.modify(state, (ledger) =>
-          beginReleaseTransition(ledger, reservationId),
         );
 
         return yield* resolve(result);

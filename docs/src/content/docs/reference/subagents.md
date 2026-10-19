@@ -45,8 +45,9 @@ failures with the declaration's `containedFailure` Schema.
 | `parentReserveDuration`           | Zero; accepts a finite, nonnegative Effect Duration input                                 |
 | Token and cost caps               | Optional; missing usage never creates budget credit                                       |
 
-Each parent Run has its own delegation pool, separate from its execution counters. Durable
-accounting conservatively charges reservations when usage is unavailable. Increasing an allowance
+Each parent Run has its own delegation pool, separate from its execution counters. In-process
+pools are released after the Run and its attached children finish cleanup. Durable accounting
+conservatively charges reservations when usage is unavailable. Increasing an allowance
 requires a fresh delegation, not a top-up of an active child. See [budgets](/concepts/budgets/).
 
 In-process attached children are also capped by the parent's remaining deadline. Set

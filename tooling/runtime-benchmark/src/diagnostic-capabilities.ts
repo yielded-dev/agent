@@ -41,7 +41,6 @@ import {
   Schema,
   Scope,
   Stream,
-  Tracer,
 } from "effect";
 import { AiError, Model, Prompt, Tool, Toolkit } from "effect/ai";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
@@ -51,7 +50,6 @@ import { capabilityCases } from "./diagnostic-cases.js";
 import {
   DiagnosticCase,
   DiagnosticProgress,
-  type DiagnosticMark,
   type DiagnosticResult,
 } from "./diagnostic-contracts.js";
 import { BenchmarkHistoryLive, BenchmarkRetainsHistory } from "./history.js";
@@ -1285,22 +1283,18 @@ const rememberingCase = Effect.fn("diagnostic.remembering")(function* (workload:
 });
 
 /** Two attached children share one real child slot. The first provider deliberately waits
- * ten milliseconds after both slot requests arrive; slot timing includes that labeled hold.
- * Actual runtime span boundaries precede preparation and admission, unlike SubagentStarted.
+ * ten milliseconds after both inputs are prepared. Preparation-to-provider timing includes
+ * admission, slot waiting, child startup, and that labeled hold for the queued child.
  */
 const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: DiagnosticCase) {
   const progress = yield* DiagnosticProgress;
-  const clock = yield* Clock.Clock;
   const reservations = yield* Reservations.SubagentReservations;
 
   yield* progress.phase("setup");
   const enabled = workload.parameters.enabled === 1;
+  const runId = RunId.make("diagnostic-subagent-run");
+  const preparationsReady = yield* Deferred.make<void>();
   let start = 0n;
-  let entries = 0;
-  let joins = 0;
-  let slotRequests = 0;
-  let releases = 0;
-  let releaseRequests = 0;
   let prepared = 0;
   let projected = 0;
   let children = 0;
@@ -1310,68 +1304,9 @@ const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: Diagn
   let parents = 0;
   let parentFinalizers = 0;
   let localCalls = 0;
-  let traceOverflow = false;
-  const traceMarks: Array<DiagnosticMark> = [];
+  let snapshot: Reservations.SubagentParentBudgetView | undefined;
+  const preparationEnds = new Map<string, number>();
   const metrics: Array<{ name: string; value: number }> = [];
-
-  const traceMark = (name: string) => {
-    if (traceMarks.length >= 64) {
-      traceOverflow = true;
-
-      return;
-    }
-    traceMarks.push({
-      name,
-      elapsedMs: Number(clock.monotonicTimeNanosUnsafe() - start) / 1_000_000,
-    });
-  };
-
-  const tracer = Tracer.make({
-    span(options) {
-      const role =
-        options.name === "SubagentRuntime.diag_child"
-          ? "invocation"
-          : options.name === "SubagentReservations.acquireChildSlot"
-            ? "slot"
-            : options.name === "SubagentReservations.release"
-              ? "release"
-              : undefined;
-
-      const index =
-        role === "invocation"
-          ? entries++
-          : role === "slot"
-            ? slotRequests++
-            : role === "release"
-              ? releaseRequests++
-              : -1;
-
-      const begin = clock.monotonicTimeNanosUnsafe();
-
-      if (role !== undefined) traceMark(`subagent.${role}.begin.${index}`);
-
-      return new (class extends Tracer.NativeSpan {
-        // Do not retain provider prompts, span attributes, events, or linked spans.
-        override attribute() {}
-        override event() {}
-        override addLinks() {}
-        override end(endTime: bigint, exit: Exit.Exit<unknown, unknown>) {
-          if (role !== undefined) {
-            traceMark(`subagent.${role}.end.${index}`);
-            if (role === "invocation") joins++;
-            if (role === "release") releases++;
-            if (metrics.length < 64)
-              metrics.push({
-                name: `${role}.${index}`,
-                value: Number(clock.monotonicTimeNanosUnsafe() - begin) / 1_000_000,
-              });
-            else traceOverflow = true;
-          }
-          super.end(endTime, exit);
-        }
-      })({ ...options, links: [] });
-    },
-  });
 
   const child = Agent.make("diagnostic-child", {
     input: Schema.Struct({ question: Schema.String }),
@@ -1388,17 +1323,23 @@ const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: Diagn
     success: Schema.Struct({ summary: Schema.String }),
     failure: BenchmarkError,
     prepareInput: Effect.fnUntraced(function* ({ topic }) {
-      prepared++;
-      yield* progress.mark({
-        name: `subagent.prepare.begin.${topic}`,
-        elapsedMs: yield* elapsed(start),
-      });
-      const value = { question: topic };
+      const begin = yield* elapsed(start);
 
       yield* progress.mark({
-        name: `subagent.prepare.end.${topic}`,
-        elapsedMs: yield* elapsed(start),
+        name: `subagent.prepare.begin.${topic}`,
+        elapsedMs: begin,
       });
+      const value = { question: topic };
+      const end = yield* elapsed(start);
+
+      preparationEnds.set(topic, end);
+      metrics.push({ name: `prepare.${topic}`, value: end - begin });
+      yield* progress.mark({
+        name: `subagent.prepare.end.${topic}`,
+        elapsedMs: end,
+      });
+      prepared++;
+      if (prepared === 2) yield* Deferred.succeed(preparationsReady, undefined);
 
       return value;
     }),
@@ -1435,20 +1376,26 @@ const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: Diagn
 
               active++;
               maxActive = Math.max(maxActive, active);
+              const at = yield* elapsed(start);
+              const preparedAt = preparationEnds.get(`topic-${index}`);
+
+              if (preparedAt === undefined)
+                return yield* BenchmarkError.make({
+                  message: "Child provider entered before input preparation",
+                });
+              metrics.push({ name: `preparationToProvider.${index}`, value: at - preparedAt });
               yield* progress.mark({
                 name: `subagent.childProvider.${index}`,
-                elapsedMs: yield* elapsed(start),
+                elapsedMs: at,
               });
               yield* check(
                 (yield* encodedPrompt(request.prompt)).includes(`topic-${index}`),
                 "Child preparation changed input or order",
               );
               if (index === 0) {
-                yield* Effect.gen(function* () {
-                  while (slotRequests < 2) yield* Effect.yieldNow;
-                }).pipe(Effect.timeout("2 seconds"));
+                yield* Deferred.await(preparationsReady).pipe(Effect.timeout("2 seconds"));
                 yield* progress.mark({
-                  name: "subagent.queued.ready",
+                  name: "subagent.preparations.ready",
                   elapsedMs: yield* elapsed(start),
                 });
                 yield* Effect.sleep("10 millis");
@@ -1557,6 +1504,16 @@ const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: Diagn
           policy: { maxTurns: 3, maxToolCalls: 2, maxDuration: "30 seconds", toolConcurrency: 2 },
         }),
         "Answer",
+        {
+          runId,
+          input: {
+            drain: () => Effect.succeed([]),
+            end: Effect.fnUntraced(function* () {
+              // Handlers have released their reservations; the parent Run still owns its ledger.
+              if (enabled) snapshot = yield* reservations.parentSnapshot(runId).pipe(Effect.orDie);
+            }),
+          },
+        },
       );
 
       yield* (yield* ScriptedModel).assertExhausted;
@@ -1565,37 +1522,25 @@ const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: Diagn
     }),
   ).pipe(
     Effect.provide(Layer.mergeAll(handlers, model).pipe(Layer.provideMerge(BenchmarkHistoryLive))),
-    Effect.withTracer(tracer),
-    // Flush bounded trace scalars even when the Run fails or is interrupted.
-    Effect.ensuring(
-      Effect.suspend(() =>
-        Effect.forEach(traceMarks, (mark) => progress.mark(mark), { discard: true }),
-      ).pipe(Effect.orDie),
-    ),
   );
 
   const totalMs = yield* elapsed(start);
 
   yield* progress.phase("verification");
   yield* check(
-    !traceOverflow && result.output.answer === "done" && parents === 2 && parentFinalizers === 2,
-    "Subagent parent work or bounded trace mismatch",
+    result.output.answer === "done" && parents === 2 && parentFinalizers === 2,
+    "Subagent parent work or finalizers mismatch",
   );
   if (enabled) {
-    const snapshot = yield* reservations.parentSnapshot(result.runId);
-
     yield* check(
-      snapshot.totalChildInvocations === 2 &&
+      snapshot !== undefined &&
+        snapshot.totalChildInvocations === 2 &&
         snapshot.reservations.length === 2 &&
         snapshot.reservations.every((reservation) => reservation.status === "released"),
       "Subagent reservations did not settle",
     );
     yield* check(
-      entries === 2 &&
-        joins === 2 &&
-        slotRequests === 2 &&
-        releases === 2 &&
-        prepared === 2 &&
+      prepared === 2 &&
         projected === 2 &&
         children === 2 &&
         childFinalizers === 2 &&
@@ -1605,7 +1550,7 @@ const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: Diagn
     );
   } else
     yield* check(
-      localCalls === 2 && entries === 0 && children === 0,
+      localCalls === 2 && prepared === 0 && projected === 0 && children === 0,
       "Disabled subagents performed optional work",
     );
 
@@ -1619,12 +1564,15 @@ const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: Diagn
       { name: "childModelFinalizers", value: childFinalizers },
       { name: "preparations", value: prepared },
       { name: "projections", value: projected },
-      { name: "slotRequests", value: slotRequests },
-      { name: "releasedReservations", value: releases },
-      { name: "joinedInvocations", value: joins },
+      {
+        name: "releasedReservations",
+        value:
+          snapshot?.reservations.filter((reservation) => reservation.status === "released")
+            .length ?? 0,
+      },
       { name: "maxActiveChildren", value: maxActive },
       { name: "inducedProviderHoldMillis", value: enabled ? 10 : 0 },
-      { name: "toolCalls", value: enabled ? entries : localCalls },
+      { name: "toolCalls", value: enabled ? prepared : localCalls },
     ],
   };
 });
