@@ -7,7 +7,7 @@ import { ChildProcess } from "effect/process";
 import { analyzeMetafile, build, version as esbuildVersion } from "esbuild";
 
 import { comparisonExports, stageComparisonModules } from "./internal/comparison-exports.ts";
-import { PublishManifest, withPublishManifests } from "./release-publish.ts";
+import { readWorkspacePackages, withPublishManifests } from "./release-publish.ts";
 
 class BundleSizeError extends Schema.TaggedError<BundleSizeError>()("BundleSizeError", {
   message: Schema.String,
@@ -292,7 +292,8 @@ const measureCheckout = Effect.fn("bundleSize.measureCheckout")(function* (
   const path = yield* Path.Path;
   const stage = yield* fs.makeTempDirectoryScoped({ prefix: "effect-agent-bundle-" });
   const available = new Set<string>();
-  const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(PublishManifest));
+  const packages = yield* readWorkspacePackages(root);
+  const workspaceNames = new Set(packages.map(({ manifest }) => manifest.name));
 
   const effect = yield* Schema.decodeEffect(
     Schema.fromJsonString(
@@ -317,16 +318,9 @@ const measureCheckout = Effect.fn("bundleSize.measureCheckout")(function* (
   yield* fs.copyFile(path.join(root, "package.json"), path.join(stage, "package.json"));
   yield* fs.copy(fixtureDirectory, path.join(stage, "fixtures"));
 
-  for (const directory of (yield* fs.readDirectory(path.join(root, "packages"))).sort()) {
-    if (directory.startsWith(".")) continue;
-    const source = path.join(root, "packages", directory);
-
-    const manifest = yield* decodeManifest(
-      yield* fs.readFileString(path.join(source, "package.json")),
-    );
-
+  for (const { directory: source, manifest } of packages) {
     if (manifest.private === true) continue;
-    const destination = path.join(stage, "packages", directory);
+    const destination = path.join(stage, "packages", path.basename(source));
 
     yield* fs.makeDirectory(destination, { recursive: true });
     const exports = comparisonExports(manifest.exports);
@@ -337,6 +331,21 @@ const measureCheckout = Effect.fn("bundleSize.measureCheckout")(function* (
     );
     // Copy only built files. Source imports cannot accidentally resolve here.
     yield* fs.copy(path.join(source, "dist"), path.join(destination, "dist"));
+    // Keep package-local external dependencies; workspace imports use staged builds.
+    for (const dependency of Object.keys({
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies,
+    })) {
+      if (workspaceNames.has(dependency)) continue;
+      const installed = path.join(source, "node_modules", dependency);
+
+      if (!(yield* fs.exists(installed))) continue;
+      const target = path.join(destination, "node_modules", dependency);
+
+      yield* fs.makeDirectory(path.dirname(target), { recursive: true });
+      yield* fs.symlink(installed, target);
+    }
     const link = path.join(stage, "node_modules", manifest.name);
 
     yield* fs.makeDirectory(path.dirname(link), { recursive: true });
