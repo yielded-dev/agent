@@ -1,5 +1,5 @@
 /** Trusted, read-only server. -I -S prevents imports from the workspace or site hooks. */
-export const STATIC_PREVIEW_PORT = 5173;
+export const STATIC_PREVIEW_PORT = 4504;
 export const STATIC_PREVIEW_HEALTH_PATH = "/__preview/health";
 
 export const STATIC_PREVIEW_SERVER = String.raw`
@@ -96,6 +96,6 @@ class Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 # TCPServer avoids HTTPServer's reverse DNS lookup in the container.
-with Server(('0.0.0.0', 5173), Handler) as server:
+with Server(('0.0.0.0', ${STATIC_PREVIEW_PORT}), Handler) as server:
     server.serve_forever()
 `;

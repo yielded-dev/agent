@@ -38,7 +38,7 @@ export class Workspace extends Context.Service<
 
       const bind = (instanceId?: string) =>
         makeNativeSandbox(threadId, {
-          instance: "standard-1",
+          instance: "standard-3",
           idleMillis: 1_800_000,
           ...(instanceId === undefined
             ? {}
