@@ -1,7 +1,8 @@
 import { BrowserCrypto } from "@effect/platform-browser";
 import { WebSearch } from "@yielded/agent";
+import { authenticateRequest } from "@yielded/agent-example-auth/cloudflare";
 import {
-  authenticateRequest,
+  Authentication,
   hostedModelAccess,
   type AuthEnvironment,
 } from "@yielded/agent-example-auth/server";
@@ -292,7 +293,11 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     return new Response(asset.body, { status: asset.status, headers });
   }
-  const session = yield* authenticateRequest(request, env);
+  const context = yield* Worker.WorkerContext;
+
+  const session = yield* authenticateRequest(request, (verification) =>
+    context.waitUntil(verification),
+  );
 
   if (request.method !== "GET" && request.headers.get("origin") !== url.origin)
     return json({ message: "Origin not allowed." }, 403);
@@ -825,7 +830,9 @@ const previewProxy = Layer.unwrap(
   }),
 );
 
-export default Worker.make(previewProxy, {
+const authentication = Layer.unwrap(Effect.map(WorkerEnvironment, Authentication.layer));
+
+export default Worker.makeFetchHandler(Layer.merge(previewProxy, authentication), {
   fetch: handle().pipe(
     Effect.catchTags({
       AccountError: Effect.fnUntraced(function* (error) {

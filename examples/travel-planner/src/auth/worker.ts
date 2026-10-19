@@ -1,7 +1,8 @@
-import { authenticateRequest } from "@yielded/agent-example-auth/server";
+import { authenticateRequest } from "@yielded/agent-example-auth/cloudflare";
+import type { Authentication } from "@yielded/agent-example-auth/server";
 import { DurableObject } from "cloudflare:workers";
 import { Effect, Schema } from "effect";
-import { WorkerEnvironment } from "effect-cf";
+import { Worker, type WorkerEnvironment } from "effect-cf";
 
 import { AccountId, type AccountError, type AccountSession } from "./account";
 
@@ -135,12 +136,16 @@ export class PlannerAuthV2 extends DurableObject<Cloudflare.Env> {
 
 export const authenticate: (
   request: Request,
-) => Effect.Effect<AccountSession, AccountError, WorkerEnvironment> = Effect.fn(
-  "Planner.requireSession",
-)(function* (request: Request) {
+) => Effect.Effect<
+  AccountSession,
+  AccountError,
+  WorkerEnvironment | Authentication | Worker.WorkerContext
+> = Effect.fn("Planner.requireSession")(function* (request: Request) {
+  const context = yield* Worker.WorkerContext;
+
   const { subjectId, accountId, displayName } = yield* authenticateRequest(
     request,
-    yield* WorkerEnvironment,
+    (verification) => context.waitUntil(verification),
   );
 
   return { subjectId, accountId, displayName };

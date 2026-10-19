@@ -1,8 +1,8 @@
 import { OAuthScope, OAuthServer } from "@yielded/auth";
 import * as Portable from "@yielded/crypto/Portable";
-import { Jwk } from "@yielded/jose";
-import { Clock, Effect, Redacted, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import { Signature } from "@yielded/crypto/Signature";
+import { Jwks } from "@yielded/jose";
+import { Cause, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
 import { AccountClaims, AccountError } from "./contract";
@@ -23,125 +23,13 @@ const Configuration = Schema.Struct({
   AUTH_HOSTED_MODEL_SCOPE: OAuthScope.OAuthScope,
 });
 
-const KeySet = Schema.Struct({
-  keys: Schema.NonEmptyArray(Jwk.PublicJwk).check(Schema.isMaxLength(16)),
-});
-
-const KeyHint = Schema.fromJsonString(
-  Schema.Struct({ kid: Schema.NonEmptyString.check(Schema.isMaxLength(256)) }),
-);
-
 const unavailable = () =>
   AccountError.make({ code: "unavailable", message: "Authentication is temporarily unavailable." });
 
 const unauthorized = () =>
   AccountError.make({ code: "unauthorized", message: "Sign in to continue." });
 
-type KeySnapshot = {
-  readonly publicKeys: typeof KeySet.Type.keys;
-  readonly kids: ReadonlyArray<string | undefined>;
-  readonly expiresAt: number;
-};
-type KeyCache = {
-  pending?: Promise<void>;
-  snapshot?: KeySnapshot;
-  nextAttemptAt: number;
-};
-// Only trusted deployment configuration selects an entry. Tokens and authorization are never cached.
-const keyCaches = new Map<string, KeyCache>();
-
-const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, kid: string) {
-  const key = JSON.stringify([config.AUTH_ISSUER, config.AUTH_RESOURCE, config.AUTH_JWKS_URL]);
-  let cache = keyCaches.get(key);
-
-  if (cache === undefined) {
-    cache = { nextAttemptAt: 0 };
-    keyCaches.set(key, cache);
-  }
-  const current = cache;
-  const now = yield* Clock.currentTimeMillis;
-
-  if (current.snapshot && current.snapshot.expiresAt > now && current.snapshot.kids.includes(kid))
-    return current.snapshot.publicKeys;
-  const { waitUntil } = yield* Effect.promise(() => import("cloudflare:workers"));
-
-  // Native promise reactions resume in each waiting Worker's request context.
-  // Effect semaphore observers resume in the releasing request instead.
-  const acquire: Effect.Effect<() => void> = Effect.suspend(() => {
-    const pending = current.pending;
-
-    if (pending)
-      return Effect.promise(() => pending).pipe(Effect.interruptible, Effect.andThen(acquire));
-    let complete: () => void = () => undefined;
-
-    current.pending = new Promise<void>((resolve) => {
-      complete = resolve;
-    });
-    // Finish the bounded refresh even if its initiating request disconnects.
-    waitUntil(current.pending);
-
-    return Effect.succeed(() => {
-      current.pending = undefined;
-      complete();
-    });
-  });
-
-  return yield* Effect.acquireUseRelease(
-    acquire,
-    Effect.fnUntraced(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      const previous = current.snapshot;
-
-      if (previous && previous.expiresAt > now && previous.kids.includes(kid))
-        return previous.publicKeys;
-      if (current.nextAttemptAt > now) {
-        if (previous && previous.expiresAt > now) return previous.publicKeys;
-
-        return yield* unavailable();
-      }
-      // A token may suggest a key ID, never a URL. Unknown IDs trigger at most one fetch per 30s.
-      current.nextAttemptAt = now + 30_000;
-
-      return yield* Effect.gen(function* () {
-        const http = yield* HttpClient.HttpClient;
-        const response = yield* http.get(config.AUTH_JWKS_URL);
-
-        if (response.status !== 200) return yield* unavailable();
-
-        const keys = yield* response.json.pipe(Effect.flatMap(Schema.decodeUnknownEffect(KeySet)));
-
-        current.snapshot = {
-          publicKeys: keys.keys,
-          kids: keys.keys.map((key) => key.kid),
-          expiresAt: now + 300_000,
-        };
-
-        return keys.keys;
-      }).pipe(
-        Effect.scoped,
-        Effect.timeout("5 seconds"),
-        Effect.mapError(unavailable),
-        Effect.catch((error) =>
-          previous && previous.expiresAt > now
-            ? Effect.succeed(previous.publicKeys)
-            : Effect.fail(error),
-        ),
-        Effect.provideService(FetchHttpClient.RequestInit, {
-          redirect: "manual",
-          credentials: "omit",
-        }),
-        Effect.provide(FetchHttpClient.layer),
-      );
-    }),
-    (release) => Effect.sync(release),
-  );
-});
-
-/** Verify the host's HttpOnly access cookie locally; no account or permission store exists here. */
-export const authenticateRequest = Effect.fnUntraced(function* (
-  request: Request,
-  env: AuthEnvironment,
-) {
+const accessCookie = Effect.fnUntraced(function* (request: Request) {
   const cookie = request.headers.get("cookie") ?? "";
 
   const values = cookie
@@ -149,39 +37,43 @@ export const authenticateRequest = Effect.fnUntraced(function* (
     .map((value) => value.trim())
     .filter((value) => value.startsWith("__Host-yielded-access="));
 
-  if (values.length !== 1) return yield* unauthorized();
+  const value = values[0];
+
+  if (values.length !== 1 || value === undefined) return yield* unauthorized();
+
+  return value.slice("__Host-yielded-access=".length);
+});
+
+/** Verify the host's HttpOnly access cookie with its scoped Jwks and Signature services.
+ * The host owns the trusted key endpoint and must retain bounded verification on Workers.
+ * No account or permission store exists here.
+ */
+export const authenticateRequest = Effect.fnUntraced(function* (
+  request: Request,
+  env: AuthEnvironment,
+) {
+  const credential = yield* accessCookie(request);
 
   const config = yield* Schema.decodeUnknownEffect(Configuration)(env).pipe(
     Effect.mapError(unavailable),
   );
 
-  const credential = values[0]!.slice("__Host-yielded-access=".length);
-
   if (credential.length > 16_384) return yield* unauthorized();
 
-  // This untrusted hint only selects keys from the configured issuer's JWKS.
-  const hint = yield* Effect.fromResult(Base64Url.decodeString(credential.split(".")[0]!)).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(KeyHint)),
-    Effect.mapError(unauthorized),
-  );
-
-  const publicKeys = yield* keysFor(config, hint.kid);
-
-  // Verifiers capture Effect services; keep that context inside the current Worker request.
-  const verifier = yield* OAuthServer.makeAccessTokenVerifier({
+  const verifier = yield* OAuthServer.makeAccessTokenVerifierWithKeySet({
     issuer: config.AUTH_ISSUER,
     resource: config.AUTH_RESOURCE,
-    publicKeys,
-  }).pipe(
-    Effect.provide(Portable.layerWithoutKdf(globalThis.crypto.subtle)),
-    Effect.mapError(unavailable),
-  );
+  }).pipe(Effect.mapError(unavailable));
 
   const access = yield* verifier
     .verify(Redacted.make(credential))
     .pipe(
-      Effect.mapError((error) =>
-        error._tag === "OAuthServerInvalidToken" ? unauthorized() : unavailable(),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) =>
+            error._tag === "OAuthServerInvalidToken" ? unauthorized() : unavailable(),
+          ),
+        ),
       ),
     );
 
@@ -193,6 +85,49 @@ export const authenticateRequest = Effect.fnUntraced(function* (
 
   return { subjectId: access.subjectId, ...claims, scopes: access.scopes };
 });
+
+export type AuthenticatedAccount = Effect.Success<ReturnType<typeof authenticateRequest>>;
+
+/** Application-owned verification; each layer owns one scoped remote key resolver. */
+export class Authentication extends Context.Service<
+  Authentication,
+  { readonly authenticate: (request: Request) => Effect.Effect<AuthenticatedAccount, AccountError> }
+>()("agent-example-auth/Authentication") {
+  static readonly layer = (env: AuthEnvironment) =>
+    Layer.effect(
+      Authentication,
+      Effect.gen(function* () {
+        const keys = yield* Jwks.Jwks;
+        const signature = yield* Signature;
+
+        return {
+          authenticate: (request: Request) =>
+            authenticateRequest(request, env).pipe(
+              Effect.provideService(Jwks.Jwks, keys),
+              Effect.provideService(Signature, signature),
+            ),
+        };
+      }),
+    ).pipe(
+      Layer.provide(
+        Jwks.layerRemote({
+          url: env.AUTH_JWKS_URL ?? "",
+          maxKeys: 16,
+          cacheTimeMs: 300_000,
+        }),
+      ),
+      Layer.provide([FetchHttpClient.layer, Portable.layerWithoutKdf(globalThis.crypto.subtle)]),
+      // Unconfigured authentication must not prevent public assets from being served.
+      Layer.catchCause((cause) =>
+        Layer.succeed(Authentication, {
+          authenticate: (request) =>
+            accessCookie(request).pipe(
+              Effect.andThen(Effect.failCause(Cause.map(cause, unavailable))),
+            ),
+        }),
+      ),
+    );
+}
 
 /** Durable work asks the issuer for current funding; access-token snapshots cannot authorize recovery. */
 export const hostedModelAccess = Effect.fnUntraced(

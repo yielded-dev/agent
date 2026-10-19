@@ -223,7 +223,11 @@ export class TravelPlannerThread extends makeTravelPlannerThread(
 }
 
 export default {
-  async fetch(request: Request, env: Cloudflare.Env & { readonly PLANNER_TOKEN?: string }) {
+  async fetch(
+    request: Request,
+    env: Cloudflare.Env & { readonly PLANNER_TOKEN?: string },
+    ctx: ExecutionContext,
+  ) {
     const url = new URL(request.url);
 
     if (url.pathname.startsWith("/__research/")) {
@@ -251,6 +255,6 @@ export default {
       }
     }
 
-    return fixtureWorker.fetch(request, env);
+    return fixtureWorker.fetch(request, env, ctx);
   },
 };

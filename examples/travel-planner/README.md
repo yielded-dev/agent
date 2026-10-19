@@ -46,7 +46,9 @@ The planner and scout select one current binding per agent ID.
 The host serves `/auth/login`, `/auth/session`, `/auth/refresh` and `/auth/logout`.
 It sets the `__Host-yielded-access` HttpOnly cookie. The shared consumer verifies
 its signature, issuer, resource audience, expiry and configured scope locally,
-using public keys cached for five minutes. The browser refreshes before expiry
+using Yielded Auth's verifier and public keys cached for five minutes. Each Worker
+owns one remote key resolver for its configured authority and retains bounded
+verification when a client disconnects. The browser refreshes before expiry
 and retries a rejected pre-admission request once. Account changes dispose the
 previous account's queries and drafts before the next account is rendered.
 

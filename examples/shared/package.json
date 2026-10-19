@@ -3,14 +3,15 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./cloudflare": "./src/cloudflare.ts",
     "./client": "./src/client.ts",
     "./contract": "./src/contract.ts",
     "./server": "./src/server.ts"
   },
   "dependencies": {
     "@yielded/auth": "catalog:",
-    "@yielded/crypto": "0.1.0-beta.41",
-    "@yielded/jose": "0.1.0-beta.41",
+    "@yielded/crypto": "catalog:",
+    "@yielded/jose": "catalog:",
     "effect": "catalog:"
   }
 }
