@@ -89,13 +89,14 @@ export const ScheduleConfiguration = Schema.Struct({
 export type ScheduleConfiguration = typeof ScheduleConfiguration.Type;
 
 export const ScheduledEnvelope = Schema.Struct({
-  ...Struct.omit(PreparedInput.fields, ["workerAdmission", "messageAdmission"]),
+  schemaVersion: PreparedInput.fields.schemaVersion,
   owner: ScheduleOwner,
   scheduleId: ScheduleId,
   configurationRevision: Positive,
   intendedAtMillis: ScheduleInstant,
   preparedAtMillis: ScheduleInstant,
   occurrenceId: Digest,
+  ...Struct.omit(PreparedInput.fields, ["schemaVersion", "workerAdmission", "messageAdmission"]),
 });
 
 export type ScheduledEnvelope = typeof ScheduledEnvelope.Type;
