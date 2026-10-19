@@ -138,7 +138,9 @@ export const canonicalRecordMetadata = (
       message_id: canonicalIdentifier(
         tag === "SubtreeBudgetReserved"
           ? text("reservationId")
-          : (text("admission", "messageId") ?? text("messageId")),
+          : tag === "AgentUpdateEmitted"
+            ? text("delivery", "messageId")
+            : (text("admission", "messageId") ?? text("messageId")),
       ),
       submission_id: canonicalIdentifier(text("submissionId")),
       application_input:
@@ -749,6 +751,8 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                 ORDER BY sequence DESC LIMIT 1`.pipe(execute);
               break;
             case "DeliveryPredecessor": {
+              yield* requireReadyWork(request.threadId, tail.tail_sequence);
+
               const candidates = sql.join(
                 " UNION ALL ",
                 false,
@@ -757,7 +761,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   (tag) => sql`SELECT * FROM (
                   SELECT thread_id, sequence, record_id, ${recordBatchId(sql, namespace)} AS batch_id, ${recordJson} AS record_json
                   FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_delivery_predecessor")}
-                  WHERE thread_id=${request.threadId} AND record_tag=${RECORD_TAGS[tag]} AND handoff=1
+                  WHERE thread_id=${request.threadId} AND record_tag=${RECORD_TAGS[tag]} AND message_id IS NOT NULL
                     AND sequence<=${selection.throughSequence}
                   ORDER BY sequence DESC LIMIT 1
                 ) AS predecessor_branch`,
@@ -1454,9 +1458,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
             yield* requireReadyWork(request.threadId, tail.tail_sequence);
 
-            // Canonical handoffs disappear on transfer; every retained delivery identity suppresses
-            // its old handoff, including terminal identities. Terminal capacity expires without
-            // deleting the exact receipt or decoding any historical envelopes.
+            // Terminal capacity expires without deleting receipts or decoding historical envelopes.
             const peer = sql.onDialectOrElse({
               pg: () => sql`(read_metadata ->> 'peer') = 'true'`,
               orElse: () =>
@@ -1464,12 +1466,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             });
 
             const rows = yield* sql`SELECT message_id FROM (
-          SELECT message_id FROM (SELECT message_id FROM ${relation("effect_agent_work_entries")} AS work ${recoveryIndex(sql, "effect_agent_work_entries_peer")}
-            WHERE thread_id=${request.threadId} AND handoff_kind='peer' AND message_id IS NOT NULL
-              AND NOT EXISTS (SELECT 1 FROM ${relation("effect_agent_message_deliveries")} AS delivery ${recoveryIndex(sql, "effect_agent_message_deliveries_identity")}
-                WHERE delivery.owner_thread_id=work.thread_id AND ${sql.onDialectOrElse({ pg: () => sql`(delivery.read_metadata ->> 'messageId')`, orElse: () => sql`json_quote(delivery.message_id)` })}=work.message_id)
-            ORDER BY message_id LIMIT ${request.limit}) AS handoffs
-          UNION SELECT message_id FROM (SELECT ${sql.onDialectOrElse({ pg: () => sql`(read_metadata ->> 'messageId')`, orElse: () => sql`json_quote(message_id)` })} AS message_id
+          SELECT message_id FROM (SELECT ${sql.onDialectOrElse({ pg: () => sql`(read_metadata ->> 'messageId')`, orElse: () => sql`json_quote(message_id)` })} AS message_id
             FROM ${relation("effect_agent_message_deliveries")} ${recoveryIndex(sql, "effect_agent_message_deliveries_peer")}
             WHERE owner_thread_id=${request.threadId} AND state NOT IN ('processed', 'refused') AND ${peer}
             ORDER BY message_id LIMIT ${request.limit}) AS deliveries

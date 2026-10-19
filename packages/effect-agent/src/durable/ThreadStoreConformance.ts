@@ -36,7 +36,6 @@ import {
   WorkerOriginRecorded,
   WorkerStopRequested,
   SubtreeBudgetReserved,
-  PeerMessagePrepared,
 } from "./Records.ts";
 import { canonicalRecordBytes } from "./RunContinuation.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
@@ -775,31 +774,6 @@ const nativeWorkerAccounting = conformanceCase(
         ]),
         tail,
       );
-      yield* ensure(
-        (yield* store.countPeerMessages!({ threadId, nowMillis: 0, limit: 1 })) === 0,
-        "Conversation history does not count as peer sends",
-      );
-
-      const peerProof = (n: number) =>
-        envelope(
-          `peer-${n}`,
-          PeerMessagePrepared.make({
-            messageId: Schema.decodeSync(IdempotencyKey)(`peer-${n}`),
-            source: { _tag: "programmatic", threadId, agentId },
-            encodedEnvelope: {},
-            sourcePrincipal: Schema.decodeSync(PeerMessagePrepared.fields.sourcePrincipal)("owner"),
-            operation: "send",
-            deadlineAtMillis: 1000,
-          }),
-        );
-
-      tail = yield* append(threadId, batch("peer-proofs", [peerProof(0), peerProof(1)]), tail);
-      yield* ensure(
-        (yield* store.countPeerMessages!({ threadId, nowMillis: 0, limit: 1 })) === 1 &&
-          (yield* store.countPeerMessages!({ threadId, nowMillis: 0, limit: 1000 })) === 2,
-        "Peer count saturates at the requested capacity without returning payloads",
-      );
-
       yield* expectFailure(
         "Worker accounting cannot return a partial authorization snapshot",
         readWorkerState({ threadId, sourceSubmissionId: CONFORMANCE_SUBMISSION, limit: 1 }),

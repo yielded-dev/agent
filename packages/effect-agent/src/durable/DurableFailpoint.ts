@@ -72,12 +72,8 @@ export const DurableRuntimeFailpointLocation = Schema.Literals([
   "worker:after-subtree-append",
   "worker:before-report-append",
   "worker:after-report-append",
-  "worker:before-report-delivery",
-  "worker:after-report-delivery",
   "update:before-canonical-append",
   "update:after-canonical-append",
-  "update:before-delivery-insert",
-  "update:after-delivery-insert",
 ]);
 
 export type DurableRuntimeFailpointLocation = typeof DurableRuntimeFailpointLocation.Type;

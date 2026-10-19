@@ -187,15 +187,14 @@ import {
 } from "./internal/tool-operations.ts";
 import { makeWorkerRuntime, WorkerInputControl } from "./internal/worker-host.ts";
 import { WorkerRuntime } from "./internal/worker-runtime.ts";
-import { MessageDeliveryStore, prepareMessageDelivery } from "./MessageDelivery.ts";
+import { MessageDeliveryStore } from "./MessageDelivery.ts";
 import {
   OperationAuthorizationRequest,
   OperationAuthorizer,
   OperationDenied,
 } from "./OperationAuthorizer.ts";
-import { PreparedInput } from "./PreparedInputAdmission.ts";
-import type { DefinitionDigests } from "./Records.ts";
 import {
+  type DefinitionDigests,
   type RunContinuation,
   type CanonicalRecordEnvelope,
   type CanonicalRecordPayload,
@@ -503,12 +502,7 @@ const decodeBatchIdSync = Schema.decodeSync(BatchId);
 export const childReservationIdFor = (runId: RunId, toolCallId: ToolCallId): ChildReservationId =>
   decodeChildReservationIdSync(`subagent-reservation:${runId}:${toolCallId}`);
 
-/**
- * S2 fixes every attached durable child at delegation depth 1 (SUB-029
- * rejects all nested delegation at preflight), so recovery can rebuild the
- * child lineage from the canonical `SubagentRequested` record alone — the
- * record deliberately does not carry a depth field.
- */
+/** Historical requests without a recorded depth describe a direct child. */
 const CHILD_DELEGATION_DEPTH: DelegationDepth = Schema.decodeSync(DelegationDepth)(1);
 
 /** Canonical `AbortRequested.author` of every propagated parent-abort command (spec §13.1). */
@@ -3516,15 +3510,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           ),
         );
     }
-    if (submission.workerAdmission?.origin.reporting?.mode === "standard")
-      yield* updateRuntime.repairRun(submission.threadId, submission.submissionId).pipe(
-        Effect.mapError(() =>
-          LedgerError.make({
-            operation: "update-delivery",
-            message: "Update delivery remains pending",
-          }),
-        ),
-      );
     yield* workerRuntime
       .completeInput(submission)
       .pipe(
@@ -8408,8 +8393,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       if (prepared === undefined)
         yield* ensureThreadCreated(threadId, submission.agentId, submission.agentDigests);
-      if (submission.workerAdmission?.origin.reporting?.mode === "standard")
-        yield* updateRuntime.repairRun(threadId, submissionId);
       if (submission.workerAdmission !== undefined) {
         yield* workerRuntime
           .ensureOrigin(submission.workerAdmission.origin)
@@ -10386,9 +10369,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       );
     const history = yield* readRecoveryHistory(found.value.threadId, [submissionId]);
 
-    if (history.materialized && found.value.workerAdmission?.origin.reporting?.mode === "standard")
-      yield* updateRuntime.repairRun(found.value.threadId, submissionId);
-
     return yield* recoverSnapshot(found.value, history);
   });
 
@@ -10613,61 +10593,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
     return "repaired";
-  });
-
-  const repairFrozenDelivery = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-    frozen: {
-      readonly messageId: IdempotencyKey;
-      readonly envelope: PersistedJson;
-      readonly createdAtMillis: number;
-      readonly deadlineAtMillis: number;
-      readonly predecessor?: IdempotencyKey;
-    },
-  ) {
-    if (Option.isNone(deliveries))
-      return yield* ThreadStoreError.make({
-        operation: "recover delivery",
-        message: "The owning delivery port is unavailable",
-      });
-
-    const envelope = yield* Schema.decodeUnknownEffect(PreparedInput)(frozen.envelope).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({
-          operation: "recover delivery",
-          message: "Frozen delivery evidence is incompatible",
-          cause,
-        }),
-      ),
-    );
-
-    const record = yield* withCrypto(
-      prepareMessageDelivery({
-        key: { ownerThreadId: threadId, messageId: frozen.messageId },
-        envelope,
-        createdAtMillis: frozen.createdAtMillis,
-        deadlineAtMillis: frozen.deadlineAtMillis,
-        ...(frozen.predecessor === undefined ? {} : { predecessor: frozen.predecessor }),
-      }),
-    ).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({
-          operation: "recover delivery",
-          message: "Frozen delivery cannot be prepared",
-          cause,
-        }),
-      ),
-    );
-
-    yield* deliveries.value.insert(record).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({
-          operation: "recover delivery",
-          message: "The durable handoff remains owed",
-          cause,
-        }),
-      ),
-    );
   });
 
   const recoverOwnedWork = Effect.fnUntraced(function* (
@@ -11004,38 +10929,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     )
       return yield* invalid();
     switch (owner.kind) {
-      case "peer":
-        if (
-          payload._tag !== "PeerMessagePrepared" ||
-          owner.messageId !== payload.messageId ||
-          payload.source.threadId !== threadId
-        )
-          return yield* invalid();
-        yield* repairFrozenDelivery(threadId, {
-          messageId: payload.messageId,
-          envelope: payload.encodedEnvelope,
-          createdAtMillis: DateTime.toEpochMillis(evidence.record.createdAt),
-          deadlineAtMillis: payload.deadlineAtMillis,
-        });
-
-        return report("repaired");
-      case "report":
-        if (payload._tag !== "WorkerReportPrepared" || owner.messageId !== payload.messageId)
-          return yield* invalid();
-        yield* repairFrozenDelivery(threadId, payload);
-
-        return report("repaired");
-      case "update":
-        if (
-          payload._tag !== "AgentUpdateEmitted" ||
-          payload.delivery === undefined ||
-          owner.messageId !== payload.delivery.messageId ||
-          payload.update.threadId !== threadId
-        )
-          return yield* invalid();
-        yield* repairFrozenDelivery(threadId, payload.delivery);
-
-        return report("repaired");
       case "worker-stop":
         if (
           payload._tag !== "WorkerStopRequested" ||

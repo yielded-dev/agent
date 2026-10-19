@@ -244,11 +244,11 @@ it("applies the consuming adapter's stored-value bound to a shared pending view"
         invalidators: journal.state.invalidators,
       });
 
-      const higher = yield* makeSqlMessageDeliveryStore(undefined, {
+      const higher = yield* makeSqlMessageDeliveryStore(journal.state.owner, undefined, {
         maxStoredValueBytes: size + 1,
       }).pipe(Effect.provideService(SqlStorageOwner, owner()));
 
-      const lower = yield* makeSqlMessageDeliveryStore(undefined, {
+      const lower = yield* makeSqlMessageDeliveryStore(journal.state.owner, undefined, {
         maxStoredValueBytes: size - 1,
       }).pipe(Effect.provideService(SqlStorageOwner, owner()));
 

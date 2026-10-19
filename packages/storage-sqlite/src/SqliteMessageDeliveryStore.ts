@@ -1,4 +1,7 @@
-import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
+import {
+  makeSqlMessageDeliveryStore,
+  registerCanonicalMessageWriter,
+} from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import {
   MessageDeliveryStore,
   type MessageDeliveryStoreLimits,
@@ -13,8 +16,11 @@ export const messageDeliveryStoreLayer = (limits?: MessageDeliveryStoreLimits) =
   Layer.effect(
     MessageDeliveryStore,
     Effect.gen(function* () {
-      yield* initializeSqliteJournal();
+      const journal = yield* initializeSqliteJournal();
+      const store = yield* makeSqlMessageDeliveryStore(journal.owner, limits);
 
-      return yield* makeSqlMessageDeliveryStore(limits);
+      yield* registerCanonicalMessageWriter(journal.owner, store);
+
+      return store;
     }),
   );

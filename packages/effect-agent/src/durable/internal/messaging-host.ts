@@ -33,7 +33,6 @@ import {
   MessageDeliveryFailpoint,
   MessageDeliveryStore,
   type MessageDeliveryRecord,
-  prepareMessageDelivery,
 } from "../MessageDelivery.ts";
 import { PreparedInput } from "../PreparedInputAdmission.ts";
 import {
@@ -216,15 +215,18 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
 
   const mapStore =
     (operation: MessagingError["operation"]) =>
-    (error: { readonly _tag: string; readonly reason?: string }) =>
-      failure(
+    (error: {
+      readonly _tag: string;
+      readonly reason?: string;
+      readonly deliveryReason?: string;
+    }) => {
+      const reason = error.deliveryReason ?? error.reason;
+
+      return failure(
         operation,
-        error.reason === "capacity"
-          ? "capacity"
-          : error.reason === "conflict"
-            ? "conflict"
-            : "storage",
+        reason === "capacity" ? "capacity" : reason === "conflict" ? "conflict" : "storage",
       );
+    };
 
   const lifetime = Schema.decodeEffect(
     Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(604_800_000)),
@@ -316,10 +318,8 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
 
         const prior = yield* exactRecord(threadId, peerMessageRecordId(message.messageId));
 
-        let saved: Effect.Success<ReturnType<typeof proof>>;
-
         if (prior !== undefined) {
-          saved = yield* decodeProof(prior);
+          const saved = yield* decodeProof(prior);
           const metadata = saved.envelope.messageAdmission;
 
           if (
@@ -476,29 +476,13 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
           yield* deps.failpoint
             .hit("peer:after-prepared-append")
             .pipe(Effect.mapError(mapStore(operation)));
-          saved = {
-            envelope,
-            sourcePrincipal: principal,
-            operation,
-            createdAtMillis,
-            deadlineAtMillis: createdAtMillis + window,
-          };
         }
 
-        const prepared = yield* prepareMessageDelivery({
-          key: message,
-          envelope: saved.envelope,
-          createdAtMillis: saved.createdAtMillis,
-          deadlineAtMillis: saved.deadlineAtMillis,
-        }).pipe(
-          Effect.provideService(Crypto.Crypto, deps.crypto),
-          Effect.mapError(mapStore(operation)),
-        );
+        const published = yield* store.get(message).pipe(Effect.mapError(mapStore(operation)));
 
-        return yield* status(
-          yield* store.insert(prepared).pipe(Effect.mapError(mapStore(operation))),
-          operation,
-        );
+        if (published === null) return yield* failure(operation, "corrupt");
+
+        return yield* status(published, operation);
       }
 
       return yield* failure(operation, "capacity");

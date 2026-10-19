@@ -1,6 +1,9 @@
 import { makeSqlActivityStore } from "@yielded/agent-storage-sql/sql-activity-store";
 import { sqlStorageOwner } from "@yielded/agent-storage-sql/sql-journal";
-import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
+import {
+  makeSqlMessageDeliveryStore,
+  registerCanonicalMessageWriter,
+} from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import {
   makeSqlScheduleStore,
   SqlScheduleWriteTransaction,
@@ -265,10 +268,16 @@ export const messageDeliveryStoreLayer = (
       const sql = yield* SqlClient.SqlClient;
       const config = yield* initialize(options);
 
-      return yield* makeSqlMessageDeliveryStore(options.limits, {
+      const owner = yield* sqlStorageOwner(sql, config.schema);
+
+      const store = yield* makeSqlMessageDeliveryStore(owner, options.limits, {
         namespace: config.schema,
         transaction: yield* makeWriteTransaction(sql, config.lockTimeout, config.schema),
       });
+
+      yield* registerCanonicalMessageWriter(owner, store);
+
+      return store;
     }),
   );
 

@@ -52,6 +52,7 @@ import {
   MessageDeliveryStore,
   defaultMessageDeliveryStoreLimits,
   applyMessageDeliveryChange,
+  prepareCanonicalMessageDeliveries,
   type MessageDeliveryRecord,
 } from "../../src/durable/MessageDelivery.ts";
 import {
@@ -492,6 +493,17 @@ const harness = Effect.fn("workerHostHarness")(function* (
       }),
     append: Effect.fnUntraced(function* (request) {
       yield* Effect.yieldNow;
+
+      const preparedDeliveries = yield* prepareCanonicalMessageDeliveries(
+        request.threadId,
+        request.batch.records,
+      ).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.mapError((cause) =>
+          ThreadStoreError.make({ operation: "append", message: cause.message, cause }),
+        ),
+      );
+
       const records = logs.get(request.threadId) ?? [];
 
       if (records.length !== request.expectedTailSequence) {
@@ -523,6 +535,10 @@ const harness = Effect.fn("workerHostHarness")(function* (
         if (update.retire) executions.delete(update.checkpoint.progress.runId);
         else executions.set(update.checkpoint.progress.runId, update.checkpoint);
       }
+
+      for (const delivery of preparedDeliveries)
+        if (!deliveries.has(delivery.key.messageId))
+          deliveries.set(delivery.key.messageId, delivery);
 
       return AppendResult.make({
         firstSequence: Schema.decodeSync(CanonicalSequence)(first),

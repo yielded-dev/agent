@@ -424,13 +424,13 @@ describe("durable peer messaging boundaries", () => {
     { timeout: 60_000 },
   );
 
-  it.effect.each(["peer:after-prepared-append", "message-delivery:insert:after"])(
-    "replays the frozen route, input, principal and lifetime after %s",
-    (point) =>
+  it.effect(
+    "replays the frozen route, input, principal and lifetime after canonical publication",
+    () =>
       Effect.gen(function* () {
         const h = yield* makeHarness();
 
-        h.controls.fault = point;
+        h.controls.fault = "peer:after-prepared-append";
         expect(yield* h.send().pipe(Effect.flip)).toMatchObject({ reason: "storage" });
         const [proof] = yield* h.proofs();
 
@@ -440,7 +440,7 @@ describe("durable peer messaging boundaries", () => {
 
         expect(
           (yield* h.deliveries.list({ ownerThreadId: sourceThread, limit: 10 })).items,
-        ).toHaveLength(point === "message-delivery:insert:after" ? 1 : 0);
+        ).toHaveLength(1);
         h.controls.fault = undefined;
         h.controls.route = otherThread;
         yield* TestClock.adjust("1 second");
@@ -460,7 +460,7 @@ describe("durable peer messaging boundaries", () => {
         ).toMatchObject({ reason: "denied" });
         expect(
           (yield* h.deliveries.list({ ownerThreadId: sourceThread, limit: 10 })).items,
-        ).toHaveLength(point === "message-delivery:insert:after" ? 1 : 0);
+        ).toHaveLength(1);
         h.controls.denied = () => false;
 
         const replayed = yield* host.send({
@@ -775,13 +775,13 @@ describe("durable peer messaging boundaries", () => {
       }).pipe(Effect.scoped),
   );
 
-  it.effect("counts canonical source proofs even when the delivery store cannot insert them", () =>
+  it.effect("rejects canonical publication when the delivery store is full", () =>
     Effect.gen(function* () {
       const h = yield* makeHarness({ maxMessagesPerSource: 2, maxPendingPerOwner: 1 });
 
       yield* h.send("first");
       expect(yield* h.send("second").pipe(Effect.flip)).toMatchObject({ reason: "capacity" });
-      expect(yield* h.proofs()).toHaveLength(2);
+      expect(yield* h.proofs()).toHaveLength(1);
       const before = yield* h.history(sourceThread);
 
       expect(yield* h.send("third").pipe(Effect.flip)).toMatchObject({ reason: "capacity" });
@@ -792,7 +792,7 @@ describe("durable peer messaging boundaries", () => {
       ).toHaveLength(1);
       expect((yield* h.send("first")).status).toBe("pending");
       expect(yield* h.send("second").pipe(Effect.flip)).toMatchObject({ reason: "capacity" });
-      expect(yield* h.proofs()).toHaveLength(2);
+      expect(yield* h.proofs()).toHaveLength(1);
     }).pipe(Effect.scoped),
   );
 

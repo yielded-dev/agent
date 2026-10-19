@@ -19,7 +19,7 @@ import {
 } from "./internal/record-encoding.ts";
 import { transferRecordDependencies } from "./internal/transfer-dependencies.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
-import { MessageDeliveryRecord } from "./MessageDelivery.ts";
+import { MessageDeliveryError, MessageDeliveryRecord } from "./MessageDelivery.ts";
 import { ExportRecord } from "./RecordFormat.ts";
 import {
   type CanonicalBatch,
@@ -112,7 +112,7 @@ export const ThreadWorkerStateRequest = Schema.Struct({
 
 export type ThreadWorkerStateRequest = typeof ThreadWorkerStateRequest.Type;
 
-/** Saturating count of outstanding peer intents and terminal deliveries inside their retention window. */
+/** Saturating count of outstanding peer deliveries and terminal rows inside their retention window. */
 export const ThreadPeerCountRequest = Schema.Struct({
   threadId: ThreadId,
   nowMillis: ScheduleInstant,
@@ -1097,6 +1097,8 @@ export class ThreadStoreError extends Schema.TaggedError<ThreadStoreError>()("Th
   message: Schema.String,
   cause: Schema.optionalKey(Schema.Defect()),
   diagnostic: Schema.optionalKey(ThreadStoreDiagnostic),
+  /** Atomic outbox rejection; unlike diagnostic causes, this survives routed storage codecs. */
+  deliveryReason: Schema.optionalKey(MessageDeliveryError.fields.reason),
 }) {}
 
 export class ThreadNotMaterialized extends Schema.TaggedError<ThreadNotMaterialized>()(
@@ -1154,7 +1156,9 @@ export class ThreadStore extends Context.Service<
     readonly verification?: ThreadVerificationStorage;
     readonly materialize: (request: ThreadMaterialization) => Effect.Effect<void, ThreadStoreError>;
     /**
-     * Commit history and current execution atomically under the storage owner's mutation gate.
+     * Commit history, current execution and frozen peer/report/update deliveries atomically
+     * under the storage owner's mutation gate. Delivery-bearing appends require the native
+     * MessageDeliveryStore paired to this physical owner; limits apply before publication.
      * Only the latest active operational intent replays. Historical batches compare exact
      * canonical content; their prior operational intent is no longer retained.
      */

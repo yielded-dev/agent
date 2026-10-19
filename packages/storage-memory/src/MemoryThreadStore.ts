@@ -4,7 +4,10 @@ import {
   RunId,
   SubmissionId as importSubmissionId,
 } from "@yielded/agent/identifiers";
-import type { IdempotencyKey } from "@yielded/agent/receipt";
+import {
+  MessageDeliveryError,
+  prepareCanonicalMessageDeliveries,
+} from "@yielded/agent/message-delivery";
 import {
   ExportBatch,
   ExportedRecord,
@@ -148,6 +151,7 @@ import {
   type MemoryLedgerImport,
   type MemoryDeliveryTransfer,
   type MemoryDeliveryImport,
+  type MemoryDeliveryWriter,
   type MemoryWorkOwner,
   type PreparedMemoryAppend,
 } from "./internal/MemoryThreadStoreKernel.ts";
@@ -297,8 +301,6 @@ interface WorkIndex {
   readonly reporting: WorkerReportingMode;
   readonly entryCount: number;
   readonly entries: Map<string, CanonicalWorkEntry>;
-  readonly messages: Map<IdempotencyKey, Set<string>>;
-  readonly foreign: { child: number; worker: number; delivery: number; peer: number };
   readonly workers: Map<ThreadId, { ordinary: number; update: number; effects: number }>;
   readonly liveInputs: Array<LiveInputLocator>;
   readonly inputsByWorker: Map<ThreadId, Array<LiveInputLocator>>;
@@ -342,8 +344,6 @@ const emptyWorkIndex = (): WorkIndex => ({
   reporting: "none",
   entryCount: 0,
   entries: new Map(),
-  messages: new Map(),
-  foreign: { child: 0, worker: 0, delivery: 0, peer: 0 },
   workers: new Map(),
   liveInputs: [],
   inputsByWorker: new Map(),
@@ -352,20 +352,6 @@ const emptyWorkIndex = (): WorkIndex => ({
 const changeWorkCounts = (index: WorkIndex, entry: CanonicalWorkEntry, change: 1 | -1) => {
   const owner = entry.owner;
 
-  if (
-    owner._tag === "Child" ||
-    (owner._tag === "Handoff" &&
-      (owner.kind === "reservation" || owner.kind === "child-accounting"))
-  )
-    index.foreign.child += change;
-  if (
-    ["WorkerInput", "WorkerEffects", "Report"].includes(owner._tag) ||
-    (owner._tag === "Handoff" && owner.kind === "worker-stop")
-  )
-    index.foreign.worker += change;
-  if (owner._tag === "Handoff" && ["peer", "update", "report"].includes(owner.kind))
-    index.foreign.delivery += change;
-  if (owner._tag === "Handoff" && owner.kind === "peer") index.foreign.peer += change;
   if (owner._tag === "WorkerInput") {
     changeLiveInput(index.liveInputs, entry, change);
     let inputs = index.inputsByWorker.get(owner.workerThreadId);
@@ -388,7 +374,6 @@ const changeWorkCounts = (index: WorkIndex, entry: CanonicalWorkEntry, change: 1
 const prepareWork = Effect.fnUntraced(function* (
   previous: WorkIndex,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-  retained: (threadId: ThreadId, messageId: IdempotencyKey) => boolean,
 ) {
   const changes = new Map<string, CanonicalWorkEntry | undefined>();
   let reporting = previous.reporting;
@@ -416,43 +401,24 @@ const prepareWork = Effect.fnUntraced(function* (
           change.entry,
         );
 
-        changes.set(
-          entry.id,
-          entry.owner._tag === "Handoff" &&
-            entry.owner.messageId !== undefined &&
-            retained(record.threadId, entry.owner.messageId)
-            ? undefined
-            : entry,
-        );
+        changes.set(entry.id, entry);
       }
     }
     through = record.sequence;
   }
 
   return (): WorkIndex => {
-    const { entries, messages } = previous;
+    const { entries } = previous;
 
     for (const [id, entry] of changes) {
       const old = entries.get(id);
 
       if (old !== undefined) changeWorkCounts(previous, old, -1);
 
-      if (old?.owner._tag === "Handoff" && old.owner.messageId !== undefined) {
-        const ids = messages.get(old.owner.messageId);
-
-        ids?.delete(id);
-        if (ids?.size === 0) messages.delete(old.owner.messageId);
-      }
       if (entry === undefined) entries.delete(id);
       else {
         entries.set(id, entry);
         changeWorkCounts(previous, entry, 1);
-        if (entry.owner._tag === "Handoff" && entry.owner.messageId !== undefined) {
-          const ids = messages.get(entry.owner.messageId);
-
-          if (ids === undefined) messages.set(entry.owner.messageId, new Set([id]));
-          else ids.add(id);
-        }
       }
     }
 
@@ -718,6 +684,9 @@ const storeError = (operation: string, message: string, cause?: unknown): Thread
     ? ThreadStoreError.make({ operation, message })
     : ThreadStoreError.make({ operation, message, cause });
 
+const deliveryError = (message: string, cause: MessageDeliveryError): ThreadStoreError =>
+  ThreadStoreError.make({ operation: "append", message, cause, deliveryReason: cause.reason });
+
 const validate = <A, I>(
   schema: Schema.Codec<A, I>,
   operation: string,
@@ -797,39 +766,13 @@ const makeThreadStore = Effect.gen(function* () {
   const updates = yield* PubSub.sliding<void>(1);
   let ledgerTransfer: MemoryLedgerTransfer | undefined;
   let deliveryTransfer: MemoryDeliveryTransfer | undefined;
+  let deliveryWriter: MemoryDeliveryWriter | undefined;
 
   const workState = yield* Ref.make(new Map<ThreadId, WorkIndex>());
   const workOwners = new Map<"admissions" | "deliveries", MemoryWorkOwner>();
-  let deliveryLookup: ((threadId: ThreadId, messageId: IdempotencyKey) => boolean) | undefined;
-
-  const retainedDelivery = (threadId: ThreadId, messageId: IdempotencyKey) =>
-    deliveryLookup?.(threadId, messageId) ?? false;
 
   const publishWork = (threadId: ThreadId, index: WorkIndex) =>
     MutableRef.get(workState.ref).set(threadId, index);
-
-  const retainDelivery = (threadId: ThreadId, messageId: IdempotencyKey) => {
-    const index = MutableRef.get(workState.ref).get(threadId);
-    const ids = index?.messages.get(messageId);
-
-    if (
-      index === undefined ||
-      index.version !== WORK_INDEX_VERSION ||
-      index.entryCount !== index.entries.size ||
-      ids === undefined
-    )
-      return;
-    const { entries, messages } = index;
-
-    for (const id of ids) {
-      const entry = entries.get(id);
-
-      if (entry !== undefined) changeWorkCounts(index, entry, -1);
-      entries.delete(id);
-    }
-    messages.delete(messageId);
-    publishWork(threadId, { ...index, entryCount: entries.size });
-  };
 
   const readyIndex = (
     threadId: ThreadId,
@@ -1018,7 +961,7 @@ const makeThreadStore = Effect.gen(function* () {
               "Canonical rebuild cannot advance within its byte bound",
             );
 
-          const commitWork = yield* prepareWork(index, records, retainedDelivery).pipe(
+          const commitWork = yield* prepareWork(index, records).pipe(
             Effect.provideService(Crypto.Crypto, crypto),
           );
 
@@ -1034,8 +977,6 @@ const makeThreadStore = Effect.gen(function* () {
               reporting: rebuilt.reporting,
               entryCount: rebuilt.entryCount,
               entries: rebuilt.entries,
-              messages: rebuilt.messages,
-              foreign: rebuilt.foreign,
               workers: rebuilt.workers,
               liveInputs: rebuilt.liveInputs,
               inputsByWorker: rebuilt.inputsByWorker,
@@ -1160,12 +1101,21 @@ const makeThreadStore = Effect.gen(function* () {
         "Canonical batch exceeds its bounded transfer representation",
       );
 
-    return { request, batchJson };
+    const deliveries = yield* prepareCanonicalMessageDeliveries(
+      request.threadId,
+      request.batch.records,
+    ).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.mapError((cause) => deliveryError("Invalid canonical delivery", cause)),
+    );
+
+    return { request, batchJson, deliveries };
   });
 
   const appendPrepared = Effect.fnUntraced(function* ({
     request,
     batchJson,
+    deliveries,
   }: PreparedMemoryAppend) {
     // Every caller holds the shared kernel mutation gate across validation and Ref publication.
     const current = yield* Ref.get(state);
@@ -1285,9 +1235,21 @@ const makeThreadStore = Effect.gen(function* () {
               request.batch,
               decodeCanonicalSequence(thread.tailSequence + 1),
             ),
-            retainedDelivery,
           ).pipe(Effect.provideService(Crypto.Crypto, crypto))
         : undefined;
+
+    let commitDeliveries: (() => void) | undefined;
+
+    if (deliveries.length > 0) {
+      if (deliveryWriter === undefined)
+        return yield* deliveryError(
+          "Canonical messages require a paired MemoryMessageDeliveryStore",
+          MessageDeliveryError.make({ reason: "storage", operation: "canonical publication" }),
+        );
+      commitDeliveries = yield* deliveryWriter(deliveries).pipe(
+        Effect.mapError((cause) => deliveryError("Canonical delivery rejected", cause)),
+      );
+    }
 
     const decision = yield* Effect.uninterruptible(
       Ref.modify(state, (current): readonly [AppendDecision, MemoryState] => {
@@ -1320,6 +1282,8 @@ const makeThreadStore = Effect.gen(function* () {
               current,
             ];
 
+          commitDeliveries?.();
+
           return [
             {
               _tag: "success",
@@ -1345,6 +1309,8 @@ const makeThreadStore = Effect.gen(function* () {
               current,
             ];
           }
+
+          commitDeliveries?.();
 
           return [
             {
@@ -1440,6 +1406,7 @@ const makeThreadStore = Effect.gen(function* () {
         indexes.commit();
         if (preparedWork !== undefined) publishWork(request.threadId, preparedWork());
         current.threads.set(request.threadId, next);
+        commitDeliveries?.();
 
         const publication: readonly [AppendDecision, MemoryState] = [
           { _tag: "success", result, records },
@@ -1473,15 +1440,10 @@ const makeThreadStore = Effect.gen(function* () {
   const countPeerMessages: NonNullable<ThreadStore["Service"]["countPeerMessages"]> =
     Effect.fnUntraced(function* (request) {
       yield* validate(ThreadPeerCountRequest, "countPeerMessages", request);
-      const thread = yield* findThread(yield* Ref.get(state), request.threadId);
-
-      const index = yield* readyIndex(request.threadId, thread.tailSequence).pipe(
-        Effect.mapError((cause) => storeError("countPeerMessages", cause.message)),
-      );
+      yield* findThread(yield* Ref.get(state), request.threadId);
 
       return Math.min(
-        index.foreign.peer +
-          (deliveryTransfer?.peerCount(request.threadId, request.nowMillis, request.limit) ?? 0),
+        deliveryTransfer?.peerCount(request.threadId, request.nowMillis, request.limit) ?? 0,
         request.limit,
       );
     });
@@ -2161,11 +2123,9 @@ const makeThreadStore = Effect.gen(function* () {
                     return yield* invalidThreadArchive("Duplicate canonical record identity", id);
                 const native = prepareIndexes(staged, records);
 
-                const commitWork = yield* prepareWork(
-                  stagedWork,
-                  records,
-                  (_, messageId) => stagedDelivery?.has(messageId) ?? false,
-                ).pipe(Effect.provideService(Crypto.Crypto, crypto));
+                const commitWork = yield* prepareWork(stagedWork, records).pipe(
+                  Effect.provideService(Crypto.Crypto, crypto),
+                );
 
                 retainRecords(staged, records);
                 native.commit();
@@ -2187,16 +2147,6 @@ const makeThreadStore = Effect.gen(function* () {
               }
               if (stagedLedger !== undefined) yield* stagedLedger.stage(page);
               if (stagedDelivery !== undefined) yield* stagedDelivery.stage(page);
-              for (const delivery of page.archive.deliveries) {
-                for (const workId of stagedWork.messages.get(delivery.key.messageId) ?? []) {
-                  const entry = stagedWork.entries.get(workId);
-
-                  if (entry !== undefined) changeWorkCounts(stagedWork, entry, -1);
-                  stagedWork.entries.delete(workId);
-                }
-                stagedWork.messages.delete(delivery.key.messageId);
-                stagedWork = { ...stagedWork, entryCount: stagedWork.entries.size };
-              }
             }),
           );
           const result = yield* finishThreadImport(progress);
@@ -2692,7 +2642,6 @@ const makeThreadStore = Effect.gen(function* () {
     Context.add(MemoryThreadStoreKernel, {
       owner,
       withMutation,
-      retainDelivery,
       checkThreadCapacity: (threadId) =>
         Effect.suspend(() =>
           !MutableRef.get(workState.ref).has(threadId) &&
@@ -2717,14 +2666,14 @@ const makeThreadStore = Effect.gen(function* () {
             workOwners.set(kind, owner);
           }),
         ),
-      registerDeliveryLookup: (lookup) =>
+      registerDeliveryWriter: (writer) =>
         withMutation(
           Effect.gen(function* () {
-            if (deliveryLookup !== undefined)
+            if (deliveryWriter !== undefined)
               return yield* Effect.die(
-                storeError("initialize", "MemoryThreadStore already has a delivery lookup"),
+                storeError("initialize", "MemoryThreadStore already has a delivery writer"),
               );
-            deliveryLookup = lookup;
+            deliveryWriter = writer;
           }),
         ),
       registerLedgerTransfer: (transfer) =>
@@ -2774,6 +2723,7 @@ const makeThreadStore = Effect.gen(function* () {
  * In-memory canonical Thread persistence. Durable accepted work is served by the separate
  * SubmissionLedger port; this Layer provides ThreadStore, ThreadReader, and ThreadImport.
  * Importing admissions requires a MemorySubmissionLedger paired with this store.
+ * Publishing canonical messages requires a paired MemoryMessageDeliveryStore.
  */
 export const MemoryThreadStoreLive = ThreadReader.layer().pipe(
   Layer.provideMerge(Layer.effectContext(makeThreadStore)),

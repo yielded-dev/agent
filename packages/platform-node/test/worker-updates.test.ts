@@ -86,7 +86,7 @@ const authority = Layer.succeed(WorkerHostAuthorizer, {
 
 for (const [parentState, failpoint, abortChild] of [
   ["completed", "update:after-canonical-append", false],
-  ["aborted", "update:after-delivery-insert", false],
+  ["aborted", "update:after-canonical-append", false],
   ["completed", "update:after-canonical-append", true],
 ] as const) {
   it.live(

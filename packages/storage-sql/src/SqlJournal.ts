@@ -8,6 +8,7 @@ import { sqlStorageOwner } from "./internal/SqlOwner.ts";
 export { sqlStorageOwner } from "./internal/SqlOwner.ts";
 import { type RunId, ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
+import type { MessageDeliveryRecord } from "@yielded/agent/message-delivery";
 import type { Digest } from "@yielded/agent/records";
 import { CanonicalSequence, RunContinuation } from "@yielded/agent/records";
 import { ProgressAppendReader, validateProgressAppend } from "@yielded/agent/run-continuation";
@@ -18,6 +19,7 @@ import {
   type PreparedAppend,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
+import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
@@ -33,6 +35,7 @@ import {
   type CapturedRecordStorage,
 } from "./SqlCanonicalStorage.ts";
 import { makeSqlLifecyclePublication } from "./SqlLifecyclePublication.ts";
+import { publishCanonicalDeliveries } from "./SqlMessageDeliveryStore.ts";
 import {
   makeRowDecoder,
   makeSqlQuery,
@@ -125,6 +128,7 @@ export interface RawAppendRequest {
       readonly storage: CapturedRecordStorage;
     }
   >;
+  readonly deliveries: ReadonlyArray<MessageDeliveryRecord>;
   readonly progress: PreparedAppend["progress"];
   readonly executionWrites: PreparedAppend["executionWrites"];
   /** Fingerprint of canonical bytes and new operational facts for bounded active retries. */
@@ -441,6 +445,18 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const failpoint = options.hitFailpoint;
   const owner = yield* sqlStorageOwner(sql, options.namespace);
 
+  const publishDeliveries = (records: ReadonlyArray<MessageDeliveryRecord>) =>
+    publishCanonicalDeliveries(owner, records).pipe(
+      Effect.mapError((cause) =>
+        ThreadStoreError.make({
+          operation: "publish canonical deliveries",
+          message: cause.message,
+          deliveryReason: cause.reason,
+          cause,
+        }),
+      ),
+    );
+
   const withReadTransaction: SqlTransactions<S, W>["withReadTransaction"] = (operation) => (body) =>
     owner.withMutation(options.transactions.withReadTransaction(operation)(body));
 
@@ -543,11 +559,13 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             INSERT INTO ${relation("effect_agent_threads")} (
               thread_id,
               created_at,
-              tail_sequence
+              tail_sequence,
+              work_version
             ) VALUES (
               ${threadId},
               ${createdAt},
-              0
+              0,
+              ${WORK_INDEX_VERSION}
             ) ON CONFLICT(thread_id) DO UPDATE SET created_at=excluded.created_at
             WHERE ${relation("effect_agent_threads")}.created_at IS NULL
           `.pipe(execute, Effect.mapError(storageError("materialize thread")));
@@ -629,7 +647,11 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 
     const replay = yield* executions.replay(request);
 
-    if (replay !== undefined) return replay;
+    if (replay !== undefined) {
+      yield* publishDeliveries(request.deliveries);
+
+      return replay;
+    }
 
     const existing = yield* archives.replay(request.threadId, request.batchId);
 
@@ -641,6 +663,8 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           reason: "batch-content",
         });
       }
+
+      yield* publishDeliveries(request.deliveries);
 
       return RawAppendResult.make({
         firstSequence: existing.first_sequence,
@@ -811,6 +835,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             );
       }
     }
+    yield* publishDeliveries(request.deliveries);
     yield* failpoint("append:after-tail-update");
 
     return result;

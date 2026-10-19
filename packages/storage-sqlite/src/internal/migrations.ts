@@ -1,4 +1,7 @@
-import { backfillPeerMessageRetention } from "@yielded/agent-storage-sql/sql-message-delivery-store";
+import {
+  assertLegacyMessagePublicationDrained,
+  backfillPeerMessageRetention,
+} from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
 import { backfillSubscriptionSettlementObservation } from "@yielded/agent-storage-sql/sql-subscription-store";
 import {
@@ -19,7 +22,7 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 29;
+export const CurrentSqliteStorageVersion = 30;
 
 /** Exact released layout, retained for predecessor validation. */
 const layout27Statements = [
@@ -189,6 +192,7 @@ const layout25 = inspection(25, layout25Statements);
 const layout26 = inspection(26, layout27Statements);
 const layout27 = inspection(27, layout27Statements);
 const layout28 = inspection(28, layout28Statements);
+const layout29 = inspection(29, layoutStatements);
 
 const inspectStorage = Effect.fnUntraced(function* (
   allowUpgrade = false,
@@ -211,23 +215,28 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   if (version === 0 && objects.length === 0) return undefined;
 
-  if (
-    (version === 28 || version === CurrentSqliteStorageVersion) &&
-    objects.some(({ name }) => name === "effect_agent_canonical_batches_last")
-  )
+  if (version >= 28 && objects.some(({ name }) => name === "effect_agent_canonical_batches_last"))
     return yield* incompatible(version, "Layout contains the retired batch-end index.");
-  if (
-    version === CurrentSqliteStorageVersion &&
-    objects.some(({ name }) => name === "effect_agent_checkpoints")
-  )
+  if (version >= 29 && objects.some(({ name }) => name === "effect_agent_checkpoints"))
     return yield* incompatible(version, "Current layout contains retired generic checkpoints.");
 
-  if (allowUpgrade && (version === 25 || version === 26 || version === 27 || version === 28)) {
+  if (
+    allowUpgrade &&
+    (version === 25 || version === 26 || version === 27 || version === 28 || version === 29)
+  ) {
     if (version === 25 && objects.some(({ name }) => addedIndexes.has(name)))
       return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
 
     const predecessor =
-      version === 25 ? layout25 : version === 26 ? layout26 : version === 27 ? layout27 : layout28;
+      version === 25
+        ? layout25
+        : version === 26
+          ? layout26
+          : version === 27
+            ? layout27
+            : version === 28
+              ? layout28
+              : layout29;
 
     const header = yield* predecessor.readHeader(objects, version);
 
@@ -256,7 +265,7 @@ export const readSqliteStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layouts 25–28. */
+/** Initialize fresh storage or atomically upgrade the exact released layouts 25–29. */
 export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
@@ -271,6 +280,22 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
   return yield* makeSqlTransaction(sql, { begin: "BEGIN IMMEDIATE" })(
     Effect.gen(function* () {
       const header = yield* inspectStorage(true);
+
+      if (header !== undefined && header.layoutVersion < CurrentSqliteStorageVersion)
+        yield* assertLegacyMessagePublicationDrained().pipe(
+          Effect.mapError((cause) =>
+            cause.reason === "conflict"
+              ? incompatible(
+                  header.layoutVersion,
+                  "Recover work discovery and drain peer, report and update publication using the previous library version before upgrading.",
+                )
+              : SqliteStorageError.make({
+                  operation: cause.operation,
+                  message: cause.message,
+                  cause,
+                }),
+          ),
+        );
 
       if (header?.layoutVersion === 25) {
         yield* sql`ALTER TABLE effect_agent_message_deliveries ADD COLUMN peer_retained_until_millis INTEGER`;
@@ -313,7 +338,15 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
         if (header.layoutVersion <= 27) yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
         // Retire only the derived generic snapshot cache. This step preserves the exact
         // canonical and operational bytes; earlier layout conversions remain independent.
-        yield* sql`DROP TABLE effect_agent_checkpoints`;
+        if (header.layoutVersion < 29) yield* sql`DROP TABLE effect_agent_checkpoints`;
+        yield* sql`DROP INDEX IF EXISTS effect_agent_records_delivery_predecessor`;
+        yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_message`;
+        yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_peer`;
+        yield* createSqlThreadWorkTables().pipe(
+          Effect.mapError((cause) =>
+            SqliteStorageError.make({ operation: cause.operation, message: cause.message, cause }),
+          ),
+        );
         yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentSqliteStorageVersion} WHERE singleton=1`;
         yield* sql.unsafe(`PRAGMA user_version = ${CurrentSqliteStorageVersion}`).withoutTransform;
 

@@ -1,6 +1,7 @@
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Result from "effect/Result";
@@ -19,7 +20,7 @@ import {
   PreparedInputRetryReason,
   PreparedInput,
 } from "./PreparedInputAdmission.ts";
-import { Digest } from "./Records.ts";
+import { Digest, type RecordEnvelope } from "./Records.ts";
 import { ScheduleInstant, ScheduleRetry } from "./Schedule.ts";
 import { IdempotencyKey, Settlement } from "./SubmissionLedger.ts";
 
@@ -444,6 +445,61 @@ export const prepareMessageDelivery = Effect.fnUntraced(function* (options: {
     },
     "prepare",
   );
+});
+
+/**
+ * Derive source-owned outbox rows from privately captured canonical records. Native adapters
+ * publish these rows, their due indexes and the source records in one transaction. The v1
+ * record contract uses the default delivery policy; replay retains the existing row's progress.
+ */
+export const prepareCanonicalMessageDeliveries = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  records: ReadonlyArray<RecordEnvelope>,
+): Effect.fn.Return<ReadonlyArray<MessageDeliveryRecord>, MessageDeliveryError, Crypto.Crypto> {
+  const deliveries: Array<MessageDeliveryRecord> = [];
+
+  for (const record of records) {
+    const payload = record.payload;
+
+    const frozen =
+      payload._tag === "PeerMessagePrepared"
+        ? {
+            messageId: payload.messageId,
+            envelope: payload.encodedEnvelope,
+            createdAtMillis: DateTime.toEpochMillis(record.createdAt),
+            deadlineAtMillis: payload.deadlineAtMillis,
+          }
+        : payload._tag === "WorkerReportPrepared"
+          ? payload
+          : payload._tag === "AgentUpdateEmitted"
+            ? payload.delivery
+            : undefined;
+
+    if (frozen === undefined) continue;
+    if (
+      (payload._tag === "PeerMessagePrepared" && payload.source.threadId !== threadId) ||
+      (payload._tag === "AgentUpdateEmitted" && payload.update.threadId !== threadId)
+    )
+      return yield* error("validation", "canonical delivery owner");
+
+    const envelope = yield* Schema.decodeUnknownEffect(PreparedInput)(frozen.envelope).pipe(
+      Effect.mapError((cause) => error("validation", "canonical delivery envelope", cause)),
+    );
+
+    deliveries.push(
+      yield* prepareMessageDelivery({
+        key: { ownerThreadId: threadId, messageId: frozen.messageId },
+        envelope,
+        createdAtMillis: frozen.createdAtMillis,
+        deadlineAtMillis: frozen.deadlineAtMillis,
+        ...("predecessor" in frozen && frozen.predecessor !== undefined
+          ? { predecessor: frozen.predecessor }
+          : {}),
+      }),
+    );
+  }
+
+  return deliveries;
 });
 
 /** Pure reducer used under the adapter's atomic compare-and-swap boundary. */

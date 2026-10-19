@@ -23,7 +23,7 @@ import { runIdForSubmission } from "./RunJournal.ts";
 import type { SubmissionWorkItem } from "./SubmissionLedger.ts";
 import { ThreadReader, ThreadStore, ThreadStoreError } from "./ThreadStore.ts";
 
-export const WORK_INDEX_VERSION = 3;
+export const WORK_INDEX_VERSION = 4;
 export const MAX_WORK_PAGE_ENTRIES = 128;
 export const MAX_WORK_ENTRY_BYTES = 8 * 1024;
 export const MAX_WORK_PAGE_BYTES = MAX_WORK_PAGE_ENTRIES * MAX_WORK_ENTRY_BYTES;
@@ -58,15 +58,7 @@ export const WorkOwner = Schema.Union([
   Schema.Struct({
     _tag: Schema.Literal("Handoff"),
     recordId: RecordId,
-    kind: Schema.Literals([
-      "peer",
-      "report",
-      "update",
-      "worker-stop",
-      "reservation",
-      "child-accounting",
-    ]),
-    messageId: Schema.optionalKey(IdempotencyKey),
+    kind: Schema.Literals(["worker-stop", "reservation", "child-accounting"]),
     childThreadId: Schema.optionalKey(ThreadId),
   }),
 ]);
@@ -492,8 +484,8 @@ export type WorkIndexChange =
 
 /**
  * Fold only canonical creation, factual closure, and durable handoff evidence. Storage commits
- * these changes with the source batch. Rebuild folds the same rules in sequence order; it may
- * suppress a delivery handoff only after its authoritative delivery row exists.
+ * these changes with the source batch. Peer/report/update delivery work belongs directly to
+ * the outbox rows published in that transaction.
  */
 export const workIndexChanges = Effect.fnUntraced(function* (
   envelope: CanonicalRecordEnvelope,
@@ -519,8 +511,6 @@ export const workIndexChanges = Effect.fnUntraced(function* (
       "SubmissionSettled",
       "WorkerReportPrepared",
       "WorkerReportRefused",
-      "PeerMessagePrepared",
-      "AgentUpdateEmitted",
       "WorkerStopRequested",
       "SubtreeBudgetReserved",
       "WorkHandoffCompleted",
@@ -567,7 +557,6 @@ export const workIndexChanges = Effect.fnUntraced(function* (
 
   const handoff = (
     kind: Extract<WorkOwner, { _tag: "Handoff" }>["kind"],
-    messageId?: IdempotencyKey,
     childThreadId?: ThreadId,
   ) =>
     put(
@@ -576,7 +565,6 @@ export const workIndexChanges = Effect.fnUntraced(function* (
         _tag: "Handoff",
         recordId: record.recordId,
         kind,
-        ...(messageId === undefined ? {} : { messageId }),
         ...(childThreadId === undefined ? {} : { childThreadId }),
       },
       "handoff",
@@ -681,15 +669,11 @@ export const workIndexChanges = Effect.fnUntraced(function* (
               : []),
           ];
     case "WorkerReportPrepared":
-      return [remove("report", payload.runId), handoff("report", payload.messageId)];
+      return [remove("report", payload.runId)];
     case "WorkerReportRefused":
       return [remove("report", payload.runId)];
-    case "PeerMessagePrepared":
-      return [handoff("peer", payload.messageId)];
-    case "AgentUpdateEmitted":
-      return payload.delivery === undefined ? [] : [handoff("update", payload.delivery.messageId)];
     case "WorkerStopRequested":
-      return [handoff("worker-stop", undefined, payload.command.worker.threadId)];
+      return [handoff("worker-stop", payload.command.worker.threadId)];
     case "SubtreeBudgetReserved":
       return [
         put(

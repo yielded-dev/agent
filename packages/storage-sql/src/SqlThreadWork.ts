@@ -81,11 +81,6 @@ export const createSqlThreadWorkTables = Effect.fnUntraced(function* (namespace?
     execute,
     Effect.mapError((cause) => failure("create work entries", cause)),
   );
-  yield* sql`CREATE INDEX IF NOT EXISTS effect_agent_work_entries_message
-    ON ${table("effect_agent_work_entries")} (thread_id, message_id) WHERE message_id IS NOT NULL`.pipe(
-    execute,
-    Effect.mapError((cause) => failure("create work lookup", cause)),
-  );
   yield* sql`CREATE INDEX IF NOT EXISTS effect_agent_work_entries_worker
     ON ${table("effect_agent_work_entries")} (thread_id, worker_thread_id, created_sequence) WHERE worker_thread_id IS NOT NULL`.pipe(
     execute,
@@ -101,13 +96,8 @@ export const createSqlThreadWorkTables = Effect.fnUntraced(function* (namespace?
     execute,
     Effect.mapError((cause) => failure("create exact worker capacity lookup", cause)),
   );
-  yield* sql`CREATE INDEX IF NOT EXISTS effect_agent_work_entries_peer
-    ON ${table("effect_agent_work_entries")} (thread_id, message_id) WHERE handoff_kind = 'peer'`.pipe(
-    execute,
-    Effect.mapError((cause) => failure("create peer lookup", cause)),
-  );
   yield* sql`CREATE INDEX IF NOT EXISTS effect_agent_records_delivery_predecessor
-    ON ${table("effect_agent_canonical_records")} (thread_id, record_tag, sequence) WHERE handoff = 1`.pipe(
+    ON ${table("effect_agent_canonical_records")} (thread_id, record_tag, sequence) WHERE message_id IS NOT NULL`.pipe(
     execute,
     Effect.mapError((cause) => failure("create delivery predecessor lookup", cause)),
   );
@@ -362,12 +352,11 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
         )).length > 0;
 
       if (!existed) delta++;
-      const messageId = entry.owner._tag === "Handoff" ? entry.owner.messageId : undefined;
       const worker = entry.owner._tag === "WorkerInput" ? entry.owner : undefined;
       const handoff = entry.owner._tag === "Handoff" ? entry.owner.kind : null;
 
       yield* query(sql`INSERT INTO ${table("effect_agent_work_entries")} (thread_id, id, message_id, entry_json, created_sequence, owner_tag, worker_thread_id, worker_update, handoff_kind)
-        VALUES (${threadId}, ${entry.id}, ${messageId === undefined ? null : JSON.stringify(messageId)}, ${encoded}, ${entry.createdSequence}, ${entry.owner._tag}, ${worker === undefined ? null : JSON.stringify(worker.workerThreadId)}, ${worker === undefined ? null : worker.update ? 1 : 0}, ${handoff})
+        VALUES (${threadId}, ${entry.id}, NULL, ${encoded}, ${entry.createdSequence}, ${entry.owner._tag}, ${worker === undefined ? null : JSON.stringify(worker.workerThreadId)}, ${worker === undefined ? null : worker.update ? 1 : 0}, ${handoff})
         ON CONFLICT (thread_id, id) DO UPDATE SET message_id=excluded.message_id, entry_json=excluded.entry_json,
           created_sequence=excluded.created_sequence, owner_tag=excluded.owner_tag, worker_thread_id=excluded.worker_thread_id, worker_update=excluded.worker_update, handoff_kind=excluded.handoff_kind`);
     }
@@ -462,16 +451,6 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
         continue;
       }
 
-      const messageId =
-        change.entry.owner._tag === "Handoff" ? change.entry.owner.messageId : undefined;
-
-      if (messageId !== undefined) {
-        const rows = yield* query(
-          sql`SELECT 1 FROM ${table("effect_agent_message_deliveries")} WHERE owner_thread_id=${threadId} AND message_id=${messageId}`,
-        );
-
-        if (rows.length > 0) continue;
-      }
       const previous = yield* pendingEntry(threadId, change.entry.id, writes, initiallyEmpty);
       const entry = advanceWorkEntry(previous, change.entry);
 
@@ -512,8 +491,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   /** Only a new owner may be initialized; nullable created_at is not a materialized Thread. */
   const initialize = Effect.fnUntraced(function* (threadId: ThreadId) {
     if (!(yield* present())) return;
-    yield* query(sql`INSERT INTO ${table("effect_agent_threads")} (thread_id, created_at, tail_sequence)
-      VALUES (${threadId}, NULL, 0) ON CONFLICT(thread_id) DO NOTHING`);
+    yield* query(sql`INSERT INTO ${table("effect_agent_threads")} (thread_id, created_at, tail_sequence, work_version)
+      VALUES (${threadId}, NULL, 0, ${WORK_INDEX_VERSION}) ON CONFLICT(thread_id) DO NOTHING`);
   });
 
   /** Activation is exceptional; two indexed scalar seeks seed a populated Worker once. */
@@ -673,11 +652,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     };
   });
 
-  /** Source insert hook, including deduplication; seed only an absent, unmaterialized owner. */
-  const transferDelivery = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-    messageId: IdempotencyKey,
-  ) {
+  /** Delivery-only owners participate in discovery before their Thread is materialized. */
+  const initializeDeliveryOwner = Effect.fnUntraced(function* (threadId: ThreadId) {
     const current = yield* header(threadId);
 
     if (current === undefined) {
@@ -689,26 +665,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
         OR EXISTS (SELECT 1 FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId})`);
 
       if (retained.length === 0) yield* initialize(threadId);
-
-      return;
     }
-
-    const removed = yield* query(
-      sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND message_id=${JSON.stringify(messageId)} RETURNING id`,
-    );
-
-    if (removed.length > 0)
-      yield* saveHeader(
-        threadId,
-        headerFields(
-          current.through_sequence,
-          workerReportingMode(current.reporting),
-          current.state,
-          current.entry_count - removed.length,
-          current.worker_input_sequence,
-          current.worker_settlement_sequence,
-        ),
-      );
   });
 
   /** Explicit maintenance only: bounded canonical hydration and exact sparse-key membership. */
@@ -1191,7 +1148,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     storage,
     initialize,
     apply,
-    transferDelivery,
+    initializeDeliveryOwner,
     invalidate,
     verifyPointers,
   };

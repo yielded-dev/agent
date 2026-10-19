@@ -14,7 +14,11 @@ import { readRunContext, validateContextBoundary } from "./internal/run-context.
 import { ThreadImportReader } from "./internal/thread-import-reader.ts";
 import { ImportSourcePhase } from "./internal/thread-transfer-source.ts";
 import { toolOperationStates } from "./internal/tool-operations.ts";
-import { MessageDeliveryRecord } from "./MessageDelivery.ts";
+import {
+  MessageDeliveryRecord,
+  prepareCanonicalMessageDeliveries,
+  sameMessageDeliveryIdentity,
+} from "./MessageDelivery.ts";
 import { decodeExportRecord } from "./RecordFormat.ts";
 import {
   CanonicalBatch,
@@ -157,6 +161,17 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
   const reader = yield* ThreadImportReader;
   const resolve = reader.record;
   const payload = entry.record.payload;
+
+  const deliveries = yield* prepareCanonicalMessageDeliveries(entry.threadId, [entry.record]).pipe(
+    Effect.mapError(() => invalid("Invalid canonical delivery", entry.threadId)),
+  );
+
+  for (const expected of deliveries) {
+    const retained = yield* reader.delivery(expected.key.messageId);
+
+    if (retained === undefined || !sameMessageDeliveryIdentity(retained, expected))
+      return yield* invalid("Canonical delivery has no matching outbox row", entry.threadId);
+  }
 
   if (payload._tag === "WorkHandoffCompleted") {
     const preparation = yield* resolve(payload.preparationId);

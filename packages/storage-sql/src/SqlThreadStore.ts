@@ -1,5 +1,6 @@
 import { utf8ByteLength, digestCanonicalJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
+import { prepareCanonicalMessageDeliveries } from "@yielded/agent/message-delivery";
 import { decodeExportRecordJson } from "@yielded/agent/record-format";
 import {
   CanonicalRecordEnvelope,
@@ -110,6 +111,11 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
   );
 
+  const deliveries = yield* prepareCanonicalMessageDeliveries(
+    captured.threadId,
+    records.map(({ canonical }) => canonical),
+  ).pipe(Effect.mapError(invalid("prepare canonical deliveries")));
+
   const executionWrites = captured.executionWrites;
 
   const factsJson = `[${executionWrites
@@ -130,6 +136,7 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     batchBytes: captured.batchBytes,
     expectedTailSequence: captured.expectedTailSequence,
     records,
+    deliveries,
     progress: captured.progress,
     executionWrites,
     commitDigest,
@@ -146,6 +153,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const OFFSET_PREFIX = options.offsetPrefix;
   const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
   const isAppendConflict = Schema.is(AppendConflict);
+  const isThreadStoreError = Schema.is(ThreadStoreError);
 
   const decodeThreadId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.threadId);
   const decodeBatchId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.batchId);
@@ -268,7 +276,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
         .withProgress(rawRequest.threadId, commit(rawRequest))
         .pipe(
           Effect.mapError((error) => {
-            if (isAppendConflict(error)) return error;
+            if (isAppendConflict(error) || isThreadStoreError(error)) return error;
 
             return storeError("append canonical batch", error);
           }),
