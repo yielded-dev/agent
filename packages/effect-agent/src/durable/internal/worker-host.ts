@@ -1993,9 +1993,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     }
     // The decision and its outbox row are already committed together. The outbox's own
     // due index survives both child and source settlement, including Object eviction.
-    yield* hit("worker:before-report-delivery", "inspect");
-    yield* deps.deliveries.value.insert(prepared).pipe(Effect.mapError(storageFailure("inspect")));
-    yield* hit("worker:after-report-delivery", "inspect");
   });
 
   const completeInput = Effect.fnUntraced(function* (submission: SubmissionSnapshot) {
