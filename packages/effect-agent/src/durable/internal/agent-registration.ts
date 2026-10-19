@@ -462,7 +462,8 @@ export const DurableWorkerBinding = {
   ): Effect.Effect<
     ResolvedBinding,
     never,
-    DurableWorkerRequirements<A> | Exclude<R, Scope.Scope>
+    // Infer report services from descriptors, not an enclosing Effect collection's context.
+    DurableWorkerRequirements<A> | Exclude<NoInfer<R>, Scope.Scope>
   > =>
     Effect.gen(function* () {
       const binding = yield* capture(agent, (execute) => execute);
