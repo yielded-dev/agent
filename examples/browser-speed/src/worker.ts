@@ -1,5 +1,6 @@
+import { authenticateDurableObjectRequest } from "@yielded/agent-example-auth/cloudflare";
 import {
-  authenticateRequest,
+  Authentication,
   hostedModelAccess,
   type AuthEnvironment,
 } from "@yielded/agent-example-auth/server";
@@ -15,7 +16,8 @@ import * as DoThreadStore from "@yielded/agent-storage-cloudflare/do-thread-stor
 import * as PersistentHistory from "@yielded/agent/persistent-history";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { DurableObject } from "cloudflare:workers";
-import { Context, Effect, Layer, Redacted, Schema, Struct } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Redacted, Schema, Struct } from "effect";
+import { DurableObjectState as EffectDurableObjectState } from "effect-cf";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
@@ -58,28 +60,49 @@ export class HostedAccounts extends Context.Service<
   }
 >()("browser-speed/HostedAccounts") {
   static readonly layer = (env: Env) =>
-    Layer.succeed(HostedAccounts, {
-      read: Effect.fnUntraced(
-        function* (request: Request) {
-          const session = yield* authenticateRequest(request, env);
+    Layer.effect(
+      HostedAccounts,
+      Effect.gen(function* () {
+        const authentication = yield* Authentication;
+        const state = yield* EffectDurableObjectState.DurableObjectState;
 
-          const funded =
-            session.scopes.some((scope) => scope === env.AUTH_HOSTED_MODEL_SCOPE) &&
-            (yield* hostedModelAccess(session.accountId, env));
+        return {
+          read: Effect.fnUntraced(
+            function* (request: Request) {
+              const session = yield* authenticateDurableObjectRequest(request).pipe(
+                Effect.provideService(Authentication, authentication),
+                Effect.provideService(EffectDurableObjectState.DurableObjectState, state),
+              );
 
-          return { displayName: session.displayName, funded } satisfies Account;
-        },
-        Effect.catch(() => Effect.succeed(null)),
-      ),
-    });
+              const funded =
+                session.scopes.some((scope) => scope === env.AUTH_HOSTED_MODEL_SCOPE) &&
+                (yield* hostedModelAccess(session.accountId, env));
+
+              return { displayName: session.displayName, funded } satisfies Account;
+            },
+            Effect.catch(() => Effect.succeed(null)),
+          ),
+        };
+      }),
+    );
 }
 
 export class BrowserLab extends DurableObject<Env> {
   private readonly owner;
   private readonly traces;
+  private readonly authentication;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.authentication = ManagedRuntime.make(
+      Layer.merge(
+        Authentication.layer(env),
+        Layer.succeed(
+          EffectDurableObjectState.DurableObjectState,
+          EffectDurableObjectState.fromDurableObjectState(ctx),
+        ),
+      ),
+    );
     const hit = (location: string) => this.failpoint(location);
 
     ctx.storage.sql.exec(
@@ -335,10 +358,23 @@ export class BrowserLab extends DurableObject<Env> {
       Layer.provide(HttpServer.layerServices),
     );
 
-    return Effect.runPromise(
+    return this.authentication.runPromise(
       Effect.gen(function* () {
+        const authentication = yield* Authentication;
+        const state = yield* EffectDurableObjectState.DurableObjectState;
+
         const web = yield* Effect.acquireRelease(
-          Effect.sync(() => HttpRouter.toWebHandler(routes, { disableLogger: true })),
+          Effect.sync(() =>
+            HttpRouter.toWebHandler(
+              routes.pipe(
+                Layer.provide([
+                  Layer.succeed(Authentication, authentication),
+                  Layer.succeed(EffectDurableObjectState.DurableObjectState, state),
+                ]),
+              ),
+              { disableLogger: true },
+            ),
+          ),
           (value) => Effect.promise(() => value.dispose()),
         );
 

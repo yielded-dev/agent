@@ -1,6 +1,6 @@
 import type { Sandbox } from "@cloudflare/sandbox";
 import start from "@tanstack/react-start/server-entry";
-import type { AuthEnvironment } from "@yielded/agent-example-auth/server";
+import { Authentication, type AuthEnvironment } from "@yielded/agent-example-auth/server";
 import { Effect, Layer, Schema } from "effect";
 import { CloudflareTracer, Worker, WorkerEnvironment } from "effect-cf";
 
@@ -253,21 +253,19 @@ export const handleRequest = (verify = authenticate) =>
     return yield* Effect.promise(async () => start.fetch(pageRequest));
   });
 
+const authentication = Layer.unwrap(Effect.map(WorkerEnvironment, Authentication.layer));
+
 // Test fixtures may substitute session verification; production always uses authenticate.
-export const makeWorker = (verify = authenticate) => ({
-  fetch: (request: Request, env: Cloudflare.Env, ctx?: ExecutionContext) =>
-    Effect.runPromise(
-      handleRequest(verify)(request, env, ctx).pipe(Effect.provideService(WorkerEnvironment, env)),
-    ),
-});
+export const makeWorker = (verify = authenticate) =>
+  Worker.makeFetchHandler(authentication, {
+    eventLayer: CloudflareTracer.layer,
+    fetch: Effect.gen(function* () {
+      const request = yield* Worker.NativeRequest;
+      const env = yield* WorkerEnvironment;
+      const ctx = yield* Worker.ExecutionContext;
 
-export default Worker.make(Layer.empty, {
-  eventLayer: CloudflareTracer.layer,
-  fetch: Effect.gen(function* () {
-    const request = yield* Worker.NativeRequest;
-    const env = yield* WorkerEnvironment;
-    const ctx = yield* Worker.ExecutionContext;
+      return yield* handleRequest(verify)(request, env, ctx);
+    }),
+  });
 
-    return yield* handleRequest()(request, env, ctx);
-  }),
-});
+export default makeWorker();
