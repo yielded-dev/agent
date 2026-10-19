@@ -3971,6 +3971,7 @@ const nextContextEstimate = Effect.fnUntraced(function* (
   view: ReadonlyArray<Prompt.Message>,
   systemMessagesInHistory: boolean,
   staticInstructions: Prompt.RawInput | undefined,
+  messageTokenEstimator: ContextMessageTokenEstimator | undefined,
 ) {
   const state = context.compaction;
 
@@ -3982,7 +3983,7 @@ const nextContextEstimate = Effect.fnUntraced(function* (
     return (
       context.lastInputTokens +
       context.lastOutputTokens +
-      (yield* estimateContextTokens(view.slice(state.lastViewLength)))
+      (yield* estimateContextTokens(view.slice(state.lastViewLength), messageTokenEstimator))
     );
   }
 
@@ -3993,6 +3994,7 @@ const nextContextEstimate = Effect.fnUntraced(function* (
       systemMessagesInHistory,
       staticInstructions,
     ).content,
+    messageTokenEstimator,
   );
 });
 
@@ -5639,6 +5641,11 @@ const makeTurn = <
 
       context.windowContextTokenLimit = contextTokenLimit;
       const toolSchemaTransformer = modelContext.modelCall?.toolSchemaTransformer;
+      const compactor = yield* ContextCompactor;
+
+      const configuredMessageEstimate =
+        modelContext.modelCall?.estimateMessageTokens ?? compactor.estimateMessageTokens;
+
       // Estimates belong to this prepared prompt. Rebuild the cache after every context
       // preparation so caller-owned message identities never carry counts into another turn.
       const messageTokenEstimates = new WeakMap<Prompt.Message, number>();
@@ -5647,18 +5654,17 @@ const makeTurn = <
         const cached = messageTokenEstimates.get(message);
 
         if (cached !== undefined) return cached;
-        const tokens = estimateMessageTokens(message);
+        const tokens = configuredMessageEstimate?.(message) ?? estimateMessageTokens(message);
 
         messageTokenEstimates.set(message, tokens);
 
         return tokens;
       };
 
-      const compactor = yield* ContextCompactor;
-
       const messageTokenEstimator =
-        modelContext.modelCall?.estimateMessageTokens ??
-        (compactor.estimate === estimatePromptTokens ? estimatePreparedMessage : undefined);
+        configuredMessageEstimate !== undefined || compactor.estimate === estimatePromptTokens
+          ? estimatePreparedMessage
+          : undefined;
 
       const visibility = yield* RunToolVisibility;
 
@@ -5953,7 +5959,13 @@ const makeTurn = <
       // canonical indices still locate appended content and compaction coverage.
       const estimateSourceContext = (view: ReadonlyArray<Prompt.Message>) =>
         options.context === undefined && options.transientContext === undefined
-          ? nextContextEstimate(context, view, systemMessagesInHistory, staticInstructions)
+          ? nextContextEstimate(
+              context,
+              view,
+              systemMessagesInHistory,
+              staticInstructions,
+              messageTokenEstimator,
+            )
           : estimateCallTokens(
               prepareModelPrompt(
                 Prompt.fromMessages(view),
@@ -6491,7 +6503,10 @@ const makeTurn = <
                 const trackContext =
                   contextTokenLimit === undefined && policy.tokenBudget === undefined
                     ? Effect.sync(() => {
-                        context.windowTokens = () => compactor.estimate(providerPrompt.content);
+                        context.windowTokens = () =>
+                          messageTokenEstimator === undefined
+                            ? compactor.estimate(providerPrompt.content)
+                            : estimatePromptTokens(providerPrompt.content, estimatePreparedMessage);
                       })
                     : estimateCallTokens(providerPrompt.content).pipe(
                         Effect.map((tokens) => tokens + toolSchemaTokens),

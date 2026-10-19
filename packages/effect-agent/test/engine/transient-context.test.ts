@@ -86,6 +86,68 @@ class TransientContextDependency extends Context.Service<
 >()("@effect-agent/engine/test/TransientContextDependency") {}
 
 layer(testLayer)("transient model context", (it) => {
+  // Regression: fcf63d5d8be7a0b363f13e99d09e1647a88bad27 added transient PNG screenshots.
+  it.effect("uses image reservations while retaining native text admission", () =>
+    Effect.gen(function* () {
+      const requests: Array<Prompt.Prompt> = [];
+
+      const image = Prompt.filePart({
+        mediaType: "image/png",
+        data: new Uint8Array(256 * 1024),
+      });
+
+      const compactor = yield* ContextCompactor;
+
+      const imageCompactor = {
+        ...compactor,
+        estimateMessageTokens: (message: Prompt.Message) =>
+          message.role === "user" && message.content.some((part) => part.type === "file")
+            ? 1_000
+            : undefined,
+      };
+
+      const result = yield* AgentRuntime.run(makeAgent(requests, 2_000), "Describe the image.", {
+        transientContext: {
+          load: () => Effect.succeed(Prompt.make([Prompt.userMessage({ content: [image] })])),
+        },
+      }).pipe(Effect.provideService(ContextCompactor, imageCompactor));
+
+      expect(result.output).toBe("done");
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.content).toContainEqual(Prompt.userMessage({ content: [image] }));
+
+      const sourceAgent = Agent.withModel(
+        Agent.make("source-image", {
+          input: Schema.String,
+          output: Schema.String,
+          instructions: "Describe the image.",
+          inputPrompt: () => Prompt.make([Prompt.userMessage({ content: [image] })]),
+          toolkit: Toolkit.empty,
+          policy: { maxTurns: 1, maxToolCalls: 1, contextTokenLimit: 2_000 },
+        }),
+        makeModel(requests),
+      );
+
+      const sourceResult = yield* AgentRuntime.run(sourceAgent, "image").pipe(
+        Effect.provideService(ContextCompactor, imageCompactor),
+      );
+
+      expect(sourceResult.output).toBe("done");
+      expect(requests).toHaveLength(2);
+      expect(requests[1]?.content).toContainEqual(Prompt.userMessage({ content: [image] }));
+
+      const oversizedText = yield* AgentRuntime.run(makeAgent(requests, 2_000), "Read the text.", {
+        transientContext: { load: () => Effect.succeed(Prompt.make("text ".repeat(2_000))) },
+      }).pipe(Effect.provideService(ContextCompactor, imageCompactor), Effect.result);
+
+      expect(oversizedText._tag).toBe("Failure");
+      if (oversizedText._tag === "Failure") {
+        expect(oversizedText.failure._tag).toBe("ContextBudgetError");
+      }
+      expect(requests).toHaveLength(2);
+    }),
+  );
+
   it.effect("reuses one transient snapshot for a same-Turn overflow retry", () =>
     Effect.gen(function* () {
       const requests: Array<Prompt.Prompt> = [];

@@ -94,7 +94,14 @@ export interface CompactionRequest<E, R> {
 }
 
 export interface ContextCompaction {
-  /** Non-negative finite integer estimate, used for admission and derived prompt overhead too. */
+  /**
+   * Optional per-message accounting, shared by admission and built-in compaction. Undefined
+   * results use native structural estimates. Counts are cached within each prepared prompt;
+   * the callback must be deterministic for copied content. A resolved Model's estimator takes
+   * precedence. When configured, this replaces aggregate estimate for the interpreter.
+   */
+  readonly estimateMessageTokens?: ContextMessageTokenEstimator | undefined;
+  /** Non-negative finite integer aggregate estimate when per-message accounting is not configured. */
   readonly estimate: (messages: ReadonlyArray<Prompt.Message>) => number;
   /** Emit decisions sequentially; the consumer commits each before pulling the next. */
   readonly compact: <E, R>(

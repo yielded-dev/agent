@@ -99,6 +99,10 @@ loader then adds current references for each Turn. These references consume cont
 stay outside canonical history and summary coverage. A same-Turn overflow retry reuses the loaded
 snapshot.
 
+A custom `ContextCompactor` can supply `estimateMessageTokens` for image or provider-specific
+accounting. Return a full message estimate, or `undefined` for the native text estimate. Counts
+are cached within each prepared prompt; estimating content does not change what the model sees.
+
 Use the Agent's `inputPrompt` to choose model-visible input. Preparation must preserve protected
 input and already-compacted prefixes; it cannot safely rewrite those boundaries. For dynamic
 model routing, return `modelCall` with capacity and output-reserve information matching the selected
