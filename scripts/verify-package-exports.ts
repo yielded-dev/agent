@@ -517,14 +517,20 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
               continue;
             }
 
+            // This pure byte-header parser has no platform I/O or framework dependencies.
+            const imageHeaderParser =
+              file === "packages/effect-agent/src/engine/internal/image-tokens.ts" &&
+              specifier === "image-dimensions";
+
             if (
               allowedLayers !== undefined &&
               specifier !== "effect" &&
-              !specifier.startsWith("effect/")
+              !specifier.startsWith("effect/") &&
+              !imageHeaderParser
             )
               report(
                 file,
-                `${layer} must use relative framework imports or platform-neutral Effect modules: ${specifier}`,
+                `${layer} must use relative framework imports or approved platform-neutral dependencies: ${specifier}`,
               );
 
             if (

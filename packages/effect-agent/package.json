@@ -144,6 +144,9 @@
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vp test --passWithNoTests"
   },
+  "dependencies": {
+    "image-dimensions": "catalog:"
+  },
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",

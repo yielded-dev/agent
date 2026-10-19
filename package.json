@@ -138,6 +138,7 @@
     "vite-plus": "1.1.0",
     "vitest": "5.0.3",
     "wrangler": "4.123.0",
+    "image-dimensions": "2.6.0",
     "isomorphic-git": "1.41.9",
     "memfs": "4.71.0",
     "@alchemy.run/cloudflare-runtime": "2.0.0-beta.80",

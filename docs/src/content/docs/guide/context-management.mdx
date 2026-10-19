@@ -64,6 +64,11 @@ These numbers are workload choices, not provider defaults. `contextTokenLimit` b
 `tokenBudget` counts cumulative input and output. `completionReserveTokens` leaves cumulative
 budget for finishing. It is separate from a model's per-call output allowance.
 
+Image `FilePart`s are counted automatically from image dimensions when available, with a fixed
+reservation for remote or unreadable images. Bytes, base64, and data URLs are image transport,
+not prompt text. These are context estimates; provider usage is authoritative. A resolved model's
+`estimateMessageTokens` can refine them. Estimation never changes the images sent to the model.
+
 A context limit does **not** bound process memory. Current durable recovery reconstructs the
 Run's original saved history range to verify context consistency, even after later compaction.
 Configure compaction before a Thread becomes large; enabling it later can still require a large
