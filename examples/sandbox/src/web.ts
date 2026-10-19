@@ -5,7 +5,6 @@ import {
   browserQuickActionCaptureLayer,
   browserQuickActionScreenshotLayer,
 } from "@yielded/agent-platform-cloudflare/cloudflare-browser";
-import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { DurableStep, ToolExecutionClass } from "@yielded/agent/durable-step";
 import { PageCaptureTargetUrl, PageUrlTarget, PageViewport } from "@yielded/agent/page-capture";
 import {
@@ -21,28 +20,6 @@ import { Prompt, Tool, Toolkit } from "effect/ai";
 import { ScreenshotEvidence, ScreenshotId, screenshotKey } from "./contract.ts";
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-
-// The hosted models charge image patches, not the PNG's encoded byte length.
-// Auto/original detail preserves dimensions up to the provider's 65,535px limit.
-const screenshotTokens = (data: Uint8Array): number | undefined => {
-  if (data.byteLength < 33) return undefined;
-  const header = new DataView(data.buffer, data.byteOffset, data.byteLength);
-
-  if (
-    header.getUint32(0) !== 0x89504e47 ||
-    header.getUint32(4) !== 0x0d0a1a0a ||
-    header.getUint32(8) !== 13 ||
-    header.getUint32(12) !== 0x49484452
-  )
-    return undefined;
-  const width = header.getUint32(16);
-  const height = header.getUint32(20);
-
-  if (width === 0 || height === 0) return undefined;
-  const scale = Math.min(1, 65_535 / Math.max(width, height));
-
-  return Math.ceil(Math.ceil((width * scale) / 32) * Math.ceil((height * scale) / 32) * 1.2);
-};
 
 const ScreenshotMetadata = Schema.fromJsonString(
   Schema.Struct({
@@ -104,37 +81,6 @@ export const webLive = Layer.unwrap(
   Effect.gen(function* () {
     const env = yield* WorkerEnvironment;
     const { threadId } = yield* ThreadObjectIdentity;
-    const compactor = yield* ContextCompactor;
-
-    const imageAccounting = Layer.succeed(ContextCompactor, {
-      ...compactor,
-      estimateMessageTokens: (message) => {
-        if (message.role !== "user") return undefined;
-        let imageTokens = 0;
-        let content: Array<Prompt.UserMessagePart> | undefined;
-
-        for (const [index, part] of message.content.entries()) {
-          if (
-            part.type !== "file" ||
-            part.mediaType !== "image/png" ||
-            !(part.data instanceof Uint8Array)
-          )
-            continue;
-          const tokens = screenshotTokens(part.data);
-
-          if (tokens === undefined) continue;
-          imageTokens += tokens;
-          content ??= [...message.content];
-          content[index] = Prompt.filePart({ ...part, data: "" });
-        }
-
-        if (content === undefined) return undefined;
-
-        // Only the estimate sees this projection. Pixels reach the model unchanged;
-        // canonical compaction still operates on the small screenshot receipts.
-        return compactor.estimate([Prompt.userMessage({ ...message, content })]) + imageTokens;
-      },
-    });
 
     const screenshotHandlers = screenshots.toLayer(
       Effect.gen(function* () {
@@ -279,13 +225,7 @@ export const webLive = Layer.unwrap(
       },
     });
 
-    return Layer.mergeAll(
-      readPage.handlers,
-      scrapePage.handlers,
-      screenshotHandlers,
-      context,
-      imageAccounting,
-    ).pipe(
+    return Layer.mergeAll(readPage.handlers, scrapePage.handlers, screenshotHandlers, context).pipe(
       Layer.provide(
         Layer.merge(browserQuickActionCaptureLayer(), browserQuickActionScreenshotLayer()),
       ),

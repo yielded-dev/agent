@@ -3,6 +3,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import type { ContextMessageTokenEstimator } from "../ContextCompactor.ts";
+import { estimateImageTokens } from "./image-tokens.ts";
 import { boundedCanonicalJsonSnapshot } from "./provider-result-staging.ts";
 
 /**
@@ -100,20 +101,39 @@ const utf8Length = (text: string): number => {
 };
 
 /**
- * Deterministic UTF-8 bytes/4 token estimate over one message's structural JSON.
- * Conservative for prose, slightly generous for dense JSON — the estimate
- * only gates WHEN to compact, never what is preserved.
+ * Deterministic context estimate: UTF-8 bytes/4 for text and structural JSON,
+ * plus image reservations based on dimensions when available. Image encodings
+ * are transport, not text tokens. This never changes the model-visible message.
  */
 export const estimateMessageTokens = (message: Prompt.Message): number => {
   let text: string | undefined;
+  let imageTokens = 0;
 
   try {
-    text = JSON.stringify(message);
+    let projected: unknown = message;
+
+    if (message.role === "user" || message.role === "assistant") {
+      let content: Array<Prompt.AssistantMessagePart> | undefined;
+
+      for (const [index, part] of message.content.entries()) {
+        if (part.type !== "file" || !part.mediaType.startsWith("image/")) continue;
+        imageTokens += estimateImageTokens(part);
+        content ??= [...message.content];
+        content[index] = { ...part, data: "" };
+      }
+
+      if (content !== undefined) projected = { ...message, content };
+    }
+
+    text = JSON.stringify(projected);
   } catch {
     text = undefined;
   }
 
-  return text === undefined ? 0 : Math.ceil(utf8Length(text) / 4);
+  return Math.min(
+    Number.MAX_SAFE_INTEGER,
+    imageTokens + (text === undefined ? 0 : Math.ceil(utf8Length(text) / 4)),
+  );
 };
 
 /** Sum of `estimateMessageTokens` over a message array. */
@@ -124,7 +144,7 @@ export const estimatePromptTokens = (
   let total = 0;
 
   for (const message of messages) {
-    total += estimate(message);
+    total = Math.min(Number.MAX_SAFE_INTEGER, total + estimate(message));
   }
 
   return total;
