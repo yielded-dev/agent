@@ -324,6 +324,7 @@ export const workspace = Atom.family((id: string) => {
   const revision = Atom.make(0);
   const commandRevision = Atom.make(0);
   const savedFromServer = Atom.make<typeof SavedFiles.Type | undefined>(undefined);
+  const starting = Atom.make(false);
 
   const files = runtime
     .atom((get) => {
@@ -574,6 +575,11 @@ export const workspace = Atom.family((id: string) => {
           Stream.runForEach((page) =>
             Effect.sync(() => {
               if ("_tag" in page) {
+                if (page.starting !== undefined) {
+                  get.set(starting, page.starting);
+
+                  return;
+                }
                 get.set(savedFromServer, page.saved);
                 get.set(commandRevision, get.once(commandRevision) + 1);
 
@@ -783,6 +789,7 @@ export const workspace = Atom.family((id: string) => {
                   () => Effect.void,
                 ),
               );
+              get.set(starting, false);
               get.set(state, {
                 ...get.once(state),
                 historyReady: false,
@@ -1080,6 +1087,7 @@ export const workspace = Atom.family((id: string) => {
     directory,
     selectedFile,
     files,
+    starting,
     saved,
     expired,
     file,

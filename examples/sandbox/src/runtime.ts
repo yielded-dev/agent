@@ -245,6 +245,7 @@ export class CodingThread extends ThreadObject.make(application, {
       Effect.gen(function* () {
         const commands = yield* ShellCommands;
         const snapshots = yield* WorkspaceSnapshots;
+        const workspace = yield* Workspace;
 
         const lifetime = new CommandEventsLifetime();
 
@@ -257,11 +258,23 @@ export class CodingThread extends ThreadObject.make(application, {
               Schema.Struct({ commands: Schema.Array(ShellCommand), saved: SavedFiles }),
             ),
           ),
-          Stream.mapEffect(({ saved }) =>
-            Schema.encodeEffect(Schema.fromJsonString(WorkspaceEvent))({
-              _tag: "CommandHistoryChanged",
-              saved,
-            }),
+          Stream.map(({ saved }) => ({
+            _tag: "CommandHistoryChanged" as const,
+            saved,
+          })),
+          Stream.merge(
+            workspace.starting.pipe(
+              Stream.map(
+                (starting) =>
+                  ({
+                    _tag: "CommandHistoryChanged",
+                    starting,
+                  }) as const,
+              ),
+            ),
+          ),
+          Stream.mapEffect((event) =>
+            Schema.encodeEffect(Schema.fromJsonString(WorkspaceEvent))(event),
           ),
           Stream.map((changed) => `${changed}\n`),
           Stream.encodeText,
