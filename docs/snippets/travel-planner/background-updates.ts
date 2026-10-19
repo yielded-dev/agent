@@ -26,8 +26,8 @@ export const HotelResearcher = Agent.make("hotel-researcher", {
   policy: { maxTurns: 6, maxToolCalls: 4, maxDuration: "2 minutes" },
 });
 
-export const hotels = Subagent.background(HotelResearcher, {
-  start: true,
-  followUp: true,
-  reportToParent: true,
-});
+const Hotels = Subagent.make("hotel-researcher", { target: HotelResearcher });
+
+export const StartHotels = Subagent.startTool(Hotels);
+export const FollowUpHotels = Subagent.followUpTool(Hotels);
+export const HotelReporting = Subagent.reporting(Hotels);

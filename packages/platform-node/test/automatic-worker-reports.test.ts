@@ -76,18 +76,16 @@ it.effect(
 
         const declaration = Subagent.make("research", { target: child.definition });
 
-        const background = Subagent.background(declaration, {
-          start: true,
-          followUp: true,
-          reportToParent: true,
-        });
+        const start = Subagent.startTool(declaration);
+        const followUp = Subagent.followUpTool(declaration);
+        const reporting = Subagent.reporting(declaration);
 
         const parent = Agent.withModel(
           Agent.make("successor-report-parent", {
             input,
             output,
             instructions: "Coordinate",
-            toolkit: background.toolkit,
+            toolkit: Toolkit.make(start.tool, followUp.tool),
             policy: {
               maxTurns: 10,
               maxToolCalls: 10,
@@ -103,6 +101,7 @@ it.effect(
             [
               {
                 agent: parent,
+                reporting: [reporting],
                 definitions: DefinitionDigestInput.make({
                   agent: "parent",
                   model: "v1",
@@ -120,7 +119,7 @@ it.effect(
               producerId: "node",
             },
           ).pipe(
-            Layer.provide(background.layer),
+            Layer.provide([start.layer, followUp.layer]),
             Layer.provide(
               Layer.succeed(WorkerHostAuthorizer)({
                 authorize: (request) => {

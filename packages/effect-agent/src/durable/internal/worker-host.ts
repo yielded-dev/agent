@@ -9,13 +9,19 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import { resolveSubagentPolicy } from "../../capabilities/internal/subagent-policy.ts";
 import type * as Agent from "../../core/Agent.ts";
 import { AgentPolicy } from "../../core/AgentPolicy.ts";
 import { Update, UpdateError } from "../../core/AgentUpdates.ts";
 import { ThreadId, type AgentId, type SubmissionId } from "../../core/Identifiers.ts";
 import { MessageRef, type MessageStatus } from "../../core/Messaging.ts";
 import { IdempotencyKey, Receipt } from "../../core/Receipt.ts";
-import { SubagentDelegationCaps, SubagentGrant } from "../../core/SubagentContract.ts";
+import {
+  SubagentBudgetReservation,
+  SubagentDelegationCaps,
+  SubagentGrant,
+  SubagentPolicy,
+} from "../../core/SubagentContract.ts";
 import {
   type WorkerSummary,
   type WorkerStarted,
@@ -274,11 +280,6 @@ export class WorkerInputControl extends Context.Service<
     readonly abort: (command: AbortCommand) => Effect.Effect<AbortIntent, DurableAbortFailure>;
   }
 >()("@effect-agent/thread/internal/WorkerInputControl") {}
-
-const CurrentStartPreparation = Context.Reference<WorkerStartAdmission | undefined>(
-  "@effect-agent/thread/internal/CurrentStartPreparation",
-  { defaultValue: () => undefined },
-);
 
 const CurrentStartDelivery = Context.Reference<
   | {
@@ -2009,9 +2010,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
     // Until this insertion commits the child ledger stays nonterminal. Afterwards its independent
     // due index survives both child and source settlement, including Object eviction.
-    yield* hit("worker:before-report-delivery", "inspect");
-    yield* deps.deliveries.value.insert(prepared).pipe(Effect.mapError(storageFailure("inspect")));
-    yield* hit("worker:after-report-delivery", "inspect");
   });
 
   const completeInput = Effect.fnUntraced(function* (submission: SubmissionSnapshot) {
@@ -3118,35 +3116,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           policy: Option.getOrElse(source.policyOverride, () => context.policy),
         };
       }),
-      resolveTargetPolicy: Effect.fnUntraced(function* (request) {
-        const previous =
-          request.continuationOf === undefined
-            ? undefined
-            : yield* completedContinuation(
-                context.source,
-                request.continuationOf,
-                request.target.id,
-                request.continuationOf.delegationId,
-              );
-
-        const admission = yield* currentStart(
-          yield* CurrentStartPreparation,
-          context.source.threadId,
-          sourceSubmissionId,
-          principal,
-          request.target.id,
-          previous?.evidence,
-        );
-
-        yield* authorize("start", "send", undefined, previous?.evidence, admission);
-
-        return (yield* preparedTarget(
-          request.target,
-          request.encodedInput,
-          previous?.evidence,
-          admission,
-        )).policy;
-      }),
       start: Effect.fnUntraced(function* <E = never, R = never>(
         command: StartWorkerRequest | DeferredStartWorkerRequest<E, R>,
       ): Effect.fn.Return<WorkerStarted, WorkerError | E, R> {
@@ -3277,15 +3246,8 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         if (existing !== null) return yield* replay(existing);
 
         return yield* Effect.gen(function* () {
-          const request =
-            "prepare" in command
-              ? {
-                  ...(yield* command
-                    .prepare(effectiveScope)
-                    .pipe(Effect.provideService(CurrentStartPreparation, startAdmission))),
-                  ...command,
-                }
-              : command;
+          const encodedInput =
+            "prepare" in command ? (yield* command.prepare).encodedInput : command.encodedInput;
 
           const currentPrevious =
             command.continuationOf === undefined
@@ -3298,20 +3260,28 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                   previous?.evidence,
                 );
 
-          if (currentPrevious !== undefined) {
+          if ("prepare" in command || currentPrevious !== undefined) {
             const preparedPrincipal = yield* authorize(
               "start",
               "send",
               undefined,
-              currentPrevious.evidence,
+              currentPrevious?.evidence,
+              yield* currentStart(
+                startAdmission,
+                context.source.threadId,
+                sourceSubmissionId,
+                principal,
+                command.target.id,
+                currentPrevious?.evidence,
+              ),
             );
 
             if (preparedPrincipal !== principal) return yield* failure("start", "denied");
           }
 
           const prepared = yield* preparedTarget(
-            request.target,
-            request.encodedInput,
+            command.target,
+            encodedInput,
             currentPrevious?.evidence,
             startAdmission,
           );
@@ -3322,6 +3292,47 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             prepared.source.policyOverride,
             () => context.policy,
           );
+
+          const targetPolicy = Option.getOrElse(prepared.policy, () =>
+            effectiveScope === "worker-run"
+              ? resolved.definition.policy
+              : AgentPolicy.resolve(
+                  resolved.definition.policyOverrides ?? resolved.definition.policy,
+                  sourcePolicy,
+                ),
+          );
+
+          const request: StartWorkerRequest =
+            "prepare" in command
+              ? yield* Effect.gen(function* () {
+                  const declarationPolicy =
+                    command.declarationPolicy === undefined
+                      ? undefined
+                      : yield* decode(SubagentPolicy, command.declarationPolicy, "start");
+
+                  const limits = resolveSubagentPolicy(
+                    { target: resolved.definition, policy: declarationPolicy },
+                    effectiveScope === "worker-run" ? targetPolicy : sourcePolicy,
+                    undefined,
+                    effectiveScope === "worker-run" ? "root-attached" : "conserved",
+                    targetPolicy,
+                  );
+
+                  return {
+                    ...command,
+                    encodedInput,
+                    policy: limits.childPolicy,
+                    budget: SubagentBudgetReservation.make({
+                      caps: limits.caps,
+                      allocation: limits.allocation,
+                      ...(limits.policy.descendantInvocations === undefined
+                        ? {}
+                        : { descendantInvocations: limits.policy.descendantInvocations }),
+                    }),
+                    toolCallAllowance: limits.childPolicy.maxToolCalls,
+                  };
+                })
+              : command;
 
           const now = yield* Clock.currentTimeMillis;
           const sourceBinding = prepared.source.binding;
@@ -3387,15 +3398,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
               currentPrevious?.evidence,
             ),
           );
-
-          const targetPolicy = Option.isSome(prepared.policy)
-            ? prepared.policy.value
-            : origin.budgetScope === "worker-run"
-              ? resolved.definition.policy
-              : AgentPolicy.resolve(
-                  resolved.definition.policyOverrides ?? resolved.definition.policy,
-                  sourcePolicy,
-                );
 
           if (
             !withinPolicy(

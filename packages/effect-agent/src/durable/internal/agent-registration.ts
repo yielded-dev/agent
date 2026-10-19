@@ -29,11 +29,7 @@ import { type RuntimeBinding } from "../../engine/AgentRuntime.ts";
 import { ContextRolloverTool } from "../../engine/ContextWindow.ts";
 import { getToolExecutionClass } from "../../engine/DurableStep.ts";
 import { withAttempt as withProvisionalTextAttempt } from "../../engine/internal/provisional-text.ts";
-import {
-  BackgroundReporting,
-  WorkerReportPreparationFailure,
-  type WorkerReporting,
-} from "../../engine/SubagentHost.ts";
+import { WorkerReportPreparationFailure, type WorkerReporting } from "../../engine/SubagentHost.ts";
 import { digestDefinitions, digestJson, DigestError } from "../Digest.ts";
 import type { DurableWorkerFailure, DurableWorkerRequirements } from "../DurableAgentRuntime.ts";
 import type { DefinitionDigestInput, Digest, PersistedJson } from "../Records.ts";
@@ -391,16 +387,6 @@ const captureReporting = <E, R>(reports: ReadonlyArray<WorkerReporting<E, R>>) =
       })),
   );
 
-const backgroundReports = (definition: Agent.AnyDefinition) => [
-  ...new Set(
-    Object.values(definition.toolkit.tools).flatMap((tool) => {
-      const report = Context.get(tool.annotations, BackgroundReporting);
-
-      return report === undefined ? [] : [report];
-    }),
-  ),
-];
-
 /** One exact executable registration used by durable claim-time resolution. */
 export interface ResolvedBinding extends CapturedBinding {
   readonly digests: DefinitionDigests;
@@ -469,13 +455,18 @@ const captureWithAttemptLayer = <A extends ExecutableAgentBinding, Provides, Req
  * may supply a previously computed digest triple directly.
  */
 export const DurableWorkerBinding = {
-  make: <A extends ExecutableAgentBinding>(
+  make: <A extends ExecutableAgentBinding, E = never, R = never>(
     agent: A,
     digests: DefinitionDigests,
-  ): Effect.Effect<ResolvedBinding, never, DurableWorkerRequirements<A>> =>
+    reports: ReadonlyArray<WorkerReporting<E, R>> = [],
+  ): Effect.Effect<
+    ResolvedBinding,
+    never,
+    DurableWorkerRequirements<A> | Exclude<R, Scope.Scope>
+  > =>
     Effect.gen(function* () {
       const binding = yield* capture(agent, (execute) => execute);
-      const reporting = yield* captureReporting(backgroundReports(agent.definition));
+      const reporting = yield* captureReporting(reports);
 
       return { ...binding, digests, reporting };
     }),
@@ -540,6 +531,8 @@ export type AgentRegistration<A extends ExecutableAgentBinding = ExecutableAgent
       readonly definitions: DefinitionDigestInput;
     }
 ) & {
+  /** Parent-owned completion/update projections; services are captured independently of attempts. */
+  readonly reporting?: ReadonlyArray<WorkerReporting<unknown, unknown>>;
   /** Explicit operation versions let unchanged unfinished handlers survive toolbox changes. */
   readonly continuity?: {
     readonly versions: ReplayVersions;
@@ -574,11 +567,18 @@ type AttemptLayerRequirements<Requirements, AttemptLayer> = AttemptLayer extends
 // Conditional options retain every service they may consume. An absent attempt Layer
 // still needs the original worker services; only a definite Layer can remove them.
 type EntryRequirements<Entry> = Entry extends unknown
-  ? AttemptLayerRequirements<
-      EntryWorkerRequirements<Entry>,
-      "attemptLayer" extends keyof Entry ? Entry["attemptLayer"] : undefined
-    >
+  ?
+      | ReportingRequirements<"reporting" extends keyof Entry ? Entry["reporting"] : undefined>
+      | AttemptLayerRequirements<
+          EntryWorkerRequirements<Entry>,
+          "attemptLayer" extends keyof Entry ? Entry["attemptLayer"] : undefined
+        >
   : never;
+
+type ReportingRequirements<Reports> =
+  Reports extends ReadonlyArray<WorkerReporting<infer _E, infer R>>
+    ? Exclude<R, Scope.Scope>
+    : never;
 
 type RegistrationRequirements<Entries extends ReadonlyArray<AgentRegistration>> = EntryRequirements<
   Entries[number]
@@ -586,7 +586,7 @@ type RegistrationRequirements<Entries extends ReadonlyArray<AgentRegistration>> 
 
 const registrationDefinitions = (entry: AgentRegistration): DefinitionDigestInput => {
   const definition = entry.model === undefined ? entry.agent.definition : entry.agent;
-  const automatic = backgroundReports(definition);
+  const reports = entry.reporting ?? [];
 
   const declaredDefinitions =
     definition.updates === undefined
@@ -603,13 +603,13 @@ const registrationDefinitions = (entry: AgentRegistration): DefinitionDigestInpu
         };
 
   const definitions =
-    automatic.length === 0
+    reports.length === 0
       ? declaredDefinitions
       : {
           ...declaredDefinitions,
           agent: {
             declaration: declaredDefinitions.agent,
-            backgroundReporting: automatic.map((report) => ({
+            backgroundReporting: reports.map((report) => ({
               delegationId: report.delegationId,
               targetAgentId: report.target.id,
               mode: "standard",
@@ -684,7 +684,9 @@ function compileRegistration(entry: AgentRegistration) {
             // @effect-diagnostics-next-line anyUnknownInErrorContext:off
             captureWithAttemptLayer(agent, entry.attemptLayer);
 
-        const reporting = yield* captureReporting(backgroundReports(binding.definition));
+        // The descriptor erases projection services; EntryRequirements retains them for callers.
+        // @effect-diagnostics-next-line anyUnknownInErrorContext:off
+        const reporting = yield* captureReporting(entry.reporting ?? []);
 
         return {
           ...binding,

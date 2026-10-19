@@ -1,18 +1,14 @@
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import type * as Brand from "effect/Brand";
-import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
 import type { AnyDefinition } from "../../core/Agent.ts";
-import type { Update } from "../../core/AgentUpdates.ts";
 import * as FailureDiagnostic from "../../core/FailureDiagnostic.ts";
 import { RunId, SettlementId, ThreadId } from "../../core/Identifiers.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
@@ -21,7 +17,6 @@ import { IdempotencyKey, JoinedToHost, Receipt } from "../../core/Receipt.ts";
 import {
   BackgroundSpawnTool,
   narrowSubagentGrant,
-  SubagentBudgetReservation,
   SubagentGrant,
 } from "../../core/SubagentContract.ts";
 import {
@@ -36,20 +31,13 @@ import {
   WorkerStopped,
   WorkerSummary,
 } from "../../core/Worker.ts";
-import {
-  SubagentHost,
-  BackgroundReporting,
-  WorkerReportPreparationFailure,
-  type WorkerReporting,
-} from "../../engine/SubagentHost.ts";
+import { SubagentHost } from "../../engine/SubagentHost.ts";
 import type { SubagentDefineOptions, SubagentPrepareContext } from "../Subagent.ts";
 import {
   SubagentExecutionFailure,
   SubagentPrestartDenied,
   SubagentProjectionFailure,
 } from "./subagent-contract.ts";
-import { resolveSubagentPolicy } from "./subagent-policy.ts";
-import { automaticReporting } from "./subagent-reporting.ts";
 import { utf8Bytes } from "./utf8.ts";
 
 export type Declaration<
@@ -311,42 +299,8 @@ const operations = <
       encodedGrant,
       ...(options.continuationOf === undefined ? {} : { continuationOf: options.continuationOf }),
       ...(options.budgetScope === undefined ? {} : { budgetScope: options.budgetScope }),
-      prepare: Effect.fnUntraced(function* (budgetScope) {
-        const encodedInput = yield* prepare(parameters, caller);
-
-        const effectiveTarget = yield* service.resolveTargetPolicy({
-          target: declaration.target,
-          encodedInput,
-          ...(options.continuationOf === undefined
-            ? {}
-            : { continuationOf: options.continuationOf }),
-        });
-
-        const resolvedTarget = Option.getOrUndefined(effectiveTarget);
-
-        const resolved = resolveSubagentPolicy(
-          declaration,
-          budgetScope === "worker-run"
-            ? (resolvedTarget ?? declaration.target.policy)
-            : caller.policy,
-          undefined,
-          budgetScope === "worker-run" ? "root-attached" : "conserved",
-          resolvedTarget,
-        );
-
-        return {
-          encodedInput,
-          policy: resolved.childPolicy,
-          budget: SubagentBudgetReservation.make({
-            caps: resolved.caps,
-            allocation: resolved.allocation,
-            ...(resolved.policy.descendantInvocations === undefined
-              ? {}
-              : { descendantInvocations: resolved.policy.descendantInvocations }),
-          }),
-          toolCallAllowance: resolved.childPolicy.maxToolCalls,
-        };
-      }),
+      ...(declaration.policy === undefined ? {} : { declarationPolicy: declaration.policy }),
+      prepare: Effect.map(prepare(parameters, caller), (encodedInput) => ({ encodedInput })),
     });
 
     const validated = yield* Schema.decodeEffect(WorkerStarted)(started).pipe(
@@ -837,45 +791,10 @@ export const cancel = <
 ) => operations(declaration).cancel(worker, receipt);
 
 /** Opt in to each model-facing operation. Waiting remains programmatic only. */
-export interface BackgroundOptions {
-  /** Deliver standard completion and progress messages to the parent. */
-  readonly reportToParent?: true;
-  /**
-   * With reportToParent, select which canonical updates also notify the parent. Defaults to all.
-   * This pure predicate receives the encoded update; decode value with the child's update Schema.
-   * False retains the update for observers without starting a parent Run. Completion is unaffected.
-   * The first accepted emission freezes the decision; replay does not reevaluate it.
-   */
-  readonly reportUpdate?: (update: Update) => boolean;
-  /**
-   * With reportToParent, select which settled Runs notify the parent before result projection.
-   * The pure predicate sees canonical encoded output and outcome. False retains a filtered
-   * report decision without parent delivery; later Runs and explicit updates are independent.
-   * Recovery reuses a committed decision, but may reevaluate before that decision commits.
-   */
-  readonly reportCompletion?: WorkerReporting["reportCompletion"];
-  readonly start?: true;
-  readonly followUp?: true;
-  readonly inspect?: true;
-  readonly summary?: true;
-  readonly list?: true;
-  readonly cancel?: true;
-  /** Author-owned funding request for starts; every native admission separately authorizes it. */
+export interface StartToolOptions {
+  /** Author-owned funding request; every native admission separately authorizes it. */
   readonly budgetScope?: WorkerBudgetScope;
 }
-
-type Operation = Exclude<
-  keyof BackgroundOptions,
-  "budgetScope" | "reportToParent" | "reportUpdate" | "reportCompletion"
->;
-type Suffix = {
-  start: "start";
-  followUp: "follow_up";
-  inspect: "inspect";
-  summary: "summary";
-  list: "list";
-  cancel: "cancel";
-};
 
 const ReceiptParameters = <Name extends string>(declaration: WorkerDeclaration<Name>) =>
   Schema.Struct({ worker: Worker(declaration), receipt: Receipt });
@@ -907,7 +826,7 @@ const Summary = <Name extends string>(declaration: WorkerDeclaration<Name>) =>
 const FollowUpParameters = <Name extends string, Parameters extends Schema.Top>(
   declaration: WorkerDeclaration<Name>,
   parameters: Parameters,
-) => Schema.Struct({ worker: Worker(declaration), parameters });
+) => Schema.Struct({ worker: Worker(declaration), parameters: Schema.Union([parameters]) });
 
 const ListParameters = Schema.Struct({
   limit: Schema.optionalKey(
@@ -926,13 +845,7 @@ const Started = <Name extends string>(declaration: WorkerDeclaration<Name>) =>
 
 const Page = <Name extends string>(declaration: WorkerDeclaration<Name>) =>
   Schema.Struct({
-    items: Schema.Array(
-      Schema.Struct({
-        worker: Worker(declaration),
-        latestReceipt: Schema.NullOr(Receipt),
-        state: Schema.Literals(["starting", "active", "idle"]),
-      }),
-    ).check(Schema.isMaxLength(100)),
+    items: Schema.Array(Summary(declaration)).check(Schema.isMaxLength(100)),
     next: Schema.NullOr(ThreadId),
   });
 
@@ -943,98 +856,6 @@ const startFailure = <Failure extends Schema.Top>(failure: Failure) =>
   Schema.Union([failure, SubagentProjectionFailure, SubagentPrestartDenied, WorkerError]);
 
 const cancelFailure = Schema.Union([WorkerError, JoinedToHost]);
-
-type ToolSchemas<
-  Name extends string,
-  Parameters extends Schema.Top,
-  Success extends Schema.Top,
-  Failure extends Schema.Top,
-> = {
-  start: {
-    parameters: Parameters;
-    success: ReturnType<typeof Started<Name>>;
-    failure: ReturnType<typeof startFailure<Failure>>;
-  };
-  followUp: {
-    parameters: ReturnType<typeof FollowUpParameters<Name, Parameters>>;
-    success: typeof MessageStatus;
-    failure: ReturnType<typeof preparationFailure<Failure>>;
-  };
-  inspect: {
-    parameters: ReturnType<typeof InspectParameters<Name>>;
-    success: ReturnType<typeof Inspection<Success>>;
-    failure: ReturnType<typeof preparationFailure<Failure>>;
-  };
-  summary: {
-    parameters: ReturnType<typeof WorkerParameters<Name>>;
-    success: ReturnType<typeof Summary<Name>>;
-    failure: typeof WorkerError;
-  };
-  list: {
-    parameters: typeof ListParameters;
-    success: ReturnType<typeof Page<Name>>;
-    failure: typeof WorkerError;
-  };
-  cancel: {
-    parameters: ReturnType<typeof ReceiptParameters<Name>>;
-    success: typeof Schema.Void;
-    failure: typeof cancelFailure;
-  };
-};
-
-type BackgroundToolMap<
-  Name extends string,
-  Parameters extends Schema.Top,
-  Success extends Schema.Top,
-  Failure extends Schema.Top,
-> = {
-  start: Tool.Tool<
-    `${Name}_start`,
-    ToolSchemas<Name, Parameters, Success, Failure>["start"] & { readonly failureMode: "error" },
-    SubagentHost | Crypto.Crypto
-  >;
-  followUp: Tool.Tool<
-    `${Name}_follow_up`,
-    ToolSchemas<Name, Parameters, Success, Failure>["followUp"] & { readonly failureMode: "error" },
-    SubagentHost | Crypto.Crypto
-  >;
-  inspect: Tool.Tool<
-    `${Name}_inspect`,
-    ToolSchemas<Name, Parameters, Success, Failure>["inspect"] & { readonly failureMode: "error" },
-    SubagentHost
-  >;
-  summary: Tool.Tool<
-    `${Name}_summary`,
-    ToolSchemas<Name, Parameters, Success, Failure>["summary"] & { readonly failureMode: "error" },
-    SubagentHost
-  >;
-  list: Tool.Tool<
-    `${Name}_list`,
-    ToolSchemas<Name, Parameters, Success, Failure>["list"] & { readonly failureMode: "error" },
-    SubagentHost
-  >;
-  cancel: Tool.Tool<
-    `${Name}_cancel`,
-    ToolSchemas<Name, Parameters, Success, Failure>["cancel"] & { readonly failureMode: "error" },
-    SubagentHost
-  >;
-};
-
-/**
- * Native Tool names and schemas expose statically guaranteed selections. The handler Layer also
- * requires services for operations whose conditional flags may enable them at runtime.
- */
-export type BackgroundTools<
-  Name extends string,
-  Parameters extends Schema.Top,
-  Success extends Schema.Top,
-  Failure extends Schema.Top,
-  Selected extends BackgroundOptions,
-> = {
-  readonly [
-    Op in Operation as Selected[Op] extends true ? `${Name}_${Suffix[Op]}` : never
-  ]: BackgroundToolMap<Name, Parameters, Success, Failure>[Op];
-};
 
 const modelKey = Effect.fnUntraced(function* (operation: "start" | "followUp") {
   const service = yield* host;
@@ -1065,31 +886,31 @@ const modelKey = Effect.fnUntraced(function* (operation: "start" | "followUp") {
   );
 });
 
-type SelectionServices<Flag, Requirements> = Flag extends true ? Requirements : never;
+/** Pair one native Tool with its checked handler, retaining invocation service requirements. */
+const action = <T extends Tool.Any, R>(
+  tool: T,
+  build: Effect.Effect<
+    (
+      parameters: Tool.Parameters<T>,
+    ) => Effect.Effect<Tool.Success<T>, Tool.Failure<T>, Tool.HandlerServices<T>>,
+    never,
+    R
+  >,
+) => {
+  const toolkit = Toolkit.make(tool);
 
-// Conditional flags retain services for either possible runtime branch. Disabled operations
-// never run the capture effect and cannot install a handler that consumes those services.
-const captureSelected = <Flag extends true | undefined>(flag: Flag) => {
-  function capture<A, R>(
-    effect: Effect.Effect<A, never, R>,
-  ): Effect.Effect<Option.Option<A>, never, SelectionServices<Flag, R>>;
-  function capture<A, R>(effect: Effect.Effect<A, never, R>) {
-    return flag === true ? Effect.map(effect, Option.some) : Effect.succeedNone;
-  }
+  const layer = toolkit.toLayer(
+    Effect.map(build, (handler) => {
+      // The handler is checked above; only the computed single-tool name needs this bridge.
+      return { [tool.name]: handler } as Toolkit.HandlersFrom<typeof toolkit.tools>;
+    }),
+  );
 
-  return capture;
+  return Object.freeze({ tool, layer });
 };
 
-// Construction-local service keys distinguish projections for co-registered parent versions.
-// These keys are never persisted; worker/run identity and registration digests remain canonical.
-let reportingServiceId = 0;
-
-/**
- * Derive optional native AI Tools and their handler Layer from one immutable declaration.
- * Projection services are captured by the Layer; the host and stable-key Crypto service remain
- * invocation dependencies. The attached `.tool` and its suspension behavior are unchanged.
- */
-export const background = <
+/** Retain new worker input under the current Tool Call's stable identity. */
+export const startTool = <
   const Name extends string,
   Input extends Schema.Top,
   Output extends Schema.Top,
@@ -1098,39 +919,11 @@ export const background = <
   Failure extends Schema.Top,
   Prepare,
   Project,
-  const Selected extends BackgroundOptions,
 >(
   declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
-  selected: Selected,
+  options: StartToolOptions = {},
 ) => {
-  const report = selected.reportToParent === true ? automaticReporting(declaration) : undefined;
-
-  const reportService = Context.Service<WorkerReporting<WorkerReportPreparationFailure>>(
-    `@effect-agent/capabilities/BackgroundReport/${declaration.name}/${reportingServiceId++}`,
-  );
-
-  const descriptor: WorkerReporting<WorkerReportPreparationFailure> | undefined =
-    report === undefined
-      ? undefined
-      : {
-          ...report,
-          ...(selected.reportUpdate === undefined ? {} : { reportUpdate: selected.reportUpdate }),
-          ...(selected.reportCompletion === undefined
-            ? {}
-            : { reportCompletion: selected.reportCompletion }),
-          prepare: (value) =>
-            Effect.flatMap(Effect.serviceOption(reportService), (service) =>
-              Option.isSome(service)
-                ? service.value.prepare(value)
-                : WorkerReportPreparationFailure.make({ stage: "preparation" }),
-            ),
-        };
-
-  const ops = operations(declaration);
-  const failure = preparationFailure(declaration.failure);
-  const receiptParameters = ReceiptParameters(declaration);
-
-  const startTool = Tool.make(`${declaration.name}_start` as const, {
+  const tool = Tool.make(`${declaration.name}_start` as const, {
     description: `Retain input for a background ${declaration.name} worker and return its delivery state. Pending confirms retention only; inspect the same message instead of starting another worker.`,
     parameters: declaration.parameters,
     success: Started(declaration),
@@ -1141,26 +934,147 @@ export const background = <
     .addDependency(SubagentHost)
     .addDependency(Crypto.Crypto);
 
-  const followUpTool = Tool.make(`${declaration.name}_follow_up` as const, {
+  const ops = operations(declaration);
+
+  return action(
+    tool,
+    Effect.map(
+      Effect.context<Prepare | Parameters["EncodingServices"] | Input["EncodingServices"]>(),
+      (captured) => (parameters: Parameters["Type"]) =>
+        Effect.gen(function* () {
+          const service = yield* host;
+          const idempotencyKey = yield* modelKey("start");
+
+          return yield* ops
+            .start(parameters, { ...options, idempotencyKey })
+            .pipe(Effect.provideService(SubagentHost, service), Effect.provide(captured));
+        }),
+    ),
+  );
+};
+
+/** Retain follow-up input for an existing worker under the current Tool Call's identity. */
+export const followUpTool = <
+  const Name extends string,
+  Input extends Schema.Top,
+  Output extends Schema.Top,
+  Parameters extends Schema.Top,
+  Success extends Schema.Top,
+  Failure extends Schema.Top,
+  Prepare,
+  Project,
+>(
+  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+) => {
+  const tool = Tool.make(`${declaration.name}_follow_up` as const, {
     description: `Retain typed follow-up input for an existing ${declaration.name} worker. Pending is retained, not executed: inspect the same message instead of sending the command again.`,
     parameters: FollowUpParameters(declaration, declaration.parameters),
     success: MessageStatus,
-    failure,
+    failure: preparationFailure(declaration.failure),
   })
     .annotate(WorkerOperationTool, true)
     .addDependency(SubagentHost)
     .addDependency(Crypto.Crypto);
 
-  const inspectTool = Tool.make(`${declaration.name}_inspect` as const, {
+  const ops = operations(declaration);
+
+  return action(
+    tool,
+    Effect.map(
+      Effect.context<Prepare | Parameters["EncodingServices"] | Input["EncodingServices"]>(),
+      (captured) =>
+        (parameters: { readonly worker: Worker<Name>; readonly parameters: Parameters["Type"] }) =>
+          Effect.gen(function* () {
+            const service = yield* host;
+            const idempotencyKey = yield* modelKey("followUp");
+
+            return yield* ops
+              .followUp(parameters.worker, parameters.parameters, { idempotencyKey })
+              .pipe(Effect.provideService(SubagentHost, service), Effect.provide(captured));
+          }),
+    ),
+  );
+};
+
+/** Inspect one delivery or accepted Receipt without resending input. */
+export const inspectTool = <
+  const Name extends string,
+  Input extends Schema.Top,
+  Output extends Schema.Top,
+  Parameters extends Schema.Top,
+  Success extends Schema.Top,
+  Failure extends Schema.Top,
+  Prepare,
+  Project,
+>(
+  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+) => {
+  const tool = Tool.make(`${declaration.name}_inspect` as const, {
     description: `Inspect one ${declaration.name} delivery by message reference, or its execution result by accepted receipt. Provide exactly one reference; inspection never resends input.`,
     parameters: InspectParameters(declaration),
     success: Inspection(declaration.success),
-    failure,
+    failure: preparationFailure(declaration.failure),
   })
     .annotate(WorkerOperationTool, true)
     .addDependency(SubagentHost);
 
-  const summaryTool = Tool.make(`${declaration.name}_summary` as const, {
+  const ops = operations(declaration);
+
+  return action(
+    tool,
+    Effect.map(
+      Effect.context<
+        | Project
+        | Parameters["DecodingServices"]
+        | Output["DecodingServices"]
+        | Success["EncodingServices"]
+      >(),
+      (captured) =>
+        (parameters: {
+          readonly worker: Worker<Name>;
+          readonly message?: MessageRef;
+          readonly receipt?: Receipt;
+        }) =>
+          Effect.gen(function* () {
+            const service = yield* host;
+
+            if (parameters.message !== undefined)
+              return yield* ops.inspectMessage(parameters.worker, parameters.message);
+            if (parameters.receipt === undefined)
+              return yield* WorkerError.make({ operation: "inspect", reason: "message-mismatch" });
+
+            return yield* ops.observe("inspect", parameters.worker, parameters.receipt).pipe(
+              Effect.map((observed) => {
+                if ("diagnostic" in observed) {
+                  const { diagnostic: _diagnostic, ...projected } = observed;
+
+                  return projected;
+                }
+
+                return observed;
+              }),
+              Effect.provideService(SubagentHost, service),
+              Effect.provide(captured),
+            );
+          }),
+    ),
+  );
+};
+
+/** Inspect a continuing worker's state and latest accepted input. */
+export const summaryTool = <
+  const Name extends string,
+  Input extends Schema.Top,
+  Output extends Schema.Top,
+  Parameters extends Schema.Top,
+  Success extends Schema.Top,
+  Failure extends Schema.Top,
+  Prepare,
+  Project,
+>(
+  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+) => {
+  const tool = Tool.make(`${declaration.name}_summary` as const, {
     description: `Inspect ${declaration.name}'s continuing worker state and latest accepted input.`,
     parameters: WorkerParameters(declaration),
     success: Summary(declaration),
@@ -1169,7 +1083,28 @@ export const background = <
     .annotate(WorkerOperationTool, true)
     .addDependency(SubagentHost);
 
-  const listTool = Tool.make(`${declaration.name}_list` as const, {
+  return action(
+    tool,
+    Effect.succeed((parameters: { readonly worker: Worker<Name> }) =>
+      summary(declaration, parameters.worker),
+    ),
+  );
+};
+
+/** List workers visible through the current caller's host facet. */
+export const listTool = <
+  const Name extends string,
+  Input extends Schema.Top,
+  Output extends Schema.Top,
+  Parameters extends Schema.Top,
+  Success extends Schema.Top,
+  Failure extends Schema.Top,
+  Prepare,
+  Project,
+>(
+  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+) => {
+  const tool = Tool.make(`${declaration.name}_list` as const, {
     description: `List visible ${declaration.name} workers.`,
     parameters: ListParameters,
     success: Page(declaration),
@@ -1178,175 +1113,42 @@ export const background = <
     .annotate(WorkerOperationTool, true)
     .addDependency(SubagentHost);
 
-  const cancelTool = Tool.make(`${declaration.name}_cancel` as const, {
+  const ops = operations(declaration);
+
+  return action(
+    tool,
+    Effect.succeed((parameters: typeof ListParameters.Type) => ops.list(parameters)),
+  );
+};
+
+/** Request cancellation of one exact worker Receipt. */
+export const cancelTool = <
+  const Name extends string,
+  Input extends Schema.Top,
+  Output extends Schema.Top,
+  Parameters extends Schema.Top,
+  Success extends Schema.Top,
+  Failure extends Schema.Top,
+  Prepare,
+  Project,
+>(
+  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+) => {
+  const tool = Tool.make(`${declaration.name}_cancel` as const, {
     description: `Request cancellation of one exact ${declaration.name} Receipt.`,
-    parameters: receiptParameters,
+    parameters: ReceiptParameters(declaration),
     success: Schema.Void,
     failure: cancelFailure,
   })
     .annotate(WorkerOperationTool, true)
     .addDependency(SubagentHost);
 
-  const available = {
-    start: startTool,
-    followUp: followUpTool,
-    inspect: inspectTool,
-    summary: summaryTool,
-    list: listTool,
-    cancel: cancelTool,
-  };
+  const ops = operations(declaration);
 
-  const chosen = Object.entries(available)
-    .filter(([operation]) => selected[operation as Operation] === true)
-    .map(([, tool]) => tool.annotate(BackgroundReporting, descriptor));
-
-  type Tools = BackgroundTools<Name, Parameters, Success, Failure, Selected>;
-  // The mapped keys depend on literal selection flags; the runtime filter applies exactly those flags.
-  const toolkit = Toolkit.make(...chosen) as unknown as Toolkit.Toolkit<Tools>;
-
-  type PrepareServices = Prepare | Parameters["EncodingServices"] | Input["EncodingServices"];
-  type ProjectServices =
-    | Project
-    | Parameters["DecodingServices"]
-    | Output["DecodingServices"]
-    | Success["EncodingServices"];
-
-  const build = Effect.gen(function* () {
-    const start = yield* captureSelected<Selected["start"]>(selected.start)(
-      Effect.map(
-        Effect.context<PrepareServices>(),
-        (captured) => (parameters: Parameters["Type"]) =>
-          Effect.gen(function* () {
-            const service = yield* host;
-            const idempotencyKey = yield* modelKey("start");
-
-            return yield* ops
-              .start(parameters, {
-                idempotencyKey,
-                ...(selected.budgetScope === undefined
-                  ? {}
-                  : { budgetScope: selected.budgetScope }),
-              })
-              .pipe(Effect.provideService(SubagentHost, service), Effect.provide(captured));
-          }),
-      ),
-    );
-
-    const followUp = yield* captureSelected<Selected["followUp"]>(selected.followUp)(
-      Effect.map(
-        Effect.context<PrepareServices>(),
-        (captured) =>
-          (parameters: {
-            readonly worker: Worker<Name>;
-            readonly parameters: Parameters["Type"];
-          }) =>
-            Effect.gen(function* () {
-              const service = yield* host;
-              const idempotencyKey = yield* modelKey("followUp");
-
-              return yield* ops
-                .followUp(parameters.worker, parameters.parameters, { idempotencyKey })
-                .pipe(Effect.provideService(SubagentHost, service), Effect.provide(captured));
-            }),
-      ),
-    );
-
-    const inspect = yield* captureSelected<Selected["inspect"]>(selected.inspect)(
-      Effect.map(
-        Effect.context<ProjectServices>(),
-        (captured) =>
-          (parameters: {
-            readonly worker: Worker<Name>;
-            readonly message?: MessageRef;
-            readonly receipt?: Receipt;
-          }) =>
-            Effect.gen(function* () {
-              const service = yield* host;
-
-              if (parameters.message !== undefined)
-                return yield* ops.inspectMessage(parameters.worker, parameters.message);
-              if (parameters.receipt === undefined)
-                return yield* WorkerError.make({
-                  operation: "inspect",
-                  reason: "message-mismatch",
-                });
-
-              return yield* ops.observe("inspect", parameters.worker, parameters.receipt).pipe(
-                Effect.map((observed) => {
-                  if ("diagnostic" in observed) {
-                    const { diagnostic: _diagnostic, ...projected } = observed;
-
-                    return projected;
-                  }
-
-                  return observed;
-                }),
-                Effect.provideService(SubagentHost, service),
-                Effect.provide(captured),
-              );
-            }),
-      ),
-    );
-
-    const handlers = {
-      ...(Option.isSome(start) ? { [startTool.name]: start.value } : {}),
-      ...(Option.isSome(followUp) ? { [followUpTool.name]: followUp.value } : {}),
-      ...(Option.isSome(inspect) ? { [inspectTool.name]: inspect.value } : {}),
-      [listTool.name]: (parameters: typeof ListParameters.Type) => ops.list(parameters),
-      [summaryTool.name]: (parameters: { readonly worker: Worker<Name> }) =>
-        summary(declaration, parameters.worker),
-      [cancelTool.name]: (parameters: {
-        readonly worker: Worker<Name>;
-        readonly receipt: Receipt;
-      }) => ops.cancel(parameters.worker, parameters.receipt),
-    };
-
-    // Each selected handler is paired with its native schema; computed names need this bridge.
-    return handlers as unknown as Toolkit.HandlersFrom<Tools>;
-  });
-
-  type SelectedServices =
-    | SelectionServices<Selected["start"], PrepareServices>
-    | SelectionServices<Selected["followUp"], PrepareServices>
-    | SelectionServices<Selected["inspect"], ProjectServices>
-    | SelectionServices<Selected["reportToParent"], Exclude<ProjectServices, Scope.Scope>>;
-
-  const reportingLayer = Layer.effectContext(
-    Effect.gen(function* () {
-      const capturedReport = yield* captureSelected<Selected["reportToParent"]>(
-        selected.reportToParent,
-      )(
-        Effect.map(
-          Effect.context<Exclude<ProjectServices, Scope.Scope>>(),
-          (context): WorkerReporting<WorkerReportPreparationFailure> => {
-            const reporting = automaticReporting(declaration);
-
-            return {
-              ...reporting,
-              prepare: (value) =>
-                Effect.scoped(Effect.suspend(() => reporting.prepare(value))).pipe(
-                  Effect.provide(context),
-                  Effect.mapError((error) =>
-                    Schema.is(WorkerReportPreparationFailure)(error)
-                      ? error
-                      : WorkerReportPreparationFailure.make({ stage: "preparation" }),
-                  ),
-                ),
-            };
-          },
-        ),
-      );
-
-      return Option.isNone(capturedReport)
-        ? Context.empty()
-        : Context.make(reportService, capturedReport.value);
-    }),
+  return action(
+    tool,
+    Effect.succeed((parameters: { readonly worker: Worker<Name>; readonly receipt: Receipt }) =>
+      ops.cancel(parameters.worker, parameters.receipt),
+    ),
   );
-
-  const layer: Layer.Layer<Tool.HandlersFor<Tools>, never, SelectedServices> = Layer.merge(
-    toolkit.toLayer(build),
-    reportingLayer,
-  );
-
-  return Object.freeze({ tools: toolkit.tools, toolkit, layer });
 };

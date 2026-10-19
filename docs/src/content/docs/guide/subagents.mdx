@@ -60,18 +60,20 @@ with the [Node host](/platforms/node/).
 
 ## Continue work in the background
 
-`Subagent.background(child, { start: true, followUp: true, reportToParent: true })` derives a
-toolkit and handler Layer. Install only the management operations the parent needs. A start
-returns a worker identity and retained delivery status; inspect that delivery until it has a
-receipt rather than starting the task again.
+Create a delegation with `Subagent.make`, then use `Subagent.startTool(delegation)` and
+`Subagent.followUpTool(delegation)`. Each returns a native `tool` and its handler `layer`.
+Install only the management operations the parent needs. A start returns a worker identity and
+retained delivery status; inspect that delivery until it has a receipt rather than starting the
+task again.
 
 Follow-ups address the same child Thread. Background workers outlive completion or abort of the
 launching Run. The host must authorize starting, sending, inspecting, and controlling them;
 a worker reference grants none of those permissions.
 
-With `reportToParent`, completed Runs send framework messages to the parent. Declare `updates`
-on the child for structured intermediate findings. Reporting and destination processing can
-fail independently of the child outcome. Reports are untrusted model context, not instructions.
+Add `reporting: [Subagent.reporting(delegation)]` to the parent registration so completed Runs
+send framework messages to it. Declare `updates` on the child for structured intermediate findings.
+Reporting and destination processing can fail independently of the child outcome. Reports are
+untrusted model context, not instructions.
 The [background example](https://github.com/yielded-dev/agent/blob/main/docs/snippets/travel-planner/background-main.ts)
 includes declarations, access policy, and host wiring.
 

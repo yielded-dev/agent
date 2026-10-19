@@ -1,6 +1,5 @@
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
-import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
@@ -11,7 +10,7 @@ import type * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
 import type { DelegationId, RunId, SettlementId, ThreadId } from "../core/Identifiers.ts";
 import type { MessageRef, MessageStatus } from "../core/Messaging.ts";
 import { type IdempotencyKey, type JoinedToHost, type Receipt } from "../core/Receipt.ts";
-import type { SubagentBudgetReservation } from "../core/SubagentContract.ts";
+import type { SubagentBudgetReservation, SubagentPolicy } from "../core/SubagentContract.ts";
 import {
   WorkerError,
   type WorkerStop,
@@ -62,14 +61,9 @@ export interface DeferredStartWorkerRequest<E = never, R = never> extends Pick<
   | "encodedGrant"
   | "budgetScope"
 > {
-  /** The host resolves funding scope before policy/budget preparation. */
-  readonly prepare: (
-    budgetScope: WorkerBudgetScope,
-  ) => Effect.Effect<
-    Pick<StartWorkerRequest, "encodedInput" | "policy" | "budget" | "toolCallAllowance">,
-    E,
-    R
-  >;
+  /** Declaration ceilings; the host resolves effective policy and reserves the funded budget. */
+  readonly declarationPolicy?: SubagentPolicy;
+  readonly prepare: Effect.Effect<Pick<StartWorkerRequest, "encodedInput">, E, R>;
 }
 
 export interface FollowUpWorkerRequest {
@@ -140,7 +134,7 @@ export class WorkerReportPreparationFailure extends Schema.TaggedError<WorkerRep
 ) {}
 
 /**
- * Source-owned standard projection discovered from background tools.
+ * Source-owned standard projection supplied explicitly at durable registration.
  * The concrete descriptor retains its E/R; durable registration captures R and records
  * bounded preparation failure rather than serializing arbitrary application errors.
  */
@@ -160,11 +154,6 @@ export interface WorkerReporting<E = never, R = never> {
   >;
 }
 
-/** Descriptor carried by background tools; registration discovers it without an app handoff. */
-export const BackgroundReporting = Context.Reference<
-  WorkerReporting<WorkerReportPreparationFailure> | undefined
->("@effect-agent/engine/BackgroundReporting", { defaultValue: () => undefined });
-
 /**
  * Trusted, caller-bound host port. The interpreter supplies a fresh facet for each Tool Call;
  * programmatic callers acquire a separately authorized Thread facet. Request values cannot
@@ -174,12 +163,6 @@ export class SubagentHost extends Context.Service<
   SubagentHost,
   {
     readonly context: Effect.Effect<WorkerContext, WorkerError>;
-    /** Resolve prepared input through host authority; None retains the registered target policy. */
-    readonly resolveTargetPolicy: (request: {
-      readonly continuationOf?: WorkerRef;
-      readonly target: Agent.AnyDefinition;
-      readonly encodedInput: unknown;
-    }) => Effect.Effect<Option.Option<AgentPolicy>, WorkerError>;
     /** Prepared callers retain strict input/policy conflicts; deferred callers replay the saved capture. */
     readonly start: <E = never, R = never>(
       request: StartWorkerRequest | DeferredStartWorkerRequest<E, R>,
@@ -224,7 +207,6 @@ export class SubagentHost extends Context.Service<
 >()("@effect-agent/engine/SubagentHost") {
   static readonly unavailable: SubagentHost["Service"] = {
     context: WorkerError.make({ operation: "context", reason: "unavailable" }),
-    resolveTargetPolicy: () => WorkerError.make({ operation: "start", reason: "unavailable" }),
     start: () => WorkerError.make({ operation: "start", reason: "unavailable" }),
     followUp: () => WorkerError.make({ operation: "followUp", reason: "unavailable" }),
     inspect: () => WorkerError.make({ operation: "inspect", reason: "unavailable" }),

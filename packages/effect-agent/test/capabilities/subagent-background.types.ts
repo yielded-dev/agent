@@ -15,7 +15,7 @@ import * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
 import type * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
-import type * as Layer from "effect/Layer";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as SchemaGetter from "effect/SchemaGetter";
 
@@ -60,7 +60,10 @@ const updateTarget = Agent.make("updating-child", {
   toolkit: Toolkit.empty,
 });
 
-const updateBackground = Subagent.background(updateTarget, { start: true });
+const updateBackground = Subagent.startTool(
+  Subagent.make("updating-child", { target: updateTarget }),
+);
+
 const updateDeclaration = Subagent.make("updating", { target: updateTarget });
 
 const updateLayerProofs = (model: Layer.Layer<Agent.ModelServices>) => {
@@ -79,7 +82,7 @@ const updateLayerProofs = (model: Layer.Layer<Agent.ModelServices>) => {
 };
 
 const updateTypes: [
-  Assert<Equal<keyof typeof updateBackground.tools, "updating-child_start">>,
+  Assert<Equal<typeof updateBackground.tool.name, "updating-child_start">>,
   Assert<typeof updateDeclaration.target extends typeof updateTarget ? true : false>,
 ] = [true, true];
 
@@ -91,10 +94,9 @@ const dispositionTarget = Agent.make("disposition-child", {
   runDisposition: { schema: text, fromOutput: (output) => output },
 });
 
-const dispositionBackground = Subagent.background(dispositionTarget, {
-  start: true,
-  reportToParent: true,
-});
+const dispositionBackground = Subagent.startTool(
+  Subagent.make("disposition-child", { target: dispositionTarget }),
+);
 
 const dispositionDeclaration = Subagent.make("disposition", {
   target: dispositionTarget,
@@ -102,7 +104,7 @@ const dispositionDeclaration = Subagent.make("disposition", {
 });
 
 const dispositionTypes: [
-  Assert<Equal<keyof typeof dispositionBackground.tools, "disposition-child_start">>,
+  Assert<Equal<typeof dispositionBackground.tool.name, "disposition-child_start">>,
   Assert<typeof dispositionDeclaration.target extends typeof dispositionTarget ? true : false>,
   Assert<Equal<Layer.Services<typeof dispositionBackground.layer>, never>>,
 ] = [true, true, true];
@@ -133,12 +135,15 @@ const dispositionLayerProofs = (model: Layer.Layer<Agent.ModelServices>) => {
   return proofs;
 };
 
-const direct = Subagent.background(target, {
-  start: true,
-  followUp: true,
-  inspect: true,
-  reportToParent: true,
-});
+const directDeclaration = Subagent.make("typed-background-child", { target });
+const directStart = Subagent.startTool(directDeclaration);
+const directFollowUp = Subagent.followUpTool(directDeclaration);
+const directInspect = Subagent.inspectTool(directDeclaration);
+
+const direct = {
+  tools: Toolkit.make(directStart.tool, directFollowUp.tool, directInspect.tool).tools,
+  layer: Layer.mergeAll(directStart.layer, directFollowUp.layer, directInspect.layer),
+};
 
 const directTypes: [
   Assert<
@@ -212,7 +217,7 @@ const hostStartTypes = (host: SubagentHost["Service"], request: StartWorkerReque
 
   const deferred = host.start({
     ...request,
-    prepare: () => Effect.flatMap(Prepare, () => Effect.fail(DeclaredFailure.make())),
+    prepare: Effect.flatMap(Prepare, () => Effect.fail(DeclaredFailure.make())),
   });
 
   const proofs: [
@@ -259,69 +264,29 @@ const stopProofs: [
 ] = [true, true];
 
 const listed = Subagent.list(declaration);
-const selected = Subagent.background(declaration, { start: true, inspect: true, cancel: true });
-const onlyList = Subagent.background(declaration, { list: true });
-const onlyStart = Subagent.background(declaration, { start: true });
-const onlyInspect = Subagent.background(declaration, { inspect: true });
-const automatic = Subagent.background(declaration, { start: true, reportToParent: true });
+const onlyList = Subagent.listTool(declaration);
+const onlyStart = Subagent.startTool(declaration);
+const onlyInspect = Subagent.inspectTool(declaration);
+const onlyCancel = Subagent.cancelTool(declaration);
 
-const conditionalReporting = (enabled: boolean) => ({
-  automatic: Subagent.background(declaration, {
-    list: true,
-    reportToParent: enabled ? true : undefined,
-  }),
-});
+const selected = {
+  toolkit: Toolkit.make(onlyStart.tool, onlyInspect.tool, onlyCancel.tool),
+  tools: Toolkit.make(onlyStart.tool, onlyInspect.tool, onlyCancel.tool).tools,
+};
 
-const conditionalServices: [
-  Assert<
-    Equal<
-      Layer.Services<ReturnType<typeof conditionalReporting>["automatic"]["layer"]>,
-      Project | Encoder | Decoder
-    >
-  >,
-] = [true];
-
-const conditionalOperations = (prepare: boolean, project: boolean) => ({
-  start: Subagent.background(declaration, { start: prepare ? true : undefined }),
-  followUp: Subagent.background(declaration, { followUp: prepare ? true : undefined }),
-  inspect: Subagent.background(declaration, { inspect: project ? true : undefined }),
-  mixed: Subagent.background(declaration, {
-    list: true,
-    start: prepare ? true : undefined,
-    inspect: project ? true : undefined,
-  }),
-  disabled: Subagent.background(declaration, {
-    start: undefined,
-    followUp: undefined,
-    inspect: undefined,
-  }),
-});
-
-type ConditionalOperations = ReturnType<typeof conditionalOperations>;
-
-const conditionalOperationServices: [
-  Assert<Equal<Layer.Services<ConditionalOperations["start"]["layer"]>, Prepare | Encoder>>,
-  Assert<Equal<Layer.Services<ConditionalOperations["followUp"]["layer"]>, Prepare | Encoder>>,
-  Assert<
-    Equal<Layer.Services<ConditionalOperations["inspect"]["layer"]>, Project | Encoder | Decoder>
-  >,
-  Assert<
-    Equal<
-      Layer.Services<ConditionalOperations["mixed"]["layer"]>,
-      Prepare | Project | Encoder | Decoder
-    >
-  >,
-  Assert<Equal<Layer.Services<ConditionalOperations["disabled"]["layer"]>, never>>,
-  Assert<Equal<keyof ConditionalOperations["mixed"]["tools"], "research_list">>,
-] = [true, true, true, true, true, true];
+const automatic = { ...onlyStart, reporting: Subagent.reporting(declaration) };
 
 const automaticServices: Assert<
-  Equal<Layer.Services<typeof automatic.layer>, Prepare | Project | Encoder | Decoder>
+  Equal<
+    | Layer.Services<typeof automatic.layer>
+    | Effect.Services<ReturnType<typeof automatic.reporting.prepare>>,
+    Prepare | Project | Encoder | Decoder
+  >
 > = true;
 
 const automaticErrors: Assert<Equal<Layer.Error<typeof automatic.layer>, never>> = true;
-const automaticKeys: Assert<Equal<keyof typeof automatic.tools, "research_start">> = true;
-const onlySummary = Subagent.background(declaration, { summary: true });
+const automaticKeys: Assert<Equal<typeof automatic.tool.name, "research_start">> = true;
+const onlySummary = Subagent.summaryTool(declaration);
 
 type StartErrors =
   | DeclaredFailure
@@ -434,7 +399,7 @@ const rejectInvalidCalls = () => {
   void Subagent.cancel(declaration, otherWorker, receipt);
   // @ts-expect-error Unselected operations are not in the Tool record.
   void selected.tools.research_follow_up;
-  // @ts-expect-error Direct definitions expose only selected operations.
+  // @ts-expect-error The toolkit contains only explicitly installed operations.
   void direct.tools["typed-background-child_cancel"];
 
   // @ts-expect-error Direct input parameters retain the target schema.
@@ -443,7 +408,7 @@ const rejectInvalidCalls = () => {
 
   void wrongDirectInput;
   // @ts-expect-error Models cannot wait through a background tool.
-  Subagent.background(declaration, { await: true });
+  Subagent.awaitTool(declaration);
 };
 
 export const verifyPreservesOperationErrorsSchemaServicesAndSelectedNativeToolNames = () => {
@@ -457,8 +422,6 @@ export const verifyPreservesOperationErrorsSchemaServicesAndSelectedNativeToolNa
   void updateTypes.every(Boolean);
   void dispositionTypes.every(Boolean);
   void (automaticServices && automaticErrors && automaticKeys);
-  void conditionalServices.every(Boolean);
-  void conditionalOperationServices.every(Boolean);
   void (nestedParameterProof && nestedSuccessProof);
   void typeof rejectInvalidCalls;
 };

@@ -4,7 +4,7 @@ description: Defaults, authority, funding, and caller limits for attached and ba
 ---
 
 Use the [subagent guide](/guide/subagents/) to choose a lifetime. This reference describes
-`Subagent.make`, `Subagent.layer`, and `Subagent.background`.
+`Subagent.make`, `Subagent.layer`, the background action tools, and `Subagent.reporting`.
 
 ## Input and result mappings
 
@@ -83,25 +83,29 @@ budget. A host concurrency ceiling limits active workers separately from per-Run
 
 ## Background delivery and recovery
 
-| Operation or option          | Caller limit                                                                     |
-| ---------------------------- | -------------------------------------------------------------------------------- |
-| `background` operation flags | Opt in individually; no waiting tool                                             |
-| `start` / `followUp`         | Retained delivery status, then destination receipt; reuse keys after uncertainty |
-| `inspect`                    | Supply exactly one message reference or receipt                                  |
-| `await`                      | Programmatic only; interruption detaches the waiter                              |
-| `cancel`                     | One exact receipt                                                                |
-| `stop`                       | Permanently seals the worker; does not undo external actions                     |
-| Assignment lifecycle         | Typed completion seals only after latest accepted input is applied               |
+`startTool`, `followUpTool`, `inspectTool`, `summaryTool`, `listTool`, and `cancelTool` each
+return `{ tool, layer }`. Pass a delegation and install the operations the parent needs.
+
+| Operation or option  | Caller limit                                                                     |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `start` / `followUp` | Retained delivery status, then destination receipt; reuse keys after uncertainty |
+| `inspect`            | Supply exactly one message reference or receipt                                  |
+| `await`              | Programmatic only; interruption detaches the waiter                              |
+| `cancel`             | One exact receipt                                                                |
+| `stop`               | Permanently seals the worker; does not undo external actions                     |
+| Assignment lifecycle | Typed completion seals only after latest accepted input is applied               |
 
 Worker summaries report `unknown` when unresolved operations park a Run. This state is not
 active progress; reconcile the original operations before retrying external effects.
 
 ## Completion report guarantees
 
-`reportToParent: true` sends standard completion messages. Optional pure `reportCompletion` and
-`reportUpdate` predicates filter notifications. Child settlement, delivery acceptance, and parent
-processing are distinct. Programmatic reporting requires the exact `sourceSubmissionId` supplying
-parent context. Reports cannot target an attached child's nonexistent continuing inbox.
+Pass `Subagent.reporting(delegation)` in the parent registration's `reporting` array to send
+standard completion messages. Its optional pure `reportCompletion` and `reportUpdate` predicates
+filter notifications. Registration captures projection services independently of attempt Layers;
+each projection receives a fresh Scope. Child settlement, delivery acceptance, and parent processing
+are distinct. Programmatic reporting requires the exact `sourceSubmissionId` supplying parent
+context. Reports cannot target an attached child's nonexistent continuing inbox.
 
 ## Update delivery guarantees
 

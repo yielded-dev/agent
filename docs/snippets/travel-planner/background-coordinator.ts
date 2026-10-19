@@ -1,19 +1,20 @@
 import { Subagent, Agent } from "@yielded/agent";
 import { Schema } from "effect";
+import { Toolkit } from "effect/ai";
 
 import { CoordinatorInput } from "./background-input.ts";
 import { Researcher } from "./researcher.ts";
 
-export const ResearchBackground = Subagent.background(Researcher, {
-  start: true,
-  followUp: true,
-  reportToParent: true,
-});
+const Research = Subagent.make("activity-researcher", { target: Researcher });
+
+export const StartResearch = Subagent.startTool(Research);
+export const FollowUpResearch = Subagent.followUpTool(Research);
+export const ResearchReporting = Subagent.reporting(Research);
 
 export const BackgroundCoordinator = Agent.make("background-trip-coordinator", {
   input: CoordinatorInput,
   output: Schema.String,
-  toolkit: ResearchBackground.toolkit,
+  toolkit: Toolkit.make(StartResearch.tool, FollowUpResearch.tool),
   instructions:
     "Help the user plan a trip. Start activity research in the background when needed. " +
     "Keep discussing their preferences while research runs. Send changed preferences " +
