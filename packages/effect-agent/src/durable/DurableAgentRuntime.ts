@@ -2708,6 +2708,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   // also covers a destination handoff written before dispatch or after Run settlement.
   const progressStore = ThreadStore.of({
     ...store,
+    // Required capacity methods may be inherited and depend on the original receiver.
+    ...(store.readWorkerCapacity === undefined
+      ? {}
+      : { readWorkerCapacity: store.readWorkerCapacity.bind(store) }),
+    ...(store.countPeerMessages === undefined
+      ? {}
+      : { countPeerMessages: store.countPeerMessages.bind(store) }),
     append: Effect.fnUntraced(function* (request) {
       const active = activeProgress.get(request.threadId);
 
