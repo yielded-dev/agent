@@ -9,8 +9,6 @@ export const SqlStorageFailpointLocation = Schema.Literals([
   "append:after-tail-update",
   "append:after",
   "export:after-thread-read",
-  "save-checkpoint:before",
-  "save-checkpoint:after",
   "ledger:admit:before",
   "ledger:admit:after",
   "ledger:mark-ready:before",

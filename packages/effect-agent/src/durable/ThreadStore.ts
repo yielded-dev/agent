@@ -31,7 +31,6 @@ import {
   Digest,
   MAX_RUN_TOOL_CALL_IDENTITIES,
   ObservationOffset,
-  PersistedJson,
   type PromptRecordEnvelope,
   ProducerId,
   RecordId,
@@ -1031,34 +1030,6 @@ export const streamExport = (request: ThreadExportRequest) =>
     }),
   );
 
-/**
- * A disposable projection snapshot. Adapters bind its sequence to a complete batch in the canonical
- * log; consumers decode `state` and decide projection compatibility before suffix replay.
- * Run recovery uses authoritative active checkpoints independently of these application snapshots.
- */
-export class ThreadCheckpoint extends Schema.Class<ThreadCheckpoint>(
-  "@effect-agent/thread/ThreadCheckpoint",
-)({
-  schemaVersion: Schema.Literal(1),
-  threadId: ThreadId,
-  throughSequence: CanonicalSequence,
-  state: PersistedJson,
-  createdAt: Schema.DateTimeUtcFromString,
-}) {}
-
-export class SaveCheckpointRequest extends Schema.Class<SaveCheckpointRequest>(
-  "@effect-agent/thread/SaveCheckpointRequest",
-)({
-  checkpoint: ThreadCheckpoint,
-}) {}
-
-export class LoadCheckpointRequest extends Schema.Class<LoadCheckpointRequest>(
-  "@effect-agent/thread/LoadCheckpointRequest",
-)({
-  threadId: ThreadId,
-  atOrBeforeSequence: Schema.optionalKey(CanonicalSequence),
-}) {}
-
 /** A bounded, disposable prior Prompt, checked against its captured historyDigest. */
 export const MAX_PROMPT_CHECKPOINT_BYTES = 16 * 1024 * 1024;
 
@@ -1092,8 +1063,8 @@ export const PromptCheckpointRead = Schema.Struct({
 export type PromptCheckpointRead = typeof PromptCheckpointRead.Type;
 
 /**
- * Optional cold-context acceleration, separate from application checkpoints. Save only after
- * canonical settlement. Replace the prior value atomically at the exact supplied sequence.
+ * Optional cold-context acceleration. Save only after canonical settlement.
+ * Replace the prior value atomically at the exact supplied sequence.
  * One process owns the Thread; import only targets empty Threads and atomically deletes these
  * derivatives. The runtime validates the content digest and a bounded suffix of completed Runs.
  * Any incompatible head, content digest or suffix is a cache miss.
@@ -1166,41 +1137,11 @@ export class AppendConflict extends Schema.TaggedError<AppendConflict>()("Append
   actualTailSequence: Schema.optionalKey(CanonicalSequence),
 }) {}
 
-export class CheckpointRejected extends Schema.TaggedError<CheckpointRejected>()(
-  "CheckpointRejected",
-  {
-    threadId: ThreadId,
-    reason: Schema.Literals([
-      "ahead-of-tail",
-      "not-batch-boundary",
-      "unsupported-version",
-      "corrupt",
-    ]),
-  },
-) {}
-
 export type ThreadStoreFailure =
   | ThreadStoreError
   | ThreadNotMaterialized
   | AppendConflict
   | OwnershipLost;
-
-/**
- * Optional, disposable projection storage. Neither history execution nor durable recovery
- * requires it. Adapters that offer it must bind every checkpoint to a canonical batch tail.
- * Application consumers own projection compatibility; this port does not interpret metadata.
- */
-export interface ThreadCheckpoints {
-  readonly save: (
-    request: SaveCheckpointRequest,
-  ) => Effect.Effect<void, ThreadStoreError | ThreadNotMaterialized | CheckpointRejected>;
-  readonly load: (
-    request: LoadCheckpointRequest,
-  ) => Effect.Effect<
-    Option.Option<ThreadCheckpoint>,
-    ThreadStoreError | ThreadNotMaterialized | CheckpointRejected
-  >;
-}
 
 export class ThreadStore extends Context.Service<
   ThreadStore,
@@ -1267,10 +1208,8 @@ export class ThreadStore extends Context.Service<
     readonly readWorkerCapacity?: (
       request: ThreadWorkerCapacityRequest,
     ) => Effect.Effect<ThreadWorkerCapacity, ThreadStoreError | ThreadNotMaterialized>;
-    /** Absent when this adapter does not support disposable checkpoints. */
-    readonly checkpoints?: ThreadCheckpoints | undefined;
     readonly promptCheckpoints?: PromptCheckpoints | undefined;
-    /** Indexed scalar count; unsupported adapters fail closed at the caller. */
+    /** Indexed scalar count; required when assembling a durable runtime. */
     readonly countPeerMessages?:
       | ((
           request: ThreadPeerCountRequest,
@@ -1279,7 +1218,7 @@ export class ThreadStore extends Context.Service<
   }
 >()("@effect-agent/thread/ThreadStore") {}
 
-/** Canonical observation without append, materialization, or checkpoint mutation authority. */
+/** Canonical observation without append or materialization authority. */
 export class ThreadReader extends Context.Service<
   ThreadReader,
   Pick<

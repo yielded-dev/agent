@@ -13,7 +13,6 @@ import {
   SqliteStorageCorruptionError,
 } from "@yielded/agent-storage-sqlite/sqlite-storage-error";
 import { SqliteStorageFailpoint } from "@yielded/agent-storage-sqlite/sqlite-storage-failpoint";
-import { submissionLedgerLayer } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
 import {
   exclusiveHostClientLayer,
   exclusiveRunStorageLayer,
@@ -52,11 +51,9 @@ import {
 import {
   readTestThread,
   threadStoreConformanceCases,
-  threadCheckpointConformanceCases,
 } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import {
-  ThreadCheckpoint,
   ThreadExportRequest,
   ThreadIdentityRequest,
   ThreadMaterialization,
@@ -66,8 +63,6 @@ import {
   ThreadStoreError,
   ThreadTailRequest,
   AppendRequest,
-  LoadCheckpointRequest,
-  SaveCheckpointRequest,
   type AppendResult,
   type ThreadReader,
 } from "@yielded/agent/thread-store";
@@ -88,9 +83,6 @@ import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-
-import { seedCheckpoint, assertCheckpoint } from "../../../test/fixtures/checkpoints.ts";
-import { snapshotStore } from "../../../test/fixtures/storage-upgrade.ts";
 
 const threadId = Schema.decodeSync(ThreadMaterialization.fields.threadId)("thread-sqlite-1");
 const secondThreadId = Schema.decodeSync(ThreadMaterialization.fields.threadId)("thread-sqlite-2");
@@ -406,123 +398,66 @@ describe("SqliteThreadStore", () => {
     ),
   );
 
-  for (const historical of [false]) {
-    it.effect(
-      `reopens ${historical ? "historical" : "metadata-free"} checkpoints without rewriting storage`,
-      () =>
-        withTemporaryDatabase((filename) =>
-          Effect.gen(function* () {
-            yield* seedCheckpoint(historical).pipe(
-              Effect.provide(
-                Layer.mergeAll(threadStoreLayer, submissionLedgerLayer).pipe(
-                  Layer.provideMerge(
-                    Layer.mergeAll(
-                      storageConfigLayer({ filename }),
-                      SqliteStorageFailpoint.layer,
-                      NodeCrypto.layer,
-                    ),
-                  ),
-                ),
-              ),
-            );
-            const before = yield* snapshotStore;
-            const sql = yield* SqlClientService.SqlClient;
-            const version = yield* sql`PRAGMA user_version`;
-
-            for (const verifyOnOpen of [true]) {
-              yield* Effect.gen(function* () {
-                yield* ThreadStore;
-                expect(yield* snapshotStore).toEqual(before);
-                yield* assertCheckpoint(historical);
-                expect(yield* snapshotStore).toEqual(before);
-                expect(yield* sql`PRAGMA user_version`).toEqual(version);
-              }).pipe(
-                Effect.provide(
-                  threadStoreLayer.pipe(
-                    Layer.provide(
-                      Layer.mergeAll(
-                        storageConfigLayer({ filename, verifyOnOpen }),
-                        SqliteStorageFailpoint.layer,
-                        NodeCrypto.layer,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }
-          }).pipe(Effect.provide(SqliteClient.layer({ filename }))),
-        ),
-    );
-  }
-
-  for (const corruption of ["thread"]) {
-    it.effect(`rejects checkpoint ${corruption} metadata that disagrees with its row`, () =>
-      withTemporaryDatabase((filename) =>
-        Effect.gen(function* () {
-          const store = yield* ThreadStore;
-          const sql = yield* SqlClientService.SqlClient;
-
-          yield* store.materialize(ThreadMaterialization.make({ threadId }));
-
-          yield* append(
-            store,
-            batch("checkpoint-metadata", [inputRecord("checkpoint-metadata-input", "Kyoto")]),
-          );
-
-          const checkpoint = ThreadCheckpoint.make({
-            schemaVersion: 1,
-            threadId,
-            throughSequence: sequence(0),
-
-            state: {},
-            createdAt: at(2),
-          });
-
-          yield* store.checkpoints!.save(SaveCheckpointRequest.make({ checkpoint }));
-
-          const corrupted = ThreadCheckpoint.make({
-            ...checkpoint,
-            ...(corruption === "thread" ? { threadId: secondThreadId } : {}),
-          });
-
-          const corruptedJson = JSON.stringify(
-            yield* Schema.encodeEffect(ThreadCheckpoint)(corrupted),
-          );
-
-          yield* sql`
-            UPDATE effect_agent_checkpoints
-            SET checkpoint_json = ${corruptedJson}
-            WHERE thread_id = ${threadId} AND through_sequence = 0
-          `;
-
-          const loaded = yield* store
-            .checkpoints!.load(
-              LoadCheckpointRequest.make({ threadId, atOrBeforeSequence: sequence(0) }),
-            )
-            .pipe(Effect.exit);
-
-          expect(Exit.isFailure(loaded)).toBe(true);
-          if (Exit.isFailure(loaded)) {
-            const error = Cause.squash(loaded.cause);
-
-            expect(error).toBeInstanceOf(ThreadStoreError);
-            if (isThreadStoreError(error)) expect(error.operation).toBe("load checkpoint");
-          }
-        }).pipe(Effect.provide(explicitTestStorageLayer(filename))),
-      ),
-    );
-  }
-
   describe("shared ThreadStore conformance", () => {
-    for (const conformanceCase of [
-      ...threadStoreConformanceCases,
-      ...threadCheckpointConformanceCases,
-    ]) {
+    for (const conformanceCase of threadStoreConformanceCases) {
       it.effect(conformanceCase.name, () =>
         withTemporaryDatabase((filename) => withStorage(filename, conformanceCase.run)),
       );
     }
   });
+
+  // Regression: https://github.com/yielded-dev/agent/commit/8b88036d879da7bbab88bb9918ac6f1f87f2930a
+  it.effect("rejects undeclared schema-header triggers before opening storage", () =>
+    withTemporaryDatabase((filename) =>
+      Effect.gen(function* () {
+        yield* withStorage(
+          filename,
+          Effect.gen(function* () {
+            const store = yield* ThreadStore;
+
+            yield* store.materialize(ThreadMaterialization.make({ threadId }));
+            yield* append(store, batch("header-trigger", [inputRecord("header-trigger", "Osaka")]));
+          }),
+        );
+        yield* withSql(
+          filename,
+          Effect.gen(function* () {
+            const sql = yield* SqlClientService.SqlClient;
+
+            yield* sql`CREATE TRIGGER application_header_observer
+              AFTER UPDATE OF layout_version ON effect_agent_schema BEGIN
+                UPDATE effect_agent_canonical_records
+                SET created_at_json = '"2000-01-01T00:00:00.000Z"';
+              END`;
+          }),
+        );
+
+        const snapshot = withSql(
+          filename,
+          Effect.gen(function* () {
+            const sql = yield* SqlClientService.SqlClient;
+
+            return {
+              schema: yield* sql`SELECT * FROM sqlite_master ORDER BY name`,
+              version: yield* sql`PRAGMA user_version`,
+              header: yield* sql`SELECT * FROM effect_agent_schema`,
+              records:
+                yield* sql`SELECT * FROM effect_agent_canonical_records ORDER BY thread_id, sequence`,
+            };
+          }),
+        );
+
+        const before = yield* snapshot;
+        const opened = yield* withStorage(filename, ThreadStore).pipe(Effect.exit);
+
+        expect(yield* snapshot).toEqual(before);
+        expect(Exit.isFailure(opened)).toBe(true);
+        if (Exit.isFailure(opened)) {
+          expect(Cause.squash(opened.cause)).toBeInstanceOf(SqliteStorageCompatibilityError);
+        }
+      }),
+    ),
+  );
 
   it.effect("rejects an unsupported storage version before creating canonical tables", () =>
     withTemporaryDatabase((filename) =>

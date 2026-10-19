@@ -26,12 +26,7 @@ import {
   validateImportedExecution,
   validateImportedRunExecution,
 } from "./ThreadImport.ts";
-import {
-  ThreadExport,
-  ThreadStoreError,
-  type ThreadCheckpoint,
-  type ExecutionCheckpoint,
-} from "./ThreadStore.ts";
+import { ThreadExport, ThreadStoreError, type ExecutionCheckpoint } from "./ThreadStore.ts";
 
 /** All reads share the export snapshot. No lifetime identity sets or materialization. */
 export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
@@ -42,8 +37,6 @@ export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
   readonly runs: Stream.Stream<RunId, E, R>;
   /** Includes orphan active rows; never obtained through idle-only public export. */
   readonly executions: Stream.Stream<ExecutionCheckpoint, E, R>;
-  readonly checkpoint?: ThreadCheckpoint;
-  readonly checkpointsSupported?: boolean;
   readonly requireAllSettled?: boolean;
 }
 
@@ -99,7 +92,6 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
   });
 
   let lastInputQueue = -1;
-  let checkpointBound = input.checkpoint?.throughSequence === 0;
 
   yield* Stream.runForEach(input.pages, (page) =>
     Effect.gen(function* () {
@@ -121,8 +113,6 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
       );
 
       if (prepared === undefined) return;
-      for (const batch of prepared.batches)
-        if (batch.lastSequence === input.checkpoint?.throughSequence) checkpointBound = true;
       for (const entry of prepared.records) {
         yield* Effect.gen(function* () {
           for (const runId of canonicalRunIds(entry.record)) {
@@ -279,11 +269,6 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
     fail("ledger-canonical-agreement", "Worker seal terminal has no exact settled worker evidence");
   if (input.requireAllSettled && submissionCount === 0)
     fail("all-settled", "No submissions are known");
-  if (
-    input.checkpoint !== undefined &&
-    (input.checkpoint.threadId !== input.threadId || !checkpointBound)
-  )
-    fail("checkpoint-binding", "Checkpoint is not bound to a complete canonical batch tail");
 
   const names: Array<IntegrityCheckName> = [
     "schema-round-trip",
@@ -294,7 +279,6 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
     "input-before-settlement",
     "terminal-uniqueness",
     "ledger-canonical-agreement",
-    "checkpoint-binding",
   ];
 
   if (input.requireAllSettled) names.push("all-settled");
@@ -302,13 +286,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
   const checks = names.map((name) =>
     IntegrityCheck.make({
       name,
-      status: failures.has(name)
-        ? "failed"
-        : name === "checkpoint-binding" &&
-            input.checkpoint === undefined &&
-            !input.checkpointsSupported
-          ? "skipped"
-          : "passed",
+      status: failures.has(name) ? "failed" : "passed",
       ...(failures.has(name) ? { detail: failures.get(name) } : {}),
     }),
   );

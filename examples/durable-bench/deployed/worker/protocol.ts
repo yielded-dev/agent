@@ -137,6 +137,24 @@ export const BulkFixture = Schema.Struct({
 
 export type BulkFixture = typeof BulkFixture.Type;
 
+/** Native upgrades may retire this derived cache; every retained table must match the seed. */
+export const expectedRestoredTables = (
+  fixture: BulkFixture,
+  compatibility: typeof FixtureCompatibility.Type | undefined,
+): Readonly<Record<string, number>> => {
+  const expected = { ...fixture.tables };
+
+  if (
+    fixture.target === "yielded" &&
+    compatibility !== undefined &&
+    compatibility.stored.layoutVersion <= 28 &&
+    compatibility.opened.layoutVersion >= 29
+  )
+    delete expected.effect_agent_checkpoints;
+
+  return expected;
+};
+
 export const Identity = Schema.Struct({
   build: Schema.NonEmptyString,
   isolate: Schema.NonEmptyString,

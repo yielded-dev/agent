@@ -115,7 +115,6 @@
     "./thread-context-history-projection": "./src/durable/ThreadContextHistoryProjection.ts",
     "./thread-history": "./src/engine/ThreadHistory.ts",
     "./thread-invariants": "./src/durable/ThreadInvariants.ts",
-    "./thread-projection": "./src/durable/ThreadProjection.ts",
     "./thread-projection-maintenance": "./src/durable/ThreadProjectionMaintenance.ts",
     "./thread-reader": "./src/durable/ThreadReader.ts",
     "./thread-store": "./src/durable/ThreadStore.ts",

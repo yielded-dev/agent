@@ -66,8 +66,8 @@ needs durable execution. Both reuse a Thread ID for follow-ups.
 
 Durable storage retains canonical history, current execution checkpoints, admissions,
 and unresolved operations. Settlement deletes the finished Run's checkpoint.
-Projections are disposable. Every backend requires one live owner per Thread;
-PostgreSQL does not add distributed ownership.
+Applications own disposable query projections over canonical records. Every backend
+requires one live owner per Thread; PostgreSQL does not add distributed ownership.
 
 ## Back up or change record formats
 

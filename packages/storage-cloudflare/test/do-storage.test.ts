@@ -7,7 +7,6 @@ import {
 } from "@yielded/agent-storage-cloudflare/do-storage-error";
 import { DoStorageFailpoint } from "@yielded/agent-storage-cloudflare/do-storage-failpoint";
 import { CurrentDoStorageVersion } from "@yielded/agent-storage-cloudflare/do-storage-version";
-import { ledgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
 import {
   threadStoreLayer,
   invalidate,
@@ -40,10 +39,8 @@ import { makeRunWriter } from "@yielded/agent/run-storage";
 import {
   readTestThread,
   threadStoreConformanceCases,
-  threadCheckpointConformanceCases,
 } from "@yielded/agent/testing/thread-store-conformance";
 import {
-  ThreadCheckpoint,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadObservation,
@@ -52,8 +49,6 @@ import {
   ThreadStore,
   ThreadStoreError,
   AppendRequest,
-  LoadCheckpointRequest,
-  SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
 import * as Prompt from "effect/ai/Prompt";
 import * as Cause from "effect/Cause";
@@ -67,8 +62,6 @@ import * as Stream from "effect/Stream";
 import * as Tracer from "effect/Tracer";
 import { describe, expect, it } from "vite-plus/test";
 
-import { seedCheckpoint, assertCheckpoint } from "../../../test/fixtures/checkpoints.ts";
-import { snapshotStore } from "../../../test/fixtures/storage-upgrade.ts";
 import { evictionFailpointHandler } from "../src/DoStorageFailpointTesting.ts";
 import {
   thread,
@@ -626,101 +619,11 @@ describe("DoThreadStore", () => {
       }).pipe(Effect.provide(layer({ storage }))),
     ));
 
-  for (const historical of [false]) {
-    it(`reopens ${historical ? "historical" : "metadata-free"} checkpoints without rewriting storage`, () =>
-      withThreadStorage(`checkpoint-roundtrip:${historical}`, (storage) =>
-        Effect.gen(function* () {
-          yield* seedCheckpoint(historical).pipe(
-            Effect.provide(
-              Layer.mergeAll(layer({ storage }), ledgerLayer({ storage }), BrowserCrypto.layer),
-            ),
-          );
-          const before = yield* snapshotStore;
-
-          for (const verifyOnOpen of [true]) {
-            yield* Effect.gen(function* () {
-              yield* ThreadStore;
-              expect(yield* snapshotStore).toEqual(before);
-              yield* assertCheckpoint(historical);
-              expect(yield* snapshotStore).toEqual(before);
-            }).pipe(Effect.provide(layer({ storage, verifyOnOpen })));
-          }
-        }).pipe(Effect.provide(SqliteClient.layer({ storage }))),
-      ));
-  }
-
-  for (const corruption of ["thread"]) {
-    it(`rejects checkpoint ${corruption} metadata that disagrees with its row`, () =>
-      withThreadStorage(`checkpoint-metadata:${corruption}`, (storage) =>
-        Effect.gen(function* () {
-          const store = yield* ThreadStore;
-          const threadId = thread("checkpoint-metadata");
-
-          yield* store.materialize(ThreadMaterialization.make({ threadId }));
-
-          yield* store.append(
-            AppendRequest.make({
-              threadId,
-              batch: batch("checkpoint-metadata", [
-                inputRecord("checkpoint-metadata-input", "Kyoto"),
-              ]),
-              expectedTailSequence: sequence(0),
-            }),
-          );
-
-          const checkpoint = ThreadCheckpoint.make({
-            schemaVersion: 1,
-            threadId,
-            throughSequence: sequence(0),
-
-            state: {},
-            createdAt: at(2),
-          });
-
-          yield* store.checkpoints!.save(SaveCheckpointRequest.make({ checkpoint }));
-
-          const corrupted = ThreadCheckpoint.make({
-            ...checkpoint,
-            ...(corruption === "thread" ? { threadId: thread("other-checkpoint-thread") } : {}),
-          });
-
-          const corruptedJson = JSON.stringify(
-            yield* Schema.encodeEffect(ThreadCheckpoint)(corrupted),
-          );
-
-          yield* Effect.sync(() =>
-            storage.sql.exec(
-              "UPDATE effect_agent_checkpoints SET checkpoint_json = ? WHERE thread_id = ? AND through_sequence = 0",
-              corruptedJson,
-              threadId,
-            ),
-          );
-
-          const loaded = yield* store
-            .checkpoints!.load(
-              LoadCheckpointRequest.make({ threadId, atOrBeforeSequence: sequence(0) }),
-            )
-            .pipe(Effect.exit);
-
-          expect(Exit.isFailure(loaded)).toBe(true);
-          if (Exit.isFailure(loaded)) {
-            const error = Cause.squash(loaded.cause);
-
-            expect(error).toBeInstanceOf(ThreadStoreError);
-            if (isThreadStoreError(error)) expect(error.operation).toBe("load checkpoint");
-          }
-        }).pipe(Effect.provide(layer({ storage }))),
-      ));
-  }
-
   // The SAME adapter-neutral contract suite the Node/SQLite and in-memory adapters run,
   // executed in-workerd against a real SQLite-backed Durable Object's storage. One Durable
   // Object per case: the 0.21.x pool shares storage across tests within a run.
   describe("shared ThreadStore conformance", () => {
-    for (const conformanceCase of [
-      ...threadStoreConformanceCases,
-      ...threadCheckpointConformanceCases,
-    ]) {
+    for (const conformanceCase of threadStoreConformanceCases) {
       it(`${conformanceCase.name}`, () => {
         const spanNames: Array<string> = [];
 
@@ -747,9 +650,7 @@ describe("DoThreadStore", () => {
                   "DoThreadStore.parseOffset",
                   "DoThreadStore.encodeCanonicalRecord",
                   "DoThreadStore.encodeCanonicalBatch",
-                  "DoThreadStore.encodeCheckpoint",
                   "DoThreadStore.decodeEnvelope",
-                  "DoThreadStore.decodeCheckpoint",
                   "DoThreadStore.hitFailpoint",
                 ]) {
                   expect(spanNames).not.toContain(helper);

@@ -50,7 +50,6 @@ import { DoStorageConfig } from "../DoStorageConfig.ts";
 import {
   type DoStorageFailpointError,
   DoAppendConflict,
-  DoCheckpointConflict,
   DoStorageCorruptionError,
   DoStorageError,
   DoValueBoundExceeded,
@@ -200,12 +199,6 @@ const ReadPlanRow = Schema.Struct({
 
 type ReadPage = [typeof ReadPlanRow.Type, ...Array<typeof ReadPlanRow.Type>];
 
-class CheckpointRow extends Schema.Class<CheckpointRow>("CheckpointRow")({
-  checkpoint_json: BoundedStoredText,
-  thread_id: BoundedIdentifier,
-  through_sequence: CanonicalSequence,
-}) {}
-
 const LifecycleCursorRow = Schema.Struct({
   thread_id: BoundedIdentifier,
   through_sequence: CanonicalSequence,
@@ -230,26 +223,12 @@ export class RawReadRequest extends Schema.Class<RawReadRequest>(
   limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1_024)),
 }) {}
 
-export class RawCheckpoint extends Schema.Class<RawCheckpoint>(
-  "@effect-agent/storage-cloudflare/RawCheckpoint",
-)({
-  checkpointJson: BoundedStoredText,
-  threadId: BoundedIdentifier,
-  throughSequence: CanonicalSequence,
-}) {}
-
 type AppendError =
   | ThreadStoreError
   | DoAppendConflict
   | DoStorageCorruptionError
   | DoStorageError
   | DoStorageFailpointError
-  | DoValueBoundExceeded;
-
-type CheckpointError =
-  | DoCheckpointConflict
-  | DoStorageCorruptionError
-  | DoStorageError
   | DoValueBoundExceeded;
 
 type DoJournalFailpoint = (
@@ -1240,143 +1219,6 @@ const makeJournal = Effect.fnUntraced(function* (
     };
   });
 
-  const saveCheckpoint = Effect.fnUntraced(function* (
-    checkpoint: RawCheckpoint,
-  ): Effect.fn.Return<void, CheckpointError> {
-    if (checkpoint.threadId.length > MAX_IDENTIFIER_LENGTH) {
-      return yield* DoStorageError.make({
-        operation: "save checkpoint",
-        message: "Checkpoint identity exceeds the Durable Object storage bounds.",
-      });
-    }
-    yield* checkValueBound("save checkpoint", checkpoint.checkpointJson);
-    yield* withWriteTransaction("checkpoint transaction")(
-      Effect.gen(function* () {
-        const threadRows = yield* getThread(checkpoint.threadId);
-
-        const thread = yield* decodeSingleRow(
-          Schema.Array(ThreadRow),
-          "effect_agent_threads",
-          checkpoint.threadId,
-          threadRows,
-        );
-
-        if (checkpoint.throughSequence > thread.tail_sequence) {
-          return yield* DoCheckpointConflict.make({
-            reason: "ahead-of-tail",
-            message:
-              `Checkpoint sequence ${checkpoint.throughSequence} is after canonical tail ` +
-              `${thread.tail_sequence}.`,
-          });
-        }
-
-        if (!(yield* isBatchBoundary(checkpoint.threadId, checkpoint.throughSequence))) {
-          return yield* DoCheckpointConflict.make({
-            reason: "not-batch-boundary",
-            message: "Checkpoint sequence is not the end of a complete canonical batch.",
-          });
-        }
-
-        const checkpointRows = yield* sql<Record<string, unknown>>`
-          SELECT
-            thread_id,
-            through_sequence,
-            checkpoint_json
-          FROM effect_agent_checkpoints
-          WHERE thread_id = ${checkpoint.threadId}
-            AND through_sequence = ${checkpoint.throughSequence}
-        `.pipe(Effect.mapError(storageError("read idempotent checkpoint")));
-
-        const existing = yield* decodeRows(
-          Schema.Array(CheckpointRow),
-          "effect_agent_checkpoints",
-          `${checkpoint.threadId}/${checkpoint.throughSequence}`,
-          checkpointRows,
-        );
-
-        if (existing.length > 1) {
-          return yield* DoStorageCorruptionError.make({
-            table: "effect_agent_checkpoints",
-            rowKey: `${checkpoint.threadId}/${checkpoint.throughSequence}`,
-            message: "A checkpoint primary key returned more than one row.",
-          });
-        }
-        if (existing.length === 1) {
-          if (existing[0].checkpoint_json !== checkpoint.checkpointJson) {
-            return yield* DoCheckpointConflict.make({
-              reason: "corrupt",
-              message: "A different checkpoint already exists at this canonical sequence.",
-            });
-          }
-
-          return;
-        }
-
-        yield* sql`
-          INSERT INTO effect_agent_checkpoints (
-            thread_id,
-            through_sequence,
-            checkpoint_json
-          ) VALUES (
-            ${checkpoint.threadId},
-            ${checkpoint.throughSequence},
-            ${checkpoint.checkpointJson}
-          )
-        `.pipe(Effect.mapError(storageError("insert checkpoint")));
-      }),
-    );
-  });
-
-  const loadCheckpoint = Effect.fnUntraced(function* (
-    threadId: string,
-    atOrBeforeSequence: CanonicalSequence,
-  ) {
-    const rows = yield* sql<Record<string, unknown>>`
-      SELECT
-        thread_id,
-        through_sequence,
-        checkpoint_json
-      FROM effect_agent_checkpoints
-      WHERE thread_id = ${threadId}
-        AND through_sequence <= ${atOrBeforeSequence}
-      ORDER BY through_sequence DESC
-      LIMIT 1
-    `.pipe(Effect.mapError(storageError("load checkpoint")));
-
-    return yield* decodeRows(
-      Schema.Array(CheckpointRow),
-      "effect_agent_checkpoints",
-      `${threadId}<=${atOrBeforeSequence}`,
-      rows,
-    );
-  });
-
-  const isBatchBoundary = Effect.fnUntraced(function* (
-    threadId: string,
-    sequence: CanonicalSequence,
-  ) {
-    if (sequence === 0) return true;
-
-    const rows = yield* sql<Record<string, unknown>>`
-        SELECT last_sequence FROM effect_agent_canonical_batches
-        WHERE thread_id = ${threadId}
-          AND batch_id = (
-            SELECT ${recordBatchId(sql)} FROM effect_agent_canonical_records
-            WHERE thread_id = ${threadId} AND sequence = ${sequence}
-          )
-          AND last_sequence = ${sequence}
-      `.pipe(Effect.mapError(storageError("read canonical batch boundary")));
-
-    const batches = yield* decodeRows(
-      Schema.Array(Schema.Struct({ last_sequence: CanonicalSequence })),
-      "effect_agent_canonical_batches",
-      `${threadId}/${sequence}`,
-      rows,
-    );
-
-    return batches.length === 1;
-  });
-
   const sourceFailure = (cause: unknown) =>
     LifecyclePublicationError.make({ reason: "unavailable", cause });
 
@@ -1560,11 +1402,8 @@ const makeJournal = Effect.fnUntraced(function* (
     checkValueBound,
     getThread,
     hasRecord,
-    isBatchBoundary,
-    loadCheckpoint,
     materialize,
     read: (request: RawReadRequest) => state.read(read(request)),
-    saveCheckpoint,
     withWriteTransaction,
   } as const;
 });

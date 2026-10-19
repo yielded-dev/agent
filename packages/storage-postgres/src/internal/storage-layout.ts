@@ -18,7 +18,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 28;
+export const CurrentPostgresStorageVersion = 29;
 
 /** The released layout 25 already has observe_settlement; only these indexes are new. */
 const layout26IndexStatements = {
@@ -84,7 +84,6 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_tool_declarations_sequence ON __NAMESPACE__.effect_agent_tool_declarations(thread_id, sequence)",
   'CREATE TABLE __NAMESPACE__.effect_agent_record_refusals (thread_id TEXT COLLATE "C" NOT NULL, reservation_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, reservation_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
   "CREATE INDEX effect_agent_record_refusals_sequence ON __NAMESPACE__.effect_agent_record_refusals(thread_id, sequence)",
-  'CREATE TABLE __NAMESPACE__."effect_agent_checkpoints" ( thread_id TEXT COLLATE "C" NOT NULL, through_sequence BIGINT NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_submissions" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, queue_sequence BIGINT NOT NULL, principal TEXT COLLATE "C" NOT NULL, idempotency_key TEXT COLLATE "C" NOT NULL, agent_id TEXT COLLATE "C" NOT NULL, definition_key BIGINT NOT NULL, deployment_id TEXT COLLATE "C" NOT NULL, input_json TEXT COLLATE "C" NOT NULL, input_digest TEXT COLLATE "C" NOT NULL, receipt_id TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, settled_outcome TEXT COLLATE "C", settled_record_id TEXT COLLATE "C", finalized_at TEXT COLLATE "C", created_at TEXT COLLATE "C" NOT NULL, ready_at TEXT COLLATE "C", input_applied_record_id TEXT COLLATE "C", input_applied_sequence BIGINT, joined_host_submission_id TEXT COLLATE "C", suspended_reason_json TEXT COLLATE "C", suspended_at TEXT COLLATE "C", unknown_reason TEXT COLLATE "C", unknown_tool_call_ids_json TEXT COLLATE "C", parent_submission_id TEXT COLLATE "C", parent_tool_call_id TEXT COLLATE "C", admission_group TEXT COLLATE "C", admission_fence_json TEXT COLLATE "C", worker_admission_json TEXT COLLATE "C", message_admission_json TEXT COLLATE "C", UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )',
   "CREATE INDEX effect_agent_submissions_group ON __NAMESPACE__.\"effect_agent_submissions\" (thread_id, admission_group) WHERE admission_group IS NOT NULL AND state <> 'settled'",
   'CREATE TABLE __NAMESPACE__."effect_agent_abort_intents" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, author TEXT COLLATE "C" NOT NULL, reason TEXT COLLATE "C" NOT NULL, requested_at TEXT COLLATE "C" NOT NULL, canonical_record_id TEXT COLLATE "C", FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
@@ -442,6 +441,7 @@ const layoutShape: Readonly<
       effect_agent_canonical_records_thread_id_record_id_key: ["u", ["thread_id", "record_id"]],
     },
   },
+  // Retained only for exact predecessor layout validation.
   effect_agent_checkpoints: {
     columns: ["thread_id:text:true", "through_sequence:bigint:true", "checkpoint_json:text:true"],
     constraints: {
@@ -1115,7 +1115,10 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
     legacy.version !== CurrentPostgresStorageVersion &&
     !(
       allowReleasedUpgrade &&
-      (legacy.version === 25 || legacy.version === 26 || legacy.version === 27)
+      (legacy.version === 25 ||
+        legacy.version === 26 ||
+        legacy.version === 27 ||
+        legacy.version === 28)
     )
   )
     return yield* incompatible(legacy.version, `Unsupported storage version ${legacy.version}.`);
@@ -1254,6 +1257,14 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
   };
 
   for (const [name, expected] of Object.entries(expectedShape)) {
+    if (name === "effect_agent_checkpoints" && legacy.version >= 29) {
+      if (names.some((row) => row.name === name))
+        return yield* incompatible(
+          legacy.version,
+          "Current layout contains retired generic checkpoints.",
+        );
+      continue;
+    }
     const tableColumns = columns.filter((row) => row.name === name);
     const actualConstraints = constraints.filter((row) => row.table_name === name);
 
@@ -1325,7 +1336,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
       if (indexes.some((row) => row.name === name))
         return yield* incompatible(
           legacy.version,
-          "Layout 28 contains the retired batch-end index.",
+          `Layout ${legacy.version} contains the retired batch-end index.`,
         );
       continue;
     }
@@ -1438,7 +1449,12 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
 
   if (header !== undefined) {
     if (header.layoutVersion === CurrentPostgresStorageVersion) return header;
-    if (header.layoutVersion !== 25 && header.layoutVersion !== 26 && header.layoutVersion !== 27)
+    if (
+      header.layoutVersion !== 25 &&
+      header.layoutVersion !== 26 &&
+      header.layoutVersion !== 27 &&
+      header.layoutVersion !== 28
+    )
       return yield* incompatible(header.layoutVersion, "Unsupported layout upgrade.");
 
     // READ COMMITTED must observe in-flight writers before reading checkpoints for conversion.
@@ -1473,7 +1489,11 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
           }),
         ),
       );
-    yield* execute(sql`DROP INDEX ${table("effect_agent_canonical_batches_last")}`);
+    if (header.layoutVersion <= 27)
+      yield* execute(sql`DROP INDEX ${table("effect_agent_canonical_batches_last")}`);
+    // Retire only the derived generic snapshot cache. This step preserves the exact
+    // canonical and operational bytes; earlier layout conversions remain independent.
+    yield* execute(sql`DROP TABLE ${table("effect_agent_checkpoints")}`);
     yield* execute(
       sql`UPDATE ${table("effect_agent_storage_version")} SET version=${CurrentPostgresStorageVersion} WHERE id=TRUE`,
     );

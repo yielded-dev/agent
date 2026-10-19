@@ -91,7 +91,6 @@ export * as Subscriptions from "./durable/Subscriptions.ts";
 export * as SubscriptionTools from "./durable/SubscriptionTools.ts";
 export * as SubscriptionTransition from "./durable/SubscriptionTransition.ts";
 export * as ThreadInvariants from "./durable/ThreadInvariants.ts";
-export * as ThreadProjection from "./durable/ThreadProjection.ts";
 export * as ThreadProjectionMaintenance from "./durable/ThreadProjectionMaintenance.ts";
 export * as ThreadStore from "./durable/ThreadStore.ts";
 export * as ToolReconciler from "./durable/ToolReconciler.ts";

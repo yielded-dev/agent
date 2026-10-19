@@ -1,8 +1,5 @@
 import { describe, it } from "@effect/vitest";
-import {
-  threadStoreConformanceCases,
-  threadCheckpointConformanceCases,
-} from "@yielded/agent/testing/thread-store-conformance";
+import { threadStoreConformanceCases } from "@yielded/agent/testing/thread-store-conformance";
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import * as Effect from "effect/Effect";
 import * as String from "effect/String";
@@ -25,10 +22,7 @@ const withStorage = <A, E>(url: string, effect: Effect.Effect<A, E, ThreadStore>
 
 describe("PostgresThreadStore", () => {
   describe("shared ThreadStore conformance", () => {
-    for (const conformanceCase of [
-      ...threadStoreConformanceCases,
-      ...threadCheckpointConformanceCases,
-    ]) {
+    for (const conformanceCase of threadStoreConformanceCases) {
       it.effect(conformanceCase.name, () =>
         withTemporaryDatabase((url) => withStorage(url, conformanceCase.run)),
       );

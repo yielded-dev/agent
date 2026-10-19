@@ -114,7 +114,6 @@ export default defineConfig({
       "src/durable/ThreadStoreConformance.ts",
       "src/durable/ThreadInvariants.ts",
       "src/durable/ThreadProjectionMaintenance.ts",
-      "src/durable/ThreadProjection.ts",
       "src/durable/ThreadStore.ts",
       "src/durable/ThreadReader.ts",
       "src/durable/ToolReconciler.ts",

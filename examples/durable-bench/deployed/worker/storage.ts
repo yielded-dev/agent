@@ -9,6 +9,7 @@ import { fingerprint, type Message } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
 import {
   expectedSeed,
+  expectedRestoredTables,
   StorageFormat,
   type FixtureCompatibility,
   type BulkFixture,
@@ -311,11 +312,12 @@ export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) 
   )
     return yield* fail("Imported transcript fingerprint differs from local fixture");
   const counts = tables(storage.sql);
+  const expectedTables = expectedRestoredTables(fixture, compatibility);
 
-  if (Object.keys(counts).sort().join("\n") !== Object.keys(fixture.tables).sort().join("\n"))
+  if (Object.keys(counts).sort().join("\n") !== Object.keys(expectedTables).sort().join("\n"))
     return yield* fail("Initialized table inventory differs from local source fixture");
 
-  for (const [table, expected] of Object.entries(fixture.tables)) {
+  for (const [table, expected] of Object.entries(expectedTables)) {
     if (counts[table] !== expected)
       return yield* fail(
         `Initialized ${table} count ${counts[table]} differs from source ${expected}`,

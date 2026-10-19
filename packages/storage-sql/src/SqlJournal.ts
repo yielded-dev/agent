@@ -14,7 +14,6 @@ import { ProgressAppendReader, validateProgressAppend } from "@yielded/agent/run
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import {
   AppendConflict,
-  CheckpointRejected,
   type ExecutionCheckpoint,
   type PreparedAppend,
   ThreadStoreError,
@@ -74,8 +73,6 @@ const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
 const MAX_STORED_TEXT_BYTES = 16 * 1024 * 1024;
 const MAX_IDENTIFIER_LENGTH = 1_024;
 
-const storedTextBytes = (value: string): number => new TextEncoder().encode(value).byteLength;
-
 export class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
   created_at: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
@@ -98,12 +95,6 @@ export class RecordRow extends Schema.Class<RecordRow>("RecordRow")({
   sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
 }) {}
 
-class CheckpointRow extends Schema.Class<CheckpointRow>("CheckpointRow")({
-  checkpoint_json: BoundedStoredText,
-  thread_id: BoundedIdentifier,
-  through_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-}) {}
-
 const decodeReceipt = Schema.decodeUnknownEffect(
   Schema.Array(StoredExecution).check(Schema.isMaxLength(1)),
 );
@@ -111,7 +102,6 @@ const decodeReceipt = Schema.decodeUnknownEffect(
 const ThreadRows = Schema.Array(ThreadRow);
 const BatchRows = Schema.Array(BatchRow);
 const RecordRows = Schema.Array(RecordRow);
-const CheckpointRows = Schema.Array(CheckpointRow);
 const decodeCanonicalSequence = Schema.decodeEffect(CanonicalSequence);
 
 const isLifecyclePublicationFact = Schema.is(Schema.toType(LifecyclePublicationFact));
@@ -426,14 +416,6 @@ export class RawReadRequest extends Schema.Class<RawReadRequest>(
   limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1_024)),
 }) {}
 
-export class RawCheckpoint extends Schema.Class<RawCheckpoint>(
-  "@effect-agent/storage-sql/RawCheckpoint",
-)({
-  checkpointJson: BoundedStoredText,
-  threadId: ThreadId.check(Schema.isMaxLength(MAX_IDENTIFIER_LENGTH)),
-  throughSequence: CanonicalSequence,
-}) {}
-
 /** Construct journal operations over an already initialized database. */
 export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   S extends Diagnostic,
@@ -520,8 +502,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const decodeBatchRows = decodeRows(BatchRows);
 
   const decodeRecordRows = decodeRows(RecordRows);
-
-  const decodeCheckpointRows = decodeRows(CheckpointRows);
 
   const storageError =
     (operation: string) =>
@@ -861,147 +841,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     );
   });
 
-  const saveCheckpoint = Effect.fnUntraced(function* (
-    checkpoint: RawCheckpoint,
-  ): Effect.fn.Return<void, CheckpointRejected | C | S | W> {
-    if (
-      checkpoint.threadId.length > MAX_IDENTIFIER_LENGTH ||
-      storedTextBytes(checkpoint.checkpointJson) > MAX_STORED_TEXT_BYTES
-    ) {
-      return yield* options.errors.storage({
-        operation: "save checkpoint",
-        message: "Checkpoint identity or encoded JSON exceeds the SQL storage bounds.",
-      });
-    }
-    yield* withWriteTransaction("checkpoint transaction")(
-      Effect.gen(function* () {
-        const threadRows = yield* sql<Record<string, unknown>>`
-          SELECT
-            thread_id,
-            created_at,
-            tail_sequence
-          FROM ${relation("effect_agent_threads")}
-          WHERE thread_id = ${checkpoint.threadId}
-        `.pipe(execute, Effect.mapError(storageError("read checkpoint tail")));
-
-        const thread = yield* decodeThreadRow(
-          "effect_agent_threads",
-          checkpoint.threadId,
-          threadRows,
-        );
-
-        if (checkpoint.throughSequence > thread.tail_sequence) {
-          return yield* CheckpointRejected.make({
-            threadId: checkpoint.threadId,
-            reason: "ahead-of-tail",
-          });
-        }
-        if (!(yield* isBatchBoundary(checkpoint.threadId, checkpoint.throughSequence))) {
-          return yield* CheckpointRejected.make({
-            threadId: checkpoint.threadId,
-            reason: "not-batch-boundary",
-          });
-        }
-
-        const checkpointRows = yield* sql<Record<string, unknown>>`
-          SELECT
-            thread_id,
-            through_sequence,
-            checkpoint_json
-          FROM ${relation("effect_agent_checkpoints")}
-          WHERE thread_id = ${checkpoint.threadId}
-            AND through_sequence = ${checkpoint.throughSequence}
-        `.pipe(execute, Effect.mapError(storageError("read idempotent checkpoint")));
-
-        const existing = yield* decodeCheckpointRows(
-          "effect_agent_checkpoints",
-          `${checkpoint.threadId}/${checkpoint.throughSequence}`,
-          checkpointRows,
-        );
-
-        if (existing.length > 1) {
-          return yield* options.errors.corruption({
-            table: "effect_agent_checkpoints",
-            rowKey: `${checkpoint.threadId}/${checkpoint.throughSequence}`,
-            message: "A checkpoint primary key returned more than one row.",
-          });
-        }
-        if (existing.length === 1) {
-          if (existing[0].checkpoint_json !== checkpoint.checkpointJson) {
-            return yield* CheckpointRejected.make({
-              threadId: checkpoint.threadId,
-              reason: "corrupt",
-            });
-          }
-
-          return;
-        }
-
-        yield* sql`
-          INSERT INTO ${relation("effect_agent_checkpoints")} (
-            thread_id,
-            through_sequence,
-            checkpoint_json
-          ) VALUES (
-            ${checkpoint.threadId},
-            ${checkpoint.throughSequence},
-            ${checkpoint.checkpointJson}
-          )
-        `.pipe(execute, Effect.mapError(storageError("insert checkpoint")));
-      }),
-    );
-  });
-
-  const loadCheckpoint = Effect.fnUntraced(function* (
-    threadId: string,
-    atOrBeforeSequence: CanonicalSequence,
-  ) {
-    const rows = yield* sql<Record<string, unknown>>`
-      SELECT
-        thread_id,
-        through_sequence,
-        checkpoint_json
-      FROM ${relation("effect_agent_checkpoints")}
-      WHERE thread_id = ${threadId}
-        AND through_sequence <= ${atOrBeforeSequence}
-      ORDER BY through_sequence DESC
-      LIMIT 1
-    `.pipe(execute, Effect.mapError(storageError("load checkpoint")));
-
-    return yield* decodeCheckpointRows(
-      "effect_agent_checkpoints",
-      `${threadId}<=${atOrBeforeSequence}`,
-      rows,
-    );
-  });
-
-  const isBatchBoundary = Effect.fnUntraced(function* (
-    threadId: string,
-    sequence: CanonicalSequence,
-  ) {
-    if (sequence === 0) return true;
-
-    // The identity row and batch-end predicate reject missing and interior sequences.
-    const rows = yield* sql<Record<string, unknown>>`
-      SELECT last_sequence
-      FROM ${relation("effect_agent_canonical_batches")}
-      WHERE thread_id = ${threadId}
-        AND batch_id = (
-          SELECT ${recordBatchId(sql, options.namespace)} FROM ${relation("effect_agent_canonical_records")}
-          WHERE thread_id = ${threadId} AND sequence = ${sequence}
-        )
-        AND last_sequence = ${sequence}
-    `.pipe(execute, Effect.mapError(storageError("read canonical batch boundary")));
-
-    const batches = yield* decodeRows(
-      Schema.Array(
-        Schema.Struct({ last_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)) }),
-      ),
-    )("effect_agent_canonical_batches", `${threadId}/${sequence}`, rows);
-
-    return batches.length === 1;
-  });
-
   const scanStoredPayloads = () =>
     withReadTransaction("startup scan transaction")(
       Effect.gen(function* () {
@@ -1036,15 +875,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             ORDER BY thread_id, sequence
           `.pipe(execute, Effect.mapError(storageError("scan canonical records")));
 
-        const checkpoints = yield* sql<Record<string, unknown>>`
-            SELECT
-              thread_id,
-              through_sequence,
-              checkpoint_json
-            FROM ${relation("effect_agent_checkpoints")}
-            ORDER BY thread_id, through_sequence
-          `.pipe(execute, Effect.mapError(storageError("scan checkpoints")));
-
         return {
           threads: yield* decodeThreadRows("effect_agent_threads", "startup_scan", threads),
           batches: yield* decodeBatchRows(
@@ -1056,11 +886,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             "effect_agent_canonical_records",
             "startup_scan",
             records,
-          ),
-          checkpoints: yield* decodeCheckpointRows(
-            "effect_agent_checkpoints",
-            "startup_scan",
-            checkpoints,
           ),
         };
       }),
@@ -1085,11 +910,8 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         Effect.suspend(() => readAppendThread(request.threadId)),
       ),
     getThread,
-    isBatchBoundary,
-    loadCheckpoint,
     materialize,
     read,
-    saveCheckpoint,
     scanStoredPayloads,
     withWriteTransaction,
     withReadTransaction,

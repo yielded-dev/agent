@@ -334,7 +334,7 @@ const crossThreadStoreError = (operation: string, target: string): ThreadStoreEr
     message:
       `${operation} addressed to foreign Thread ${target} is not route-capable; the ` +
       "closed cross-Object subset is materialize, append, read and readPrompt (paged), inspectTail, and " +
-      "export. Observation and checkpoints are lane-local by construction and must execute " +
+      "export. Observation and Prompt checkpoints are lane-local by construction and must execute " +
       "inside the owning Thread's Durable Object.",
   });
 
@@ -937,7 +937,6 @@ export const routedSettlementPublisherLayer = (options: RoutedPortOptions) =>
 
 const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPortOptions) {
   const local = yield* ThreadStore;
-  const checkpoints = local.checkpoints;
   const promptCheckpoints = local.promptCheckpoints;
   const lifecyclePublications = local.lifecyclePublications;
   const acknowledgeMany = lifecyclePublications?.acknowledgeMany;
@@ -1287,7 +1286,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
         ),
       ),
 
-    // Observation and checkpoints are lane-local: the closed route-capable store subset
+    // Observation and Prompt checkpoints are lane-local: the closed route-capable store subset
     // includes exact-Thread work pages and rebuild, but no global Object enumeration.
     observe: (request) =>
       options.ownsThread(request.threadId)
@@ -1322,22 +1321,6 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
               options.ownsThread(ownerThreadId)
                 ? lifecyclePublications.retryParked(ownerThreadId, nowMillis)
                 : Effect.fail(LifecyclePublicationError.make({ reason: "unavailable" })),
-          },
-        }),
-    ...(checkpoints === undefined
-      ? {}
-      : {
-          checkpoints: {
-            save: (request) =>
-              options.ownsThread(request.checkpoint.threadId)
-                ? checkpoints.save(request)
-                : Effect.fail(
-                    crossThreadStoreError("thread save checkpoint", request.checkpoint.threadId),
-                  ),
-            load: (request) =>
-              options.ownsThread(request.threadId)
-                ? checkpoints.load(request)
-                : Effect.fail(crossThreadStoreError("thread load checkpoint", request.threadId)),
           },
         }),
     ...(promptCheckpoints === undefined
@@ -1375,7 +1358,7 @@ export const routedSubmissionLedgerLayer = (
  * Routing decorator over the LOCAL `ThreadStore` facet (plan §1.3): this-thread
  * requests execute locally; foreign store reads, writes, and exact-Thread work pages/rebuild
  * travel the transport. Work enumeration stays local under CurrentNativeSource; global
- * enumeration, foreign checkpoints, and observation fail typed.
+ * enumeration, foreign Prompt checkpoints, and observation fail typed.
  */
 export const routedThreadStoreLayer = (
   options: RoutedPortOptions,

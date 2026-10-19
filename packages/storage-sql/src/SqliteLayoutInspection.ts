@@ -127,16 +127,17 @@ export const makeSqliteLayoutInspection = <C, K, S>(
     return header;
   });
 
-  /** Framework tables allow exactly their declared triggers; application schemas own theirs. */
+  /** Framework tables, including the schema header, allow exactly their declared triggers. */
   const readManagedTriggers = Effect.fnUntraced(function* (initialized: boolean) {
     const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
     const actual = yield* decode(
       Objects,
       yield* sql`SELECT name, type, sql FROM main.sqlite_master
-        WHERE type='trigger' AND tbl_name IN ${sql.in(
-          options.objects.filter(([type]) => type === "table").map(([, name]) => name),
-        )} ORDER BY name`.pipe(Effect.mapError(options.storageError)),
+        WHERE type='trigger' AND tbl_name IN ${sql.in([
+          "effect_agent_schema",
+          ...options.objects.filter(([type]) => type === "table").map(([, name]) => name),
+        ])} ORDER BY name`.pipe(Effect.mapError(options.storageError)),
       "sqlite_master",
     );
 

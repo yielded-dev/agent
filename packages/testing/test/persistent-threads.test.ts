@@ -14,7 +14,6 @@ import { type RunEvent } from "@yielded/agent/run-event";
 import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadHistory } from "@yielded/agent/thread-history";
-import { replayThread } from "@yielded/agent/thread-projection";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
@@ -175,10 +174,14 @@ describe("persistent threads", () => {
           }
 
           const log = yield* exported;
-          const projection = replayThread(threadId, log.records);
+          const payloads = log.records.map(({ record }) => record.payload);
 
-          expect(projection.completedRuns).toHaveLength(100);
-          expect(projection.modelOutputs).toEqual(Array.from({ length: 100 }, () => "ok"));
+          expect(payloads.filter((payload) => payload._tag === "RunCompleted")).toHaveLength(100);
+          expect(
+            payloads
+              .filter((payload) => payload._tag === "ModelCompleted")
+              .map((payload) => payload.output),
+          ).toEqual(Array.from({ length: 100 }, () => "ok"));
         }).pipe(Effect.provide(sqliteLayer({ filename }))),
       ),
     );
@@ -264,12 +267,20 @@ describe("persistent threads", () => {
 
       const result = yield* AgentRuntime.run(binding, "request", options);
       const log = yield* exported;
-      const projection = replayThread(threadId, log.records);
+      const payloads = log.records.map(({ record }) => record.payload);
 
       expect(yield* Ref.get(decodes)).toBe(1);
       expect(yield* Ref.get(seenInput)).toBe("request:1");
-      expect(projection.inputs).toEqual(["request:1"]);
-      expect(projection.modelOutputs).toEqual(["reply"]);
+      expect(
+        payloads
+          .filter((payload) => payload._tag === "UserInputRecorded")
+          .map((payload) => payload.input),
+      ).toEqual(["request:1"]);
+      expect(
+        payloads
+          .filter((payload) => payload._tag === "ModelCompleted")
+          .map((payload) => payload.output),
+      ).toEqual(["reply"]);
       expect(result.output).toBe("reply");
 
       const refused = yield* AgentRuntime.run(agent([]), "x".repeat(1_048_577), options).pipe(
@@ -345,12 +356,24 @@ describe("persistent threads", () => {
             "user",
             "assistant",
           ]);
-          const projection = replayThread(threadId, restored.log.records);
+          const payloads = restored.log.records.map(({ record }) => record.payload);
 
-          expect(projection.inputs).toEqual(["Find my city", "Where was I?"]);
-          expect(projection.modelOutputs).toEqual(["Kyoto", "Welcome back to Kyoto"]);
-          expect(projection.completedRuns).toEqual([first.runId, second.runId]);
-          expect(projection.settlements).toEqual([]);
+          expect(
+            payloads
+              .filter((payload) => payload._tag === "UserInputRecorded")
+              .map((payload) => payload.input),
+          ).toEqual(["Find my city", "Where was I?"]);
+          expect(
+            payloads
+              .filter((payload) => payload._tag === "ModelCompleted")
+              .map((payload) => payload.output),
+          ).toEqual(["Kyoto", "Welcome back to Kyoto"]);
+          expect(
+            payloads
+              .filter((payload) => payload._tag === "RunCompleted")
+              .map((payload) => payload.runId),
+          ).toEqual([first.runId, second.runId]);
+          expect(payloads.filter((payload) => payload._tag === "SubmissionSettled")).toEqual([]);
           expect(
             restored.log.records
               .filter(({ record }) => record.payload._tag === "UserInputRecorded")
@@ -413,7 +436,12 @@ describe("persistent threads", () => {
         });
         const log = yield* exported;
 
-        expect(replayThread(threadId, log.records).completedRuns).toEqual([winner.runId]);
+        expect(
+          log.records
+            .map(({ record }) => record.payload)
+            .filter((payload) => payload._tag === "RunCompleted")
+            .map((payload) => payload.runId),
+        ).toEqual([winner.runId]);
         expect(yield* Ref.get(calls)).toBe(2);
         expect(JSON.stringify(yield* loadHistory(threadId))).not.toContain("loser");
       }).pipe(Effect.provide(memory)),
@@ -562,11 +590,21 @@ describe("persistent threads", () => {
                 Effect.provide(sqliteLayer({ filename, verifyOnOpen: true })),
               );
 
-              const projection = replayThread(threadId, log.records);
+              const payloads = log.records.map(({ record }) => record.payload);
 
-              expect(projection.inputs).toEqual(location === "append:after" ? ["city"] : []);
-              expect(projection.modelOutputs).toEqual(location === "append:after" ? ["Kyoto"] : []);
-              expect(projection.completedRuns).toHaveLength(location === "append:after" ? 1 : 0);
+              expect(
+                payloads
+                  .filter((payload) => payload._tag === "UserInputRecorded")
+                  .map((payload) => payload.input),
+              ).toEqual(location === "append:after" ? ["city"] : []);
+              expect(
+                payloads
+                  .filter((payload) => payload._tag === "ModelCompleted")
+                  .map((payload) => payload.output),
+              ).toEqual(location === "append:after" ? ["Kyoto"] : []);
+              expect(payloads.filter((payload) => payload._tag === "RunCompleted")).toHaveLength(
+                location === "append:after" ? 1 : 0,
+              );
             }),
           ),
       );

@@ -64,6 +64,7 @@ import {
   type TransientObjectTransport,
   ColdResult,
   expectedSeed,
+  expectedRestoredTables,
   ImportResult,
   Identity,
   ObjectIdentity,
@@ -1623,7 +1624,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   });
                 if (
                   seeded.fingerprint !== fixture.fingerprint ||
-                  !equalCounts(seeded.tables, fixture.tables)
+                  !equalCounts(seeded.tables, expectedRestoredTables(fixture, seeded.compatibility))
                 )
                   return yield* BenchError.make({
                     message:

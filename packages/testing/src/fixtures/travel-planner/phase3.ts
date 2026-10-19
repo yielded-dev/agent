@@ -9,9 +9,6 @@ import {
   RecordEnvelope,
   RecordId,
 } from "@yielded/agent/records";
-import { ThreadProjection } from "@yielded/agent/thread-projection";
-import { ThreadCheckpoint } from "@yielded/agent/thread-store";
-import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { TravelPlan, TripRequest } from "./definition.ts";
@@ -100,38 +97,3 @@ export const phase3TravelPlannerBatches = [
 /** Portable current-version fixture; it contains no passenger identity or credentials. */
 export const phase3TravelPlannerEncodedFixture: ReadonlyArray<typeof CanonicalBatch.Encoded> =
   Schema.encodeSync(Schema.Array(CanonicalBatch))(phase3TravelPlannerBatches);
-
-export class TravelPlannerProjectionError extends Schema.TaggedError<TravelPlannerProjectionError>()(
-  "TravelPlannerProjectionError",
-  { message: Schema.String },
-) {}
-
-/** Decode the itinerary projection rebuilt from canonical model-completion records. */
-export const travelPlanFromProjection = (
-  projection: ThreadProjection,
-): Effect.Effect<TravelPlan, TravelPlannerProjectionError> => {
-  const output = projection.modelOutputs.at(-1);
-
-  if (output === undefined) {
-    return Effect.fail(
-      TravelPlannerProjectionError.make({
-        message: "The canonical projection has no completed Travel Planner model output.",
-      }),
-    );
-  }
-
-  return Schema.decodeUnknownEffect(TravelPlan)(output).pipe(
-    Effect.mapError((error) => TravelPlannerProjectionError.make({ message: error.message })),
-  );
-};
-
-/** Build a disposable checkpoint bound to a validated canonical prefix. */
-export const makePhase3TravelPlannerCheckpoint = (projection: ThreadProjection): ThreadCheckpoint =>
-  Schema.decodeSync(ThreadCheckpoint)({
-    schemaVersion: 1,
-    threadId: projection.threadId,
-    throughSequence: projection.throughSequence,
-
-    state: Schema.encodeSync(ThreadProjection)(projection),
-    createdAt: "2026-09-01T00:00:04.000Z",
-  });

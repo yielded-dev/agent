@@ -70,7 +70,6 @@ import {
   ThreadNotMaterialized,
   ThreadExportRejected,
   ThreadStoreError,
-  ThreadCheckpoint,
   ExecutionCheckpoint,
   streamExport,
   ThreadExportSource,
@@ -1094,7 +1093,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   "effect_agent_record_runs",
                   "effect_agent_canonical_batches",
                   "effect_agent_executions",
-                  "effect_agent_checkpoints",
                   "effect_agent_worker_stops",
                   "effect_agent_run_keys",
                   "effect_agent_work_entries",
@@ -1914,19 +1912,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               }),
           );
 
-          const checkpoints = yield* query(
-            sql`SELECT checkpoint_json FROM ${table("effect_agent_checkpoints")} WHERE thread_id=${id} AND through_sequence<=${first.tailSequence} ORDER BY through_sequence DESC LIMIT 1`,
-          ).pipe(
-            Effect.flatMap((r) =>
-              decode(Schema.Array(Schema.Struct({ checkpoint_json: Schema.String })), r),
-            ),
-          );
-
-          const checkpoint =
-            checkpoints[0] === undefined
-              ? undefined
-              : yield* json(ThreadCheckpoint, checkpoints[0].checkpoint_json);
-
           const pages = streamExport({ threadId: id }).pipe(
             Stream.provideService(ThreadExportSource, { export: verificationPage }),
           );
@@ -1962,8 +1947,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             submissions,
             runs,
             executions: active,
-            ...(checkpoint === undefined ? {} : { checkpoint }),
-            checkpointsSupported: true,
             ...(request.requireAllSettled === undefined
               ? {}
               : { requireAllSettled: request.requireAllSettled }),

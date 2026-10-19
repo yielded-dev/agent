@@ -19,7 +19,7 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 28;
+export const CurrentSqliteStorageVersion = 29;
 
 /** Exact released layout, retained for predecessor validation. */
 const layout27Statements = [
@@ -102,8 +102,12 @@ const layout27Statements = [
   "CREATE INDEX effect_agent_message_deliveries_capacity ON effect_agent_message_deliveries(owner_thread_id, (COALESCE(json_extract(record_json, '$.envelope.messageAdmission._tag'), '') = 'WorkerUpdate'), message_id) WHERE state IN ('pending', 'accepted', 'parked')",
 ] as const;
 
-const layoutStatements = layout27Statements.filter(
+const layout28Statements = layout27Statements.filter(
   (statement) => !statement.startsWith("CREATE INDEX effect_agent_canonical_batches_last "),
+);
+
+const layoutStatements = layout28Statements.filter(
+  (statement) => !statement.startsWith('CREATE TABLE "effect_agent_checkpoints" '),
 );
 
 const headerStatement =
@@ -184,6 +188,7 @@ const { decode, readObjects, readHeader, readManagedTriggers } = inspection(
 const layout25 = inspection(25, layout25Statements);
 const layout26 = inspection(26, layout27Statements);
 const layout27 = inspection(27, layout27Statements);
+const layout28 = inspection(28, layout28Statements);
 
 const inspectStorage = Effect.fnUntraced(function* (
   allowUpgrade = false,
@@ -206,10 +211,24 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   if (version === 0 && objects.length === 0) return undefined;
 
-  if (allowUpgrade && (version === 25 || version === 26 || version === 27)) {
+  if (
+    (version === 28 || version === CurrentSqliteStorageVersion) &&
+    objects.some(({ name }) => name === "effect_agent_canonical_batches_last")
+  )
+    return yield* incompatible(version, "Layout contains the retired batch-end index.");
+  if (
+    version === CurrentSqliteStorageVersion &&
+    objects.some(({ name }) => name === "effect_agent_checkpoints")
+  )
+    return yield* incompatible(version, "Current layout contains retired generic checkpoints.");
+
+  if (allowUpgrade && (version === 25 || version === 26 || version === 27 || version === 28)) {
     if (version === 25 && objects.some(({ name }) => addedIndexes.has(name)))
       return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
-    const predecessor = version === 25 ? layout25 : version === 26 ? layout26 : layout27;
+
+    const predecessor =
+      version === 25 ? layout25 : version === 26 ? layout26 : version === 27 ? layout27 : layout28;
+
     const header = yield* predecessor.readHeader(objects, version);
 
     yield* predecessor.readManagedTriggers(true);
@@ -237,7 +256,7 @@ export const readSqliteStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layouts 25–27. */
+/** Initialize fresh storage or atomically upgrade the exact released layouts 25–28. */
 export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
@@ -291,7 +310,10 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
         );
       }
       if (header !== undefined && header.layoutVersion < CurrentSqliteStorageVersion) {
-        yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
+        if (header.layoutVersion <= 27) yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
+        // Retire only the derived generic snapshot cache. This step preserves the exact
+        // canonical and operational bytes; earlier layout conversions remain independent.
+        yield* sql`DROP TABLE effect_agent_checkpoints`;
         yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentSqliteStorageVersion} WHERE singleton=1`;
         yield* sql.unsafe(`PRAGMA user_version = ${CurrentSqliteStorageVersion}`).withoutTransform;
 

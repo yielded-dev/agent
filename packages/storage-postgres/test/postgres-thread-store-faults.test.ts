@@ -19,9 +19,6 @@ import {
 import {
   type SelectedThreadRead,
   AppendRequest,
-  LoadCheckpointRequest,
-  SaveCheckpointRequest,
-  ThreadCheckpoint,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadRead,
@@ -35,7 +32,6 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
@@ -775,52 +771,6 @@ describe("PostgresThreadStore faults", () => {
         );
 
         expect(recoveredAppend.replayed).toBe(true);
-
-        const checkpoint = ThreadCheckpoint.make({
-          schemaVersion: 1,
-          threadId,
-          throughSequence: recoveredAppend.lastSequence,
-
-          state: { destination: "Sapporo" },
-          createdAt: at(3),
-        });
-
-        const save = Effect.gen(function* () {
-          const store = yield* ThreadStore;
-
-          yield* store.checkpoints!.save(SaveCheckpointRequest.make({ checkpoint }));
-        });
-
-        yield* select("save-checkpoint:before");
-        expect(Exit.isFailure(yield* withFailpoints(save).pipe(Effect.exit))).toBe(true);
-        yield* select(undefined);
-        expect(
-          Option.isNone(
-            yield* withFailpoints(
-              Effect.gen(function* () {
-                const store = yield* ThreadStore;
-
-                return yield* store.checkpoints!.load(LoadCheckpointRequest.make({ threadId }));
-              }),
-            ),
-          ),
-        ).toBe(true);
-
-        yield* select("save-checkpoint:after");
-        expect(Exit.isFailure(yield* withFailpoints(save).pipe(Effect.exit))).toBe(true);
-        yield* select(undefined);
-        expect(
-          Option.isSome(
-            yield* withFailpoints(
-              Effect.gen(function* () {
-                const store = yield* ThreadStore;
-
-                return yield* store.checkpoints!.load(LoadCheckpointRequest.make({ threadId }));
-              }),
-            ),
-          ),
-        ).toBe(true);
-        yield* withFailpoints(save);
       }),
     ),
   );
