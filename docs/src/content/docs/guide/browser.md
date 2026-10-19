@@ -35,8 +35,10 @@ const BrowserTools = Toolkit.make(ReadPage.tool);
 ```
 
 Use `BrowserTools` on the Agent. `CloudflareBrowser.layer(ReadPage, { browser })` supplies Worker
-handlers; `CloudflareBrowserRest.layer` supplies REST capture with an HTTP client. Hosts and actions
-are fixed before execution. Structured extraction additionally needs explicit authorization and
+handlers; `CloudflareBrowserRest.layer` supplies REST capture with an HTTP client. Set `urls: "*"`
+when the host permits arbitrary HTTPS pages and subresources. This opts out of the host allowlist;
+it does not provide private-network isolation. URL policy and actions are fixed before execution.
+Structured extraction additionally needs explicit authorization and
 accounting for model inference.
 
 ## Capture and crawl

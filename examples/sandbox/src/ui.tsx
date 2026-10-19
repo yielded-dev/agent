@@ -650,6 +650,9 @@ const toolTitles: Readonly<Record<string, string>> = {
   edit_file: "Edit file",
   search: "Search files",
   OpenAiWebSearch: "Search the web",
+  read_web_page: "Read web page",
+  scrape_web_page: "Scrape web page",
+  screenshot_web_page: "Capture web page",
   bash: "Run Bash",
   new_context: "Refresh context",
   get_context_remaining: "Check context capacity",
@@ -677,22 +680,40 @@ function TranscriptEntry({
     const outcome = result ?? (entry.kind === "result" ? entry : undefined);
 
     return (
-      <Tool
-        title={toolTitle(entry.name)}
-        status={
-          outcome
-            ? outcome.failed
-              ? "failed"
-              : "complete"
-            : active
-              ? waiting
-                ? "pending"
-                : "running"
-              : "incomplete"
-        }
-        input={entry.kind === "tool" ? entry.text : undefined}
-        output={outcome?.text}
-      />
+      <>
+        <Tool
+          title={toolTitle(entry.name)}
+          status={
+            outcome
+              ? outcome.failed
+                ? "failed"
+                : "complete"
+              : active
+                ? waiting
+                  ? "pending"
+                  : "running"
+                : "incomplete"
+          }
+          input={entry.kind === "tool" ? entry.text : undefined}
+          output={outcome?.text}
+        />
+        {outcome?.screenshot && (
+          <a
+            href={outcome.screenshot.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 block overflow-hidden rounded-lg border border-border"
+            aria-label={`Open screenshot of ${outcome.screenshot.source}`}
+          >
+            <img
+              src={outcome.screenshot.url}
+              alt={`Reference page: ${outcome.screenshot.source}`}
+              loading="lazy"
+              className="max-h-64 w-full object-contain object-top"
+            />
+          </a>
+        )}
+      </>
     );
   }
   if (entry.kind === "reasoning") return <Reasoning streaming={streaming}>{entry.text}</Reasoning>;

@@ -56,8 +56,8 @@ export const browserQuickActionImplementation = SandboxImplementation.make({
 });
 
 /**
- * Effect-native client captured by the binding service. Its option types come
- * directly from the pinned Workers declarations rather than a local copy.
+ * Effect-native client captured by the binding service. Compose the pinned
+ * action types with the documented Kitesurf selector for links and scrape.
  */
 export interface BrowserQuickActionClient {
   readonly screenshot: (
@@ -70,10 +70,10 @@ export interface BrowserQuickActionClient {
     options: BrowserRunMarkdownOptions,
   ) => Effect.Effect<Response, BrowserQuickActionRpcError>;
   readonly links: (
-    options: BrowserRunLinksOptions,
+    options: BrowserRunLinksOptions & BrowserRunAlternateBackendOptions,
   ) => Effect.Effect<Response, BrowserQuickActionRpcError>;
   readonly scrape: (
-    options: BrowserRunScrapeOptions,
+    options: BrowserRunScrapeOptions & BrowserRunAlternateBackendOptions,
   ) => Effect.Effect<Response, BrowserQuickActionRpcError>;
   readonly json: (
     options: BrowserRunJsonOptions,
@@ -201,10 +201,13 @@ const navigationFailureMessage = (bodyText: string, response: Response): string 
 };
 
 /** Project the schema-validated request onto Cloudflare's native common options. */
-const quickActionCommonOptions = (request: PageCaptureRequest): BrowserRunCommonOptions => {
-  const options: BrowserRunBaseOptions = {};
+const quickActionCommonOptions = (
+  request: PageCaptureRequest,
+): BrowserRunCommonOptions & BrowserRunAlternateBackendOptions => {
+  const options: BrowserRunBaseOptions & BrowserRunAlternateBackendOptions = {};
   const navigation = request.navigation;
 
+  if (request.engine === "kitesurf") options.browser = "kitesurf";
   if (navigation !== undefined) {
     const goto: NonNullable<BrowserRunBaseOptions["gotoOptions"]> = {};
 
@@ -501,15 +504,6 @@ const makeCapture = (
   Effect.fnUntraced(function* (
     request: PageCaptureRequest,
   ): Effect.fn.Return<PageCaptureResult, PageCaptureError> {
-    if (request.engine !== "chromium") {
-      return yield* PageCaptureUnsupportedError.make({
-        implementation: browserQuickActionImplementation,
-        feature: "engine",
-        message:
-          "The browser binding's quickAction() exposes no engine selector; kitesurf requires the REST or CDP surface",
-      });
-    }
-
     const usesWorkersAi = request.action._tag === "CapturePageStructured";
 
     if (usesWorkersAi) {
@@ -662,8 +656,9 @@ export const CloudflareBrowser = {
 };
 
 const screenshotOptions = (request: PageScreenshotRequest): BrowserRunScreenshotOptions => {
-  const options: BrowserRunBaseOptions = {};
+  const options: BrowserRunBaseOptions & BrowserRunAlternateBackendOptions = {};
 
+  if (request.engine === "kitesurf") options.browser = "kitesurf";
   if (
     request.navigation?.waitUntil !== undefined ||
     request.navigation?.timeoutMillis !== undefined
@@ -800,14 +795,6 @@ const makeScreenshot = (browser: BrowserQuickActionClient): PageScreenshotCaptur
   Effect.fnUntraced(function* (
     request: PageScreenshotRequest,
   ): Effect.fn.Return<PageScreenshotResult, PageScreenshotError> {
-    if (request.engine !== "chromium") {
-      return yield* PageCaptureUnsupportedError.make({
-        implementation: browserQuickActionImplementation,
-        feature: "engine",
-        message: "The browser binding's screenshot action exposes no engine selector",
-      });
-    }
-
     const response = yield* browser
       .screenshot(screenshotOptions(request))
       .pipe(

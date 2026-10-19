@@ -6,6 +6,18 @@ export const LIVE_TEXT_THREAD_HEADER = "x-yielded-thread-id";
 
 export const WorkspaceId = Schema.String.check(Schema.isUUID());
 
+export const ScreenshotId = Schema.String.check(Schema.isUUID());
+
+export const ScreenshotEvidence = Schema.Struct({
+  imageId: ScreenshotId,
+  url: Schema.String,
+  engine: Schema.Literals(["kitesurf", "chromium"]),
+  capturedAt: Schema.Natural,
+});
+
+export const screenshotKey = (threadId: string, imageId: string) =>
+  `web-evidence/${threadId}/${imageId}.png`;
+
 export const WorkspaceRegistration = Schema.Struct({
   id: WorkspaceId,
   title: Schema.NullOr(Schema.String.check(Schema.isMaxLength(120))),
@@ -94,6 +106,7 @@ export const Entry = Schema.Struct({
   kind: Schema.Literals(["user", "assistant", "reasoning", "tool", "result", "status"]),
   text: Schema.String,
   detail: Schema.optionalKey(Schema.String),
+  screenshot: Schema.optionalKey(Schema.Struct({ url: Schema.String, source: Schema.String })),
   sources: Schema.optionalKey(
     Schema.Array(Schema.Struct({ url: Schema.String, title: Schema.String })),
   ),

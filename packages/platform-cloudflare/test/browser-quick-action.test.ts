@@ -117,11 +117,11 @@ describe("Browser Run Quick Action PageCapture adapter", () => {
       { highWaterMark: 0 },
     );
 
-    const { binding } = makeBinding([new Response(stream)]);
+    const { binding, calls } = makeBinding([new Response(stream)]);
 
     const error = await captureError(
       binding,
-      request(CapturePageMarkdown.make({}), { maxOutputBytes: 1_024 }),
+      request(CapturePageMarkdown.make({}), { engine: "kitesurf", maxOutputBytes: 1_024 }),
     );
 
     expect(error).toMatchObject({
@@ -129,6 +129,12 @@ describe("Browser Run Quick Action PageCapture adapter", () => {
       limit: 1_024,
       observed: 1_536,
     });
+    expect(calls).toEqual([
+      {
+        action: "markdown",
+        options: { url: "https://docs.example.com/pricing", browser: "kitesurf" },
+      },
+    ]);
     expect(chunksRead).toBe(3);
     expect(canceled).toBe(true);
     expect(stream.locked).toBe(false);

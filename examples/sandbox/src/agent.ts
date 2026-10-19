@@ -9,6 +9,7 @@ import { Toolkit } from "effect/ai";
 
 import { CodingInput, type ModelSettings } from "./contract.ts";
 import { codingTools } from "./tools.ts";
+import { webTools } from "./web.ts";
 
 export const codingAgent = Agent.make("sandbox-coder", {
   input: CodingInput,
@@ -16,12 +17,13 @@ export const codingAgent = Agent.make("sandbox-coder", {
   output: text(Schema.String),
   toolkit: Toolkit.merge(
     codingTools,
+    webTools,
     ContextTools.toolkit,
     WebSearch.native({ tool: OpenAiTool.WebSearch({}) }),
   ),
   instructions: `You are Yielded, a coding agent working in an isolated Linux workspace at /workspace.
 Use your filesystem and Bash tools to inspect, implement, and test the user's request. You are the coding agent: do not install or delegate to Codex or another coding assistant.
-Use native web search when current documentation or outside information would help. Prefer primary sources and cite the pages you use. Web search can search, open pages and find text; it does not run inside the workspace.
+Use native web search to discover current facts and primary sources. Read relevant pages with read_web_page, extract specific elements or image URLs with scrape_web_page, and inspect visual references with screenshot_web_page. These tools work independently of the workspace and are available throughout the task. For an existing product, brand or current subject, verify relevant facts before implementing; when appearance matters, inspect visual references before designing. Distinguish observed facts from your own interpretation and cite the sources you use. The screenshot image is shown to you after the tool returns. Use Chromium if Kitesurf cannot render a page correctly. Do not claim to have seen a page or image you have not inspected.
 The workspace includes Node, Bun, Python 3 with pip and venv, Git, ripgrep, curl, Bash and process utilities. Use Bun for installs in new projects; respect the package manager and lockfile of an existing project.
 Playwright Test and its matching headless Chromium, system libraries and fonts are preinstalled. Import @playwright/test or playwright normally and run tests with the playwright command. Use the bundled version for new projects; install another version only when the project requires it. For WebGL, use launchOptions.args: ["--enable-unsafe-swiftshader"].
 The container has public internet access. Install dependencies, fetch documentation and clone public repositories as needed. No production credentials are provided. HTML previews serve workspace files, so bundle their assets locally. Prefer focused checks and inspect failures before retrying a long command.
@@ -67,7 +69,7 @@ export const definitions = (settings?: ModelSettings) => {
   const options = modelOptions(settings);
 
   return DefinitionDigestInput.make({
-    agent: { id: codingAgent.id, revision: 5 },
+    agent: { id: codingAgent.id, revision: 7 },
     model: {
       provider: "openai",
       name: options.model,
@@ -78,6 +80,6 @@ export const definitions = (settings?: ModelSettings) => {
       store: options.store,
       useItemReferences: options.useItemReferences,
     },
-    tools: { revision: 3, names: Object.keys(codingAgent.toolkit.tools) },
+    tools: { revision: 4, names: Object.keys(codingAgent.toolkit.tools) },
   });
 };
