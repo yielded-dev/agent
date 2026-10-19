@@ -42,13 +42,18 @@ call only when its complete saved history proves no native operation started.
 An operation that may have run stays blocked until its outcome is known; checking
 recovery never resends the request or reruns the model.
 
-Files are saved to the host's R2 bucket after agent work or a direct command settles.
-Saving runs through the Thread's existing alarms and keeps the latest confirmed
-snapshot. The file panel shows when it was saved and offers a retry if saving failed.
-Containers still stop after 30 minutes idle. **Restore workspace** loads the saved
-files into a new container under the same account, URL and conversation. It restores
-files, including hidden and ignored files, but not running processes or native
-process receipts. An unresolved command stays unresolved after restoration.
+Files are saved after agent work or a direct command settles. The Thread's existing
+alarms retain a portable R2 backup, then attempt a native filesystem checkpoint for
+the same settled work. New messages can be accepted while saving; execution waits
+for that save to finish. The file panel shows when a portable save is retained and
+offers a retry if saving failed. A failed native capture still leaves the portable
+save available.
+Containers still stop after 30 minutes idle. **Restore workspace** uses the native
+checkpoint when available, or the R2 backup after expiry or an image change. It
+also reads workspaces saved with only an R2 backup. Restoration keeps the same
+account, URL and conversation and includes hidden and ignored files. Running
+processes and native process receipts are not restored. An unresolved command
+stays unresolved after restoration.
 
 Changes since the last successful save can be lost when a container stops. Older
 workspaces without a saved snapshot cannot recover files that have already expired.

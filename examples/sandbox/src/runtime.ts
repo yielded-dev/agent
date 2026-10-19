@@ -122,9 +122,11 @@ const registered = DurableAgentRuntime.layerRegistered([
         RunSettings,
         Effect.gen(function* () {
           const ledger = yield* SubmissionLedger;
+          const snapshots = yield* WorkspaceSnapshots;
 
           return {
             read: Effect.gen(function* () {
+              yield* snapshots.beforeExecution;
               const found = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
               if (Option.isNone(found) || found.value.threadId !== threadId)
@@ -173,9 +175,9 @@ const owner = ThreadWorkDiscovery.layer.pipe(
 const application = Layer.fresh(ThreadMaintenance.layer).pipe(
   Layer.provideMerge(commandMaintenance),
   Layer.provideMerge(ShellCommands.layer),
+  Layer.provideMerge(registered),
   Layer.provideMerge(WorkspaceSnapshots.layer),
   Layer.provideMerge(WorkspacePreviews.layer),
-  Layer.provideMerge(registered),
   Layer.provideMerge(owner),
   Layer.provideMerge(Workspace.layer),
 );

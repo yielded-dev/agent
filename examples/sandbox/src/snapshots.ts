@@ -3,7 +3,9 @@ import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudfl
 import { ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
 import { ThreadWorkDiscovery, type ThreadWorkRequest } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Clock, Context, Effect, Layer, Schema } from "effect";
+import { CheckpointInput, SandboxCheckpoint } from "@yielded/sandbox/cloudflare/NativeSandbox";
+import { reportSanitizedCause } from "@yielded/sandbox/observability/RuntimeDiagnostics";
+import { Cause, Clock, Context, Effect, Fiber, Layer, Schema } from "effect";
 import { DurableObjectState } from "effect-cf";
 
 import type { SavedFiles } from "./contract.ts";
@@ -21,7 +23,12 @@ const Backup = Schema.Struct({
   format: Schema.Literal("tar+zstd/1"),
 });
 
-const Snapshot = Schema.Struct({ backup: Backup, source: Schema.String, savedAt: Schema.Natural });
+const Snapshot = Schema.Struct({
+  backup: Backup,
+  checkpoint: Schema.optionalKey(SandboxCheckpoint),
+  source: Schema.String,
+  savedAt: Schema.Natural,
+});
 
 const Operation = Schema.Union([
   Schema.Struct({
@@ -29,11 +36,14 @@ const Operation = Schema.Union([
     id: Schema.String,
     source: Schema.String,
     instanceId: Schema.String,
+    sequence: Schema.optionalKey(CheckpointInput.fields.sequence),
+    backup: Schema.optionalKey(Backup),
   }),
   Schema.Struct({
     kind: Schema.Literal("restoring"),
     id: Schema.String,
     instanceId: Schema.NullOr(Schema.String),
+    mode: Schema.optionalKey(Schema.Literals(["checkpoint", "backup"])),
   }),
 ]);
 
@@ -43,6 +53,7 @@ const SnapshotState = Schema.Struct({
   operation: Schema.NullOr(Operation),
   failedSource: Schema.NullOr(Schema.String),
   restoreFailed: Schema.Boolean,
+  sequence: Schema.optionalKey(CheckpointInput.fields.sequence),
 });
 
 type SnapshotState = typeof SnapshotState.Type;
@@ -64,6 +75,11 @@ const readSnapshotState = Effect.gen(function* () {
 
 /** Read inside the same source transaction as fresh admission. Replays keep their receipts. */
 export const snapshotBusy = readSnapshotState.pipe(Effect.map((state) => state.operation !== null));
+
+/** Admission can queue during a save; execution reconciles it before touching the workspace. */
+export const snapshotRestoring = readSnapshotState.pipe(
+  Effect.map((state) => state.operation?.kind === "restoring"),
+);
 
 const make = Effect.gen(function* () {
   const durableState = yield* DurableObjectState.DurableObjectState;
@@ -139,6 +155,84 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const finishSave = Effect.gen(function* () {
+    const state = yield* read;
+    const operation = state.operation;
+
+    if (operation?.kind !== "saving") return;
+    const backup = operation.backup;
+    const sandbox = yield* workspace.bind(operation.instanceId);
+
+    // Only the native capture has bounded idempotency. A retry uses its original
+    // instance and sequence; the already retained R2 upload is never repeated.
+    const captured = yield* Effect.gen(function* () {
+      if (backup === undefined || operation.sequence === undefined) return;
+
+      return yield* sandbox.checkpoint({
+        instanceId: operation.instanceId,
+        sequence: operation.sequence,
+      });
+    }).pipe(
+      Effect.tapError((error) =>
+        reportSanitizedCause(Cause.fail(error), { operation: "WorkspaceSnapshots.checkpoint" }),
+      ),
+      Effect.result,
+    );
+
+    if (backup === undefined || captured._tag === "Failure") {
+      // A lost reply can leave native IO running after this Thread is evicted.
+      // Exact ensure waits for the native admission gate without replaying an
+      // uncertain upload or allowing the next model call through.
+      const settled = yield* sandbox.ensure().pipe(Effect.result);
+
+      if (settled._tag === "Failure") {
+        const description = yield* sandbox.describe;
+
+        if (description.running && description.current?.instanceId === operation.instanceId)
+          return yield* settled.failure;
+      }
+    }
+    const savedAt = yield* Clock.currentTimeMillis;
+
+    yield* mutations.withTransaction(
+      Effect.gen(function* () {
+        const latest = yield* read;
+
+        if (latest.operation?.id !== operation.id) return;
+        // The SDK chooses its upload ID. Without a receipt, keep the last save
+        // and require an explicit retry, including for pre-checkpoint records.
+        if (backup === undefined)
+          return yield* put({ ...latest, operation: null, failedSource: operation.source });
+        yield* put({
+          ...latest,
+          snapshot: {
+            backup,
+            ...(captured._tag === "Success" && captured.success !== undefined
+              ? { checkpoint: captured.success }
+              : {}),
+            source: operation.source,
+            savedAt,
+          },
+          previous: latest.snapshot?.backup ?? null,
+          operation: null,
+          failedSource: null,
+          restoreFailed: false,
+        });
+      }),
+    );
+    yield* notify;
+  });
+
+  const beforeExecution = Effect.gen(function* () {
+    const state = yield* read;
+
+    if (state.operation?.kind === "restoring")
+      return yield* SnapshotRejected.make({
+        message: "Wait for workspace restoration to finish.",
+      });
+    yield* finishSave;
+  });
+
   const save = Effect.gen(function* () {
     const inspection = yield* workspace.inspect;
 
@@ -157,9 +251,20 @@ const make = Effect.gen(function* () {
         const instanceId = yield* workspace.instanceId;
 
         if (instanceId === null) return null;
-        const operation = { kind: "saving" as const, id: crypto.randomUUID(), source, instanceId };
 
-        yield* put({ ...state, operation });
+        const sequence = yield* Schema.decodeEffect(CheckpointInput.fields.sequence)(
+          (state.sequence ?? 0) + 1,
+        );
+
+        const operation = {
+          kind: "saving" as const,
+          id: crypto.randomUUID(),
+          source,
+          instanceId,
+          sequence,
+        };
+
+        yield* put({ ...state, operation, sequence });
 
         return operation;
       }),
@@ -177,40 +282,32 @@ const make = Effect.gen(function* () {
     const result = yield* sandbox.backupDirectory(options).pipe(Effect.result);
 
     if (result._tag === "Failure") {
-      yield* mutations.withTransaction(
-        Effect.gen(function* () {
-          const state = yield* read;
-
-          if (state.operation?.id === operation.id)
-            yield* put({ ...state, operation: null, failedSource: operation.source });
-        }),
-      );
-      yield* notify;
+      yield* finishSave;
 
       return yield* result.failure;
     }
     const backup = yield* Schema.decodeUnknownEffect(Backup)(result.success);
-    const savedAt = yield* Clock.currentTimeMillis;
 
     const retained = yield* mutations.withTransaction(
       Effect.gen(function* () {
         const state = yield* read;
 
-        if (state.operation?.id !== operation.id) return false;
+        if (state.operation?.kind !== "saving" || state.operation.id !== operation.id) return false;
         yield* put({
-          snapshot: { backup, source: operation.source, savedAt },
-          previous: state.snapshot?.backup ?? null,
-          operation: null,
-          failedSource: null,
-          restoreFailed: false,
+          ...state,
+          operation: { ...state.operation, backup },
         });
 
         return true;
       }),
     );
 
-    if (!retained) yield* sandbox.deleteDirectoryBackup(backup);
-    yield* notify;
+    if (!retained) {
+      yield* sandbox.deleteDirectoryBackup(backup);
+
+      return;
+    }
+    yield* finishSave;
     yield* cleanup;
   });
 
@@ -245,7 +342,12 @@ const make = Effect.gen(function* () {
           yield* put({
             ...state,
             restoreFailed: false,
-            operation: { kind: "restoring", id: crypto.randomUUID(), instanceId: null },
+            operation: {
+              kind: "restoring",
+              id: crypto.randomUUID(),
+              instanceId: null,
+              mode: state.snapshot.checkpoint === undefined ? "backup" : "checkpoint",
+            },
           });
           yield* mutations.recordProgress([snapshotLane]);
         }),
@@ -276,12 +378,41 @@ const make = Effect.gen(function* () {
     let state = yield* read;
 
     if (state.operation?.kind !== "restoring" || state.snapshot === null) return;
+    const snapshot = state.snapshot;
     const operationId = state.operation.id;
     let instanceId = state.operation.instanceId;
+    let mode = state.operation.mode ?? "backup";
+
+    if (mode === "checkpoint" && snapshot.checkpoint === undefined)
+      return yield* SnapshotRejected.make({
+        message: "The saved native checkpoint is unavailable.",
+      });
 
     if (instanceId === null) {
       const initial = yield* workspace.bind();
-      const current = yield* initial.ensure();
+
+      const restored = yield* (
+        mode === "checkpoint" && snapshot.checkpoint !== undefined
+          ? initial.restore(snapshot.checkpoint)
+          : initial.ensure()
+      ).pipe(Effect.result);
+
+      if (restored._tag === "Failure") {
+        if (mode !== "checkpoint" || restored.failure.code !== "CHECKPOINT_UNAVAILABLE")
+          return yield* restored.failure;
+        // Only an explicit incompatibility permits the portable restore. Persist
+        // the choice before boot so redelivery cannot switch back to native.
+        mode = "backup";
+        yield* mutations.withTransaction(
+          Effect.gen(function* () {
+            state = yield* read;
+            if (state.operation?.kind !== "restoring" || state.operation.id !== operationId)
+              return yield* SnapshotRejected.make({ message: "The restore request changed." });
+            yield* put({ ...state, operation: { ...state.operation, mode } });
+          }),
+        );
+      }
+      const current = restored._tag === "Success" ? restored.success : yield* initial.ensure();
 
       instanceId = current.instanceId;
       yield* mutations.withTransaction(
@@ -310,7 +441,7 @@ const make = Effect.gen(function* () {
         message: "The replacement container stopped before restoration finished.",
       });
     }
-    yield* sandbox.restoreDirectory(state.snapshot.backup);
+    if (mode === "backup") yield* sandbox.restoreDirectory(snapshot.backup);
     yield* sandbox.writeFile(workspace.identity.path, workspace.identity.id);
     yield* mutations.withTransaction(
       Effect.gen(function* () {
@@ -343,21 +474,22 @@ const make = Effect.gen(function* () {
             .pipe(Effect.andThen(notify)),
         ),
       );
-    if (state.operation?.kind === "saving") {
-      // The SDK chooses its upload ID. After interruption keep the last committed
-      // backup; repeating this capture could create another untracked object.
-      yield* mutations.withTransaction(
-        put({ ...state, operation: null, failedSource: state.operation.source }),
-      );
-      yield* notify;
-
-      return;
-    }
-    yield* cleanup;
-    yield* save;
+    yield* Effect.gen(function* () {
+      if (state.operation?.kind === "saving") return yield* finishSave;
+      yield* cleanup;
+      yield* save;
+    }).pipe(
+      // Incoming work yields the after-native phase. Join this finite save
+      // before releasing the maintenance pass; admission can still accept it.
+      // The child stays interruptible so its timeout remains effective.
+      Effect.timeout("40 seconds"),
+      Effect.forkChild({ uninterruptible: false }),
+      Effect.flatMap(Fiber.join),
+      Effect.uninterruptible,
+    );
   });
 
-  return { status, requestRestore, requestSave, run };
+  return { status, requestRestore, requestSave, run, beforeExecution };
 });
 
 export class SnapshotRejected extends Schema.TaggedError<SnapshotRejected>()("SnapshotRejected", {

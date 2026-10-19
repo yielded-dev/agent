@@ -315,7 +315,7 @@ function Workspace({ id }: { id: string }) {
   const busy =
     !state.historyReady ||
     expired ||
-    fileOperation !== "idle" ||
+    fileOperation === "restoring" ||
     state.reviewRequired ||
     state.active !== null ||
     state.pending !== null ||
@@ -500,25 +500,27 @@ function Workspace({ id }: { id: string }) {
           />
           <div className="bar">
             <small>
-              {state.pending?.command
-                ? state.admissionRequestId
-                  ? "Sending command…"
-                  : "Command is running"
-                : state.active
-                  ? progressLabel
-                  : state.reviewRequired
-                    ? "Review required"
-                    : state.uncertain
-                      ? "Awaiting delivery status"
-                      : !state.historyReady
-                        ? "Loading history…"
-                        : fileOperation === "saving"
-                          ? "Saving files…"
-                          : fileOperation === "restoring"
-                            ? saved?.restoreFailed
-                              ? "Restore needs a retry"
-                              : "Restoring files…"
-                            : "! runs Bash · ⌘ / Ctrl + Enter to send"}
+              {fileOperation === "saving" && (state.pending || state.active)
+                ? "Queued while files are saved…"
+                : state.pending?.command
+                  ? state.admissionRequestId
+                    ? "Sending command…"
+                    : "Command is running"
+                  : state.active
+                    ? progressLabel
+                    : state.reviewRequired
+                      ? "Review required"
+                      : state.uncertain
+                        ? "Awaiting delivery status"
+                        : !state.historyReady
+                          ? "Loading history…"
+                          : fileOperation === "saving"
+                            ? "Saving files…"
+                            : fileOperation === "restoring"
+                              ? saved?.restoreFailed
+                                ? "Restore needs a retry"
+                                : "Restoring files…"
+                              : "! runs Bash · ⌘ / Ctrl + Enter to send"}
             </small>
             {state.reviewRequired ? (
               <Button
@@ -538,7 +540,10 @@ function Workspace({ id }: { id: string }) {
                 variant="outline"
                 type="button"
                 disabled={
-                  expired || fileOperation !== "idle" || sent.waiting || !!state.admissionRequestId
+                  expired ||
+                  fileOperation === "restoring" ||
+                  sent.waiting ||
+                  !!state.admissionRequestId
                 }
                 onClick={() => send()}
               >
