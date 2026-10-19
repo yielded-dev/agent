@@ -967,10 +967,11 @@ const nowUtc: Effect.Effect<DateTime.Utc> = Effect.map(Clock.currentTimeMillis, 
  * never sees foreign leftovers), then Tier 1's port contract cases (whose lanes deliberately
  * end in every nonterminal shape), then records Tier 3. Requires `Crypto.Crypto` and a
  * TestClock-backed environment; the candidate Layers are built exactly once.
+ * Missing required durable storage capabilities fail with `ThreadStoreError`.
  */
 export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
   options: CertifyDurableAdaptersOptions<LedgerE, StoreE>,
-): Effect.Effect<CertificationReport, LedgerE | StoreE, Crypto.Crypto> => {
+): Effect.Effect<CertificationReport, LedgerE | StoreE | ThreadStoreError, Crypto.Crypto> => {
   // RUN-036: certification uses the default-none Tool failure observer. Trusted application
   // reporting adds no durable transition and is verified separately from adapter certification.
   const environment = Layer.mergeAll(runStorageLayer(), ThreadReader.layer()).pipe(

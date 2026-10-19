@@ -223,27 +223,24 @@ export interface ThreadWorkStorage {
  * Inventories combine current admission/delivery owners with canonical operations and handoffs.
  * Cursors are Thread-bound, forward-only live scans. Revalidate selected candidates; creations
  * before an already consumed cursor appear in the next scan. Rebuild never runs implicitly.
+ * Layer construction requires the adapter's native work-discovery port.
  */
 export class ThreadWorkDiscovery extends Context.Service<ThreadWorkDiscovery, ThreadWorkStorage>()(
   "@effect-agent/thread/ThreadWorkDiscovery",
 ) {
   static readonly layer = Layer.effect(
     ThreadWorkDiscovery,
-    Effect.map(
-      ThreadStore,
-      (store) =>
-        store.work ?? {
-          threads: () =>
-            ThreadStoreError.make({
-              operation: "discover Thread work",
-              message: "The storage adapter has no work-discovery port",
-            }),
-          page: ({ threadId }) =>
-            WorkDiscoveryUnavailable.make({ threadId, reason: "unsupported" }),
-          rebuild: ({ threadId }) =>
-            WorkDiscoveryUnavailable.make({ threadId, reason: "unsupported" }),
-        },
-    ),
+    Effect.gen(function* () {
+      const { work } = yield* ThreadStore;
+
+      if (work === undefined)
+        return yield* ThreadStoreError.make({
+          operation: "construct work discovery",
+          message: "The storage adapter has no work-discovery port",
+        });
+
+      return work;
+    }),
   );
 }
 

@@ -81,5 +81,8 @@ See [operations](/guide/operations/) for receipts, observation, and cancellation
 
 `DurableAgentRuntime.layer` composes registrations with a `SubmissionLedger`, `ThreadStore`,
 `WakeScheduler`, and host authorization. Capture model and tool services when building the Layer.
+The storage adapter must provide work discovery, streaming verification, worker-capacity reads,
+and peer-message counts; missing capabilities fail Layer construction with `ThreadStoreError`.
+Prompt checkpoints and fresh-admission shortcuts are optional accelerators.
 Your host must route each Thread to one process owner and drive recovery after lost wake hints.
 Prefer a platform host unless you need to own that scheduling and resource lifetime yourself.

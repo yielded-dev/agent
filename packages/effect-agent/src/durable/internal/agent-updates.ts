@@ -35,7 +35,13 @@ import { CurrentRunWriter, readRunEvidenceSnapshot } from "../RunContinuation.ts
 import { runIdForSubmission } from "../RunJournal.ts";
 import { LedgerError, type SubmissionSnapshot } from "../SubmissionLedger.ts";
 import { PreparedInput } from "../Subscription.ts";
-import { getRecord, ThreadReader, ThreadStore, ThreadTailRequest } from "../ThreadStore.ts";
+import {
+  getRecord,
+  ThreadReader,
+  ThreadStore,
+  ThreadStoreError,
+  ThreadTailRequest,
+} from "../ThreadStore.ts";
 import {
   deliveryPredecessor,
   decodeWorkCursor,
@@ -90,6 +96,14 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   readonly producerId: ProducerId;
 }) {
   const store = yield* ThreadStore;
+  const work = store.work;
+
+  if (work === undefined)
+    return yield* ThreadStoreError.make({
+      operation: "construct agent update runtime",
+      message: "The storage adapter has no work-discovery port",
+    });
+
   const workers = yield* WorkerRuntime;
   const wake = yield* WakeScheduler;
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
@@ -162,8 +176,6 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   });
 
   const pendingUpdates = Effect.fnUntraced(function* (threadId: ThreadId) {
-    if (store.work === undefined) return yield* rejected("unavailable");
-
     const initial = yield* decodeWorkCursor({ threadId, limit: 128 }).pipe(
       Effect.provideService(Crypto.Crypto, crypto),
       Effect.mapError(storage),
@@ -174,7 +186,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
     let count = 0;
 
     for (let pages = 0; pages < MAX_RECOVERY_PAGES; pages++) {
-      const page: ThreadWorkPage = yield* store.work
+      const page: ThreadWorkPage = yield* work
         .page({ threadId, limit: 128, cursor })
         .pipe(Effect.mapError(() => rejected("unavailable")));
 
