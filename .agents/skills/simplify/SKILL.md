@@ -1,16 +1,18 @@
 ---
 name: simplify
-description: Simplify code or workflows by removing unnecessary machinery while preserving required behavior.
+description: Review or simplify code and workflows by questioning architecture and removing unnecessary machinery while preserving required behavior.
 disable-model-invocation: true
 ---
 
 # Simplify
 
-Start from the requested outcome and what it actually requires. Follow repository guidance and keep the review focused on that outcome. Look for unnecessary work, complexity, and weak assumptions in the solution. Distinguish inherited assumptions from user requirements and external contracts.
+Start from the requested outcome and what it actually requires. Follow repository guidance and keep the review focused on that outcome. Look for unnecessary work, complexity, and weak assumptions in the solution. Distinguish inherited assumptions from user requirements and external contracts. Current code and tests establish what happens, not by themselves what must remain.
 
-Prefer deleting over simplifying, simplifying over optimizing, and optimizing over automating. First look for dependencies, alternate paths, and handoffs that can disappear entirely. Reassess what becomes simpler once they are gone. Optimize or automate only when the task calls for it.
+Prefer deleting over simplifying, simplifying over optimizing, and optimizing over automating. Question whether whole responsibilities, subsystems, dependencies, alternate paths, and handoffs need to exist before cleaning up their implementation. Sketch the smallest design that satisfies the actual requirements; treat the current architecture as a candidate, not a constraint. Reassess what becomes unnecessary after each proposed removal. Optimize or automate only when the task calls for it.
 
-Check relevant callers, stored data, and operational dependencies before removing behavior. Make justified changes within scope; do not stop at recommendations. Use a reversible candidate diff and focused checks when dependencies are uncertain. If deletion would change the assignment, make that choice explicit. If no worthwhile simplification is supported, leave the implementation alone and say so; a review need not produce a diff.
+Match the requested deliverable. A review produces findings and tradeoffs for a reviewer to decide; an implementation request authorizes justified changes within scope. For a large feature, branch, or architecture review, follow the [architecture review workflow](references/architecture-review.md) and write a short memo of what to cut, what replaces it, and what stays. When implementation is already requested, use that reasoning to guide the work without adding a report approval gate. Small, focused changes do not need the full workflow.
+
+Check relevant callers, stored data, and operational dependencies before removing behavior. Use a reversible candidate diff and focused checks when dependencies are uncertain. If deletion would change the assignment, make that choice explicit. If no worthwhile simplification is supported, leave the implementation alone and explain what makes the current machinery necessary. Judge simplification by responsibilities and maintenance removed, not code moved, renamed, or a deletion quota.
 
 Keep the minimum useful implementation, including inside libraries. Preserve a small boundary that owns reusable behavior; remove machinery that the current contract does not need. The [library-first](../library-first/SKILL.md) guidance owns that distinction. In Effect code, preserve service requirements, typed failures, and scoped lifetimes; use existing primitives rather than replacing them with custom wrappers.
 
