@@ -2708,7 +2708,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   // also covers a destination handoff written before dispatch or after Run settlement.
   const progressStore = ThreadStore.of({
     ...store,
-    // Required capacity methods may be inherited and depend on the original receiver.
+    // Required ports may be inherited; preserve their objects and method receivers.
+    ...(store.work === undefined ? {} : { work: store.work }),
     ...(store.readWorkerCapacity === undefined
       ? {}
       : { readWorkerCapacity: store.readWorkerCapacity.bind(store) }),
