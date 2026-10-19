@@ -1,6 +1,7 @@
 import {
   ThreadObjectNamespace,
   ThreadObjectIdentity,
+  ThreadObjectPlacement,
   type ThreadObjectRpc,
 } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import {
@@ -369,7 +370,16 @@ export class TestThreadObject extends ThreadObject.make(
                           Layer.provide(testMessageRecovery),
                           Layer.provideMerge(layerFromBindings([...existing, ...workers])),
                         )
-                      : layerFromBindings([...existing, ...workers]),
+                      : threadId.startsWith("local-lookup-")
+                        ? layerFromBindings([...existing, ...workers]).pipe(
+                            Layer.provide(
+                              Layer.succeed(ThreadObjectPlacement, {
+                                ownsThread: (id) =>
+                                  id === threadId || id === `${threadId}:colocated`,
+                              }),
+                            ),
+                          )
+                        : layerFromBindings([...existing, ...workers]),
         ),
       ),
     ),

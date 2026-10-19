@@ -1,9 +1,4 @@
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
-import {
-  ThreadObjectPlacement,
-  ThreadObjectNamespace,
-  DurableObjectContext,
-} from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { invalidate } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import { digestDefinitions, digestJson } from "@yielded/agent/digest";
@@ -11,19 +6,15 @@ import { AgentId, SubmissionId, ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
 import { DefinitionDigestInput, DeploymentId } from "@yielded/agent/records";
 import { AdmissionRequest, SubmissionLedger } from "@yielded/agent/submission-ledger";
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
 import { DurableObject } from "effect-cf";
-import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
 import { expect, it } from "vite-plus/test";
 
 import { stubFor } from "./harness.ts";
-
-const options = { deploymentId: "binding-layer", producerPrefix: "binding-layer" };
 
 // Regression: https://github.com/yielded-dev/agent/commit/227b5e8a98ce4d1b303bacbeaf35c15ff45f6c75
 it("keeps local submission lookups inside the physical owner, including corrupt identity rows", async () => {
@@ -34,23 +25,9 @@ it("keeps local submission lookups inside the physical owner, including corrupt 
   await runInDurableObject(stubFor(thread), (instance, state) =>
     instance[DurableObject.RunSymbol](
       Effect.gen(function* () {
-        const runtime = ThreadObject.layer([]).pipe(
-          Layer.provide(
-            Layer.succeed(ThreadObjectPlacement, {
-              ownsThread: (id) => id === thread || id === colocated,
-            }),
-          ),
-          Layer.provide(ThreadObject.layerConfig(options)),
-          Layer.provide([
-            DurableObjectContext.layer(state, env),
-            ThreadObjectNamespace.layer(env.THREADS),
-          ]),
-        );
-
-        const built = yield* Layer.build(runtime);
-        const ports = Context.get(built, ThreadObject.ThreadObjectPorts);
-        const ledger = Context.get(built, SubmissionLedger);
-        const sql = Context.get(built, SqlClient.SqlClient);
+        const ports = yield* ThreadObject.ThreadObjectPorts;
+        const ledger = yield* SubmissionLedger;
+        const sql = yield* SqlClient.SqlClient;
 
         const agentDigests = yield* digestDefinitions(
           DefinitionDigestInput.make({ agent: "local-lookup", model: "none", tools: "none" }),
