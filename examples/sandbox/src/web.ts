@@ -21,6 +21,13 @@ import { ScreenshotEvidence, ScreenshotId, screenshotKey } from "./contract.ts";
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
+const ScreenshotMetadata = Schema.fromJsonString(
+  Schema.Struct({
+    engine: ScreenshotEvidence.fields.engine,
+    capturedAt: ScreenshotEvidence.fields.capturedAt,
+  }),
+);
+
 const readPage = WebCapture.make("read_web_page", {
   description:
     "Read a web page as rendered Markdown or HTML, or discover its links. Use this to gather primary-source evidence before building.",
@@ -94,52 +101,56 @@ export const webLive = Layer.unwrap(
                 "image",
                 ScreenshotEvidence,
                 Effect.gen(function* () {
-                  const result = yield* capture.capture(
-                    PageScreenshotRequest.make({
-                      target: PageUrlTarget.make({ url }),
-                      engine,
-                      fullPage,
-                      viewport: PageViewport.make({ width: 1280, height: 800 }),
-                      limits: PageScreenshotLimits.make({ maxOutputBytes: MAX_IMAGE_BYTES }),
-                    }),
-                  );
+                  const key = screenshotKey(threadId, imageId);
 
-                  const evidence = {
-                    imageId,
-                    url,
-                    engine,
-                    capturedAt: yield* Clock.currentTimeMillis,
-                  };
-
-                  const object = yield* Effect.tryPromise({
-                    try: async () => {
-                      const key = screenshotKey(threadId, imageId);
-
-                      const created = await env.BACKUPS.put(key, result.bytes, {
-                        httpMetadata: { contentType: result.mediaType },
-                        customMetadata: {
-                          evidence: Schema.encodeSync(Schema.fromJsonString(ScreenshotEvidence))(
-                            evidence,
-                          ),
-                        },
-                        onlyIf: { etagDoesNotMatch: "*" },
-                      });
-
-                      return created ?? (await env.BACKUPS.head(key));
-                    },
+                  let object = yield* Effect.tryPromise({
+                    try: () => env.BACKUPS.head(key),
                     catch: (cause) =>
-                      failure("The screenshot could not be saved. Try another capture.", cause),
+                      failure("The saved screenshot could not be checked. Try again.", cause),
                   });
 
-                  // A lost step receipt may retry the capture. Keep the first image and its
-                  // metadata together, even if an older request finishes writing later.
-                  return yield* Schema.decodeUnknownEffect(
-                    Schema.fromJsonString(ScreenshotEvidence),
-                  )(object?.customMetadata?.evidence).pipe(
+                  // A lost step receipt must recover the image even if the live page is gone.
+                  if (object === null) {
+                    const result = yield* capture.capture(
+                      PageScreenshotRequest.make({
+                        target: PageUrlTarget.make({ url }),
+                        engine,
+                        fullPage,
+                        viewport: PageViewport.make({ width: 1280, height: 800 }),
+                        limits: PageScreenshotLimits.make({ maxOutputBytes: MAX_IMAGE_BYTES }),
+                      }),
+                    );
+
+                    const metadata = Schema.encodeSync(ScreenshotMetadata)({
+                      engine,
+                      capturedAt: yield* Clock.currentTimeMillis,
+                    });
+
+                    object = yield* Effect.tryPromise({
+                      try: async () => {
+                        const created = await env.BACKUPS.put(key, result.bytes, {
+                          httpMetadata: { contentType: result.mediaType },
+                          customMetadata: { capture: metadata },
+                          onlyIf: { etagDoesNotMatch: "*" },
+                        });
+
+                        return created ?? (await env.BACKUPS.head(key));
+                      },
+                      catch: (cause) =>
+                        failure("The screenshot could not be saved. Try another capture.", cause),
+                    });
+                  }
+
+                  // The durable tool input already owns the URL; keep object metadata small.
+                  const metadata = yield* Schema.decodeUnknownEffect(ScreenshotMetadata)(
+                    object?.customMetadata?.capture,
+                  ).pipe(
                     Effect.mapError((cause) =>
                       failure("The saved screenshot could not be read.", cause),
                     ),
                   );
+
+                  return { imageId, url, ...metadata };
                 }),
               );
             },
