@@ -34,7 +34,7 @@ const timeoutMs = 30_000;
 
 const SavedCommand = Schema.Struct({
   ...ShellCommand.fields,
-  deadlineAt: Schema.Finite,
+  deadlineAt: Schema.optionalKey(Schema.Finite),
   allocation: Schema.optionalKey(Allocation),
   stopRequested: Schema.optionalKey(Schema.Boolean),
 });
@@ -200,7 +200,6 @@ const make = Effect.gen(function* () {
             ...input,
             afterSequence,
             createdAt,
-            deadlineAt: createdAt + timeoutMs,
             status: "queued",
           };
 
@@ -242,10 +241,19 @@ const make = Effect.gen(function* () {
     if (command === null || command.status === "unknown") return Option.none<number>();
     yield* (yield* WorkspaceSnapshots).beforeExecution;
 
+    // Saving files is queue time. Retain the execution deadline before the first
+    // allocation attempt so retries cannot extend it.
+    const deadlineAt =
+      command.deadlineAt ??
+      command.allocation?.deadlineAt ??
+      (yield* Clock.currentTimeMillis) + timeoutMs;
+
+    if (command.deadlineAt === undefined) command = yield* update({ ...command, deadlineAt });
+
     let allocation = command.allocation;
 
     if (allocation === undefined) {
-      if (command.stopRequested || (yield* Clock.currentTimeMillis) >= command.deadlineAt) {
+      if (command.stopRequested || (yield* Clock.currentTimeMillis) >= deadlineAt) {
         yield* update(
           command.stopRequested
             ? { ...command, status: "completed", output: stoppedOutput }
@@ -255,7 +263,7 @@ const make = Effect.gen(function* () {
 
         return Option.none<number>();
       }
-      const allocated = yield* allocateCommand(command.deadlineAt).pipe(Effect.result);
+      const allocated = yield* allocateCommand(deadlineAt).pipe(Effect.result);
 
       if (allocated._tag === "Failure") {
         // Inspect only after failed allocation; ordinary command startup adds no RPC.
@@ -288,8 +296,7 @@ const make = Effect.gen(function* () {
       ).pipe(Effect.result);
 
       if (outcome._tag === "Failure") {
-        if ((yield* Clock.currentTimeMillis) < command.deadlineAt + 10_000)
-          return yield* outcome.failure;
+        if ((yield* Clock.currentTimeMillis) < deadlineAt + 10_000) return yield* outcome.failure;
         // Preserve the exact receipt and block new writes when execution cannot be established.
         yield* update({ ...command, status: "unknown" });
 
