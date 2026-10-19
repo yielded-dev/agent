@@ -1,12 +1,6 @@
-import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { make as makeRunStorage, StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
-import {
-  SubmissionLedger,
-  MarkInputAppliedRequest,
-  submissionInputBatchId,
-  submissionInputRecordId,
-} from "@yielded/agent/submission-ledger";
+import { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { ThreadImport, type ThreadArchive } from "@yielded/agent/thread-import";
 import { ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
 import * as Channel from "effect/Channel";
@@ -18,7 +12,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
 import * as Stream from "effect/Stream";
 
-import type { makeSqlJournalKernel, RawAppendRequest } from "./SqlJournal.ts";
+import type { makeSqlJournalKernel } from "./SqlJournal.ts";
 import type { Diagnostic } from "./SqlStorage.ts";
 import {
   makeSqlSubmissionLedgerKernel,
@@ -88,62 +82,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
     _affected?: { readonly threadId?: string; readonly submissionId?: string },
   ) => bind(owner.withMutation(effect));
 
-  const appendNative = storeKernel.makeOwnedAppend(
-    Effect.fnUntraced(function* (raw: RawAppendRequest) {
-      const record = raw.records[0]?.canonical;
-
-      if (
-        raw.records.length !== 1 ||
-        record?.payload._tag !== "UserInputRecorded" ||
-        record.payload.kind !== "user" ||
-        record.payload.submissionId === undefined
-      )
-        return yield* journalKernel.journal.append(raw);
-      const submissionId = record.payload.submissionId;
-
-      if (
-        !owner.hasOwner(raw.threadId, submissionId) ||
-        raw.batchId !== submissionInputBatchId(submissionId) ||
-        record.recordId !== submissionInputRecordId(submissionId) ||
-        record.payload.runId !== runIdForSubmission(submissionId)
-      )
-        return yield* journalKernel.journal.append(raw);
-
-      // Original input, active state and applied marker are one native transaction.
-      const appended = yield* journalKernel.journal.withWriteTransaction(
-        "append applied input transaction",
-      )(
-        Effect.gen(function* () {
-          yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:before");
-          const result = yield* journalKernel.journal.appendInTransaction(raw);
-
-          yield* ledgerKernel
-            .markInputAppliedInTransaction(
-              MarkInputAppliedRequest.make({
-                submissionId,
-                recordId: record.recordId,
-                sequence: result.firstSequence,
-              }),
-            )
-            .pipe(
-              Effect.mapError((cause) =>
-                storeOptions.errors.storage({
-                  operation: "append applied input",
-                  message: cause.message,
-                  cause,
-                }),
-              ),
-            );
-
-          return result;
-        }),
-      );
-
-      yield* ledgerOptions.hitFailpoint("ledger:mark-input-applied:after");
-
-      return appended;
-    }),
-  );
+  const appendNative = storeKernel.makeOwnedAppend(journalKernel.journal.append);
 
   const stopWorker = rawLedger.stopWorker;
   const inspectWorker = rawLedger.inspectWorker;
@@ -162,6 +101,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
     markReady: (request) =>
       admin(rawLedger.markReady(request), { submissionId: request.submissionId }),
     selectHead: (request) => admin(rawLedger.selectHead(request)),
+    appendInput: (submissionId, request) => bind(rawLedger.appendInput(submissionId, request)),
     markInputApplied: (request) =>
       admin(rawLedger.markInputApplied(request), { submissionId: request.submissionId }),
     finalizeSettlement: (request) =>

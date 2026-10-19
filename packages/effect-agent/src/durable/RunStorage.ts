@@ -8,7 +8,8 @@ import type * as Scope from "effect/Scope";
 
 import type { SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { StorageOwner } from "./internal/StorageOwner.ts";
-import type { CanonicalBatch, CanonicalSequence } from "./Records.ts";
+import type { CanonicalBatch, CanonicalSequence, RecordEnvelope } from "./Records.ts";
+import { runIdForSubmission } from "./RunJournal.ts";
 import {
   SettlementPublication,
   type SettlementPublicationFailure,
@@ -31,6 +32,8 @@ import {
   RevertJoiningRequest,
   SettlementConflict,
   SubmissionLedger,
+  submissionInputBatchId,
+  submissionInputRecordId,
   SuspendRequest,
   type SuspensionReason,
 } from "./SubmissionLedger.ts";
@@ -122,8 +125,8 @@ export interface RunWriter {
 
 export interface RunStorageSession extends RunWriter, RunOwnership {
   readonly claim: Claim;
-  /** Atomic original input/context plus the ledger marker, when the adapter supports it. */
-  readonly appendInput?: RunWriter["append"];
+  /** Atomic original input/current state plus the ledger marker under this owner. */
+  readonly appendInput: RunWriter["append"];
   /** Read current controls, root identity and empty-Run evidence under this owner.
    * Its tail is adopted by the writer; append still checks the tail and revision. */
   readonly prepareStart?: Effect.Effect<
@@ -150,6 +153,39 @@ export class RunStorage extends Context.Service<
     >;
   }
 >()("@effect-agent/thread/RunStorage") {}
+
+/** Check captured input publication and its checkpoint reference; adapters enforce ownership atomically. */
+export const validateInputPublication = Effect.fnUntraced(function* (
+  submissionId: SubmissionId,
+  request: PreparedAppend,
+): Effect.fn.Return<RecordEnvelope, ThreadStoreError> {
+  const record = request.batch.records[0];
+
+  const context = request.executions
+    ?.flatMap((update) => update.facts)
+    .find(({ payload }) => payload._tag === "RunContextRecorded");
+
+  if (
+    request.executions?.length !== 1 ||
+    request.executions[0]?.previousRevision !== 0 ||
+    request.batch.records.length !== 1 ||
+    record?.payload._tag !== "UserInputRecorded" ||
+    record.payload.kind !== "user" ||
+    record.payload.submissionId !== submissionId ||
+    record.payload.runId !== runIdForSubmission(submissionId) ||
+    record.recordId !== submissionInputRecordId(submissionId) ||
+    request.batch.batchId !== submissionInputBatchId(submissionId) ||
+    request.executions[0]?.checkpoint.progress.originalInput.recordId !== record.recordId ||
+    (context?.payload._tag === "RunContextRecorded" &&
+      context.payload.historyThrough !== request.expectedTailSequence)
+  )
+    return yield* ThreadStoreError.make({
+      operation: "append original input and context",
+      message: "Original input publication has a different context boundary",
+    });
+
+  return record;
+});
 
 /** One writer's scoped capability, selected at claim or administrative construction. */
 class WriterOwnership extends Context.Service<
@@ -335,23 +371,18 @@ export const make = Effect.gen(function* () {
 
             const owned = <A, E>(effect: Effect.Effect<A, E>) => generation.use(effect);
 
-            const inputPublisher = ledger.appendInput;
-
-            const appendInput =
-              inputPublisher === undefined
-                ? undefined
-                : yield* makeAppend.pipe(
-                    Effect.provideService(ThreadStore, {
-                      ...store,
-                      append: (request) => inputPublisher(claimed.submissionId, request),
-                    }),
-                  );
+            const appendInput = yield* makeAppend.pipe(
+              Effect.provideService(ThreadStore, {
+                ...store,
+                append: (request) => ledger.appendInput(claimed.submissionId, request),
+              }),
+            );
 
             const session: RunStorageSession = {
               ...writer,
               claim: claimed,
-              ...(appendInput === undefined ? {} : { appendInput }),
-              ...(store.readFreshRun === undefined || appendInput === undefined
+              appendInput,
+              ...(store.readFreshRun === undefined
                 ? {}
                 : {
                     prepareStart: owner.withProgress(

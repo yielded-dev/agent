@@ -29,7 +29,7 @@ export const SettlementPublicationAuthority = Schema.Union([
 
 export type SettlementPublicationAuthority = typeof SettlementPublicationAuthority.Type;
 
-/** The deterministic settlement fact followed by its atomically published Run progress. */
+/** One deterministic settlement fact, with atomic Run progress in the execution updates. */
 export class SettlementPublication extends Schema.Class<SettlementPublication>(
   "@effect-agent/thread/SettlementPublication",
 )({
@@ -94,16 +94,7 @@ export const validatePublication = Effect.fnUntraced(function* (input: Settlemen
   const record = request.append.batch.records[0];
 
   if (
-    request.append.batch.records
-      .slice(1)
-      .some(
-        (progress) =>
-          progress.payload._tag !== "RunContinuation" ||
-          progress.payload.lastFact.recordId !== record.recordId ||
-          (progress.payload.runId !== runIdForSubmission(request.submissionId) &&
-            (record.payload._tag !== "SubmissionSettled" ||
-              progress.payload.runId !== record.payload.runId)),
-      ) ||
+    request.append.batch.records.length !== 1 ||
     record === undefined ||
     record.payload._tag !== "SubmissionSettled" ||
     record.payload.submissionId !== request.submissionId ||
@@ -113,8 +104,7 @@ export const validatePublication = Effect.fnUntraced(function* (input: Settlemen
   )
     return yield* LedgerError.make({
       operation: "publish settlement",
-      message:
-        "Publication must contain the deterministic settlement and only its owning Run progress",
+      message: "Publication must contain exactly the deterministic settlement record",
     });
 
   return { request, record, settlement: record.payload };

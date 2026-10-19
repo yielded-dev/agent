@@ -83,5 +83,7 @@ the store.
 
 `@yielded/agent-storage-sql` provides shared SQL implementations. Durable adapters
 must co-own the Thread log, Submission ledger, and atomic settlement publisher.
+Their `SubmissionLedger.appendInput` must publish the original input, current Run
+state, and applied marker atomically under the Thread owner.
 Start with the [package map](/reference/packages/#effect-agent-storage-sql) and
 [adapter verification](/guide/testing/).

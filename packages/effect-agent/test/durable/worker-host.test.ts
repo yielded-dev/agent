@@ -699,6 +699,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
       capabilities: Effect.die("Worker fixture only implements ledger lookup"),
       scanNonterminal: Stream.die("Worker fixture only implements ledger lookup"),
       admit: () => Effect.die("Worker fixture only implements ledger lookup"),
+      appendInput: () => Effect.die("Worker fixture only implements ledger lookup"),
       markReady: () => Effect.die("Worker fixture only implements ledger lookup"),
       resolveFundingOwner: ({ threadId, submissionId }) =>
         Effect.suspend(() => {

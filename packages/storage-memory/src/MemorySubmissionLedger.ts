@@ -21,6 +21,7 @@ import {
   type SettlementOutcome,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { validateInputPublication } from "@yielded/agent/run-storage";
 import {
   SettlementPublisher,
   SettlementPublicationResult,
@@ -353,7 +354,7 @@ const admissionKey = (
   idempotencyKey: IdempotencyKey,
 ): string => JSON.stringify([threadId, principal, idempotencyKey]);
 
-const toSnapshot = (row: SubmissionRow): SubmissionSnapshot =>
+const toSnapshot = (row: SubmissionRow, finalization?: StoredFinalization): SubmissionSnapshot =>
   SubmissionSnapshot.make({
     submissionId: row.submissionId,
     threadId: row.threadId,
@@ -385,6 +386,12 @@ const toSnapshot = (row: SubmissionRow): SubmissionSnapshot =>
           ),
         }),
     ...(row.settledOutcome === undefined ? {} : { settledOutcome: row.settledOutcome }),
+    ...(finalization === undefined
+      ? {}
+      : {
+          settledAt: utc(finalization.finalizedAtMillis),
+          settledRecordId: finalization.recordId,
+        }),
     ...(row.readyAtMillis === undefined ? {} : { readyAt: utc(row.readyAtMillis) }),
     ...(row.parentLinkage === undefined ? {} : { parentLinkage: row.parentLinkage }),
   });
@@ -1090,7 +1097,9 @@ const makeSubmissionLedger = Effect.fnUntraced(
         const stored =
           submissionId === undefined ? undefined : current.submissions.get(submissionId);
 
-        return stored === undefined ? Option.none() : Option.some(toSnapshot(stored.row));
+        return stored === undefined
+          ? Option.none()
+          : Option.some(toSnapshot(stored.row, stored.finalization));
       },
     );
 
@@ -1118,7 +1127,7 @@ const makeSubmissionLedger = Effect.fnUntraced(
 
         return stored === undefined
           ? AdmissionNotAdmitted.make()
-          : AdmissionAdmitted.make({ submission: toSnapshot(stored.row) });
+          : AdmissionAdmitted.make({ submission: toSnapshot(stored.row, stored.finalization) });
       },
     );
 
@@ -1192,6 +1201,46 @@ const makeSubmissionLedger = Effect.fnUntraced(
       }),
     );
 
+    const prepareInputApplied = (
+      current: LedgerState,
+      request: MarkInputAppliedRequest,
+    ): Decision<StoredSubmission | undefined, OwnershipLost | LedgerError> => {
+      const stored = current.submissions.get(request.submissionId);
+
+      if (stored === undefined)
+        return failure(
+          ledgerError("markInputApplied", `Unknown Submission ${request.submissionId}`),
+        );
+      if (!journal.owner.hasOwner(stored.row.threadId, stored.row.submissionId))
+        return failure(ownershipLost(stored));
+      if (stored.inputApplied !== undefined) {
+        if (
+          stored.inputApplied.recordId === request.recordId &&
+          stored.inputApplied.sequence === request.sequence
+        )
+          return success(undefined);
+
+        return failure(
+          ledgerError(
+            "markInputApplied",
+            `A different canonical input marker is already recorded for Submission ${request.submissionId}`,
+          ),
+        );
+      }
+
+      const marker = InputAppliedMarker.make({
+        recordId: request.recordId,
+        sequence: request.sequence,
+      });
+
+      const row: SubmissionRow =
+        STATE_RANK[stored.row.state] < STATE_RANK["input-applied"]
+          ? { ...stored.row, state: "input-applied" }
+          : stored.row;
+
+      return success({ ...stored, row, inputApplied: marker });
+    };
+
     const markInputApplied: SubmissionLedger["Service"]["markInputApplied"] = Effect.fnUntraced(
       function* (unvalidated) {
         const request = yield* validate(MarkInputAppliedRequest, "markInputApplied", unvalidated);
@@ -1199,57 +1248,74 @@ const makeSubmissionLedger = Effect.fnUntraced(
         const decision = yield* Ref.modify(
           state,
           (current): readonly [Decision<void, OwnershipLost | LedgerError>, LedgerState] => {
-            const stored = current.submissions.get(request.submissionId);
+            const prepared = prepareInputApplied(current, request);
 
-            if (stored === undefined) {
-              return [
-                failure(
-                  ledgerError("markInputApplied", `Unknown Submission ${request.submissionId}`),
-                ),
-                current,
-              ];
-            }
-            if (!journal.owner.hasOwner(stored.row.threadId, stored.row.submissionId)) {
-              return [failure(ownershipLost(stored)), current];
-            }
-
-            if (stored.inputApplied !== undefined) {
-              if (
-                stored.inputApplied.recordId === request.recordId &&
-                stored.inputApplied.sequence === request.sequence
-              ) {
-                return [success(undefined), current];
-              }
-
-              return [
-                failure(
-                  ledgerError(
-                    "markInputApplied",
-                    `A different canonical input marker is already recorded for Submission ${request.submissionId}`,
-                  ),
-                ),
-                current,
-              ];
-            }
-
-            const marker = InputAppliedMarker.make({
-              recordId: request.recordId,
-              sequence: request.sequence,
-            });
-
-            const row: SubmissionRow =
-              STATE_RANK[stored.row.state] < STATE_RANK["input-applied"]
-                ? { ...stored.row, state: "input-applied" }
-                : stored.row;
-
-            return [
-              success(undefined),
-              withSubmission(current, { ...stored, row, inputApplied: marker }),
-            ];
+            return prepared._tag === "failure"
+              ? [prepared, current]
+              : [
+                  success(undefined),
+                  prepared.value === undefined ? current : withSubmission(current, prepared.value),
+                ];
           },
         );
 
         if (decision._tag === "failure") return yield* decision.error;
+      },
+    );
+
+    const appendInput: SubmissionLedger["Service"]["appendInput"] = Effect.fnUntraced(
+      function* (submissionId, request) {
+        const operation = "append original input and context";
+        const prepared = yield* journal.prepareAppend(request);
+        const record = yield* validateInputPublication(submissionId, prepared.request);
+
+        return yield* journal.owner.withProgress(
+          prepared.request.threadId,
+          journal.withMutation(
+            Effect.gen(function* () {
+              const current = yield* Ref.get(state);
+              const stored = current.submissions.get(submissionId);
+
+              if (stored === undefined)
+                return yield* ThreadStoreError.make({ operation, message: "Unknown Submission" });
+              if (stored.row.threadId !== prepared.request.threadId)
+                return yield* ThreadStoreError.make({
+                  operation,
+                  message: "Original input belongs to another Thread",
+                });
+
+              const commit = yield* journal.prepareCommit(prepared);
+
+              const update = prepareInputApplied(
+                current,
+                MarkInputAppliedRequest.make({
+                  submissionId,
+                  recordId: record.recordId,
+                  sequence: commit.result.firstSequence,
+                }),
+              );
+
+              if (update._tag === "failure")
+                return yield* update.error._tag === "OwnershipLost"
+                  ? update.error
+                  : ThreadStoreError.make({
+                      operation,
+                      message: update.error.message,
+                      cause: update.error,
+                    });
+
+              yield* Effect.uninterruptible(
+                Effect.sync(() => {
+                  commit.publish();
+                  if (update.value !== undefined)
+                    MutableRef.set(state.ref, withSubmission(current, update.value));
+                }).pipe(Effect.andThen(commit.notify)),
+              );
+
+              return commit.result;
+            }),
+          ),
+        );
       },
     );
 
@@ -1448,7 +1514,7 @@ const makeSubmissionLedger = Effect.fnUntraced(
             const terminal =
               stored.row.workerAdmissionJson === undefined
                 ? undefined
-                : workerTerminalFromRecord(toSnapshot(stored.row), record);
+                : workerTerminalFromRecord(toSnapshot(stored.row, stored.finalization), record);
 
             const latestId = current.latestByThread.get(stored.row.threadId);
             const latest = latestId === undefined ? undefined : current.submissions.get(latestId);
@@ -1563,8 +1629,8 @@ const makeSubmissionLedger = Effect.fnUntraced(
       const terminal = current.stoppedWorkers.get(threadId);
 
       return WorkerLedgerState.make({
-        latest: latest === undefined ? null : toSnapshot(latest.row),
-        active: active === undefined ? null : toSnapshot(active.row),
+        latest: latest === undefined ? null : toSnapshot(latest.row, latest.finalization),
+        active: active === undefined ? null : toSnapshot(active.row, active.finalization),
         stopped: current.stoppedWorkers.has(threadId),
         ...(terminal === undefined ? {} : { terminal }),
       });
@@ -3047,7 +3113,7 @@ const makeSubmissionLedger = Effect.fnUntraced(
         }
 
         return RecoverySnapshot.make({
-          submission: toSnapshot(stored.row),
+          submission: toSnapshot(stored.row, stored.finalization),
           joins,
           approvalDecisions: [...stored.approvalDecisions.values()].sort(byToolCallId),
           unknownResolutions: [...stored.unknownResolutions.values()]
@@ -3112,8 +3178,8 @@ const makeSubmissionLedger = Effect.fnUntraced(
           );
 
         return FundingOwner.make({
-          selected: toSnapshot(selected.row),
-          owner: toSnapshot(owner.row),
+          selected: toSnapshot(selected.row, selected.finalization),
+          owner: toSnapshot(owner.row, owner.finalization),
         });
       }),
       admit: (request) => journal.withMutation(admit(request)),
@@ -3121,6 +3187,7 @@ const makeSubmissionLedger = Effect.fnUntraced(
       lookup,
       resolveAdmission,
       selectHead: (request) => journal.withMutation(selectHead(request)),
+      appendInput,
       markInputApplied: (request) => journal.withMutation(markInputApplied(request)),
       finalizeSettlement: (request) => journal.withMutation(finalizeSettlement(request)),
       requestAbort: (request) => journal.withMutation(requestAbort(request)),
@@ -3302,7 +3369,7 @@ const makeSubmissionLedger = Effect.fnUntraced(
             const stored = threadRows(MutableRef.get(state.ref), threadId, after).next().value;
 
             return [
-              stored === undefined ? [] : [toSnapshot(stored.row)],
+              stored === undefined ? [] : [toSnapshot(stored.row, stored.finalization)],
               stored === undefined ? Option.none<number>() : Option.some(stored.row.queueSequence),
             ] as const;
           }),
@@ -3485,8 +3552,10 @@ const makeSubmissionLedger = Effect.fnUntraced(
 
               if (
                 rebuilt.settlement !== undefined &&
-                workerTerminalFromRecord(toSnapshot(stored.row), rebuilt.settlement) ===
-                  workerSeal?.terminal
+                workerTerminalFromRecord(
+                  toSnapshot(stored.row, stored.finalization),
+                  rebuilt.settlement,
+                ) === workerSeal?.terminal
               )
                 terminalEvidence = true;
               withSubmission(staged, fromRebuilt(rebuilt));

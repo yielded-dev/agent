@@ -994,14 +994,10 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                   }),
                   Context.add(SubmissionLedger, {
                     ...ledger,
-                    ...(appendInput === undefined
-                      ? {}
-                      : {
-                          appendInput: (submissionId, input) =>
-                            Effect.flatMap(PreparedAppend.capture(input), (request) =>
-                              observeAppend(request, appendInput(submissionId, request)),
-                            ),
-                        }),
+                    appendInput: (submissionId, input) =>
+                      Effect.flatMap(PreparedAppend.capture(input), (request) =>
+                        observeAppend(request, appendInput(submissionId, request)),
+                      ),
                     ...(options.hostLanesForMutation === undefined &&
                     options.lifecyclePublication === undefined
                       ? {}

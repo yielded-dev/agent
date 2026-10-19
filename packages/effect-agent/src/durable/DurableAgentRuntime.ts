@@ -2649,44 +2649,34 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }),
     );
 
-    const inputWriter =
-      session.appendInput === undefined
-        ? undefined
-        : {
-            ...session,
-            append: session.appendInput,
-          };
+    const inputWriter = { ...session, append: session.appendInput };
 
     const wrapped: RunStorageSession = {
       ...session,
       append: owned.append,
-      ...(inputWriter === undefined
-        ? {}
-        : {
-            appendInput: (batch: CommitBatch) =>
-              storageOwner.withProgress(
-                session.threadId,
-                storageOwner.withMutation(
-                  Effect.gen(function* () {
-                    yield* session.checkActive;
-                    // The captured empty canonical prefix is enforced again by the append tail and
-                    // checkpoint revision-zero CAS. It is not a cache entry across preparation IO.
-                    const original = originalInput?.();
-                    const commit = progress.commit(batch);
+      appendInput: (batch: CommitBatch) =>
+        storageOwner.withProgress(
+          session.threadId,
+          storageOwner.withMutation(
+            Effect.gen(function* () {
+              yield* session.checkActive;
+              // The captured empty canonical prefix is enforced again by the append tail and
+              // checkpoint revision-zero CAS. It is not a cache entry across preparation IO.
+              const original = originalInput?.();
+              const commit = progress.commit(batch);
 
-                    return yield* (
-                      original === undefined
-                        ? commit
-                        : progress.withVerifiedEmptyRun(
-                            runIdForSubmission(session.claim.submissionId),
-                            CanonicalSequence.make(original.sequence - 1),
-                            commit,
-                          )
-                    ).pipe(Effect.provideService(CurrentRunWriter, inputWriter));
-                  }),
-                ),
-              ),
-          }),
+              return yield* (
+                original === undefined
+                  ? commit
+                  : progress.withVerifiedEmptyRun(
+                      runIdForSubmission(session.claim.submissionId),
+                      CanonicalSequence.make(original.sequence - 1),
+                      commit,
+                    )
+              ).pipe(Effect.provideService(CurrentRunWriter, inputWriter));
+            }),
+          ),
+        ),
       publishSettlement: (batch) =>
         progress.publish(batch).pipe(Effect.provideService(CurrentRunSettlement, session)),
     };
@@ -3254,15 +3244,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
   /**
-   * Plan step 2: append the deterministic `UserInputRecorded` record (batch idempotency makes it
-   * exactly-once canonical, DUR-007) and mark it applied. When canonical history already carries
-   * the record — an earlier Attempt crashed after its append — only the ledger marker is repaired
-   * (DUR-015/DUR-016).
+   * Publish the deterministic input and applied marker atomically. Retained canonical input
+   * remains sufficient evidence to repair a missing ledger marker.
    */
   const applyCanonicalInput = Effect.fnUntraced(function* (
-    ctx: AttemptAppendContext,
+    session: RunStorageSession,
     submission: SubmissionSnapshot,
-    ownership: RunOwnership,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     inputApplied: RecoverySnapshot["inputApplied"],
   ) {
@@ -3272,7 +3259,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     if (existing !== undefined) {
       if (inputApplied === undefined) {
-        yield* ownership.markInputApplied({ recordId, sequence: existing.sequence });
+        yield* session.markInputApplied({ recordId, sequence: existing.sequence });
       }
 
       return;
@@ -3280,8 +3267,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     const envelope = yield* prepareOriginalInput(submission);
 
-    const result = yield* appendBatch(
-      ctx,
+    yield* appendBatch(
+      { threadId: session.threadId, append: session.appendInput },
       CanonicalBatch.make({
         batchId: submissionInputBatchId(submissionId),
         producerId: config.producerId,
@@ -3290,7 +3277,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
     yield* hit("input:after-canonical-append");
-    yield* ownership.markInputApplied({ recordId, sequence: result.firstSequence });
   });
 
   const readRunStart = Effect.fnUntraced(function* (
@@ -8287,27 +8273,23 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const promptSession: RunStorageSession = {
         ...storageSession,
-        ...(storageSession.appendInput === undefined
-          ? {}
-          : {
-              appendInput: (batch: CommitBatch, executions?: ReadonlyArray<ExecutionUpdate>) =>
-                storageSession.appendInput!(batch, executions).pipe(
-                  Effect.tap((result) =>
-                    Effect.sync(() => {
-                      if (
-                        pendingOriginal !== undefined &&
-                        !result.replayed &&
-                        result.firstSequence === pendingOriginal.sequence
-                      )
-                        committedPromptSuffix = makeCommittedPromptSuffix({
-                          threadId: storageSession.threadId,
-                          sequence: result.firstSequence,
-                          record: batch.records[0]!,
-                        });
-                    }),
-                  ),
-                ),
-            }),
+        appendInput: (batch: CommitBatch, executions?: ReadonlyArray<ExecutionUpdate>) =>
+          storageSession.appendInput(batch, executions).pipe(
+            Effect.tap((result) =>
+              Effect.sync(() => {
+                if (
+                  pendingOriginal !== undefined &&
+                  !result.replayed &&
+                  result.firstSequence === pendingOriginal.sequence
+                )
+                  committedPromptSuffix = makeCommittedPromptSuffix({
+                    threadId: storageSession.threadId,
+                    sequence: result.firstSequence,
+                    record: batch.records[0]!,
+                  });
+              }),
+            ),
+          ),
         append: (batch, executions) => {
           const suffix = committedPromptSuffix;
           const append = storageSession.append(batch, executions);
@@ -8569,7 +8551,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         );
       }
       if (prepared === undefined)
-        yield* applyCanonicalInput(ctx, submission, session, records, snapshot.inputApplied);
+        yield* applyCanonicalInput(session, submission, records, snapshot.inputApplied);
 
       const start =
         prepared?.start ??
@@ -10035,9 +10017,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           submission.agentId,
           submission.agentDigests,
         );
-        const ctx = session;
-
-        const ownership = session;
 
         const currentRecords = yield* refreshRecoveryHistory(
           submission.threadId,
@@ -10046,13 +10025,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           history.submissionIds,
         );
 
-        yield* applyCanonicalInput(
-          ctx,
-          submission,
-          ownership,
-          currentRecords,
-          snapshot.inputApplied,
-        );
+        yield* applyCanonicalInput(session, submission, currentRecords, snapshot.inputApplied);
         yield* session.release;
 
         return "repaired";

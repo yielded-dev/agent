@@ -80,7 +80,8 @@ export { RunContinuation, RunContextRecorded, EvidenceReference } from "./Record
 /** Writer and progress sequencer selected at the local owner's resource boundary. */
 export class CurrentRunWriter extends Context.Service<
   CurrentRunWriter,
-  Pick<RunStorageSession, "threadId" | "tail" | "append" | "appendInput" | "withProgress">
+  Pick<RunStorageSession, "threadId" | "tail" | "append" | "withProgress"> &
+    Partial<Pick<RunStorageSession, "appendInput">>
 >()("@effect-agent/thread/CurrentRunWriter") {}
 
 /** Settlement publication keeps its original atomic authority and claim-scoped implementation. */
