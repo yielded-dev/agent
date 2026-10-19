@@ -19,8 +19,9 @@ export class PreviewRejected extends Schema.TaggedError<PreviewRejected>()("Prev
 
 const key = "workspace-preview";
 
+// Version 1 used port 5173. Retire its process before changing the accepted command.
 const Receipt = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literals([1, 2]),
   generation: Schema.Natural.check(Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER)),
   instanceId: Schema.NonEmptyString,
   materializationId: Schema.NonEmptyString,
@@ -68,6 +69,7 @@ const make = Effect.gen(function* () {
 
     if (
       instanceId !== receipt.instanceId ||
+      current?.version !== receipt.version ||
       current?.generation !== receipt.generation ||
       current.instanceId !== receipt.instanceId ||
       current.materializationId !== threadId ||
@@ -101,6 +103,7 @@ const make = Effect.gen(function* () {
       return yield* PreviewRejected.make({ message: "The preview process outcome is unknown." });
     if (
       receipt === null ||
+      receipt.version !== 2 ||
       receipt.instanceId !== instanceId ||
       receipt.deadlineAt <= (yield* Clock.currentTimeMillis) ||
       observed?.state === "exited"
@@ -132,7 +135,7 @@ const make = Effect.gen(function* () {
             });
 
           const next = yield* Schema.decodeEffect(Receipt)({
-            version: 1,
+            version: 2,
             generation: (previous?.generation ?? 0) + 1,
             instanceId,
             materializationId: threadId,

@@ -65,9 +65,12 @@ workspaces without a saved snapshot cannot recover files that have already expir
 Commands have no production credentials. The host caps concurrent containers at four.
 The image includes Node, Bun, Python with pip/venv, Git, ripgrep and common shell tools.
 Playwright Test and matching headless Chromium, system libraries and fonts are
-preinstalled. New projects can import `@playwright/test` or `playwright` and run
+preinstalled. Chromium uses CPU software rendering for WebGL. New projects can import `@playwright/test` or `playwright` and run
 `playwright test` without installing a browser. Existing projects keep their own
 package manager and dependencies.
+
+New and restored workspaces use 2 vCPUs and 8 GiB of memory for browser checks.
+Running workspaces keep their current container until it stops.
 
 Open **Diagnostics** in the workspace header to inspect saved model responses,
 token counts, tool timings and failures, or copy a page with its run and response
@@ -78,6 +81,9 @@ Select an HTML file and switch between **Source** and **Preview** in the file vi
 The preview embeds the workspace's HTML, scripts, CSS and images from an isolated
 origin using Sandbox's native forwarding; it can also open in a separate tab.
 External assets and dev servers are not supported.
+The static preview server reserves port 4504, leaving Vite's default port available
+for development and tests. Build with relative asset paths for nested HTML previews
+(for Vite, `base: "./"`) and select the built HTML file.
 Preview access lasts up to 15 minutes; preparing it again replaces the previous grant.
 It permits reading workspace files, including through scripts in the HTML, and
 remains valid after app sign-out until it expires or the container stops.
