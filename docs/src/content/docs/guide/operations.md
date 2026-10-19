@@ -96,6 +96,7 @@ point-in-time restoration and cross-Object work.
 Schedules and event subscriptions retain delivery obligations separately from Agent execution.
 A retained event or message is not a submission receipt, and a receipt does not prove processing.
 Inspect parked deliveries and preserve their original idempotency keys when retrying.
+Custom hosts provide `PreparedInputAdmission` for schedules, subscriptions, and worker messages.
 
 Schedule and subscription limits count active or pending work, including paused registrations,
 parked deliveries and settlement observation. Settled history does not consume these slots.

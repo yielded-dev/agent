@@ -52,10 +52,7 @@ import * as Schema from "effect/Schema";
 import type { ThreadObjectNamespace } from "./CloudflareBindings.ts";
 import { CloudflareThreadClient } from "./CloudflareThreadClient.ts";
 import { cloudflareCryptoLayer } from "./internal/crypto.ts";
-import {
-  cloudflarePreparedInputAdmissionLayer,
-  cloudflareScheduledInputAdmissionLayer,
-} from "./internal/prepared-admission.ts";
+import { cloudflarePreparedInputAdmissionLayer } from "./internal/prepared-admission.ts";
 
 const SCHEDULE_ALARM_TAG = "effect-agent/ScheduleOwnerWake";
 const SCHEDULE_ALARM_ID = "driver";
@@ -703,10 +700,7 @@ export const makeScheduleOwnerObjectClass = <E>(
       scheduleStoreLayer.pipe(Layer.provide(transactionLayer), Layer.provide(sqlLayer)),
     ),
     Layer.provide(
-      cloudflareScheduledInputAdmissionLayer.pipe(
-        Layer.provide(cloudflarePreparedInputAdmissionLayer),
-        Layer.provide(CloudflareThreadClient.layer),
-      ),
+      cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
     ),
     Layer.provide(ScheduleWakeNoop),
     Layer.provide(cloudflareCryptoLayer),

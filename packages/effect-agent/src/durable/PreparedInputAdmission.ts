@@ -1,11 +1,83 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
-import type { Receipt } from "./DurableAgentRuntime.ts";
-import { type ScheduledInputFailure, ScheduleStorageError } from "./Schedule.ts";
+import { AgentId, ThreadId } from "../core/Identifiers.ts";
+import { InputMessage } from "../core/Messaging.ts";
+import type { Receipt } from "../core/Receipt.ts";
+import { DefinitionDigests, Digest, PersistedJson, WorkerAdmission } from "./Records.ts";
+import type { ScheduleStorageError } from "./Schedule.ts";
+import { AdmissionFence, AdmissionGroup, IdempotencyKey, Principal } from "./SubmissionLedger.ts";
 import type { SubmissionStatus } from "./SubmissionStatus.ts";
-import type { PreparedInput } from "./Subscription.ts";
+
+const Name = Schema.NonEmptyString.check(
+  Schema.isMaxLength(128),
+  Schema.isPattern(/^[^\p{Surrogate}]*$/u),
+);
+
+/** Bounded policy identifiers, never credentials or arbitrary diagnostics. */
+export const PreparedInputAuthorizationDecision = Schema.Struct({
+  policyId: Name,
+  decisionId: Name,
+});
+
+export type PreparedInputAuthorizationDecision = typeof PreparedInputAuthorizationDecision.Type;
+
+/** Common admission data; each producer retains its own cursor and delivery lifecycle. */
+export const PreparedInput = Schema.Struct({
+  schemaVersion: Schema.Literal(1),
+  threadId: ThreadId,
+  deliveryPrincipal: Principal,
+  admissionGroup: Schema.optionalKey(AdmissionGroup),
+  admissionFence: Schema.optionalKey(AdmissionFence),
+  agentId: AgentId,
+  definitions: DefinitionDigests,
+  input: PersistedJson,
+  inputDigest: Digest,
+  admissionKey: IdempotencyKey,
+  authorization: PreparedInputAuthorizationDecision,
+  workerAdmission: Schema.optionalKey(WorkerAdmission),
+  messageAdmission: Schema.optionalKey(InputMessage),
+});
+
+export type PreparedInput = typeof PreparedInput.Type;
+
+export const PreparedInputRetryReason = Schema.Literals([
+  "transport",
+  "capacity",
+  "storage",
+  "host-closed",
+  "timeout",
+  "ambiguous",
+]);
+
+export type PreparedInputRetryReason = typeof PreparedInputRetryReason.Type;
+
+/** Only when the unchanged envelope was not admitted and cannot succeed, including on replay. */
+export class PreparedInputRefused extends Schema.TaggedError<PreparedInputRefused>()(
+  "PreparedInputRefused",
+  {
+    code: Name,
+    cause: Schema.optionalKey(FailureDiagnostic.Value),
+    stack: Schema.optionalKey(Schema.String),
+  },
+) {}
+
+/** Includes lost replies: admission may already have committed. */
+export class PreparedInputRetryable extends Schema.TaggedError<PreparedInputRetryable>()(
+  "PreparedInputRetryable",
+  {
+    reason: PreparedInputRetryReason,
+    cause: Schema.optionalKey(FailureDiagnostic.Value),
+    stack: Schema.optionalKey(Schema.String),
+  },
+) {}
+
+export type PreparedInputFailure =
+  | PreparedInputRefused
+  | PreparedInputRetryable
+  | ScheduleStorageError;
 
 /** Host admission shared by event deliveries and scheduling adapters. */
 export class PreparedInputAdmission extends Context.Service<
@@ -14,8 +86,8 @@ export class PreparedInputAdmission extends Context.Service<
     /** Required when retention is configured; reports canonical settlement without releasing group ownership itself. */
     readonly submissionStatus?: (
       receipt: Receipt,
-    ) => Effect.Effect<SubmissionStatus, ScheduledInputFailure>;
-    readonly submit: (envelope: PreparedInput) => Effect.Effect<Receipt, ScheduledInputFailure>;
+    ) => Effect.Effect<SubmissionStatus, PreparedInputFailure>;
+    readonly submit: (envelope: PreparedInput) => Effect.Effect<Receipt, PreparedInputFailure>;
   }
 >()("@effect-agent/thread/PreparedInputAdmission") {}
 
@@ -24,16 +96,16 @@ export class PreparedInputAdmission extends Context.Service<
  * and completion fencing. Interruption and defects propagate without claiming a refusal.
  */
 export const admitPreparedInput = <R>(
-  submit: Effect.Effect<Receipt, ScheduledInputFailure, R>,
+  submit: Effect.Effect<Receipt, PreparedInputFailure, R>,
   timeoutMillis: number,
 ) =>
   submit.pipe(
     Effect.timeout(timeoutMillis),
     Effect.map((receipt) => ({ _tag: "Receipt" as const, receipt })),
-    Effect.catchTag("ScheduledInputRefused", (error) =>
+    Effect.catchTag("PreparedInputRefused", (error) =>
       Effect.succeed({ _tag: "Refused" as const, error }),
     ),
-    Effect.catchTag("ScheduledInputRetryable", (error) =>
+    Effect.catchTag("PreparedInputRetryable", (error) =>
       Effect.succeed({
         _tag: "Retry" as const,
         reason: error.reason,
@@ -54,6 +126,6 @@ export const admitPreparedInput = <R>(
             reason: "storage" as const,
             diagnostic: FailureDiagnostic.capture(error),
           })
-        : Effect.fail(ScheduleStorageError.make(error)),
+        : Effect.fail(error),
     ),
   );

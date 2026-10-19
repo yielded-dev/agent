@@ -18,7 +18,7 @@ import * as PubSub from "effect/PubSub";
 import * as Result from "effect/Result";
 
 import type { NodeDurableHost } from "./NodeDurableHost.ts";
-import { nodeScheduledInputAdmissionLayer } from "./NodeSubscriptions.ts";
+import { nodePreparedInputAdmissionLayer } from "./NodeSubscriptions.ts";
 
 /** One bounded hint slot for the single supported Node scheduler. Indexed polling repairs loss. */
 export const nodeScheduleWakeLayer: Layer.Layer<ScheduleWake> = Layer.effect(
@@ -116,7 +116,7 @@ export class NodeScheduling {
 
     return schedulingWithDriver.pipe(
       Layer.provide(
-        Layer.mergeAll(nodeScheduledInputAdmissionLayer, nodeScheduleWakeLayer, NodeCrypto.layer),
+        Layer.mergeAll(nodePreparedInputAdmissionLayer, nodeScheduleWakeLayer, NodeCrypto.layer),
       ),
     );
   }

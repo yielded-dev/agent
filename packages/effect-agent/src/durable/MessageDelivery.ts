@@ -13,11 +13,15 @@ import { Receipt } from "../core/Receipt.ts";
 import { WorkerUpdate } from "../core/Worker.ts";
 import { digestJson } from "./Digest.ts";
 import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
-import { admitPreparedInput, PreparedInputAdmission } from "./PreparedInputAdmission.ts";
+import {
+  admitPreparedInput,
+  PreparedInputAdmission,
+  PreparedInputRetryReason,
+  PreparedInput,
+} from "./PreparedInputAdmission.ts";
 import { Digest } from "./Records.ts";
-import { ScheduleInstant, ScheduleRetry, ScheduleRetryReason } from "./Schedule.ts";
+import { ScheduleInstant, ScheduleRetry } from "./Schedule.ts";
 import { IdempotencyKey, Settlement } from "./SubmissionLedger.ts";
-import { PreparedInput } from "./Subscription.ts";
 
 const Positive = Schema.Int.check(Schema.isGreaterThan(0));
 const BoundedName = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256));
@@ -183,7 +187,7 @@ export const MessageDeliveryChange = Schema.Union([
   Schema.Struct({
     _tag: Schema.Literal("Retry"),
     ...fence,
-    reason: ScheduleRetryReason,
+    reason: PreparedInputRetryReason,
     diagnostic: Schema.optionalKey(FailureDiagnostic.Diagnostic),
   }),
   Schema.Struct({
@@ -793,14 +797,14 @@ export class MessageDeliveryDriver extends Context.Service<
                 const status = yield* admission.submissionStatus(claimed.receipt).pipe(
                   Effect.timeout(timeout),
                   Effect.map((status) => ({ _tag: "Status" as const, status })),
-                  Effect.catchTag("ScheduledInputRetryable", (failure) =>
+                  Effect.catchTag("PreparedInputRetryable", (failure) =>
                     Effect.succeed({
                       _tag: "Retry" as const,
                       reason: failure.reason,
                       diagnostic: FailureDiagnostic.capture(failure),
                     }),
                   ),
-                  Effect.catchTag("ScheduledInputRefused", (failure) =>
+                  Effect.catchTag("PreparedInputRefused", (failure) =>
                     Effect.succeed({
                       _tag: "Unavailable" as const,
                       diagnostic: FailureDiagnostic.capture(failure),

@@ -5,9 +5,13 @@ import { digestJson } from "@yielded/agent/digest";
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import { EventSources, makeEventSource } from "@yielded/agent/event-source";
 import { AgentId, ThreadId, ReceiptId, SubmissionId } from "@yielded/agent/identifiers";
-import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
+import {
+  PreparedInputAdmission,
+  PreparedInputRefused,
+  PreparedInputRetryable,
+  type PreparedInput,
+} from "@yielded/agent/prepared-input-admission";
 import { DefinitionDigests, Digest } from "@yielded/agent/records";
-import { ScheduledInputRefused, ScheduledInputRetryable } from "@yielded/agent/schedule";
 import {
   Settlement,
   submissionSettlementId,
@@ -23,7 +27,6 @@ import {
   SubscriptionSourceError,
   SubscriptionStore,
   defaultSubscriptionLimits,
-  type PreparedInput,
   type SubscriptionLimits,
 } from "@yielded/agent/subscription";
 import {
@@ -235,7 +238,7 @@ describe("Durable subscription delivery", () => {
 
                 return recovered
                   ? Effect.succeed(receipt(input))
-                  : ScheduledInputRetryable.make({ reason: "ambiguous" });
+                  : PreparedInputRetryable.make({ reason: "ambiguous" });
               }),
           }),
         ),
@@ -346,7 +349,7 @@ describe("Durable subscription delivery", () => {
             Effect.suspend(() => {
               probes++;
 
-              return ScheduledInputRetryable.make({ reason: "transport" });
+              return PreparedInputRetryable.make({ reason: "transport" });
             }),
         }),
       ),
@@ -579,7 +582,7 @@ describe("Durable subscription delivery", () => {
       }).pipe(
         Effect.provide(
           layer({
-            submit: () => ScheduledInputRefused.make({ code: "proven-not-admitted" }),
+            submit: () => PreparedInputRefused.make({ code: "proven-not-admitted" }),
           }),
         ),
       ),
@@ -679,7 +682,7 @@ describe("Durable subscription delivery", () => {
                 attempts.push(envelope);
 
                 return attempts.length === 1
-                  ? ScheduledInputRetryable.make({ reason: "ambiguous" })
+                  ? PreparedInputRetryable.make({ reason: "ambiguous" })
                   : Effect.succeed(receipt(envelope));
               }),
           }),
@@ -896,7 +899,7 @@ describe("Durable subscription delivery", () => {
           layer({
             limits: configured,
             reconcile: () => Effect.succeed(null),
-            submissionStatus: () => ScheduledInputRetryable.make({ reason: "storage" }),
+            submissionStatus: () => PreparedInputRetryable.make({ reason: "storage" }),
           }),
         ),
       );
@@ -1021,7 +1024,7 @@ describe("Durable subscription delivery", () => {
         expect(admissions).toBe(0);
       }).pipe(
         Effect.provide(
-          layer({ submit: () => ScheduledInputRetryable.make({ reason: "transport" }) }),
+          layer({ submit: () => PreparedInputRetryable.make({ reason: "transport" }) }),
         ),
       ),
   );

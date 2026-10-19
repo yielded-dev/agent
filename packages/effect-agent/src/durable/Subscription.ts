@@ -2,16 +2,12 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { InputMessage } from "../capabilities/Messaging.ts";
 import { AgentId, ThreadId } from "../core/Identifiers.ts";
 import { Receipt } from "../core/Receipt.ts";
-import { DefinitionDigests, Digest, PersistedJson, WorkerAdmission } from "./Records.ts";
-import {
-  ScheduleAuthorizationDecision,
-  ScheduleDestination,
-  ScheduleInstant,
-  ScheduleRetry,
-} from "./Schedule.ts";
+import type { PreparedInputAuthorizationDecision } from "./PreparedInputAdmission.ts";
+import { PreparedInput } from "./PreparedInputAdmission.ts";
+import { DefinitionDigests, Digest, PersistedJson } from "./Records.ts";
+import { ScheduleDestination, ScheduleInstant, ScheduleRetry } from "./Schedule.ts";
 import { AdmissionFence, AdmissionGroup, IdempotencyKey, Principal } from "./SubmissionLedger.ts";
 
 export const SubscriptionName = Schema.NonEmptyString.check(
@@ -139,25 +135,6 @@ export const EventAcknowledgement = Schema.Struct({
 });
 
 export type EventAcknowledgement = typeof EventAcknowledgement.Type;
-
-/** Common admission data; neither a schedule cursor nor a subscription lifecycle lives here. */
-export const PreparedInput = Schema.Struct({
-  schemaVersion: Schema.Literal(1),
-  threadId: ThreadId,
-  deliveryPrincipal: Principal,
-  admissionGroup: Schema.optionalKey(AdmissionGroup),
-  admissionFence: Schema.optionalKey(AdmissionFence),
-  agentId: AgentId,
-  definitions: DefinitionDigests,
-  input: PersistedJson,
-  inputDigest: Digest,
-  admissionKey: IdempotencyKey,
-  authorization: ScheduleAuthorizationDecision,
-  workerAdmission: Schema.optionalKey(WorkerAdmission),
-  messageAdmission: Schema.optionalKey(InputMessage),
-});
-
-export type PreparedInput = typeof PreparedInput.Type;
 
 export const SubscriptionDeliveryKey = Schema.Struct({
   subscription: SubscriptionKey,
@@ -545,7 +522,7 @@ export class SubscriptionAuthorizer extends Context.Service<
     readonly prepare: (
       subscription: SubscriptionRecord,
       event: AcceptedEvent,
-    ) => Effect.Effect<typeof ScheduleAuthorizationDecision.Type, SubscriptionError>;
+    ) => Effect.Effect<typeof PreparedInputAuthorizationDecision.Type, SubscriptionError>;
   }
 >()("@effect-agent/thread/SubscriptionAuthorizer") {}
 

@@ -18,6 +18,7 @@ import {
   MessageDeliveryRecord,
   prepareMessageDelivery,
 } from "../MessageDelivery.ts";
+import { PreparedInput } from "../PreparedInputAdmission.ts";
 import {
   AgentUpdateEmitted,
   BatchId,
@@ -34,7 +35,6 @@ import {
 import { CurrentRunWriter, readRunEvidenceSnapshot } from "../RunContinuation.ts";
 import { runIdForSubmission } from "../RunJournal.ts";
 import { LedgerError, type SubmissionSnapshot } from "../SubmissionLedger.ts";
-import { PreparedInput } from "../Subscription.ts";
 import {
   getRecord,
   ThreadReader,

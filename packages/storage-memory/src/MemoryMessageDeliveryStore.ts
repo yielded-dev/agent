@@ -19,6 +19,7 @@ import {
   sameMessageDeliveryIdentity,
   validateMessageDelivery,
 } from "@yielded/agent/message-delivery";
+import { PreparedInput } from "@yielded/agent/prepared-input-admission";
 import { ScheduleInstant } from "@yielded/agent/schedule";
 import { validateCanonicalSettlement } from "@yielded/agent/settlement-publisher";
 import {
@@ -27,7 +28,6 @@ import {
   submissionSettlementRecordId,
   submissionSettlementId,
 } from "@yielded/agent/submission-ledger";
-import { PreparedInput } from "@yielded/agent/subscription";
 import {
   ThreadDeliveryImportReader,
   ThreadImportRejected,
