@@ -267,13 +267,6 @@ export const delegateDocumentSummary = Subagent.make("delegate_document_summary"
 export const mapSummaryChildFailure = (failure: { readonly _tag: string }): DocumentSummaryFailed =>
   DocumentSummaryFailed.make({ childErrorTag: failure._tag });
 
-/** The exact digest strings the durable declaration AND host registration must share (SUB-023). */
-export const docsSummarizerDigestStrings = {
-  agent: "50".repeat(32),
-  model: "51".repeat(32),
-  tools: "52".repeat(32),
-} as const;
-
 /** Runtime wiring: the immutable delegation plus one explicit child Binding (S2 declaration). */
 export const docsSummaryHandlersLayer = <ModelProvides, ModelRequires>(
   childBinding: RuntimeBinding<
@@ -287,7 +280,6 @@ export const docsSummaryHandlersLayer = <ModelProvides, ModelRequires>(
 ) =>
   Subagent.layer(delegateDocumentSummary, childBinding, {
     mapChildFailure: mapSummaryChildFailure,
-    durable: { targetDigests: docsSummarizerDigestStrings },
   });
 
 // ---------------------------------------------------------------------------

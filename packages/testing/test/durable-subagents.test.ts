@@ -366,7 +366,6 @@ const submitParentWith =
  */
 const makeHarness = Effect.fnUntraced(function* (options?: {
   readonly registration?: "missing" | "ambiguous" | "different-definition";
-  readonly declaredDigests?: DefinitionDigests;
 }) {
   const { childScripted, childBinding } = yield* makeChildFixture;
 
@@ -380,9 +379,6 @@ const makeHarness = Effect.fnUntraced(function* (options?: {
 
   const delegationLayer = Subagent.layer(researchDelegation, childBinding, {
     mapChildFailure,
-    ...(options?.declaredDigests === undefined
-      ? {}
-      : { durable: { targetDigests: options.declaredDigests } }),
   }).pipe(Layer.provide(delegationSupport));
 
   const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
@@ -466,7 +462,6 @@ const makeSiblingHarnessWith = Effect.fnUntraced(function* (
 
   const delegationLayer = Subagent.layer(researchDelegation, childBinding, {
     mapChildFailure,
-    durable: { targetDigests: CHILD_DIGEST_STRINGS },
   }).pipe(Layer.provide(delegationSupport));
 
   const lookupLayer = Toolkit.make(lookupTool).toLayer({
@@ -1032,7 +1027,6 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
           const delegationLayer = Subagent.layer(containedResearchDelegation, childBinding, {
             mapChildFailure,
-            durable: { targetDigests: CHILD_DIGEST_STRINGS },
           }).pipe(Layer.provide(delegationSupport));
 
           const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
@@ -1489,7 +1483,6 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
         const delegation = Subagent.layer(researchDelegation, childBinding, {
           mapChildFailure,
-          durable: { targetDigests: CHILD_DIGEST_STRINGS },
         }).pipe(Layer.provide(delegationSupport));
 
         const handlers = Toolkit.make(Lookup).toLayer({

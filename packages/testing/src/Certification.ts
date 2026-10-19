@@ -648,7 +648,6 @@ const makeCell = Effect.fnUntraced(function* (scenario: CertificationScenario, s
 
       const delegationLayer = Subagent.layer(researchDelegation, childBinding, {
         mapChildFailure,
-        durable: { targetDigests: CHILD_DIGEST_STRINGS },
       }).pipe(Layer.provide(delegationSupport));
 
       const lookupLayer = Toolkit.make(Lookup).toLayer({

@@ -268,12 +268,10 @@ export interface RunSubagentEstablishRequest {
   readonly toolCallId: ToolCallId;
   readonly delegationId: DelegationId;
   readonly targetAgentId: AgentId;
-  /** The child Run's root-relative delegation depth (S2 fixes the ceiling at 1). */
+  /** The child Run's root-relative delegation depth, bounded by its inherited grant. */
   readonly depth: DelegationDepth;
   /** Exact target Definition from the capability; the host resolves its existing registration. */
-  readonly target?: AnyDefinition | undefined;
-  /** Explicit low-level binding override. If a target is supplied, this must match its registration. */
-  readonly targetDigests?: RunSubagentDigests | undefined;
+  readonly target: AnyDefinition;
   /** The prepared child input in encoded (wire) form; it rides the canonical request record so recovery admission never needs a live handler. */
   readonly encodedChildInput: unknown;
   /** The delegation's authority ceiling in encoded form. */

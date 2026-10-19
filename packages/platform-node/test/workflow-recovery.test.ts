@@ -51,7 +51,6 @@ it.live(
       );
 
       const childDefinitions = definitionsFor(planner.id);
-      const childDigests = yield* digestDefinitions(childDefinitions);
 
       const delegation = Subagent.make("delegate_workflow", {
         target: planner,
@@ -89,9 +88,9 @@ it.live(
       const definitions = definitionsFor(parent.definition.id);
       const digests = yield* digestDefinitions(definitions);
 
-      const handlers = Subagent.layer(delegation, childModel.model, {
-        durable: { targetDigests: childDigests },
-      }).pipe(Layer.provide([SubagentReservationsMemoryLive]));
+      const handlers = Subagent.layer(delegation, childModel.model).pipe(
+        Layer.provide([SubagentReservationsMemoryLive]),
+      );
 
       const stack = hostLayer(directory, [
         { agent: parent, definitions },

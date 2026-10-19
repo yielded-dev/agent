@@ -16,17 +16,11 @@
 //    checks a `McpConnection` against a static Toolkit value (or a typed
 //    `connectMcp(request, expectedToolkit)`) would remove a whole class of
 //    look-alike-toolkit mistakes.
-// 2. The durable delegation declaration (`SubagentRuntimeOptions.durable
-//    .targetDigests`) and the host's `DurableWorkerBinding.make(binding,
-//    digests)` registration must agree byte-for-byte, but nothing shares the
-//    value: the fixture exports both a string form and a decoded
-//    `DefinitionDigests` form of the same digests to keep them from drifting.
-//    One authoritative exported value consumed by both sides would be better.
-// 3. Prompt-aware scripted models are boilerplate-heavy: every durable fixture
+// 2. Prompt-aware scripted models are boilerplate-heavy: every durable fixture
 //    (S2 travel planner, P6 planner, this one) re-implements "counters outside
 //    the Layer + decide-from-prompt". A shared `makePromptAwareCountingModel`
 //    in the testing package is an easy WP7 simplification.
-// 4. The delegation surface itself (Subagent.make + projections + policy)
+// 3. The delegation surface itself (Subagent.make + projections + policy)
 //    was pleasant to author a second time — bounds and declassification live
 //    exactly where a reviewer looks for them.
 // ---------------------------------------------------------------------------
@@ -57,7 +51,6 @@ export {
   documentSummaryPolicy,
   delegateDocumentSummary,
   mapSummaryChildFailure,
-  docsSummarizerDigestStrings,
   docsSummaryHandlersLayer,
   ResearchRequest,
   ResearchDigest,

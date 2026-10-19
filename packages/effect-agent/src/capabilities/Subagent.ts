@@ -20,7 +20,6 @@ import {
   type RunDispositionDeclaration,
 } from "../core/Agent.ts";
 import { AgentPolicyError } from "../core/AgentError.ts";
-import type { AgentPolicy } from "../core/AgentPolicy.ts";
 import { type AgentId, DelegationId, ToolCallId } from "../core/Identifiers.ts";
 import { IdGenerator } from "../core/IdGenerator.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
@@ -47,10 +46,7 @@ import {
   ToolCallWaiting,
 } from "../engine/AgentRuntime.ts";
 import type { SpawnInterpreterOptions } from "../engine/internal/agent-runtime.ts";
-import {
-  type RunSubagentChildIdentity,
-  type RunSubagentDigests,
-} from "../engine/internal/interpreter-options.ts";
+import type { RunSubagentChildIdentity } from "../engine/internal/interpreter-options.ts";
 import {
   RunEventSink,
   type SubagentEventBasePayload,
@@ -72,11 +68,7 @@ import {
   SubagentExecutionFailure,
   maxErrorTagLength,
 } from "./internal/subagent-contract.ts";
-import {
-  resolveSubagentPolicy,
-  resolveToolCallAllowance,
-  residualSubagentCaps,
-} from "./internal/subagent-policy.ts";
+import { resolveSubagentPolicy, residualSubagentCaps } from "./internal/subagent-policy.ts";
 import {
   type BudgetReservationId,
   makeBudgetReservationId,
@@ -328,8 +320,8 @@ export interface SubagentDefineOptions<
    * framework's honest exhaustion marker (SUB-034): when `budgetExhausted` is
    * true the child settled through the final-answer resolution (RUN-018) and
    * its output is a budget-truncated partial — surface it in the declared
-   * success Schema so the orchestrator can decide to re-delegate with a
-   * raised `toolCallAllowance`.
+   * success Schema so the caller can choose a fresh delegation with a larger
+   * task budget.
    */
   readonly projectResult: (
     output: TargetOutput["Type"],
@@ -340,24 +332,6 @@ export interface SubagentDefineOptions<
     Failure["Type"] | SubagentProjectionFailure,
     ProjectRequirements
   >;
-  /**
-   * Per-invocation child Tool Call allowance (SUB-034): a tightening-only
-   * bound below the child Definition's own `maxToolCalls`, additionally
-   * clamped to this delegation's `SubagentPolicy.maxToolCalls` (the
-   * per-invocation reservation slice). `fromParameters` lets the orchestrator
-   * model grant a larger allowance through an author-owned parameter field —
-   * the budget-extension flow is a fresh re-delegation with a raised
-   * allowance, never a mid-flight top-up. Durable establishment records the
-   * effective allowance before child admission and restores it on every Attempt.
-   */
-  readonly toolCallAllowance?:
-    | {
-        /** Applied when `fromParameters` is absent or yields nothing. */
-        readonly default: number;
-        /** Extract the model-granted allowance from the decoded parameters. */
-        readonly fromParameters?: (parameters: Parameters["Type"]) => number | undefined;
-      }
-    | undefined;
   /** Per-child ceilings. When omitted, reserve from the parent policy's shared delegation pool. */
   readonly policy?: SubagentPolicy | undefined;
   /**
@@ -949,20 +923,6 @@ export type SubagentLayerRequirements<
   | SubagentReservations;
 
 /**
- * Optional construction-fixed digest override for durable delegation.
- * The coordinator normally resolves the exact target Definition through its
- * existing host registration. An override must agree with that registration.
- */
-export interface SubagentDurableOptions {
-  /**
-   * Exact digests from the target's host registration. Fixed once at handler
-   * Layer construction and checked against that registration at establishment.
-   * Recovery uses the canonical request's recorded digests, never current code.
-   */
-  readonly targetDigests: RunSubagentDigests;
-}
-
-/**
  * The conservative final accounting summary the durable delegation handler
  * attaches to every settlement join. The handler has no live child usage stream at durable join
  * time, so every dimension conservatively consumes its full reservation and
@@ -990,11 +950,6 @@ export interface SubagentRuntimeOptions<
   ChildFailure,
   HookRequirements = never,
 > {
-  /**
-   * Optional exact digest override. Without it, the durable coordinator resolves
-   * the target Definition from its existing host registrations.
-   */
-  readonly durable?: SubagentDurableOptions | undefined;
   /**
    * Total mapping from every expected child Run failure to the declared Tool
    * failure (SUB-028). The parameter type is the child Binding's complete
@@ -1580,24 +1535,6 @@ export function layer<
     Schema.Union([delegation.failure, SubagentProjectionFailure]),
   );
 
-  const childToolCallAllowance = (
-    parameters: Parameters["Type"],
-    policy: SubagentPolicy,
-    childPolicy: AgentPolicy,
-  ) => resolveToolCallAllowance(delegation.toolCallAllowance, parameters, policy, childPolicy);
-
-  // Capture an explicit digest override without retaining mutable author options.
-  const durableDeclaration: SubagentDurableOptions | undefined =
-    options.durable === undefined
-      ? undefined
-      : {
-          targetDigests: {
-            agent: options.durable.targetDigests.agent,
-            model: options.durable.targetDigests.model,
-            tools: options.durable.targetDigests.tools,
-          },
-        };
-
   const executionFailure = (
     classification: SubagentExecutionFailureClassification,
     errorTag: string,
@@ -1629,6 +1566,54 @@ export function layer<
       reason,
       message: boundedEventText(message),
     });
+
+  const validateAttachedCall = Effect.fnUntraced(function* (callId: string | undefined) {
+    const spawner = yield* AgentSpawner;
+
+    // The interpreter supplies the Tool Call identity; absence is an engine defect.
+    const toolCallId = yield* Schema.decodeUnknownEffect(ToolCallId)(callId).pipe(Effect.orDie);
+    const grant = narrowSubagentGrant(delegation.grant, spawner.grant);
+    const depth = spawner.depth + 1;
+
+    if (depth > grant.maxDepth) {
+      return yield* prestartDenied(
+        "nested-delegation",
+        "Delegation exceeds the inherited depth ceiling",
+      );
+    }
+    if (!(spawner.grant?.childLifetimes ?? ["attached", "background"]).includes("attached")) {
+      return yield* prestartDenied(
+        "grant-violation",
+        "The inherited grant does not permit attached children",
+      );
+    }
+
+    return { toolCallId, grant, depth };
+  });
+
+  const prepareChildInput = Effect.fnUntraced(function* (
+    parameters: Parameters["Type"],
+    toolCallId: ToolCallId,
+  ) {
+    const spawner = yield* AgentSpawner;
+
+    const prepared = yield* delegation.prepareInput(parameters, {
+      source: "tool",
+      delegationId: delegation.delegationId,
+      toolCallId,
+      parent: spawner.parent,
+    });
+
+    return yield* encodeChildInput(prepared).pipe(
+      Effect.mapError(() =>
+        SubagentProjectionFailure.make({
+          delegationId: delegation.delegationId,
+          stage: "input",
+          message: "Prepared child input did not satisfy the target Agent input Schema",
+        }),
+      ),
+    );
+  });
 
   const build = Effect.gen(function* () {
     const captured =
@@ -1674,28 +1659,8 @@ export function layer<
       const sink = yield* RunEventSink;
       const reservations = yield* SubagentReservations;
 
-      // The interpreter supplies the parent Tool Call identity for every
-      // executed Tool Call; its absence is an engine defect, not an expected
-      // failure of the delegation.
-      const toolCallId = yield* Schema.decodeUnknownEffect(ToolCallId)(
-        handlerContext.toolCallId,
-      ).pipe(Effect.orDie);
+      const { toolCallId, grant, depth } = yield* validateAttachedCall(handlerContext.toolCallId);
 
-      const grant = narrowSubagentGrant(delegation.grant, spawner.grant);
-      const depth = spawner.depth + 1;
-
-      if (depth > grant.maxDepth) {
-        return yield* prestartDenied(
-          "nested-delegation",
-          "Delegation exceeds the inherited depth ceiling",
-        );
-      }
-      if (!(spawner.grant?.childLifetimes ?? ["attached", "background"]).includes("attached")) {
-        return yield* prestartDenied(
-          "grant-violation",
-          "The inherited grant does not permit attached children",
-        );
-      }
       if (spawner.depth > 0 && spawner.budget === undefined) {
         return yield* prestartDenied(
           "budget-conflict",
@@ -1703,22 +1668,7 @@ export function layer<
         );
       }
 
-      const prepared = yield* delegation.prepareInput(parameters, {
-        source: "tool",
-        delegationId: delegation.delegationId,
-        toolCallId,
-        parent: spawner.parent,
-      });
-
-      const encodedInput = yield* encodeChildInput(prepared).pipe(
-        Effect.mapError(() =>
-          SubagentProjectionFailure.make({
-            delegationId: delegation.delegationId,
-            stage: "input",
-            message: "Prepared child input did not satisfy the target Agent input Schema",
-          }),
-        ),
-      );
+      const encodedInput = yield* prepareChildInput(parameters, toolCallId);
 
       const parentRunId = spawner.parent.runId;
 
@@ -1795,8 +1745,6 @@ export function layer<
             ),
       };
 
-      const toolCallAllowance = childToolCallAllowance(parameters, policy, childPolicy);
-
       // Preparation and waiting for a concurrency permit spend the parent's time too.
       // Keep the reservation unchanged; settlement refunds unused execution duration.
       const childStartedAt = yield* Clock.currentTimeMillis;
@@ -1841,7 +1789,7 @@ export function layer<
             : { descendantInvocations: policy.descendantInvocations }),
         }),
         budget,
-        ...(toolCallAllowance === undefined ? {} : { toolCallAllowance }),
+        toolCallAllowance: childPolicy.maxToolCalls,
       };
 
       yield* Ref.set(startedAt, childStartedAt);
@@ -2073,47 +2021,14 @@ export function layer<
 
       const sink = yield* RunEventSink;
 
-      const toolCallId = yield* Schema.decodeUnknownEffect(ToolCallId)(
-        handlerContext.toolCallId,
-      ).pipe(Effect.orDie);
+      const { toolCallId, grant, depth } = yield* validateAttachedCall(handlerContext.toolCallId);
 
       const emit = (event: SubagentEventPayload): Effect.Effect<void> =>
         sink.emit(event).pipe(Effect.orDie);
 
-      // Resume cannot restore authority removed by an ancestor.
-      const grant = narrowSubagentGrant(delegation.grant, spawner.grant);
-      const depth = spawner.depth + 1;
-
-      if (depth > grant.maxDepth) {
-        return yield* prestartDenied(
-          "nested-delegation",
-          "Delegation exceeds the inherited depth ceiling",
-        );
-      }
-      if (!(spawner.grant?.childLifetimes ?? ["attached", "background"]).includes("attached")) {
-        return yield* prestartDenied(
-          "grant-violation",
-          "The inherited grant does not permit attached children",
-        );
-      }
       const encodedGrant = yield* encodeGrant(grant).pipe(Effect.orDie);
 
-      const prepared = yield* delegation.prepareInput(parameters, {
-        source: "tool",
-        delegationId: delegation.delegationId,
-        toolCallId,
-        parent: spawner.parent,
-      });
-
-      const encodedInput = yield* encodeChildInput(prepared).pipe(
-        Effect.mapError(() =>
-          SubagentProjectionFailure.make({
-            delegationId: delegation.delegationId,
-            stage: "input",
-            message: "Prepared child input did not satisfy the target Agent input Schema",
-          }),
-        ),
-      );
+      const encodedInput = yield* prepareChildInput(parameters, toolCallId);
 
       // Establishment is idempotent by construction (SUB-016): the identical
       // request replays spec §12 steps 2-9 under the parent fence and
@@ -2127,13 +2042,10 @@ export function layer<
           target: delegation.target,
           targetAgentId: delegation.target.id,
           depth,
-          ...(durableDeclaration === undefined
-            ? {}
-            : { targetDigests: durableDeclaration.targetDigests }),
           encodedChildInput: encodedInput,
           encodedGrant,
           encodedAllocation,
-          toolCallAllowance: childToolCallAllowance(parameters, policy, childPolicy),
+          toolCallAllowance: childPolicy.maxToolCalls,
           policy: childPolicy,
           budget: {
             caps,

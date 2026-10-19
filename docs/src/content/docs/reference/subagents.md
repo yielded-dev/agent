@@ -40,15 +40,14 @@ failures with the declaration's `containedFailure` Schema.
 | Delegation `policy`               | Omission derives a shared child pool from parent limits                                   |
 | Explicit `SubagentPolicy`         | Sets per-child ceilings; aggregate caps multiply by `maxChildren`                         |
 | `parentCaps` on the handler Layer | Optional shared aggregate pool; declarations in one parent Run must agree                 |
-| `toolCallAllowance`               | Child's resolved allowance; an override can only tighten it                               |
 | `descendantInvocations`           | Zero when omitted                                                                         |
 | `parentReserveDuration`           | Zero; accepts a finite, nonnegative Effect Duration input                                 |
 | Token and cost caps               | Optional; missing usage never creates budget credit                                       |
 
 Each parent Run has its own delegation pool, separate from its execution counters. In-process
 pools are released after the Run and its attached children finish cleanup. Durable accounting
-conservatively charges reservations when usage is unavailable. Increasing an allowance
-requires a fresh delegation, not a top-up of an active child. See [budgets](/concepts/budgets/).
+conservatively charges reservations when usage is unavailable. The child's resolved policy sets
+its tool allowance; a larger budget requires a fresh delegation. See [budgets](/concepts/budgets/).
 
 In-process attached children are also capped by the parent's remaining deadline. Set
 `parentReserveDuration: "30 seconds"` on `SubagentPolicy` and `failureMode: "return"` on the
