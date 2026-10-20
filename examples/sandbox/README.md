@@ -20,8 +20,8 @@ and `bash`, plus OpenAI’s native web search, `read_web_page`, `scrape_web_page
 visual references before coding. The container starts in the background when an
 admitted run begins, so research can proceed while it boots. Filesystem and Bash
 tools wait for the same workspace when needed; the UI shows startup separately
-from research. Page reading and scraping use Cloudflare Kitesurf with a 256 KiB
-response limit; screenshots also offer Chromium. Captured images are shown to the
+from research. Page reading and scraping use Cloudflare Kitesurf with the library's
+5 MiB response limit; screenshots also offer Chromium. Captured images are shown to the
 model on its next turn and remain accessible in the conversation.
 They are stored privately in `BACKUPS`, scoped to the signed-in account and workspace.
 Search runs in the coding model’s own response and retains citations. The container

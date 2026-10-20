@@ -33,7 +33,6 @@ const readPage = WebCapture.make("read_web_page", {
     "Read a web page as rendered Markdown or HTML, or discover its links. Use this to gather primary-source evidence before building.",
   urls: "*",
   engine: "kitesurf",
-  maxResponseBytes: 256 * 1024,
 });
 
 const scrapePage = WebCapture.makeScrape("scrape_web_page", {
@@ -41,7 +40,6 @@ const scrapePage = WebCapture.makeScrape("scrape_web_page", {
     "Extract rendered elements and their attributes with CSS selectors. Useful for page sections, image sources, captions and specifications.",
   urls: "*",
   engine: "kitesurf",
-  maxResponseBytes: 256 * 1024,
 });
 
 const screenshots = Toolkit.make(

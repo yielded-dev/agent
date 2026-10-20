@@ -12,8 +12,11 @@ import {
   PageUrlTarget,
   type PageCaptureError,
 } from "@yielded/agent/page-capture";
+import * as WebCapture from "@yielded/agent/web-capture";
+import * as Toolkit from "effect/ai/Toolkit";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Stream from "effect/Stream";
 import { describe, expect, it } from "vite-plus/test";
 
 interface RecordedCall {
@@ -100,6 +103,81 @@ const captureLayer = (binding: BrowserQuickActionClient): Layer.Layer<PageCaptur
   );
 
 describe("Browser Run Quick Action PageCapture adapter", () => {
+  // Requested red/green seam: a library capture must accept a multi-megabyte
+  // page before the independent model-result budget applies.
+  it("returns a complete large page through the default WebCapture tool", async () => {
+    const markdown = `# Large reference\n${"reference text\n".repeat(150_000)}end of reference`;
+
+    const { binding } = makeBinding([
+      Response.json({ success: true, result: markdown, errors: [] }),
+    ]);
+
+    const capture = WebCapture.make("read_page", {
+      description: "Read the reference page",
+      urls: ["docs.example.com"],
+    });
+
+    const tools = Toolkit.make(capture.tool);
+
+    const results = await Effect.runPromise(
+      Effect.gen(function* () {
+        const toolkit = yield* tools;
+
+        const stream = yield* toolkit.handle("read_page", {
+          url: "https://docs.example.com/reference",
+          action: "markdown",
+        });
+
+        return yield* Stream.runCollect(stream);
+      }).pipe(Effect.provide(capture.handlers.pipe(Layer.provide(captureLayer(binding))))),
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.isFailure).toBe(false);
+    expect(results[0]?.result).toEqual({
+      url: "https://docs.example.com/reference",
+      action: "markdown",
+      markdown,
+    });
+  });
+
+  it("returns a large matched element through the default scrape tool", async () => {
+    const text = `Introduction\n${"reference text\n".repeat(150_000)}end of reference`;
+
+    const groups = [
+      {
+        selector: "main",
+        results: [{ text, html: text, attributes: [], left: 0, top: 0, width: 800, height: 600 }],
+      },
+    ];
+
+    const { binding } = makeBinding([Response.json({ success: true, result: groups, errors: [] })]);
+
+    const capture = WebCapture.makeScrape("scrape_page", {
+      description: "Read the reference section",
+      urls: ["docs.example.com"],
+    });
+
+    const tools = Toolkit.make(capture.tool);
+
+    const results = await Effect.runPromise(
+      Effect.gen(function* () {
+        const toolkit = yield* tools;
+
+        const stream = yield* toolkit.handle("scrape_page", {
+          url: "https://docs.example.com/reference",
+          selectors: ["main"],
+        });
+
+        return yield* Stream.runCollect(stream);
+      }).pipe(Effect.provide(capture.handlers.pipe(Layer.provide(captureLayer(binding))))),
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.isFailure).toBe(false);
+    expect(results[0]?.result).toEqual({ url: "https://docs.example.com/reference", groups });
+  });
+
   it("stops oversized streams at the first exceeding chunk and releases their reader", async () => {
     let chunksRead = 0;
     let canceled = false;

@@ -41,8 +41,6 @@ const BoundedPrompt = Schema.NonEmptyString.check(Schema.isMaxLength(8 * 1024));
 const BoundedSelector = Schema.NonEmptyString.check(Schema.isMaxLength(1_024));
 const BoundedAttributeName = Schema.NonEmptyString.check(Schema.isMaxLength(1_024));
 const BoundedAttributeValue = Schema.String.check(Schema.isMaxLength(64 * 1_024));
-const BoundedScrapeText = Schema.String.check(Schema.isMaxLength(1024 * 1_024));
-const BoundedScrapeHtml = Schema.String.check(Schema.isMaxLength(2 * 1024 * 1_024));
 const BoundedPattern = Schema.NonEmptyString.check(Schema.isMaxLength(1_024));
 const BoundedMessage = Schema.String.check(Schema.isMaxLength(SANDBOX_DIAGNOSTIC_MAX_LENGTH));
 const BoundedInferenceProvider = Schema.NonEmptyString.check(Schema.isMaxLength(256));
@@ -521,8 +519,10 @@ export class PageScrapeAttribute extends Schema.Class<PageScrapeAttribute>("Page
 
 /** One rendered element returned by a selector scrape. */
 export class PageScrapeElement extends Schema.Class<PageScrapeElement>("PageScrapeElement")({
-  text: BoundedScrapeText,
-  html: BoundedScrapeHtml,
+  // Individual fields share the page sanity bound; the adapter enforces the
+  // caller's byte budget on the complete response before decoding it.
+  text: BoundedOutputText,
+  html: BoundedOutputText,
   attributes: Schema.Array(PageScrapeAttribute).check(Schema.isMaxLength(MAX_SCRAPE_ATTRIBUTES)),
   left: Schema.Finite,
   top: Schema.Finite,

@@ -28,7 +28,6 @@ const ReadPage = WebCapture.make("read_page", {
   description: "Read example.com as rendered Markdown.",
   urls: ["example.com"],
   actions: ["markdown"],
-  maxResponseBytes: 16 * 1024,
 });
 
 const BrowserTools = Toolkit.make(ReadPage.tool);
@@ -40,6 +39,10 @@ when the host permits arbitrary HTTPS pages and subresources. This opts out of t
 it does not provide private-network isolation. URL policy and actions are fixed before execution.
 Structured extraction additionally needs explicit authorization and
 accounting for model inference.
+
+Capture tools accept up to 5 MiB of response data by default. Set `maxResponseBytes` to
+lower that limit. This is separate from the Agent's 50 KiB default
+[tool-result budget](/concepts/budgets/), which limits what enters model context and history.
 
 ## Capture and crawl
 
