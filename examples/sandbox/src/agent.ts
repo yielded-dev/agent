@@ -82,6 +82,6 @@ export const definitions = (settings?: ModelSettings) => {
       store: options.store,
       useItemReferences: options.useItemReferences,
     },
-    tools: { revision: 4, names: Object.keys(codingAgent.toolkit.tools) },
+    tools: { revision: 5, names: Object.keys(codingAgent.toolkit.tools) },
   });
 };
