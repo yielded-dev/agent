@@ -56,6 +56,7 @@ export default defineConfig({
       "src/BrowserUse.ts",
       "src/BrowserCredentials.ts",
       "src/ThreadObject.ts",
+      "src/R2ToolResultStorage.ts",
       "src/WakeScheduler.ts",
     ],
     dts: true,

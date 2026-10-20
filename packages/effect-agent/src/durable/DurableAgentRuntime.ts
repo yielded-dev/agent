@@ -65,6 +65,7 @@ import {
 import { Store as ConversationStore, makeMemoryStore } from "../core/Thread.ts";
 import { Selection, Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
+import { ToolResultStorage } from "../core/ToolResultStorage.ts";
 import {
   ModelCallUsage,
   ModelResponseIdentity,
@@ -1481,8 +1482,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   // RUN-036: capture once with the runtime, including explicit absence. A worker caller's ambient
   // observer must never replace this host choice on a fresh or replacement Attempt.
   const toolFailureObserver = yield* CurrentToolFailureObserver;
+  const toolResultStorage = yield* ToolResultStorage;
 
   const runServices = Context.make(CurrentToolFailureObserver, toolFailureObserver).pipe(
+    Context.add(ToolResultStorage, toolResultStorage),
     Context.add(RunToolVisibility, runToolVisibility),
     Context.add(RunToolScheduling, runToolScheduling),
     Context.add(ContextCompactor, compactor),

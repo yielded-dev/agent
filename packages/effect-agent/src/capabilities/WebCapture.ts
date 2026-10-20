@@ -38,11 +38,12 @@ import {
  * ordinary result redaction like any other Tool output.
  */
 
+const maxResponseBytesLimit = 5 * 1024 * 1024;
 const maxFailureTextLength = 4 * 1024;
 const BoundedFailureText = Schema.String.check(Schema.isMaxLength(maxFailureTextLength));
 const BoundedErrorTag = Schema.NonEmptyString.check(Schema.isMaxLength(256));
 const BoundedUrl = Schema.NonEmptyString.check(Schema.isMaxLength(8 * 1024));
-const BoundedContent = Schema.String.check(Schema.isMaxLength(1024 * 1024));
+const BoundedContent = Schema.String.check(Schema.isMaxLength(maxResponseBytesLimit));
 const BoundedSelector = Schema.NonEmptyString.check(Schema.isMaxLength(1_024));
 
 /** The model-selectable capture actions the first slice exposes. */
@@ -171,8 +172,9 @@ interface WebCaptureSharedOptions {
   readonly engine?: PageCaptureEngine | undefined;
   /**
    * Response byte budget measured on the UTF-8 encoded platform response.
-   * Default 131072 (128 KiB); construction fails closed outside
-   * [1024, 1048576].
+   * Default 5242880 (5 MiB); construction fails closed outside
+   * [1024, 5242880]. This limits capture, independently of the Agent's
+   * model-visible `toolResultBounds` policy.
    */
   readonly maxResponseBytes?: number | undefined;
 }
@@ -244,7 +246,6 @@ export interface WebCaptureScrapeDefinition<Name extends string> {
   readonly handlers: Layer.Layer<Tool.HandlersFor<WebCaptureScrapeTools<Name>>, never, PageCapture>;
 }
 
-const defaultMaxResponseBytes = 128 * 1024;
 const allActions: ReadonlyArray<WebCaptureAction> = ["markdown", "content", "links"];
 
 const HOST_PATTERN = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
@@ -287,13 +288,13 @@ const compileResourcePolicy = (patterns: ReadonlyArray<string>): PageResourcePol
   });
 
 const validateMaxResponseBytes = (value: number | undefined): number => {
-  const bytes = value ?? defaultMaxResponseBytes;
+  const bytes = value ?? maxResponseBytesLimit;
 
   // Fail closed on an invalid budget: NaN would make every comparison false.
-  if (!Number.isSafeInteger(bytes) || bytes < 1_024 || bytes > 1024 * 1024) {
+  if (!Number.isSafeInteger(bytes) || bytes < 1_024 || bytes > maxResponseBytesLimit) {
     // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebCapture constructors synchronously reject invalid response-size bounds.
     throw new Error(
-      `Web capture maxResponseBytes must be an integer between 1024 and ${1024 * 1024}; received ${String(value)}`,
+      `Web capture maxResponseBytes must be an integer between 1024 and ${maxResponseBytesLimit}; received ${String(value)}`,
     );
   }
 

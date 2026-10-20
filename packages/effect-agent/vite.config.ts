@@ -69,6 +69,8 @@ export default defineConfig({
       "src/capabilities/ToolDiscovery.ts",
       "src/ToolExposure.ts",
       "src/core/ToolResult.ts",
+      "src/core/ToolResultStorage.ts",
+      "src/capabilities/ToolResults.ts",
       "src/core/Usage.ts",
       "src/capabilities/WebCapture.ts",
       "src/capabilities/WebSearch.ts",

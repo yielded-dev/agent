@@ -4,6 +4,7 @@ import * as ContextTools from "@yielded/agent/context-tools";
 import { ModelCallContext } from "@yielded/agent/context-window";
 import { text } from "@yielded/agent/output";
 import { DefinitionDigestInput } from "@yielded/agent/records";
+import * as ToolResults from "@yielded/agent/tool-results";
 import { Schema } from "effect";
 import { Toolkit } from "effect/ai";
 
@@ -20,6 +21,7 @@ export const codingAgent = Agent.make("sandbox-coder", {
     codingTools,
     webTools,
     ContextTools.toolkit,
+    ToolResults.toolkit,
     WebSearch.native({ tool: OpenAiTool.WebSearch({}) }),
   ),
   instructions: `You are Yielded, a coding agent working in an isolated Linux workspace at /workspace.
@@ -82,6 +84,6 @@ export const definitions = (settings?: ModelSettings) => {
       store: options.store,
       useItemReferences: options.useItemReferences,
     },
-    tools: { revision: 4, names: Object.keys(codingAgent.toolkit.tools) },
+    tools: { revision: 5, names: Object.keys(codingAgent.toolkit.tools) },
   });
 };

@@ -128,6 +128,11 @@ import {
   ToolResultBounds,
 } from "../../core/ToolResult.ts";
 import {
+  ToolResultStorage,
+  ToolResultId,
+  MAX_STORED_TOOL_RESULT_BYTES,
+} from "../../core/ToolResultStorage.ts";
+import {
   InputTokenUsage,
   ModelCallUsage,
   ModelResponseIdentity,
@@ -2356,7 +2361,12 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
         context.toolSchemaTransformer,
       );
     }
-    const encodedResult = yield* boundEncodedToolResult(result.encodedResult, resultBounds);
+
+    const encodedResult = yield* boundEncodedToolResult(
+      result.encodedResult,
+      resultBounds,
+      context.threadId,
+    );
 
     // The ordinary JSON boundary remains required; only the public Class projection is optional.
     const successResult = result.isFailure
@@ -3213,6 +3223,7 @@ const decodeBoundedToolResult = Schema.decodeEffect(Schema.fromJsonString(Schema
 const boundEncodedToolResult = (
   encodedResult: unknown,
   bounds: ToolResultBounds,
+  threadId?: ThreadId,
 ): Effect.Effect<unknown> => {
   let text: string | undefined;
 
@@ -3226,14 +3237,38 @@ const boundEncodedToolResult = (
   if (text === undefined) {
     return Effect.succeed(unserializableToolResult("the encoded result is not a JSON value"));
   }
-  const bounded = applyToolResultBounds(text, bounds);
+  const encodedText = text;
 
-  // The measured JSON representation is the ONLY value retained, in both the
-  // truncated and unmodified cases: returning the original object would let a
-  // stateful `toJSON` pass the byte check small and expand or throw on later
-  // canonical serialization, carrying unchecked state past the boundary.
-  // Stay in the caller's Effect; a synchronous decoder would start another runtime fiber.
-  return decodeBoundedToolResult(bounded).pipe(Effect.orElseSucceed(unserializableToolResult));
+  return Effect.gen(function* () {
+    let retention: Pick<TruncatedToolResult, "fullResultId" | "fullResultError"> = {};
+    const storage = yield* ToolResultStorage;
+    const bytes = storage === undefined ? 0 : utf8ByteLength(encodedText);
+
+    if (storage !== undefined && threadId !== undefined && bytes > bounds.maxBytes) {
+      if (bytes > MAX_STORED_TOOL_RESULT_BYTES) {
+        retention = { fullResultError: "too-large" };
+      } else {
+        const saved = yield* storage
+          .save({ threadId, text: encodedText })
+          .pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(ToolResultId)),
+            Effect.timeout("5 seconds"),
+            Effect.result,
+          );
+
+        retention =
+          saved._tag === "Success"
+            ? { fullResultId: saved.success }
+            : { fullResultError: "unavailable" };
+      }
+    }
+    const bounded = applyToolResultBounds(encodedText, bounds, retention);
+
+    // Reparse the measured representation; never retain a mutable object or rerun toJSON.
+    return yield* decodeBoundedToolResult(bounded).pipe(
+      Effect.orElseSucceed(unserializableToolResult),
+    );
+  });
 };
 
 const durableResultBounds = <E, R>(

@@ -9,6 +9,7 @@ import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
 import { ToolResultBounds, TruncatedToolResult } from "@yielded/agent/tool-result";
+import { ToolResultStorage, ToolResultStorageError } from "@yielded/agent/tool-result-storage";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
 import * as OpenAiStructuredOutput from "effect/ai/OpenAiStructuredOutput";
@@ -225,6 +226,60 @@ layer(testLayer)("context economics — bounding, tracking, status, exhaustion",
         }
         expect(succeeded.result).toEqual(results[0]);
       }),
+  );
+
+  // Requested red/green seam: preserve the middle of an oversized result while
+  // the canonical event and the next model prompt remain within their byte budget.
+  it.effect("retains full oversized output behind a bounded result reference", () =>
+    Effect.gen(function* () {
+      const data = `${"x".repeat(30_000)}omitted-middle-evidence${"y".repeat(30_000)}`;
+      const saved: Array<{ readonly threadId: ThreadId; readonly text: string }> = [];
+      const id = "a".repeat(64);
+
+      const storage = Layer.succeed(ToolResultStorage, {
+        save: (request) =>
+          Effect.sync(() => {
+            saved.push(request);
+
+            return id;
+          }),
+        read: () =>
+          Effect.fail(ToolResultStorageError.make({ reason: "not-found", message: "unused" })),
+      });
+
+      const definition = Agent.make("retained-result", {
+        instructions: "Use the tool once, then answer.",
+        input: Schema.String,
+        output: answerOutput,
+        toolkit: emitToolkit,
+        policy: { maxTurns: 3, maxToolCalls: 2, toolResultBounds: { maxBytes: 256 } },
+      });
+
+      const { model, requests } = scriptedModel([
+        toolCallParts("emit-retained", "emit", {}),
+        finalParts('{"answer":"done"}'),
+      ]);
+
+      const events = yield* AgentRuntime.stream(Agent.withModel(definition, model), "read").pipe(
+        Stream.runCollect,
+        Effect.provide(
+          Layer.merge(storage, emitToolkit.toLayer({ emit: () => Effect.succeed({ data }) })),
+        ),
+      );
+
+      expect(saved).toHaveLength(1);
+      expect(saved[0]?.text).toBe(JSON.stringify({ data }));
+      const prompt = requests[1]?.prompt;
+
+      if (prompt === undefined) throw new Error("expected a continuation");
+      const result = toolResultValues(prompt)[0];
+
+      expect(result).toMatchObject({ truncatedToolResult: true, fullResultId: id });
+      expect(new TextEncoder().encode(JSON.stringify(result)).length).toBeLessThanOrEqual(256);
+      const event = events.find((event) => event._tag === "ToolCallSucceeded");
+
+      expect(event).toMatchObject({ result });
+    }),
   );
 
   it.effect(

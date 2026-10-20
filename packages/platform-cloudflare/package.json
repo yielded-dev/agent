@@ -34,7 +34,8 @@
     "./thread-object": "./src/ThreadObject.ts",
     "./wake-scheduler": "./src/WakeScheduler.ts",
     "./cloudflare-ai-gateway": "./src/CloudflareAiGateway.ts",
-    "./browser-use": "./src/BrowserUse.ts"
+    "./browser-use": "./src/BrowserUse.ts",
+    "./r2-tool-result-storage": "./src/R2ToolResultStorage.ts"
   },
   "publishConfig": {
     "access": "public"

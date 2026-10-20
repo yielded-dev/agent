@@ -21,8 +21,13 @@ visual references before coding. The container starts in the background when an
 admitted run begins, so research can proceed while it boots. Filesystem and Bash
 tools wait for the same workspace when needed; the UI shows startup separately
 from research. Page reading uses Cloudflare Chromium; scraping uses Kitesurf, and
-screenshots offer both. Captured images are shown to the model on its next turn
-and remain accessible in the conversation.
+screenshots offer both. Reading and scraping use the library's 5 MiB response limit.
+Large tool results return a 50 KiB preview and a saved-result ID. Use
+`read_tool_result` to read omitted text;
+full outputs are stored privately in `BACKUPS` under `tool-results/`, scoped to the
+current thread. The bucket owner controls retention and cleanup of those objects.
+Captured images are shown to the model on its next turn and remain accessible in
+the conversation.
 They are stored privately in `BACKUPS`, scoped to the signed-in account and workspace.
 Search runs in the coding model’s own response and retains citations. The container
 also has public internet access for dependencies, documentation and public

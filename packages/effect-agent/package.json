@@ -134,7 +134,9 @@
     "./record-format": "./src/durable/RecordFormat.ts",
     "./thread-import": "./src/durable/ThreadImport.ts",
     "./thread-archive-range": "./src/durable/ThreadArchiveRange.ts",
-    "./thread-transfer": "./src/durable/ThreadTransfer.ts"
+    "./thread-transfer": "./src/durable/ThreadTransfer.ts",
+    "./tool-result-storage": "./src/core/ToolResultStorage.ts",
+    "./tool-results": "./src/capabilities/ToolResults.ts"
   },
   "publishConfig": {
     "access": "public"

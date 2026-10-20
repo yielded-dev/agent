@@ -34,7 +34,6 @@ const readPage = WebCapture.make("read_web_page", {
   urls: "*",
   // Kitesurf can leave Markdown response bodies pending long after headers arrive.
   engine: "chromium",
-  maxResponseBytes: 32 * 1024,
 });
 
 const scrapePage = WebCapture.makeScrape("scrape_web_page", {
@@ -42,7 +41,6 @@ const scrapePage = WebCapture.makeScrape("scrape_web_page", {
     "Extract rendered elements and their attributes with CSS selectors. Useful for page sections, image sources, captions and specifications.",
   urls: "*",
   engine: "kitesurf",
-  maxResponseBytes: 32 * 1024,
 });
 
 const screenshots = Toolkit.make(
