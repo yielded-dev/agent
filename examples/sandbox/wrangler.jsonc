@@ -36,7 +36,7 @@
   "ratelimits": [
     { "name": "RUN_LIMIT", "namespace_id": "4403", "simple": { "limit": 6, "period": 60 } },
   ],
-  "observability": { "enabled": true },
+  "observability": { "enabled": true, "traces": { "enabled": true } },
   "vars": {
     "AUTH_ISSUER": "https://auth.yielded.dev",
     "AUTH_RESOURCE": "https://agent.yielded.dev",
