@@ -2,6 +2,7 @@ import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { hostedModelAccess } from "@yielded/agent-example-auth/server";
 import { ThreadMaintenance } from "@yielded/agent-platform-cloudflare/alarm";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
+import * as R2ToolResultStorage from "@yielded/agent-platform-cloudflare/r2-tool-result-storage";
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
 import * as ContextTools from "@yielded/agent/context-tools";
@@ -10,6 +11,7 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
+import * as ToolResults from "@yielded/agent/tool-results";
 import { Cause, Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject, Rpc, WorkerEnvironment } from "effect-cf";
 import { AiError, LanguageModel, Model } from "effect/ai";
@@ -175,6 +177,7 @@ const registered = DurableAgentRuntime.layerRegistered([
   Layer.provide(webLive),
   Layer.provide(codingReconciler),
   Layer.provide(ContextTools.layer),
+  Layer.provide(ToolResults.layer),
   Layer.provide(ThreadContextHistory.layer()),
   Layer.provide(ContextCompactor.layer),
 );
@@ -196,6 +199,16 @@ const application = Layer.fresh(ThreadMaintenance.layer).pipe(
   Layer.provideMerge(WorkspacePreviews.layer),
   Layer.provideMerge(owner),
   Layer.provideMerge(Workspace.layer),
+  Layer.provide(
+    Layer.unwrap(
+      Effect.gen(function* () {
+        const env = yield* WorkerEnvironment;
+        const { threadId } = yield* ThreadObjectIdentity;
+
+        return R2ToolResultStorage.layer(env.BACKUPS, threadId);
+      }),
+    ),
+  ),
 );
 
 const pathInWorkspace = (path: string) => {

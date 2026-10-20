@@ -125,9 +125,26 @@ acceptance and sharing policy.
 
 ## Limit tool output
 
-`toolResultBounds` bounds encoded results before retention and prompt reuse. Oversized results
-become an explicit truncation envelope. Return concise findings or resource identifiers when the
-model does not need the full payload.
+`toolResultBounds` limits the encoded result retained in history and sent to the model
+(default 50 KiB). Oversized results become an explicit preview with the original byte count.
+
+For follow-up reads, merge `ToolResults.toolkit` into the Agent's toolkit and provide
+`ToolResults.layer`. Install a host store with `Layer.succeed(ToolResultStorage, store)` from
+`@yielded/agent/tool-result-storage` on the runtime Layer. The engine saves oversized outputs
+before returning a preview with `fullResultId`; `read_tool_result` retrieves up to 4,000 UTF-16
+characters per call and returns `nextOffset` for continuation. Lower `maxChars` when using a
+smaller result budget.
+
+Cloudflare hosts can use `R2ToolResultStorage.layer(bucket, threadId)` from
+`@yielded/agent-platform-cloudflare/r2-tool-result-storage`. Bind it to the authorized Thread;
+the model cannot choose another Thread. The [sandbox example](https://github.com/yielded-dev/agent/tree/main/examples/sandbox)
+shows the runtime wiring. Other hosts implement the same Effect storage contract.
+
+Saving has an 8 MiB ceiling and a five-second deadline. An expected save failure keeps the
+preview with `fullResultError` and no reference; it does not rerun the original tool. Without a
+store, omitted text is discarded. Hosts own private storage, retention, quotas, and orphan
+cleanup. Saved objects are separate from Thread exports and must remain available for as long
+as their references are needed. An expired or missing object returns a typed read failure.
 
 See [budgets](/concepts/budgets/) for defaults and the
 [context-continuity example](https://github.com/yielded-dev/agent/tree/main/tooling/context-continuity-eval)

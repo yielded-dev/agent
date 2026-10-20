@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 
 import { ToolCallId } from "./Identifiers.ts";
 import { codePointUtf8Length, utf8ByteLength } from "./internal/utf8.ts";
+import { ToolResultId, ToolResultStorageError } from "./ToolResultStorage.ts";
 
 /**
  * Engine-owned evidence that a fresh model call failed parameter validation.
@@ -24,7 +25,7 @@ export type ToolParameterRejection = typeof ToolParameterRejection.Type;
 
 /**
  * The minimal `TruncatedToolResult` envelope (empty head/tail, a 16-digit
- * `originalBytes`) encodes to at most 81 UTF-8 bytes; 256 guarantees every
+ * `originalBytes`) plus a 64-character full-result ID fits within 256 bytes; every
  * accepted bound fits the envelope plus some real content, so the bound is a
  * hard resource guard rather than a best-effort one.
  */
@@ -38,13 +39,16 @@ export class ToolResultBounds extends Schema.Class<ToolResultBounds>("ToolResult
 /**
  * Canonical envelope replacing an encoded Tool result that exceeded its
  * policy bounds. `head` and `tail` are an exact prefix and suffix of the
- * original encoded JSON text; the middle is dropped, never paraphrased.
+ * original encoded JSON text. When fullResultId is present, read_tool_result can
+ * retrieve the complete result from the host store. Otherwise the middle is lost.
  */
 export class TruncatedToolResult extends Schema.Class<TruncatedToolResult>("TruncatedToolResult")({
   truncatedToolResult: Schema.Literal(true),
   originalBytes: Schema.Natural,
   head: Schema.String,
   tail: Schema.String,
+  fullResultId: Schema.optionalKey(ToolResultId),
+  fullResultError: Schema.optionalKey(ToolResultStorageError.fields.reason),
 }) {}
 
 /**
@@ -151,11 +155,15 @@ const takeSuffixWithinBytes = (value: string, maxBytes: number): string => {
  * envelope always re-encodes as valid JSON.
  *
  * The Schema-level 256-byte floor on `ToolResultBounds.maxBytes` guarantees
- * every accepted bound fits the minimal envelope (at most 81 bytes), so the
+ * every accepted bound fits the minimal envelope, including retention metadata, so the
  * returned value never exceeds `maxBytes` for a decodable bound. The
  * minimal-envelope fallback below survives purely as defense in depth.
  */
-export const applyToolResultBounds = (encodedJson: string, bounds: ToolResultBounds): string => {
+export const applyToolResultBounds = (
+  encodedJson: string,
+  bounds: ToolResultBounds,
+  retention: Pick<TruncatedToolResult, "fullResultId" | "fullResultError"> = {},
+): string => {
   const originalBytes = utf8ByteLength(encodedJson);
 
   if (originalBytes <= bounds.maxBytes) return encodedJson;
@@ -163,7 +171,13 @@ export const applyToolResultBounds = (encodedJson: string, bounds: ToolResultBou
   const render = (head: string, tail: string): string =>
     JSON.stringify(
       Schema.encodeSync(TruncatedToolResult)(
-        TruncatedToolResult.make({ truncatedToolResult: true, originalBytes, head, tail }),
+        TruncatedToolResult.make({
+          truncatedToolResult: true,
+          originalBytes,
+          head,
+          tail,
+          ...retention,
+        }),
       ),
     );
 

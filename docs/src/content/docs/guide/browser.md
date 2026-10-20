@@ -43,6 +43,7 @@ accounting for model inference.
 Capture tools accept up to 5 MiB of response data by default. Set `maxResponseBytes` to
 lower that limit. This is separate from the Agent's 50 KiB default
 [tool-result budget](/concepts/budgets/), which limits what enters model context and history.
+Use [saved tool outputs](/guide/context-management/#limit-tool-output) for follow-up reads of larger captures.
 
 ## Capture and crawl
 
