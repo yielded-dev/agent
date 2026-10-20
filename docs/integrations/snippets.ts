@@ -60,6 +60,7 @@ export const snippetPlugins = [
         noEmit: true,
         strict: true,
         typeRoots: [
+          resolve(import.meta.dirname, "../../node_modules/@types"),
           resolve(import.meta.dirname, "../../packages/platform-cloudflare/node_modules"),
         ],
         types: [],

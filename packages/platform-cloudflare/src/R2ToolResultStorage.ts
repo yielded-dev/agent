@@ -1,4 +1,3 @@
-import type { R2ObjectBody } from "@cloudflare/workers-types";
 import type { ThreadId } from "@yielded/agent/identifiers";
 import {
   MAX_STORED_TOOL_RESULT_BYTES,
@@ -21,12 +20,12 @@ export interface R2ToolResultBucket {
       readonly onlyIf: { readonly etagDoesNotMatch: string };
     },
   ) => Promise<unknown>;
-  readonly get: (key: string) => Promise<
-    | (Pick<R2ObjectBody, "size" | "bodyUsed" | "text"> & {
-        readonly body: Pick<R2ObjectBody["body"], "cancel">;
-      })
-    | null
-  >;
+  readonly get: (key: string) => Promise<{
+    readonly size: number;
+    readonly bodyUsed: boolean;
+    readonly text: () => Promise<string>;
+    readonly body: { readonly cancel: () => Promise<void> };
+  } | null>;
 }
 
 const unavailable = (cause?: unknown) => {
