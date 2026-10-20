@@ -5,10 +5,10 @@ import {
   SandboxOperationError,
   type SessionSandbox,
 } from "@yielded/sandbox/cloudflare";
-import { Context, Effect, Layer, Schema, type Stream, SubscriptionRef } from "effect";
+import { Context, Effect, Layer, Schema, Semaphore, type Stream, SubscriptionRef } from "effect";
 import { DurableObjectState } from "effect-cf";
 
-/** Tools and direct commands may create a workspace; readers require its retained instance. */
+/** Admitted runs and commands may create a workspace; readers require its retained instance. */
 export class Workspace extends Context.Service<
   Workspace,
   {
@@ -35,6 +35,7 @@ export class Workspace extends Context.Service<
       const namespace = yield* NativeSandboxNamespace;
       const identity = { path: "/workspace/.sandbox-agent-materialization", id: threadId };
       const starting = yield* SubscriptionRef.make(false);
+      const creation = yield* Semaphore.make(1);
 
       const bind = (instanceId?: string) =>
         makeNativeSandbox(threadId, {
@@ -97,7 +98,7 @@ export class Workspace extends Context.Service<
         const retained = yield* existing;
 
         return retained ?? (yield* create);
-      }).pipe(Effect.mapError(failure));
+      }).pipe(creation.withPermits(1), Effect.mapError(failure));
 
       return Workspace.of({
         identity,

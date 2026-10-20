@@ -17,9 +17,12 @@ last settings used there.
 The example exposes `read_file`, `write_file`, `edit_file`, `list_files`, `search`
 and `bash`, plus OpenAI’s native web search, `read_web_page`, `scrape_web_page` and
 `screenshot_web_page`. The agent can research arbitrary HTTPS pages and inspect
-visual references before coding, without starting its container. Page reading and
-scraping use Cloudflare Kitesurf; screenshots also offer Chromium. Captured images
-are shown to the model on its next turn and remain accessible in the conversation.
+visual references before coding. The container starts in the background when an
+admitted run begins, so research can proceed while it boots. Filesystem and Bash
+tools wait for the same workspace when needed; the UI shows startup separately
+from research. Page reading and scraping use Cloudflare Kitesurf; screenshots also
+offer Chromium. Captured images are shown to the model on its next turn and remain
+accessible in the conversation.
 They are stored privately in `BACKUPS`, scoped to the signed-in account and workspace.
 Search runs in the coding model’s own response and retains citations. The container
 also has public internet access for dependencies, documentation and public
