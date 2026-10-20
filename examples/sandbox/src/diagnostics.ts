@@ -65,6 +65,7 @@ export const diagnosticRows = (records: ReadonlyArray<CanonicalRecordEnvelope>) 
         const index = calls.get(`${p.runId}:${p.toolCallId}`);
         const started = index === undefined ? undefined : rows[index];
         const output = Schema.is(CommandOutput)(p.result) ? p.result : undefined;
+        const failure = p.isFailure && Schema.is(Failure)(p.result) ? p.result : undefined;
 
         const failed =
           p.isFailure || (output !== undefined && (output.timedOut || output.exitCode !== 0));
@@ -76,6 +77,9 @@ export const diagnosticRows = (records: ReadonlyArray<CanonicalRecordEnvelope>) 
           toolCallId: p.toolCallId,
           detail: [
             started?.detail,
+            failure === undefined
+              ? undefined
+              : `${failure.errorTag}: ${failure.message}`.slice(0, 4096),
             output?.stderr.slice(0, 2048),
             failed ? output?.stdout.slice(-2048) : undefined,
           ]

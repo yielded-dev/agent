@@ -76,7 +76,7 @@ New and restored workspaces use 2 vCPUs and 8 GiB of memory for browser checks.
 Running workspaces keep their current container until it stops.
 
 Open **Diagnostics** in the workspace header to inspect saved model responses,
-token counts, tool timings and failures, or copy a page with its run and response
+token counts, tool timings and failure messages, or copy a page with its run and response
 IDs. It reads existing history on demand. Tool elapsed time includes startup and
 recording overhead; it is shown only when both boundaries are in the page.
 
