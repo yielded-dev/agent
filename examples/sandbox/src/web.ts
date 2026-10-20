@@ -32,7 +32,8 @@ const readPage = WebCapture.make("read_web_page", {
   description:
     "Read a web page as rendered Markdown or HTML, or discover its links. Use this to gather primary-source evidence before building.",
   urls: "*",
-  engine: "kitesurf",
+  // Kitesurf can leave Markdown response bodies pending long after headers arrive.
+  engine: "chromium",
 });
 
 const scrapePage = WebCapture.makeScrape("scrape_web_page", {

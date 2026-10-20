@@ -570,7 +570,6 @@ interface RunContext {
   readonly runId: RunId;
   /** Captured once at the Run boundary, never reconstructed from events or durable data. */
   readonly toolFailureObserver: RunToolFailureObserver | undefined;
-  readonly toolResultStorage: ToolResultStorage | undefined;
   /** Agent-Schema encoded input identifying this logical Run's originating authority/wake. */
   input: unknown;
   readonly pendingFollowUps: Array<Prompt.RawInput>;
@@ -2366,7 +2365,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
     const encodedResult = yield* boundEncodedToolResult(
       result.encodedResult,
       resultBounds,
-      context,
+      context.threadId,
     );
 
     // The ordinary JSON boundary remains required; only the public Class projection is optional.
@@ -3224,7 +3223,7 @@ const decodeBoundedToolResult = Schema.decodeEffect(Schema.fromJsonString(Schema
 const boundEncodedToolResult = (
   encodedResult: unknown,
   bounds: ToolResultBounds,
-  context?: RunContext,
+  threadId?: ThreadId,
 ): Effect.Effect<unknown> => {
   let text: string | undefined;
 
@@ -3242,15 +3241,15 @@ const boundEncodedToolResult = (
 
   return Effect.gen(function* () {
     let retention: Pick<TruncatedToolResult, "fullResultId" | "fullResultError"> = {};
-    const storage = context?.toolResultStorage;
+    const storage = yield* ToolResultStorage;
     const bytes = storage === undefined ? 0 : utf8ByteLength(encodedText);
 
-    if (storage !== undefined && context !== undefined && bytes > bounds.maxBytes) {
+    if (storage !== undefined && threadId !== undefined && bytes > bounds.maxBytes) {
       if (bytes > MAX_STORED_TOOL_RESULT_BYTES) {
         retention = { fullResultError: "too-large" };
       } else {
         const saved = yield* storage
-          .save({ threadId: context.threadId, text: encodedText })
+          .save({ threadId, text: encodedText })
           .pipe(
             Effect.flatMap(Schema.decodeUnknownEffect(ToolResultId)),
             Effect.timeout("5 seconds"),
@@ -8704,7 +8703,6 @@ function executeWithCompletion<
             threadId,
             runId,
             toolFailureObserver: yield* CurrentToolFailureObserver,
-            toolResultStorage: yield* ToolResultStorage,
             input: undefined,
             pendingFollowUps: [],
             startedAtMillis,
