@@ -309,8 +309,11 @@ function Workspace({ id }: { id: string }) {
     (entry) => entry.kind === "tool" && entry.runId === state.runId && !results.has(toolKey(entry)),
   );
 
-  const progressLabel = starting
-    ? "Starting workspace…"
+  const waitingForWorkspace =
+    starting && Object.hasOwn(workspaceToolTitles, activeTool?.name ?? "");
+
+  const progressLabel = waitingForWorkspace
+    ? "Waiting for workspace…"
     : activeTool
       ? `${toolTitle(activeTool.name)}…`
       : "Waiting for the agent’s next response…";
@@ -367,7 +370,7 @@ function Workspace({ id }: { id: string }) {
                   entry={entry}
                   result={results.get(toolKey(entry))}
                   active={state.active !== null && entry.runId === state.runId}
-                  waiting={starting && entry === activeTool}
+                  waiting={waitingForWorkspace && entry === activeTool}
                 />
               ) : command ? (
                 <CommandEntry key={`command:${command.requestId}`} command={command} />
@@ -390,6 +393,12 @@ function Workspace({ id }: { id: string }) {
             {state.drafts.map((entry) => (
               <TranscriptEntry key={entry.id} entry={entry} streaming />
             ))}
+            {starting && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+                <LoaderCircle className="size-3.5 motion-safe:animate-spin" aria-hidden="true" />
+                Starting workspace…
+              </p>
+            )}
             {state.active && state.drafts.length === 0 && (
               <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
                 <LoaderCircle className="size-3.5 motion-safe:animate-spin" aria-hidden="true" />
@@ -643,17 +652,21 @@ const completionLabels: Readonly<Record<string, string>> = {
 // Provider call IDs may repeat across Turns; canonical result IDs do not.
 const toolKey = (entry: Entry) => entry.toolResultId ?? entry.id;
 
-const toolTitles: Readonly<Record<string, string>> = {
+const workspaceToolTitles: Readonly<Record<string, string>> = {
   list_files: "List files",
   read_file: "Read file",
   write_file: "Write file",
   edit_file: "Edit file",
   search: "Search files",
+  bash: "Run Bash",
+};
+
+const toolTitles: Readonly<Record<string, string>> = {
+  ...workspaceToolTitles,
   OpenAiWebSearch: "Search the web",
   read_web_page: "Read web page",
   scrape_web_page: "Scrape web page",
   screenshot_web_page: "Capture web page",
-  bash: "Run Bash",
   new_context: "Refresh context",
   get_context_remaining: "Check context capacity",
   search_context_windows: "Search conversation",

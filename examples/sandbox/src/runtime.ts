@@ -10,7 +10,7 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Cause, Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject, Rpc, WorkerEnvironment } from "effect-cf";
 import { AiError, LanguageModel, Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
@@ -124,9 +124,11 @@ const registered = DurableAgentRuntime.layerRegistered([
         Effect.gen(function* () {
           const ledger = yield* SubmissionLedger;
           const snapshots = yield* WorkspaceSnapshots;
+          const workspace = yield* Workspace;
+          const scope = yield* Effect.scope;
 
-          return {
-            read: Effect.gen(function* () {
+          const read = yield* Effect.cached(
+            Effect.gen(function* () {
               yield* snapshots.beforeExecution;
               const found = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
@@ -135,6 +137,16 @@ const registered = DurableAgentRuntime.layerRegistered([
 
               const input = yield* Schema.decodeUnknownEffect(CodingInput)(
                 found.value.inputPayload,
+              );
+
+              // Prewarm only an admitted attempt; workspace tools join creation when needed.
+              yield* workspace.open.pipe(
+                Effect.onError((cause) =>
+                  Cause.hasInterruptsOnly(cause)
+                    ? Effect.void
+                    : Effect.logWarning("Background workspace startup failed."),
+                ),
+                Effect.forkIn(scope),
               );
 
               return input.settings;
@@ -152,7 +164,9 @@ const registered = DurableAgentRuntime.layerRegistered([
                 }),
               ),
             ),
-          };
+          );
+
+          return { read };
         }),
       ),
   },
