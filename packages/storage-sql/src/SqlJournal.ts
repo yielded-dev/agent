@@ -12,6 +12,7 @@ import type { MessageDeliveryRecord } from "@yielded/agent/message-delivery";
 import type { Digest } from "@yielded/agent/records";
 import { CanonicalSequence, RunContinuation } from "@yielded/agent/records";
 import { ProgressAppendReader, validateProgressAppend } from "@yielded/agent/run-continuation";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import {
   AppendConflict,
@@ -445,17 +446,20 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const failpoint = options.hitFailpoint;
   const owner = yield* sqlStorageOwner(sql, options.namespace);
 
-  const publishDeliveries = (records: ReadonlyArray<MessageDeliveryRecord>) =>
-    publishCanonicalDeliveries(owner, records).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({
-          operation: "publish canonical deliveries",
-          message: cause.message,
-          deliveryReason: cause.reason,
-          cause,
-        }),
-      ),
-    );
+  const publishDeliveries = Effect.fnUntraced(
+    function* (records: ReadonlyArray<MessageDeliveryRecord>) {
+      yield* publishCanonicalDeliveries(records);
+    },
+    Effect.provideService(StorageOwner, owner),
+    Effect.mapError((cause) =>
+      ThreadStoreError.make({
+        operation: "publish canonical deliveries",
+        message: cause.message,
+        deliveryReason: cause.reason,
+        cause,
+      }),
+    ),
+  );
 
   const withReadTransaction: SqlTransactions<S, W>["withReadTransaction"] = (operation) => (body) =>
     owner.withMutation(options.transactions.withReadTransaction(operation)(body));

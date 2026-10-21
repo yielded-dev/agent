@@ -24,6 +24,7 @@ import {
   LifecyclePublicationError,
 } from "@yielded/agent/lifecycle-publication";
 import { BatchId, CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import {
   type AppendConflict,
@@ -364,6 +365,21 @@ const makeJournal = Effect.fnUntraced(function* (
 ) {
   const owner = (yield* SqlStorageOwner) ?? state;
   const progress = yield* SqlStorageProgress;
+
+  const publishDeliveries = Effect.fnUntraced(
+    function* (records: RawAppendRequest["deliveries"]) {
+      yield* publishCanonicalDeliveries(records);
+    },
+    Effect.provideService(StorageOwner, state.owner),
+    Effect.mapError((cause) =>
+      ThreadStoreError.make({
+        operation: "publish canonical message deliveries",
+        message: "Canonical message obligations could not be retained",
+        deliveryReason: cause.reason,
+        cause,
+      }),
+    ),
+  );
 
   const nativeDb =
     isNativeClient(sql) &&
@@ -1084,20 +1100,7 @@ const makeJournal = Effect.fnUntraced(function* (
     // caller's source transaction. The configured writer never opens another one.
     return request.deliveries.length === 0
       ? appended
-      : appended.pipe(
-          Effect.tap(() =>
-            publishCanonicalDeliveries(state.owner, request.deliveries).pipe(
-              Effect.mapError((cause) =>
-                ThreadStoreError.make({
-                  operation: "publish canonical message deliveries",
-                  message: "Canonical message obligations could not be retained",
-                  deliveryReason: cause.reason,
-                  cause,
-                }),
-              ),
-            ),
-          ),
-        );
+      : appended.pipe(Effect.tap(() => publishDeliveries(request.deliveries)));
   };
 
   const append = Effect.fnUntraced(

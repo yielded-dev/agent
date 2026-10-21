@@ -18,7 +18,7 @@ import {
   sameMessageDeliveryIdentity,
   validateMessageDelivery,
 } from "@yielded/agent/message-delivery";
-import type { StorageOwner } from "@yielded/agent/run-storage";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import { ScheduleInstant } from "@yielded/agent/schedule";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import { IdempotencyKey } from "@yielded/agent/submission-ledger";
@@ -159,12 +159,15 @@ export const registerCanonicalMessageWriter = Effect.fnUntraced(function* (
   );
 });
 
-/** Publish through the paired private insert body inside the canonical append transaction. */
+/**
+ * Publish through the paired private insert body inside the canonical append transaction.
+ * The journal supplies its retained physical owner when constructing its publication operation.
+ */
 export const publishCanonicalDeliveries = Effect.fnUntraced(function* (
-  owner: StorageOwner["Service"],
   records: ReadonlyArray<MessageDeliveryRecord>,
 ) {
   if (records.length === 0) return;
+  const owner = yield* StorageOwner;
   const retained = canonicalWriters.get(owner);
 
   if (retained === undefined || owner.isClosed())
