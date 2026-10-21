@@ -88,7 +88,6 @@ export * as SubmissionStatus from "./durable/SubmissionStatus.ts";
 export * as Subscription from "./durable/Subscription.ts";
 export * as SubscriptionInput from "./durable/SubscriptionInput.ts";
 export * as Subscriptions from "./durable/Subscriptions.ts";
-export * as SubscriptionTools from "./durable/SubscriptionTools.ts";
 export * as SubscriptionTransition from "./durable/SubscriptionTransition.ts";
 export * as ThreadInvariants from "./durable/ThreadInvariants.ts";
 export * as ThreadProjectionMaintenance from "./durable/ThreadProjectionMaintenance.ts";

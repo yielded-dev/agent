@@ -10,15 +10,7 @@ import {
   DurableRuntimeFailpointError,
   type DurableRuntimeFailpointHandler,
 } from "@yielded/agent/durable-failpoint";
-import { EventSources } from "@yielded/agent/event-source";
-import {
-  GitHubRepository,
-  GitHubWorkflowRunSourceVersion,
-  GitHubWorkflowRuns,
-  GitHubWorkflowRunCompletion,
-  GitHubWorkflowRunWatch,
-  makeGitHubWorkflowRunSource,
-} from "@yielded/agent/git-hub-workflow-source";
+import { EventSources, makeEventSource } from "@yielded/agent/event-source";
 import { AgentId, ThreadId } from "@yielded/agent/identifiers";
 import { DefinitionDigests, Digest } from "@yielded/agent/records";
 import {
@@ -58,7 +50,7 @@ import * as TestClock from "effect/testing/TestClock";
 
 const partition = SourcePartition.make({
   tenantId: "node-subscription-tenant",
-  address: "github:repository:42",
+  address: "workflow:completion",
 });
 
 const principal = Schema.decodeSync(Principal)("node-subscription-principal");
@@ -66,8 +58,9 @@ const threadId = Schema.decodeSync(ThreadId)("node-subscription-thread");
 const digest = Schema.decodeSync(Digest)("b".repeat(64));
 const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });
 const agentId = Schema.decodeSync(AgentId)("node-subscription-agent");
-const repository = GitHubRepository.make({ id: 42, owner: "effect", name: "agent" });
-const headSha = "a".repeat(40);
+const workflowSource = { name: "workflow-completed", version: "1" } as const;
+const WorkflowWatch = Schema.Struct({ runId: Schema.Int });
+const WorkflowCompletion = Schema.Struct({ runId: Schema.Int, conclusion: Schema.String });
 const scope = { partition, ownerId: "review-owner", principal } as const;
 const initialAdmissionKey = Schema.decodeSync(IdempotencyKey)("initial-run");
 
@@ -90,37 +83,30 @@ const sourceLayer = (calls: Ref.Ref<number>, completed: Ref.Ref<boolean>) =>
   Layer.merge(
     Layer.effect(
       EventSources,
-      makeGitHubWorkflowRunSource({
-        repository,
-      }).pipe(
-        Effect.map((source) => ({ sources: [source] })),
-        Effect.provideService(
-          GitHubWorkflowRuns,
-          GitHubWorkflowRuns.of({
-            getAttempt: ({ runId, attempt }) =>
-              Ref.update(calls, (count) => count + 1).pipe(
-                Effect.andThen(Ref.get(completed)),
-                Effect.map((isCompleted) => ({
-                  id: runId,
-                  run_attempt: attempt,
-                  head_sha: headSha,
-                  status: isCompleted ? "completed" : "in_progress",
-                  conclusion: isCompleted ? "success" : null,
-                  repository: { id: repository.id },
-                })),
-              ),
-          }),
-        ),
-      ),
+      makeEventSource({
+        source: workflowSource,
+        continuity: "node-workflow-completed-v1",
+        event: WorkflowCompletion,
+        parameters: WorkflowWatch,
+        identity: (event) => `workflow-completed:${event.runId}`,
+        eventKey: (event) => String(event.runId),
+        parameterKey: (parameters) => String(parameters.runId),
+        matches: (event, parameters) => event.runId === parameters.runId,
+        reconcile: ({ runId }) =>
+          Ref.update(calls, (count) => count + 1).pipe(
+            Effect.andThen(Ref.get(completed)),
+            Effect.map((isCompleted) => (isCompleted ? { runId, conclusion: "success" } : null)),
+          ),
+      }).pipe(Effect.map((source) => ({ sources: [source] }))),
     ),
     Layer.effect(
       SubscriptionInputBindings,
       makeSubscriptionInputBinding({
-        source: GitHubWorkflowRunSourceVersion,
+        source: workflowSource,
         agentId,
         definitions,
-        event: GitHubWorkflowRunCompletion,
-        parameters: GitHubWorkflowRunWatch,
+        event: WorkflowCompletion,
+        parameters: WorkflowWatch,
         context: Schema.Struct({ instruction: Schema.String }),
         input: Schema.Struct({ instruction: Schema.String, conclusion: Schema.String }),
         prepare: (completion, _watch, context) =>
@@ -174,8 +160,8 @@ const withTemporaryDatabase = <A, E>(
 const subscribe = (subscriptions: Subscriptions["Service"]) =>
   subscriptions.subscribe(scope, {
     subscriptionId: "workflow-completion",
-    source: GitHubWorkflowRunSourceVersion,
-    parameters: { runId: 101, attempt: 1, expectedHeadSha: headSha },
+    source: workflowSource,
+    parameters: { runId: 101 },
     context: { instruction: "continue reviewing" },
     mode: "once",
     expiresAtMillis: 60_000,
@@ -245,7 +231,7 @@ const makeInitialAgent = Effect.sync(() => {
 });
 
 it.effect(
-  "delivers after a completed Run, restart, missed GitHub event, and lost admission reply",
+  "delivers after a completed Run, restart, missed source event, and lost admission reply",
   () =>
     withTemporaryDatabase((filename) =>
       Effect.scoped(

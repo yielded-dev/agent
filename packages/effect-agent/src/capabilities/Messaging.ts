@@ -1,5 +1,6 @@
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
@@ -148,36 +149,33 @@ const native = <
   const Name extends string,
   Parameters extends Schema.Top,
   Success extends Schema.Top,
+  Dependencies extends Array<typeof MessagingHost | typeof Crypto.Crypto>,
   R,
 >(
   name: Name,
   parameters: Parameters,
   success: Success,
   description: string,
-  handler: (
-    parameters: Parameters["Type"],
-  ) => Effect.Effect<Success["Type"], MessagingError, R | MessagingHost | Crypto.Crypto>,
+  dependencies: Dependencies,
+  handler: (parameters: Parameters["Type"]) => Effect.Effect<Success["Type"], MessagingError, R>,
 ) => {
-  const tool = Tool.make(name, { parameters, success, failure: MessagingError, description })
-    .annotate(WorkerOperationTool, true)
-    .addDependency(MessagingHost)
-    .addDependency(Crypto.Crypto);
+  const tool = Tool.make(name, {
+    parameters,
+    success,
+    failure: MessagingError,
+    description,
+    dependencies,
+  }).annotate(WorkerOperationTool, true);
 
   const toolkit = Toolkit.make(tool);
 
   const build = Effect.gen(function* () {
-    const captured = yield* Effect.context<Exclude<R, MessagingHost | Crypto.Crypto>>();
+    const captured = (yield* Effect.context<
+      Exclude<R, Context.Service.Identifier<Dependencies[number]>>
+    >()).pipe(Context.omit(...dependencies));
 
-    const invoke = Effect.fnUntraced(function* (value: Parameters["Type"]) {
-      const service = yield* host;
-      const crypto = yield* Crypto.Crypto;
-
-      return yield* handler(value).pipe(
-        Effect.provideService(MessagingHost, service),
-        Effect.provideService(Crypto.Crypto, crypto),
-        Effect.provide(captured),
-      );
-    });
+    // Request dependencies must come from the live invocation, never the layer's captured context.
+    const invoke = (value: Parameters["Type"]) => handler(value).pipe(Effect.provide(captured));
 
     // The computed single key is precisely the native Tool's literal name.
     return { [name]: invoke } as unknown as Toolkit.HandlersFrom<typeof toolkit.tools>;
@@ -195,6 +193,7 @@ export const sendTool = <const Name extends string, Input extends Schema.Top>(
     declaration.target.input,
     MessageStatus,
     `Send input to ${declaration.name} through its authorized durable route.`,
+    [MessagingHost, Crypto.Crypto],
     (input) =>
       Effect.gen(function* () {
         return yield* send(declaration, input, { idempotencyKey: yield* modelKey() });
@@ -216,6 +215,7 @@ export const replyTool = <const Name extends string, Input extends Schema.Top>(
     Schema.Struct({ inReplyTo: MessageRef, input: inputSchema }),
     MessageStatus,
     `Reply to a recorded inbound message from ${declaration.name}.`,
+    [MessagingHost, Crypto.Crypto],
     ({ inReplyTo, input }) =>
       Effect.gen(function* () {
         return yield* reply(declaration, inReplyTo, input, { idempotencyKey: yield* modelKey() });
@@ -236,6 +236,7 @@ export const inboxTool = <const Name extends string, Input extends Schema.Top>(
     }),
     InboxPage,
     `Read a bounded page of message provenance from ${declaration.name}.`,
+    [MessagingHost],
     (options) => inbox(declaration, options),
   );
 
@@ -247,6 +248,7 @@ export const inspectTool = <const Name extends string, Input extends Schema.Top>
     Schema.Struct({ message: MessageRef }),
     MessageStatus,
     `Inspect delivery status of a message sent to ${declaration.name}.`,
+    [MessagingHost],
     ({ message }) => inspect(declaration, message),
   );
 
@@ -258,5 +260,6 @@ export const retryTool = <const Name extends string, Input extends Schema.Top>(
     Schema.Struct({ message: MessageRef }),
     MessageStatus,
     `Renew bounded automatic retries for a parked message to ${declaration.name}.`,
+    [MessagingHost],
     ({ message }) => retry(declaration, message),
   );
