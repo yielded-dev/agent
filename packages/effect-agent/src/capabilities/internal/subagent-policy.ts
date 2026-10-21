@@ -120,7 +120,7 @@ export const resolveSubagentPolicy = (
       ? SubagentDelegationCaps.make({
           maxTotalChildInvocations: parent.maxToolCalls,
           maxConcurrentChildren: parent.toolConcurrency,
-          maxTurns: parent.maxTurns,
+          ...(Number.isFinite(parent.maxTurns) ? { maxTurns: parent.maxTurns } : {}),
           maxToolCalls: parent.maxToolCalls,
           maxDurationMillis: Math.ceil(Duration.toMillis(parent.maxDuration)),
           ...(parent.tokenBudget === undefined

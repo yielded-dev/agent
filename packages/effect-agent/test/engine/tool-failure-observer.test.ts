@@ -250,6 +250,20 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
     }),
   );
 
+  it.effect("retains the tool cause when the repeated-failure policy stops the Run", () =>
+    Effect.gen(function* () {
+      const exit = yield* AgentRuntime.run(
+        binding(returns, [call("returned")], { repeatedFailureLimit: 1 }),
+        "go",
+      ).pipe(
+        Effect.provide(returns.toLayer({ returned: () => Effect.fail(failure) })),
+        Effect.exit,
+      );
+
+      expect(JSON.stringify(FailureDiagnostic.capture(exit))).toContain("Query rejected");
+    }),
+  );
+
   // Exercise the live direct and broker observer bridges before declared failures lose
   // their ErrorReporter annotation during encoding/tag projection.
   it.effect.each([false, true])("honors ignored=%s on direct declared failures", (ignored) =>

@@ -145,7 +145,7 @@ export type AgentPolicyInput = Readonly<
 
 /** Schema class for agent run limits; wall-clock duration remains finite. */
 export class AgentPolicy extends Schema.Class<AgentPolicy>("AgentPolicy")(AgentPolicyFields) {
-  /** Resolve an optional declaration against finite standalone or parent defaults. */
+  /** Resolve an optional declaration against standalone or inherited defaults. */
   static resolve(input: Partial<AgentPolicyInput> = {}, parent?: AgentPolicy): AgentPolicy {
     return AgentPolicy.make({
       maxTurns: 12,
@@ -166,7 +166,7 @@ export class AgentPolicy extends Schema.Class<AgentPolicy>("AgentPolicy")(AgentP
     });
   }
 
-  /** Normalize and validate finite policy bounds, throwing on invalid input. */
+  /** Normalize and validate policy bounds, throwing on invalid input. */
   static override make(input: AgentPolicyInput): AgentPolicy {
     const completionReserveTokens =
       input.completionReserveTokens ??

@@ -3081,11 +3081,22 @@ const applyRepeatedFailurePolicy = (
       context.consecutiveToolFailures = isFailure ? context.consecutiveToolFailures + 1 : 0;
     }
     if (repeatedFailureLimit > 0 && context.consecutiveToolFailures >= repeatedFailureLimit) {
+      const cause = Cause.fromReasons(
+        trace.applicationToolResults.flatMap((result) =>
+          result?.isFailure && result.budgetRejected !== true
+            ? (result.cause ?? Cause.fail(result.encodedResult)).reasons
+            : [],
+        ),
+      );
+
       return Effect.fail(
-        AgentPolicyError.make({
-          limit: "repeated-failures",
-          message: `Agent reached its ${repeatedFailureLimit} consecutive Tool Call failure limit`,
-        }),
+        FailureDiagnostic.withCause(
+          AgentPolicyError.make({
+            limit: "repeated-failures",
+            message: `Agent reached its ${repeatedFailureLimit} consecutive Tool Call failure limit`,
+          }),
+          cause,
+        ),
       );
     }
 

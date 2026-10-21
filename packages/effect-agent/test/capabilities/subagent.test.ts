@@ -263,6 +263,50 @@ const expectSettledOnce = (view: SubagentReservationView | undefined): void => {
 };
 
 layer(TestServices)("Subagent.layer S1 attached delegation", (it) => {
+  it.effect("delegates finite child work from a parent with unbounded turns", () =>
+    Effect.gen(function* () {
+      const child = Agent.make("finite-child", {
+        input: ChildInput,
+        output: ChildOutput,
+        instructions: "Answer as JSON.",
+        toolkit: Toolkit.empty,
+        policy: { maxTurns: 5, maxToolCalls: 5 },
+      });
+
+      const delegation = Subagent.make("delegate_finite", { target: child });
+
+      const parent = Agent.make("unbounded-parent", {
+        input: Schema.String,
+        output: Schema.String,
+        instructions: "Delegate then finish.",
+        toolkit: Toolkit.make(delegation.tool),
+        policy: { maxTurns: null, maxToolCalls: 10 },
+      });
+
+      const result = yield* AgentRuntime.run(
+        Agent.withModel(
+          parent,
+          delegatingModel(
+            "unbounded-parent",
+            delegation.tool.name,
+            [{ id: "finite-child-call", params: { question: "question" } }],
+            '"done"',
+          ),
+        ),
+        "go",
+      ).pipe(
+        Effect.provide(
+          Subagent.layer(
+            delegation,
+            Agent.withModel(child, answeringModel("finite-child", '{"answer":"child done"}')),
+          ),
+        ),
+      );
+
+      expect(result.output).toBe("done");
+    }),
+  );
+
   // Regression: https://github.com/yielded-dev/agent/issues/961
   it.effect("bounds late children by the parent deadline and leaves time to finish", () =>
     Effect.gen(function* () {
