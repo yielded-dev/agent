@@ -126,35 +126,6 @@ export const resolveSubagentPolicy = (
   return { policy, childPolicy, allocation: delegationAllocationFromPolicy(policy), caps };
 };
 
-export const resolveToolCallAllowance = <Parameters>(
-  option:
-    | {
-        readonly default: number;
-        readonly fromParameters?: (parameters: Parameters) => number | undefined;
-      }
-    | undefined,
-  parameters: Parameters,
-  policy: SubagentPolicy,
-  childPolicy: AgentPolicy,
-): number => {
-  if (option === undefined) return childPolicy.maxToolCalls;
-  const extracted = option.fromParameters?.(parameters);
-
-  // A non-finite parameter falls back to the author default, then the reservation.
-  const requested =
-    extracted !== undefined && Number.isFinite(extracted)
-      ? extracted
-      : Number.isFinite(option.default)
-        ? option.default
-        : policy.maxToolCalls;
-
-  return Math.min(
-    Math.max(1, Math.floor(requested)),
-    policy.maxToolCalls,
-    childPolicy.maxToolCalls,
-  );
-};
-
 /** Conservative subtree remainder after reserving this Run's own full execution ceiling. */
 export const residualSubagentCaps = (
   declared: SubagentDelegationCaps,

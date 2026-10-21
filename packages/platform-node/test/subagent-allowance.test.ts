@@ -68,7 +68,7 @@ const readLog = Effect.fn("AllowanceTest.readLog")(function* (threadId: ThreadId
 });
 
 it.effect(
-  "persists child allowances through establishment faults, approval suspension, and SQLite reopen without replenishing usage",
+  "persists policy-derived child allowances through establishment faults, approval suspension, and SQLite reopen without replenishing usage",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -77,7 +77,6 @@ it.effect(
 
         const rows = [
           {
-            requested: 99,
             definition: 8,
             reservation: 3,
             effective: 3,
@@ -165,15 +164,11 @@ it.effect(
           const delegation = Subagent.make("research", {
             target: childDefinition,
             description: "Run bounded probes.",
-            parameters: Schema.Struct({ allowance: Schema.Number }),
+            parameters: Schema.Struct({}),
             success: Schema.Struct({ exhausted: Schema.Boolean }),
             failure: ProbeFailed,
             prepareInput: () => Effect.succeed("probe"),
             projectResult: (_, context) => Effect.succeed({ exhausted: context.budgetExhausted }),
-            toolCallAllowance: {
-              default: 1,
-              fromParameters: ({ allowance }) => allowance,
-            },
             policy: SubagentPolicy.make({
               maxChildren: 1,
               maxConcurrency: 1,
@@ -207,7 +202,7 @@ it.effect(
                     Stream.fromIterable(
                       request.prompt.content.some((message) => message.role === "tool")
                         ? finalParts
-                        : toolTurn(delegationCall, delegation.name, { allowance: row.requested }),
+                        : toolTurn(delegationCall, delegation.name, {}),
                     ),
                 }),
               ),

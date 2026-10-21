@@ -194,6 +194,7 @@ import {
   OperationDenied,
 } from "./OperationAuthorizer.ts";
 import { PreparedInput } from "./PreparedInputAdmission.ts";
+import type { DefinitionDigests } from "./Records.ts";
 import {
   type RunContinuation,
   type CanonicalRecordEnvelope,
@@ -206,7 +207,6 @@ import {
   CanonicalBatch,
   CanonicalSequence,
   CompactionCreated,
-  DefinitionDigests,
   ModelResponseInterrupted,
   ModelCallAborted,
   PersistedJson,
@@ -494,7 +494,6 @@ const decodeIdempotencyKeySync = Schema.decodeSync(IdempotencyKey);
 const decodeChildReservationIdSync = Schema.decodeSync(ChildReservationId);
 const decodeRecordIdSync = Schema.decodeSync(RecordId);
 const decodeBatchIdSync = Schema.decodeSync(BatchId);
-const decodeDefinitionDigests = Schema.decodeUnknownEffect(DefinitionDigests);
 
 /**
  * Deterministic parent-owned child budget reservation identity (spec
@@ -7209,48 +7208,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
               // Resolve the exact declaration through ordinary host registration. Recovery
               // below uses the already-persisted request, never a newer registration.
-              let targetDigests = request.targetDigests;
-
-              if (request.target !== undefined) {
-                if (request.target.id !== request.targetAgentId) {
-                  return denied(
-                    "SubagentBindingUnavailable",
-                    "The child target identity differs from its Definition",
-                  );
-                }
-
-                const binding = yield* resolveDefinitionBinding(
-                  registeredBindings,
-                  request.target,
-                ).pipe(Effect.result);
-
-                if (binding._tag === "Failure") {
-                  return denied("SubagentBindingUnavailable", binding.failure.message);
-                }
-                if (
-                  targetDigests !== undefined &&
-                  (targetDigests.agent !== binding.success.digests.agent ||
-                    targetDigests.model !== binding.success.digests.model ||
-                    targetDigests.tools !== binding.success.digests.tools)
-                ) {
-                  return denied(
-                    "SubagentDigestsInvalid",
-                    "The explicit child digests differ from its exact registration",
-                  );
-                }
-                targetDigests = binding.success.digests;
-              }
-
-              const decodedDigests = yield* decodeDefinitionDigests(targetDigests).pipe(
-                Effect.option,
-              );
-
-              if (Option.isNone(decodedDigests)) {
+              if (request.target === undefined || request.target.id !== request.targetAgentId) {
                 return denied(
-                  "SubagentDigestsInvalid",
-                  "The declared child Binding digests are not valid stored digests",
+                  "SubagentBindingUnavailable",
+                  "The child target identity differs from its Definition",
                 );
               }
+
+              const binding = yield* resolveDefinitionBinding(
+                registeredBindings,
+                request.target,
+              ).pipe(Effect.result);
+
+              if (binding._tag === "Failure")
+                return denied("SubagentBindingUnavailable", binding.failure.message);
 
               const childInput = yield* decodePersisted(request.encodedChildInput).pipe(
                 Effect.option,
@@ -7449,7 +7420,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 toolCallId,
                 delegationId: request.delegationId,
                 targetAgentId: request.targetAgentId,
-                targetDigests: decodedDigests.value,
+                targetDigests: binding.success.digests,
                 childInput: childInput.value,
                 childInputDigest,
                 grantDigest,

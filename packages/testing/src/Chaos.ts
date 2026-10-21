@@ -746,7 +746,6 @@ const makeLaneFixture = Effect.fnUntraced(function* (
 
       const delegationLayer = Subagent.layer(chaosDelegation, childBinding, {
         mapChildFailure: (failure) => ChaosDelegationFailed.make({ childErrorTag: failure._tag }),
-        durable: { targetDigests: childDigestStrings(laneIndex) },
       }).pipe(Layer.provide(delegationSupport));
 
       const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(

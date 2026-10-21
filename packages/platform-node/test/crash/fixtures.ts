@@ -820,11 +820,7 @@ export interface CrashSubagentOptions {
   readonly projectionGate?: ProjectionGate | undefined;
 }
 
-/**
- * The two resolvable worker Bindings of the S2 fixture, registered under EXACTLY the digest
- * strings the application submits with (`CRASH_DIGESTS`) and declares on the durable
- * delegation Layer (`CHILD_DIGEST_STRINGS`) — the spec §11 host obligation.
- */
+/** Parent and child Bindings registered with the digests retained for durable recovery. */
 export const makeCrashSubagentBindings = Effect.fn("CrashFixtures.makeCrashSubagentBindings")(
   function* (options: CrashSubagentOptions) {
     const delegation = makeCrashDelegation(options.projectionGate);
@@ -836,7 +832,6 @@ export const makeCrashSubagentBindings = Effect.fn("CrashFixtures.makeCrashSubag
 
     const delegationLayer = Subagent.layer(delegation, childBinding, {
       mapChildFailure: mapCrashChildFailure,
-      durable: { targetDigests: CHILD_DIGEST_STRINGS },
     }).pipe(Layer.provide(delegationSupport));
 
     const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(

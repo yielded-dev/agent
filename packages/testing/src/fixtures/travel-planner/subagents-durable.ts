@@ -61,13 +61,7 @@ export const s2CoordinatorDigests = DefinitionDigests.make({
   tools: digestOf("c"),
 });
 
-/**
- * The exact child Binding digest strings the application declares on
- * `SubagentRuntimeOptions.durable.targetDigests` AND the host registers with
- * the host's binding array for the researcher Binding. The coordinator
- * stores and verifies them byte-for-byte (SUB-023); a host registration under
- * different strings is a `ChildCompatibilityFailure`, never a substitution.
- */
+/** Child Binding digests retained from host registration for durable recovery. */
 export const s2ResearcherDigestStrings = {
   agent: "d".repeat(64),
   model: "e".repeat(64),
@@ -238,14 +232,12 @@ const researcherReportParts = (destination: string): ReadonlyArray<Response.Stre
 ];
 
 // ---------------------------------------------------------------------------
-// Durable delegation wiring (S2): the SAME immutable S1 Delegation Definition
-// paired with one explicit child Binding, now carrying the construction-fixed
-// durable declaration. Under a durable coordinator the handler establishes an
-// accepted-work child instead of spawning an in-process fiber; without the
-// declaration a durable-mode invocation fails closed (WP5 contract).
+// Durable delegation wiring: the immutable declaration uses the exact child
+// Definition registered with the host. The coordinator retains that binding's
+// digests when it establishes the child.
 // ---------------------------------------------------------------------------
 
-/** Runtime wiring for the durable slice: the S1 delegation plus the S2 digest declaration. */
+/** Runtime wiring for the durable slice: the declaration plus its registered child Binding. */
 export const durableDestinationResearchHandlersLayer = <ModelProvides, ModelRequires>(
   childBinding: RuntimeBinding<
     typeof DestinationBrief,
@@ -258,7 +250,6 @@ export const durableDestinationResearchHandlersLayer = <ModelProvides, ModelRequ
 ) =>
   Subagent.layer(destinationResearchDelegation, childBinding, {
     mapChildFailure: mapResearchChildFailure,
-    durable: { targetDigests: s2ResearcherDigestStrings },
   });
 
 /** Optional overrides for one durable research harness. */
@@ -267,11 +258,7 @@ export interface DurableResearchHarnessOptions {
   readonly destination?: string | undefined;
   /** Delegation focus; defaults to "museums". */
   readonly focus?: string | undefined;
-  /**
-   * Digests the HOST registers the child Binding under; defaults to the exact
-   * declared `s2ResearcherDigests`. Register different digests to force the
-   * fail-closed `ChildCompatibilityFailure` path (SUB-023/SUB-032).
-   */
+  /** Host registration digests for the child Binding; defaults to `s2ResearcherDigests`. */
   readonly childRegistrationDigests?: DefinitionDigests | undefined;
 }
 

@@ -64,7 +64,7 @@ export const docsCoordinatorDigests = DefinitionDigests.make({
   tools: digestOf("42"),
 });
 
-/** The child registration digests — byte-equal to `docsSummarizerDigestStrings` (SUB-023). */
+/** Deterministic child registration digests for this fixture version. */
 export const docsSummarizerDigests = DefinitionDigests.make({
   agent: digestOf("50"),
   model: digestOf("51"),

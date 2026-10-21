@@ -48,7 +48,7 @@ import {
   SubagentPrestartDenied,
   SubagentProjectionFailure,
 } from "./subagent-contract.ts";
-import { resolveSubagentPolicy, resolveToolCallAllowance } from "./subagent-policy.ts";
+import { resolveSubagentPolicy } from "./subagent-policy.ts";
 import { automaticReporting } from "./subagent-reporting.ts";
 import { utf8Bytes } from "./utf8.ts";
 
@@ -79,7 +79,6 @@ export type Declaration<
   | "prepareInput"
   | "projectResult"
   | "policy"
-  | "toolCallAllowance"
   | "needsApproval"
 > & {
   readonly name: Name;
@@ -345,12 +344,7 @@ const operations = <
               ? {}
               : { descendantInvocations: resolved.policy.descendantInvocations }),
           }),
-          toolCallAllowance: resolveToolCallAllowance(
-            declaration.toolCallAllowance,
-            parameters,
-            resolved.policy,
-            resolved.childPolicy,
-          ),
+          toolCallAllowance: resolved.childPolicy.maxToolCalls,
         };
       }),
     });
