@@ -16,6 +16,23 @@ class DependencyFailure extends Schema.TaggedError<DependencyFailure>()("Depende
 }) {}
 
 describe("causal failure diagnostics", () => {
+  it("captures an original cause independently of its public Schema projection", () => {
+    const error = FailureDiagnostic.withPrivateCause(
+      { message: "safe", cause: "public" },
+      "PRIVATE",
+    );
+
+    const encoded = Schema.encodeSync(
+      Schema.Struct({ message: Schema.String, cause: Schema.String }),
+    )(error);
+
+    expect(encoded.cause).toBe("public");
+    expect(JSON.stringify(error)).not.toContain("PRIVATE");
+    expect(FailureDiagnostic.capture(error)).toMatchObject({
+      cause: { _tag: "Value", value: "PRIVATE" },
+    });
+  });
+
   it("keeps a replacement private cause out of enumerable JSON", () => {
     const error = FailureDiagnostic.withCause({ message: "safe", cause: "previous" }, "PRIVATE");
 

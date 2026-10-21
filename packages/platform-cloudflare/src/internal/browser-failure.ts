@@ -18,7 +18,7 @@ export class BrowserRunFailure extends Data.TaggedError("BrowserRunFailure")<{
     | "rate-limited"
     | "pending";
   readonly status?: number;
-  readonly cause?: unknown;
+  readonly cause?: BrowserRunFailure | { readonly name: string };
 }> {
   readonly [ErrorReporter.severity] = "Error" as const;
 }
@@ -84,7 +84,7 @@ export const browserFailure = (operation: string, cause?: unknown): BrowserRunFa
 
   const failure = projectBrowserFailure(operation, cause);
 
-  return cause === undefined ? failure : FailureDiagnostic.withCause(failure, cause);
+  return cause === undefined ? failure : FailureDiagnostic.withPrivateCause(failure, cause);
 };
 
 /** Keep mixed defects and interruptions distinct while discarding all foreign diagnostic content. */
