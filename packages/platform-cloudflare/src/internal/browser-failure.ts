@@ -1,7 +1,7 @@
 import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
 import * as ErrorReporter from "effect/ErrorReporter";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
@@ -92,19 +92,28 @@ export const reportBrowserCause = <E>(
   operation: string,
   cause: Cause.Cause<E>,
 ): Effect.Effect<void> =>
-  ErrorReporter.report(
-    Cause.fromReasons(
-      cause.reasons
-        .filter((reason) => !Cause.isFailReason(reason) || !ErrorReporter.isIgnored(reason.error))
-        .map((reason) => {
-          switch (reason._tag) {
-            case "Fail":
-              return Cause.makeFailReason(projectBrowserFailure(operation, reason.error));
-            case "Die":
-              return Cause.makeDieReason(projectBrowserFailure(operation, reason.defect));
-            case "Interrupt":
-              return reason;
-          }
-        }),
+  Effect.suspend(() =>
+    ErrorReporter.report(
+      Cause.fromReasons(
+        cause.reasons
+          .filter((reason) => !Cause.isFailReason(reason) || !ErrorReporter.isIgnored(reason.error))
+          .map((reason) => {
+            switch (reason._tag) {
+              case "Fail":
+                return Cause.makeFailReason(projectBrowserFailure(operation, reason.error));
+              case "Die":
+                return Cause.makeDieReason(projectBrowserFailure(operation, reason.defect));
+              case "Interrupt":
+                return reason;
+            }
+          }),
+      ),
+    ),
+  ).pipe(
+    // Reporting is best effort; a defective sink must not replace the operation's failure.
+    Effect.catchCause((cause) =>
+      Cause.hasInterrupts(cause)
+        ? Effect.failCause(Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)))
+        : Effect.void,
     ),
   );

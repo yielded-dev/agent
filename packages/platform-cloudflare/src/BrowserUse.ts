@@ -65,7 +65,13 @@ const invalid = (message: string) =>
 
 const decode = <A>(schema: Schema.Codec<A>, input: unknown) =>
   Schema.decodeUnknownEffect(schema)(input).pipe(
-    Effect.mapError(() => invalid("Invalid browser command or limits")),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, (error) =>
+          BrowserUseError.withCause(invalid("Invalid browser command or limits"), error),
+        ),
+      ),
+    ),
   );
 
 interface AttachedPage {
@@ -143,7 +149,7 @@ export const make = Effect.fnUntraced(function* <R>(
 
   const primary = yield* session
     .run(authorize({ kind: "connect" }, {}), attach)
-    .pipe(Effect.mapError(mapSessionError));
+    .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapSessionError))));
 
   const context = primary.page.browserContext();
   let calls = 0;
@@ -214,7 +220,10 @@ export const make = Effect.fnUntraced(function* <R>(
           return { ok: true as const, value: await action(selected, frame) };
         },
       )
-      .pipe(serial.withPermits(1), Effect.mapError(mapSessionError));
+      .pipe(
+        serial.withPermits(1),
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapSessionError))),
+      );
 
     if (!result.ok) return yield* Effect.fail(result.error);
     // Only host-created failures belong in E; a protocol response with similar fields is data.
