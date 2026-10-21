@@ -35,6 +35,7 @@ import {
   type MessageDeliveryRecord,
   prepareMessageDelivery,
 } from "../MessageDelivery.ts";
+import { PreparedInput } from "../PreparedInputAdmission.ts";
 import {
   BatchId,
   CanonicalBatch,
@@ -52,7 +53,6 @@ import {
   SubmissionLookupByKey,
   submissionInputRecordId,
 } from "../SubmissionLedger.ts";
-import { PreparedInput } from "../Subscription.ts";
 import {
   getRecord,
   AppendRequest,

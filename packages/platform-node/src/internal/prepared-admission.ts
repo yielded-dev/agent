@@ -1,12 +1,12 @@
 import { type DurableSubmitAgent } from "@yielded/agent/durable-agent-runtime";
 import { type AgentId } from "@yielded/agent/identifiers";
-import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
-import { PersistedJson } from "@yielded/agent/records";
 import {
-  ScheduledInputRetryable,
-  ScheduledInputRefused,
-  ScheduleStorageError,
-} from "@yielded/agent/schedule";
+  PreparedInputAdmission,
+  PreparedInputRetryable,
+  PreparedInputRefused,
+} from "@yielded/agent/prepared-input-admission";
+import { PersistedJson } from "@yielded/agent/records";
+import { ScheduleStorageError } from "@yielded/agent/schedule";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
@@ -16,8 +16,8 @@ const passthroughSubmitAgent = (agentId: AgentId): DurableSubmitAgent<typeof Per
   definition: { id: agentId, input: PersistedJson },
 });
 
-const ambiguous = (): ScheduledInputRetryable =>
-  ScheduledInputRetryable.make({ reason: "ambiguous" });
+const ambiguous = (): PreparedInputRetryable =>
+  PreparedInputRetryable.make({ reason: "ambiguous" });
 
 const corrupt = (operation: string): ScheduleStorageError =>
   ScheduleStorageError.make({ operation, reason: "corrupt" });
@@ -36,7 +36,7 @@ export const makeNodePreparedInputAdmission = Effect.gen(function* () {
     submissionStatus: (receipt) =>
       host
         .submissionStatus(receipt)
-        .pipe(Effect.mapError(() => ScheduledInputRetryable.make({ reason: "storage" }))),
+        .pipe(Effect.mapError(() => PreparedInputRetryable.make({ reason: "storage" }))),
     submit: (envelope) =>
       host
         .submit(passthroughSubmitAgent(envelope.agentId), envelope.input, {
@@ -60,17 +60,17 @@ export const makeNodePreparedInputAdmission = Effect.gen(function* () {
         .pipe(
           Effect.catchTags({
             AdmissionClosed: () =>
-              Effect.fail(ScheduledInputRetryable.make({ reason: "host-closed" })),
+              Effect.fail(PreparedInputRetryable.make({ reason: "host-closed" })),
             AgentInputError: () => Effect.fail(corrupt("prepared admission input")),
             AdmissionConflict: () => Effect.fail(corrupt("prepared admission conflict")),
             DigestError: () => Effect.fail(ambiguous()),
             AdmissionPolicyError: (error) =>
               error.reason === "refused"
-                ? ScheduledInputRefused.make({ code: error.code })
-                : ScheduledInputRetryable.make({
+                ? PreparedInputRefused.make({ code: error.code })
+                : PreparedInputRetryable.make({
                     reason: error.reason === "occupied" ? "capacity" : "storage",
                   }),
-            LedgerError: () => ScheduledInputRetryable.make({ reason: "storage" }),
+            LedgerError: () => PreparedInputRetryable.make({ reason: "storage" }),
             ThreadStoreError: () => Effect.fail(ambiguous()),
             ThreadNotMaterialized: () => Effect.fail(ambiguous()),
             AppendConflict: () => Effect.fail(ambiguous()),

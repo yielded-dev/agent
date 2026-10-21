@@ -19,9 +19,12 @@ import {
   type MessageDeliveryPolicy,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
-import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
+import {
+  PreparedInputAdmission,
+  PreparedInputRetryable,
+  PreparedInput,
+} from "@yielded/agent/prepared-input-admission";
 import { DefinitionDigests, Digest } from "@yielded/agent/records";
-import { ScheduledInputRetryable } from "@yielded/agent/schedule";
 import {
   IdempotencyKey,
   Principal,
@@ -29,7 +32,6 @@ import {
   Settlement,
 } from "@yielded/agent/submission-ledger";
 import { SettledSubmission } from "@yielded/agent/submission-status";
-import { PreparedInput } from "@yielded/agent/subscription";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -145,7 +147,7 @@ describe("direct message delivery", () => {
             Effect.suspend(() => {
               delivered.push(envelope.admissionKey);
               if (envelope.admissionKey === "admit:first" && firstAttempts++ === 0)
-                return ScheduledInputRetryable.make({ reason: "ambiguous" });
+                return PreparedInputRetryable.make({ reason: "ambiguous" });
 
               return Effect.succeed(receipt(envelope));
             }),
@@ -320,7 +322,7 @@ describe("direct message delivery", () => {
         settlement: null,
         lastFailureDiagnostic: {
           _tag: "Error",
-          errorTag: "ScheduledInputRetryable",
+          errorTag: "PreparedInputRetryable",
           cause: { _tag: "Error", message: "Status transport closed", code: "ECONNRESET" },
         },
       });
@@ -330,7 +332,7 @@ describe("direct message delivery", () => {
           submit: (envelope) => Effect.succeed(receipt(envelope)),
           submissionStatus: () =>
             Effect.fail(
-              ScheduledInputRetryable.make({
+              PreparedInputRetryable.make({
                 reason: "transport",
                 cause: Object.assign(new Error("Status transport closed"), { code: "ECONNRESET" }),
               }),

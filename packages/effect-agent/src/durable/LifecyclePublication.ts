@@ -12,6 +12,7 @@ import { SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { Receipt } from "../core/Receipt.ts";
 import { AssignmentTerminal } from "../core/Worker.ts";
 import { MessageDeliveryKey } from "./MessageDelivery.ts";
+import { PreparedInput } from "./PreparedInputAdmission.ts";
 import {
   AbortRequested,
   AgentUpdateEmitted,
@@ -36,7 +37,6 @@ import {
   SubmissionSnapshot,
   SuspensionReason,
 } from "./SubmissionLedger.ts";
-import { PreparedInput } from "./Subscription.ts";
 import { getRunInput } from "./ThreadStore.ts";
 
 /** Immutable native admission evidence. It is private and grants no application authority. */

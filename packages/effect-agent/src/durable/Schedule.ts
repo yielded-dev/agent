@@ -1,12 +1,14 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
-import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
 import { AgentId, ThreadId } from "../core/Identifiers.ts";
 import { Receipt } from "../core/Receipt.ts";
+import type { PreparedInputAuthorizationDecision } from "./PreparedInputAdmission.ts";
+import { PreparedInput, PreparedInputRetryReason } from "./PreparedInputAdmission.ts";
 import { DefinitionDigests, Digest, PersistedJson } from "./Records.ts";
-import { AdmissionFence, AdmissionGroup, IdempotencyKey, Principal } from "./SubmissionLedger.ts";
+import { AdmissionFence, AdmissionGroup, Principal } from "./SubmissionLedger.ts";
 
 const Name = Schema.NonEmptyString.check(
   Schema.isMaxLength(128),
@@ -86,46 +88,18 @@ export const ScheduleConfiguration = Schema.Struct({
 
 export type ScheduleConfiguration = typeof ScheduleConfiguration.Type;
 
-/** Persist only bounded policy identifiers, never credentials or arbitrary diagnostics. */
-export const ScheduleAuthorizationDecision = Schema.Struct({
-  policyId: Name,
-  decisionId: Name,
-});
-
-export type ScheduleAuthorizationDecision = typeof ScheduleAuthorizationDecision.Type;
-
 export const ScheduledEnvelope = Schema.Struct({
-  schemaVersion: Schema.Literal(1),
+  schemaVersion: PreparedInput.fields.schemaVersion,
   owner: ScheduleOwner,
   scheduleId: ScheduleId,
   configurationRevision: Positive,
   intendedAtMillis: ScheduleInstant,
   preparedAtMillis: ScheduleInstant,
   occurrenceId: Digest,
-  threadId: ThreadId,
-  deliveryPrincipal: Principal,
-  admissionGroup: Schema.optionalKey(AdmissionGroup),
-  admissionFence: Schema.optionalKey(AdmissionFence),
-  agentId: AgentId,
-  definitions: DefinitionDigests,
-  input: PersistedJson,
-  inputDigest: Digest,
-  admissionKey: IdempotencyKey,
-  authorization: ScheduleAuthorizationDecision,
+  ...Struct.omit(PreparedInput.fields, ["schemaVersion", "workerAdmission", "messageAdmission"]),
 });
 
 export type ScheduledEnvelope = typeof ScheduledEnvelope.Type;
-
-export const ScheduleRetryReason = Schema.Literals([
-  "transport",
-  "capacity",
-  "storage",
-  "host-closed",
-  "timeout",
-  "ambiguous",
-]);
-
-export type ScheduleRetryReason = typeof ScheduleRetryReason.Type;
 
 export const ScheduleRetry = Schema.Struct({
   attempts: Schema.Natural,
@@ -134,7 +108,7 @@ export const ScheduleRetry = Schema.Struct({
   parked: Schema.Boolean,
   nextAttemptAtMillis: ScheduleInstant,
   lastAttemptAtMillis: Schema.NullOr(ScheduleInstant),
-  lastFailure: Schema.NullOr(ScheduleRetryReason),
+  lastFailure: Schema.NullOr(PreparedInputRetryReason),
 });
 
 export type ScheduleRetry = typeof ScheduleRetry.Type;
@@ -269,38 +243,6 @@ export class ScheduleStorageError extends Schema.TaggedError<ScheduleStorageErro
   },
 ) {}
 
-/** Only when the unchanged envelope was not admitted and cannot succeed, including on replay. */
-export class ScheduledInputRefused extends Schema.TaggedError<ScheduledInputRefused>()(
-  "ScheduledInputRefused",
-  {
-    code: Name,
-    cause: Schema.optionalKey(FailureDiagnostic.Value),
-    stack: Schema.optionalKey(Schema.String),
-  },
-) {}
-
-/** Includes lost replies: admission may already have committed. */
-export class ScheduledInputRetryable extends Schema.TaggedError<ScheduledInputRetryable>()(
-  "ScheduledInputRetryable",
-  {
-    reason: ScheduleRetryReason,
-    cause: Schema.optionalKey(FailureDiagnostic.Value),
-    stack: Schema.optionalKey(Schema.String),
-  },
-) {}
-
-export type ScheduledInputFailure =
-  | ScheduledInputRefused
-  | ScheduledInputRetryable
-  | ScheduleStorageError;
-
-export class ScheduledInputAdmission extends Context.Service<
-  ScheduledInputAdmission,
-  {
-    readonly submit: (envelope: ScheduledEnvelope) => Effect.Effect<Receipt, ScheduledInputFailure>;
-  }
->()("@effect-agent/thread/ScheduledInputAdmission") {}
-
 export type ScheduleManagementOperation =
   | "create"
   | "get"
@@ -336,7 +278,7 @@ export class ScheduleAuthorizer extends Context.Service<
     readonly prepare: (
       request: ScheduleOccurrenceAuthorization,
     ) => Effect.Effect<
-      ScheduleAuthorizationDecision,
+      PreparedInputAuthorizationDecision,
       ScheduleAuthorizationError | ScheduleStorageError
     >;
   }

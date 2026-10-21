@@ -7,6 +7,7 @@ import {
   defaultMessageDeliveryStoreLimits,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
+import { PreparedInput } from "@yielded/agent/prepared-input-admission";
 import { decodeExportRecordJson, ExportedRecord } from "@yielded/agent/record-format";
 import type { RecordId } from "@yielded/agent/records";
 import {
@@ -41,7 +42,6 @@ import {
   submissionSettlementId,
   workerTerminalFromRecord,
 } from "@yielded/agent/submission-ledger";
-import { PreparedInput } from "@yielded/agent/subscription";
 import {
   ThreadImport,
   ThreadImportRejected,

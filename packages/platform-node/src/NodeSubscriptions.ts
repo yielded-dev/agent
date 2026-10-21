@@ -1,9 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { type EventSources } from "@yielded/agent/event-source";
 import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
-import { type ScheduledEnvelope, ScheduledInputAdmission } from "@yielded/agent/schedule";
 import {
-  type PreparedInput,
   type SubscriptionAuthorizer,
   type SubscriptionError,
   type SubscriptionLimits,
@@ -34,42 +32,6 @@ export const nodePreparedInputAdmissionLayer: Layer.Layer<
   NodeDurableHost
 > = Layer.effect(PreparedInputAdmission, makeNodePreparedInputAdmission).pipe(
   Layer.provide(Layer.effect(NodeAdmission, NodeDurableHost)),
-);
-
-const preparedFromSchedule = (envelope: ScheduledEnvelope): PreparedInput => ({
-  schemaVersion: 1,
-  threadId: envelope.threadId,
-  deliveryPrincipal: envelope.deliveryPrincipal,
-  ...(envelope.admissionGroup === undefined ? {} : { admissionGroup: envelope.admissionGroup }),
-  ...(envelope.admissionFence === undefined ? {} : { admissionFence: envelope.admissionFence }),
-  agentId: envelope.agentId,
-  definitions: envelope.definitions,
-  input: envelope.input,
-  inputDigest: envelope.inputDigest,
-  admissionKey: envelope.admissionKey,
-  authorization: envelope.authorization,
-});
-
-/** Compatibility adapter retaining the public scheduling admission port. */
-const nodeScheduledInputAdmissionFromPreparedLayer: Layer.Layer<
-  ScheduledInputAdmission,
-  never,
-  PreparedInputAdmission
-> = Layer.effect(
-  ScheduledInputAdmission,
-  Effect.map(PreparedInputAdmission, (admission) =>
-    ScheduledInputAdmission.of({
-      submit: (envelope) => admission.submit(preparedFromSchedule(envelope)),
-    }),
-  ),
-);
-
-export const nodeScheduledInputAdmissionLayer: Layer.Layer<
-  ScheduledInputAdmission,
-  never,
-  NodeDurableHost
-> = nodeScheduledInputAdmissionFromPreparedLayer.pipe(
-  Layer.provide(nodePreparedInputAdmissionLayer),
 );
 
 const reportPassFailure = (cause: Cause.Cause<SubscriptionStoreFailure>): Effect.Effect<boolean> =>

@@ -18,6 +18,7 @@ import {
   operationAuthorizerLayer,
   possessionOperationAuthorizer,
 } from "@yielded/agent/operation-authorizer";
+import { PreparedInput } from "@yielded/agent/prepared-input-admission";
 import {
   BatchId,
   CanonicalBatch,
@@ -41,7 +42,6 @@ import {
   submissionAbortRecordId,
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
-import { PreparedInput } from "@yielded/agent/subscription";
 import {
   AppendRequest,
   ThreadRead,

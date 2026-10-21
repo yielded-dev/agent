@@ -1,15 +1,12 @@
 import { type DurableSubmitAgent } from "@yielded/agent/durable-agent-runtime";
 import { type AgentId } from "@yielded/agent/identifiers";
-import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
-import { PersistedJson } from "@yielded/agent/records";
 import {
-  type ScheduledEnvelope,
-  ScheduledInputAdmission,
-  ScheduledInputRetryable,
-  ScheduledInputRefused,
-  ScheduleStorageError,
-} from "@yielded/agent/schedule";
-import { type PreparedInput } from "@yielded/agent/subscription";
+  PreparedInputAdmission,
+  PreparedInputRetryable,
+  PreparedInputRefused,
+} from "@yielded/agent/prepared-input-admission";
+import { PersistedJson } from "@yielded/agent/records";
+import { ScheduleStorageError } from "@yielded/agent/schedule";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -33,7 +30,7 @@ export const cloudflarePreparedInputAdmissionLayer: Layer.Layer<
       submissionStatus: (receipt) =>
         client
           .submissionStatus(receipt)
-          .pipe(Effect.mapError(() => ScheduledInputRetryable.make({ reason: "storage" }))),
+          .pipe(Effect.mapError(() => PreparedInputRetryable.make({ reason: "storage" }))),
       submit: (envelope) =>
         client
           .submit(passthroughAgent(envelope.agentId), envelope.input, {
@@ -58,60 +55,32 @@ export const cloudflarePreparedInputAdmissionLayer: Layer.Layer<
             Effect.catchTags({
               AdmissionConflict: () =>
                 ScheduleStorageError.make({ operation: "prepared admission", reason: "corrupt" }),
-              AdmissionLimitExceeded: () => ScheduledInputRetryable.make({ reason: "capacity" }),
+              AdmissionLimitExceeded: () => PreparedInputRetryable.make({ reason: "capacity" }),
               ThreadClientError: (error: ThreadClientError) =>
-                ScheduledInputRetryable.make({
+                PreparedInputRetryable.make({
                   reason: error.overloaded === true ? "capacity" : "transport",
                 }),
-              HostProtocolError: () => ScheduledInputRetryable.make({ reason: "ambiguous" }),
+              HostProtocolError: () => PreparedInputRetryable.make({ reason: "ambiguous" }),
               AdmissionPolicyError: (error) =>
                 error.reason === "refused"
-                  ? ScheduledInputRefused.make({ code: error.code })
-                  : ScheduledInputRetryable.make({
+                  ? PreparedInputRefused.make({ code: error.code })
+                  : PreparedInputRetryable.make({
                       reason: error.reason === "occupied" ? "capacity" : "storage",
                     }),
-              LedgerError: () => ScheduledInputRetryable.make({ reason: "storage" }),
-              ThreadStoreError: () => ScheduledInputRetryable.make({ reason: "storage" }),
-              DurableAlarmError: () => ScheduledInputRetryable.make({ reason: "storage" }),
+              LedgerError: () => PreparedInputRetryable.make({ reason: "storage" }),
+              ThreadStoreError: () => PreparedInputRetryable.make({ reason: "storage" }),
+              DurableAlarmError: () => PreparedInputRetryable.make({ reason: "storage" }),
               AgentInputError: () =>
                 ScheduleStorageError.make({ operation: "prepared admission", reason: "corrupt" }),
               DigestError: () =>
                 ScheduleStorageError.make({ operation: "prepared admission", reason: "corrupt" }),
-              ThreadNotMaterialized: () => ScheduledInputRetryable.make({ reason: "storage" }),
-              AppendConflict: () => ScheduledInputRetryable.make({ reason: "ambiguous" }),
-              OwnershipLost: () => ScheduledInputRetryable.make({ reason: "ambiguous" }),
+              ThreadNotMaterialized: () => PreparedInputRetryable.make({ reason: "storage" }),
+              AppendConflict: () => PreparedInputRetryable.make({ reason: "ambiguous" }),
+              OwnershipLost: () => PreparedInputRetryable.make({ reason: "ambiguous" }),
               DurableRuntimeFailpointError: () =>
-                ScheduledInputRetryable.make({ reason: "ambiguous" }),
+                PreparedInputRetryable.make({ reason: "ambiguous" }),
             }),
           ),
     });
   }),
-);
-
-const preparedFromSchedule = (envelope: ScheduledEnvelope): PreparedInput => ({
-  schemaVersion: 1,
-  threadId: envelope.threadId,
-  deliveryPrincipal: envelope.deliveryPrincipal,
-  ...(envelope.admissionGroup === undefined ? {} : { admissionGroup: envelope.admissionGroup }),
-  ...(envelope.admissionFence === undefined ? {} : { admissionFence: envelope.admissionFence }),
-  agentId: envelope.agentId,
-  definitions: envelope.definitions,
-  input: envelope.input,
-  inputDigest: envelope.inputDigest,
-  admissionKey: envelope.admissionKey,
-  authorization: envelope.authorization,
-});
-
-/** Compatibility adapter retaining Scheduling's public admission port. */
-export const cloudflareScheduledInputAdmissionLayer: Layer.Layer<
-  ScheduledInputAdmission,
-  never,
-  PreparedInputAdmission
-> = Layer.effect(
-  ScheduledInputAdmission,
-  Effect.map(PreparedInputAdmission, (admission) =>
-    ScheduledInputAdmission.of({
-      submit: (envelope) => admission.submit(preparedFromSchedule(envelope)),
-    }),
-  ),
 );

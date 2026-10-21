@@ -27,7 +27,12 @@ import {
   PeerRoutes,
   type PeerAuthorizationRequest,
 } from "@yielded/agent/messaging-host";
-import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
+import {
+  PreparedInputAdmission,
+  PreparedInputRefused,
+  PreparedInputRetryable,
+  PreparedInput,
+} from "@yielded/agent/prepared-input-admission";
 import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
 import {
   DefinitionDigests,
@@ -40,9 +45,7 @@ import {
 import { canonicalRecordBytes } from "@yielded/agent/run-continuation";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
-import { ScheduledInputRefused, ScheduledInputRetryable } from "@yielded/agent/schedule";
 import { SubmissionLedger, SubmissionLookupByKey } from "@yielded/agent/submission-ledger";
-import { PreparedInput } from "@yielded/agent/subscription";
 import { ThreadTailRequest, ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -236,14 +239,14 @@ const makeHarness = Effect.fn(function* (
         .pipe(
           Effect.mapError((error) =>
             error._tag === "AdmissionPolicyError" && error.reason === "refused"
-              ? ScheduledInputRefused.make({ code: error.code })
-              : ScheduledInputRetryable.make({ reason: "storage" }),
+              ? PreparedInputRefused.make({ code: error.code })
+              : PreparedInputRetryable.make({ reason: "storage" }),
           ),
         ),
     submissionStatus: (receipt) =>
       host
         .submissionStatus(receipt)
-        .pipe(Effect.mapError(() => ScheduledInputRetryable.make({ reason: "storage" }))),
+        .pipe(Effect.mapError(() => PreparedInputRetryable.make({ reason: "storage" }))),
   });
 
   const makeDriver = Effect.fn(function* (host = runtime) {

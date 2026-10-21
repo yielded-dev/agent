@@ -20,7 +20,11 @@ import {
   scheduleNextAfter,
   scheduleResumeCursor,
 } from "./internal/schedule-time.ts";
-import { admitPreparedInput } from "./PreparedInputAdmission.ts";
+import {
+  admitPreparedInput,
+  type PreparedInputRetryReason,
+  PreparedInputAdmission,
+} from "./PreparedInputAdmission.ts";
 import { DefinitionDigests, type Digest, PersistedJson } from "./Records.ts";
 import {
   defaultSchedulingLimits,
@@ -40,7 +44,6 @@ import {
   type ScheduleOwner,
   type ScheduleRecord,
   type ScheduleRefusal,
-  type ScheduleRetryReason,
   type ScheduleScope,
   type ScheduleSnapshot,
   type ScheduleSnapshotPage,
@@ -50,7 +53,6 @@ import {
   ScheduleTimingRequest as ScheduleTimingRequestSchema,
   type ScheduleTimingRequest,
   ScheduleValidationError,
-  ScheduledInputAdmission,
   ScheduleWake,
 } from "./Schedule.ts";
 import { type AdmissionFence, IdempotencyKey, type Principal } from "./SubmissionLedger.ts";
@@ -596,7 +598,7 @@ const makeManagement = Effect.fnUntraced(function* (limits: SchedulingLimits) {
 const makeDriver = Effect.fnUntraced(function* (limits: SchedulingLimits) {
   const store = yield* ScheduleStore;
   const authorizer = yield* ScheduleAuthorizer;
-  const admission = yield* ScheduledInputAdmission;
+  const admission = yield* PreparedInputAdmission;
   const failpoint = yield* ScheduleFailpoint;
   const crypto = yield* Crypto.Crypto;
   const admissionSemaphore = yield* Semaphore.make(limits.admissionConcurrency);
@@ -607,7 +609,7 @@ const makeDriver = Effect.fnUntraced(function* (limits: SchedulingLimits) {
   const retry = Effect.fnUntraced(function* (
     key: ScheduleKey,
     record: ScheduleRecord,
-    reason: ScheduleRetryReason,
+    reason: PreparedInputRetryReason,
     nowMillis: number,
   ) {
     if (record.pending === null) return record;
@@ -1046,7 +1048,7 @@ export class ScheduleDriver extends Context.Service<
   ): Layer.Layer<
     ScheduleDriver,
     ScheduleValidationError,
-    ScheduleStore | ScheduleAuthorizer | ScheduledInputAdmission | Crypto.Crypto
+    ScheduleStore | ScheduleAuthorizer | PreparedInputAdmission | Crypto.Crypto
   > {
     return Layer.effect(ScheduleDriver, validateLimits(limits).pipe(Effect.flatMap(makeDriver)));
   }

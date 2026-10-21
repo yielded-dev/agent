@@ -56,7 +56,13 @@ import {
   prepareMessageDelivery,
   type MessageDeliveryRecord,
 } from "../MessageDelivery.ts";
-import { PreparedInputAdmission } from "../PreparedInputAdmission.ts";
+import {
+  PreparedInputAdmission,
+  type PreparedInputFailure,
+  PreparedInputRefused,
+  PreparedInputRetryable,
+  PreparedInput,
+} from "../PreparedInputAdmission.ts";
 import {
   BatchId,
   CanonicalBatch,
@@ -94,11 +100,6 @@ import {
   runIdForSubmission,
 } from "../RunJournal.ts";
 import {
-  type ScheduledInputFailure,
-  ScheduledInputRefused,
-  ScheduledInputRetryable,
-} from "../Schedule.ts";
-import {
   SubmissionLedger,
   WorkerLedgerState,
   LedgerError,
@@ -113,7 +114,6 @@ import {
   type SubmissionSnapshot,
 } from "../SubmissionLedger.ts";
 import type { SubmissionStatus } from "../SubmissionStatus.ts";
-import { PreparedInput } from "../Subscription.ts";
 import {
   ThreadIdentityRequest,
   ThreadStore,
@@ -270,7 +270,7 @@ export class WorkerInputControl extends Context.Service<
     readonly submit: (envelope: PreparedInput) => Effect.Effect<Receipt, DurableSubmitFailure>;
     readonly status: (
       receipt: Receipt,
-    ) => Effect.Effect<SubmissionStatus, DurableAwaitFailure | ScheduledInputFailure>;
+    ) => Effect.Effect<SubmissionStatus, DurableAwaitFailure | PreparedInputFailure>;
     readonly abort: (command: AbortCommand) => Effect.Effect<AbortIntent, DurableAbortFailure>;
   }
 >()("@effect-agent/thread/internal/WorkerInputControl") {}
@@ -2856,10 +2856,10 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
               ),
               Effect.mapError((error) =>
                 error._tag === "AdmissionConflict" || error._tag === "AgentInputError"
-                  ? ScheduledInputRefused.make({ code: error._tag, cause: error })
+                  ? PreparedInputRefused.make({ code: error._tag, cause: error })
                   : error._tag === "AdmissionPolicyError" && error.reason === "refused"
-                    ? ScheduledInputRefused.make({ code: error.code, cause: error })
-                    : ScheduledInputRetryable.make({ reason: "storage", cause: error }),
+                    ? PreparedInputRefused.make({ code: error.code, cause: error })
+                    : PreparedInputRetryable.make({ reason: "storage", cause: error }),
               ),
             ),
           submissionStatus: (receipt) =>
@@ -2867,7 +2867,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
               .status(receipt)
               .pipe(
                 Effect.mapError((error) =>
-                  ScheduledInputRetryable.make({ reason: "storage", cause: error }),
+                  PreparedInputRetryable.make({ reason: "storage", cause: error }),
                 ),
               ),
         }),

@@ -12,15 +12,18 @@ import { ThreadId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { digestJson } from "./Digest.ts";
 import { EventSources, type NormalizedEvent } from "./EventSource.ts";
-import { admitPreparedInput, PreparedInputAdmission } from "./PreparedInputAdmission.ts";
+import {
+  admitPreparedInput,
+  PreparedInputAdmission,
+  type PreparedInputRetryReason,
+  PreparedInput,
+} from "./PreparedInputAdmission.ts";
 import { DefinitionDigests, type PersistedJson } from "./Records.ts";
-import { type ScheduleRetryReason } from "./Schedule.ts";
 import { type AdmissionFence, IdempotencyKey, type Principal } from "./SubmissionLedger.ts";
 import {
   AcceptedEvent,
   type EventAcknowledgement,
   type EventSourceVersion,
-  PreparedInput,
   SubscriptionAuthorizer,
   SubscriptionConfiguration,
   SubscriptionDelivery,
@@ -779,7 +782,7 @@ const makeDriver = Effect.fnUntraced(function* (requested: SubscriptionLimits) {
     );
   });
 
-  const retry = (delivery: SubscriptionDelivery, reason: ScheduleRetryReason) =>
+  const retry = (delivery: SubscriptionDelivery, reason: PreparedInputRetryReason) =>
     now.pipe(
       Effect.flatMap((time) =>
         store.changeDelivery(delivery.key, delivery.deliveryId, {

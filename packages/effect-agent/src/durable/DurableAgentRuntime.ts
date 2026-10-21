@@ -193,6 +193,7 @@ import {
   OperationAuthorizer,
   OperationDenied,
 } from "./OperationAuthorizer.ts";
+import { PreparedInput } from "./PreparedInputAdmission.ts";
 import {
   type RunContinuation,
   type CanonicalRecordEnvelope,
@@ -389,7 +390,6 @@ import {
   type UnknownResolutionIntent,
 } from "./SubmissionLedger.ts";
 import { PendingSubmission, SettledSubmission, type SubmissionStatus } from "./SubmissionStatus.ts";
-import { PreparedInput } from "./Subscription.ts";
 import {
   type AppendConflict,
   type ThreadNotMaterialized,

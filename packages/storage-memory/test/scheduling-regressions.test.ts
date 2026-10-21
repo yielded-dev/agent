@@ -3,6 +3,11 @@ import { describe, expect, it } from "@effect/vitest";
 import { MemoryScheduleStoreLive } from "@yielded/agent-storage-memory/memory-schedule-store";
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import { AgentId, ThreadId, ReceiptId, SubmissionId } from "@yielded/agent/identifiers";
+import {
+  type PreparedInput,
+  PreparedInputAdmission,
+  PreparedInputRetryable,
+} from "@yielded/agent/prepared-input-admission";
 import { DefinitionDigests, Digest } from "@yielded/agent/records";
 import {
   defaultSchedulingLimits,
@@ -10,9 +15,7 @@ import {
   ScheduleAuthorizationError,
   ScheduleAuthorizer,
   ScheduleId,
-  type ScheduledEnvelope,
-  ScheduledInputAdmission,
-  ScheduledInputRetryable,
+  ScheduledEnvelope,
   ScheduleStore,
   ScheduleStorageError,
   type ScheduleTimingRequest,
@@ -64,11 +67,11 @@ const keyOf = (request: ScheduleCreateOptions) => ({
   scheduleId: request.scheduleId,
 });
 
-const receiptFor = (envelope: ScheduledEnvelope): Receipt =>
+const receiptFor = (envelope: PreparedInput): Receipt =>
   Receipt.make({
     threadId: envelope.threadId,
-    receiptId: Schema.decodeSync(ReceiptId)(`receipt:${envelope.occurrenceId}`),
-    submissionId: Schema.decodeSync(SubmissionId)(`submission:${envelope.occurrenceId}`),
+    receiptId: Schema.decodeSync(ReceiptId)(`receipt:${envelope.admissionKey}`),
+    submissionId: Schema.decodeSync(SubmissionId)(`submission:${envelope.admissionKey}`),
     queueSequence: Schema.decodeSync(QueueSequence)(1),
   });
 
@@ -78,7 +81,7 @@ const allow: ScheduleAuthorizer["Service"] = {
 };
 
 const layer = (
-  submit: ScheduledInputAdmission["Service"]["submit"] = (envelope) =>
+  submit: PreparedInputAdmission["Service"]["submit"] = (envelope) =>
     Effect.succeed(receiptFor(envelope)),
   authorizer: ScheduleAuthorizer["Service"] = allow,
   limits: SchedulingLimits = defaultSchedulingLimits,
@@ -91,7 +94,7 @@ const layer = (
         NodeCrypto.layer,
         ScheduleWakeNoop,
         Layer.succeed(ScheduleAuthorizer, authorizer),
-        Layer.succeed(ScheduledInputAdmission, { submit }),
+        Layer.succeed(PreparedInputAdmission, { submit }),
       ),
     ),
   );
@@ -121,7 +124,7 @@ describe("Scheduling public recovery contract", () => {
       );
     }).pipe(
       Effect.provide(
-        layer(() => Effect.fail(ScheduledInputRetryable.make({ reason: "ambiguous" })), {
+        layer(() => Effect.fail(PreparedInputRetryable.make({ reason: "ambiguous" })), {
           ...allow,
           manage: () =>
             revoked
@@ -195,7 +198,9 @@ describe("Scheduling public recovery contract", () => {
         Effect.provide(
           layer(
             (envelope) =>
-              broken && envelope.scheduleId === "a-failing" && failure !== "decode"
+              broken &&
+              Schema.decodeUnknownSync(Input)(envelope.input).text === "first" &&
+              failure !== "decode"
                 ? failure === "defect"
                   ? Effect.die("injected")
                   : Effect.fail(
@@ -239,7 +244,7 @@ describe("Scheduling public recovery contract", () => {
       Effect.provide(
         layer((envelope) =>
           Effect.sync(() => {
-            submitted.push(envelope.intendedAtMillis);
+            submitted.push(Schema.decodeUnknownSync(ScheduledEnvelope)(envelope).intendedAtMillis);
 
             return receiptFor(envelope);
           }),
@@ -286,18 +291,18 @@ describe("Scheduling public recovery contract", () => {
     "recovers one Receipt after a lost reply despite updates, cancellation and revocation",
     () => {
       const admitted = new Map<string, Receipt>();
-      const submitted: Array<ScheduledEnvelope> = [];
+      const submitted: Array<PreparedInput> = [];
       let preparationCount = 0;
       let revoked = false;
 
-      const submit: ScheduledInputAdmission["Service"]["submit"] = Effect.fn(function* (envelope) {
+      const submit: PreparedInputAdmission["Service"]["submit"] = Effect.fn(function* (envelope) {
         submitted.push(envelope);
         const existing = admitted.get(envelope.admissionKey);
 
         if (existing !== undefined) return existing;
         admitted.set(envelope.admissionKey, receiptFor(envelope));
 
-        return yield* ScheduledInputRetryable.make({ reason: "ambiguous" });
+        return yield* PreparedInputRetryable.make({ reason: "ambiguous" });
       });
 
       const authorizer: ScheduleAuthorizer["Service"] = {
@@ -366,7 +371,7 @@ describe("Scheduling public recovery contract", () => {
   it.effect("duplicate due passes converge on one occurrence per schedule", () => {
     const admitted = new Map<string, Receipt>();
 
-    const submit: ScheduledInputAdmission["Service"]["submit"] = Effect.fn(function* (envelope) {
+    const submit: PreparedInputAdmission["Service"]["submit"] = Effect.fn(function* (envelope) {
       yield* Effect.yieldNow;
       const receipt = admitted.get(envelope.admissionKey) ?? receiptFor(envelope);
 
@@ -395,7 +400,7 @@ describe("Scheduling public recovery contract", () => {
   });
 
   it.effect("a Receipt for a different Thread does not clear the pending obligation", () => {
-    const submit: ScheduledInputAdmission["Service"]["submit"] = (envelope) =>
+    const submit: PreparedInputAdmission["Service"]["submit"] = (envelope) =>
       Effect.succeed(
         Receipt.make({
           ...receiptFor(envelope),
@@ -460,7 +465,7 @@ describe("Scheduling public recovery contract", () => {
           ),
       };
 
-      const submit: ScheduledInputAdmission["Service"]["submit"] = (envelope) =>
+      const submit: PreparedInputAdmission["Service"]["submit"] = (envelope) =>
         Ref.update(submissions, (count) => count + 1).pipe(Effect.as(receiptFor(envelope)));
 
       yield* Effect.gen(function* () {
@@ -569,7 +574,7 @@ describe("Scheduling public recovery contract", () => {
       const active = yield* Ref.make(0);
       const maximum = yield* Ref.make(0);
 
-      const submit: ScheduledInputAdmission["Service"]["submit"] = Effect.fn(function* (envelope) {
+      const submit: PreparedInputAdmission["Service"]["submit"] = Effect.fn(function* (envelope) {
         const count = yield* Ref.updateAndGet(active, (value) => value + 1);
 
         yield* Ref.update(maximum, (value) => Math.max(value, count));
@@ -613,7 +618,7 @@ describe("Scheduling public recovery contract", () => {
       const entered = yield* Deferred.make<void>();
       let behavior: "timeout" | "interruption" | "defect" | "success" = "timeout";
 
-      const submit: ScheduledInputAdmission["Service"]["submit"] = Effect.fn(function* (envelope) {
+      const submit: PreparedInputAdmission["Service"]["submit"] = Effect.fn(function* (envelope) {
         yield* Deferred.succeed(entered, undefined);
         switch (behavior) {
           case "timeout":
