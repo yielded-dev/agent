@@ -71,18 +71,17 @@ export const UpdatingResearchScout = Subagent.make("research_scout", {
 });
 
 /** Input preparation reads the settings of the fenced parent attempt. */
-export const UpdatingResearchScoutActions = Subagent.background(UpdatingResearchScout, {
-  start: true,
-  followUp: true,
-  cancel: true,
-  budgetScope: "worker-run",
-});
+export const UpdatingResearchScoutActions = {
+  start: Subagent.startTool(UpdatingResearchScout, { budgetScope: "worker-run" }),
+  followUp: Subagent.followUpTool(UpdatingResearchScout),
+  cancel: Subagent.cancelTool(UpdatingResearchScout),
+};
 
-/** Install outside attemptLayer: automatic reports outlive the attempt that started a worker. */
-export const UpdatingResearchScoutBackground = Subagent.background(UpdatingResearchScout, {
-  summary: true,
-  inspect: true,
-  list: true,
-  budgetScope: "worker-run",
-  reportToParent: true,
-});
+export const UpdatingResearchScoutBackground = {
+  summary: Subagent.summaryTool(UpdatingResearchScout),
+  inspect: Subagent.inspectTool(UpdatingResearchScout),
+  list: Subagent.listTool(UpdatingResearchScout),
+};
+
+/** Registration captures completion projection services independently of parent attempts. */
+export const UpdatingResearchScoutReporting = Subagent.reporting(UpdatingResearchScout);

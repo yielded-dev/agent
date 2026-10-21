@@ -112,9 +112,9 @@ for (const [parentState, failpoint, abortChild] of [
           let selected = true;
           let selections = 0;
 
-          const background = Subagent.background(child, {
-            start: true,
-            reportToParent: true,
+          const start = Subagent.startTool(declaration);
+
+          const reporting = Subagent.reporting(declaration, {
             reportUpdate: () => {
               selections++;
 
@@ -127,7 +127,7 @@ for (const [parentState, failpoint, abortChild] of [
               input,
               output,
               instructions: "Discuss findings.",
-              toolkit: background.toolkit,
+              toolkit: Toolkit.make(start.tool),
               policy: { maxTurns: 10, maxToolCalls: 10, maxDuration: "1 minute" },
             }),
             model("restart-parent", () => Stream.fromIterable(finish("I have the finding."))),
@@ -148,6 +148,7 @@ for (const [parentState, failpoint, abortChild] of [
 
           const registrations = [source, childBinding].map((agent) => ({
             agent,
+            reporting: agent === source ? [reporting] : [],
             definitions: DefinitionDigestInput.make({
               agent: agent.definition.id,
               model: "v1",
@@ -175,7 +176,7 @@ for (const [parentState, failpoint, abortChild] of [
                 location === failpoint
                   ? Deferred.succeed(lostAck, undefined).pipe(Effect.andThen(Effect.never))
                   : Effect.void,
-            }).pipe(Layer.provide([authority, background.layer])),
+            }).pipe(Layer.provide([authority, start.layer])),
           ).pipe(Scope.provide(firstScope));
 
           const runtime = Context.get(first, DurableAgentRuntime);
@@ -242,9 +243,7 @@ for (const [parentState, failpoint, abortChild] of [
           selected = false;
 
           const second = yield* Layer.build(
-            NodeHost.layer(registrations, options).pipe(
-              Layer.provide([authority, background.layer]),
-            ),
+            NodeHost.layer(registrations, options).pipe(Layer.provide([authority, start.layer])),
           );
 
           const reopened = Context.get(second, DurableAgentRuntime);

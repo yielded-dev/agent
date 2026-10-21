@@ -29,10 +29,19 @@ export const planner = Agent.make(researchCoordinatorId, {
       AppTools.tools.get_trip_app,
       AppTools.tools.set_trip_places,
     ),
-    UpdatingResearchScoutBackground.toolkit,
-    UpdatingResearchScoutActions.toolkit,
-    ReportingAppEditorBackground.toolkit,
-    ReportingAppEditorActions.toolkit,
+    Toolkit.make(
+      UpdatingResearchScoutBackground.summary.tool,
+      UpdatingResearchScoutBackground.inspect.tool,
+      UpdatingResearchScoutBackground.list.tool,
+      UpdatingResearchScoutActions.start.tool,
+      UpdatingResearchScoutActions.followUp.tool,
+      UpdatingResearchScoutActions.cancel.tool,
+      ReportingAppEditorBackground.summary.tool,
+      ReportingAppEditorBackground.inspect.tool,
+      ReportingAppEditorBackground.list.tool,
+      ReportingAppEditorActions.start.tool,
+      ReportingAppEditorActions.followUp.tool,
+    ),
   ),
   instructions: () =>
     Effect.map(

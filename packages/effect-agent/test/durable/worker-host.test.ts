@@ -40,7 +40,6 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import { automaticReporting } from "../../src/capabilities/internal/subagent-reporting.ts";
 import {
   DurableRuntimeFailpoint,
   DurableRuntimeFailpointError,
@@ -186,7 +185,7 @@ const reportDeclaration = Subagent.make("research", {
   prepareInput: ({ note }) => Effect.succeed({ text: note }),
 });
 
-const rawReport = automaticReporting(reportDeclaration);
+const rawReport = Subagent.reporting(reportDeclaration);
 
 const standardReport: WorkerReporting<WorkerReportPreparationFailure> = {
   ...rawReport,
@@ -1053,11 +1052,7 @@ layer(NodeCrypto.layer)((it) => {
 
         const started = yield* h.host.start({
           ...command,
-          prepare: Effect.fnUntraced(function* () {
-            yield* h.host.resolveTargetPolicy({ target, encodedInput: command.encodedInput });
-
-            return { encodedInput: command.encodedInput, policy, budget: command.budget };
-          }),
+          prepare: Effect.succeed({ encodedInput: command.encodedInput }),
         });
 
         expect(started.delivery.status).toBe("parked");
@@ -1901,7 +1896,7 @@ layer(NodeCrypto.layer)((it) => {
     Effect.gen(function* () {
       const scoutId = Schema.decodeSync(DelegationId)("scout");
 
-      const scoutReport = automaticReporting(
+      const scoutReport = Subagent.reporting(
         Subagent.make("scout", {
           target,
           parameters: reportDeclaration.parameters,

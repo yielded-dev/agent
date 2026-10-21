@@ -31,12 +31,14 @@ import { ResearchAuthorizationLive, scoutAttemptLayer } from "../research/runtim
 import {
   updatingResearchScout,
   UpdatingResearchScoutBackground,
+  UpdatingResearchScoutReporting,
   UpdatingResearchScoutActions,
 } from "../research/scout.ts";
 import { AppBuildBucketLive } from "../trip-app/bindings.ts";
 import { EditorHostLive, editorAttemptLayer } from "../trip-app/editor-runtime.ts";
 import {
   ReportingAppEditorBackground,
+  AppEditorReporting,
   ReportingAppEditorActions,
   appEditor,
 } from "../trip-app/editor.ts";
@@ -293,8 +295,11 @@ export const plannerApplication = <E, R>(
     Layer.mergeAll(
       TripToolsLive(context.threadId),
       AppToolsLive,
-      ReportingAppEditorActions.layer,
-      UpdatingResearchScoutActions.layer,
+      ReportingAppEditorActions.start.layer,
+      ReportingAppEditorActions.followUp.layer,
+      UpdatingResearchScoutActions.start.layer,
+      UpdatingResearchScoutActions.followUp.layer,
+      UpdatingResearchScoutActions.cancel.layer,
     ).pipe(
       Layer.provideMerge(
         Layer.effect(
@@ -348,6 +353,7 @@ export const plannerApplication = <E, R>(
     {
       agent: planner,
       model,
+      reporting: [UpdatingResearchScoutReporting, AppEditorReporting],
       definitions: DefinitionDigestInput.make({
         agent: { id: planner.id, version: "travel-planner-v17" },
         model: modelVersion,
@@ -392,9 +398,14 @@ export const plannerApplication = <E, R>(
         ),
     },
   ]).pipe(
-    // Reports have no parent attempt. Keep their projection services in the registration context.
-    Layer.provide(UpdatingResearchScoutBackground.layer),
-    Layer.provide(ReportingAppEditorBackground.layer),
+    Layer.provide([
+      UpdatingResearchScoutBackground.summary.layer,
+      UpdatingResearchScoutBackground.inspect.layer,
+      UpdatingResearchScoutBackground.list.layer,
+      ReportingAppEditorBackground.summary.layer,
+      ReportingAppEditorBackground.inspect.layer,
+      ReportingAppEditorBackground.list.layer,
+    ]),
     Layer.provide(browser),
     Layer.provide(EditorHostLive),
     Layer.provide(ResearchAuthorizationLive),

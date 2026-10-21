@@ -1,9 +1,87 @@
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 
 import { AgentId, ThreadId, DelegationId, RunId, ToolCallId, SubmissionId } from "./Identifiers.ts";
 
 const Natural = Schema.Natural;
+
+const PositiveInt = Schema.Int.check(Schema.isGreaterThan(0));
+
+const FinitePositiveDuration = Schema.Duration.pipe(
+  Schema.refine(
+    (duration): duration is Duration.Duration =>
+      Duration.isFinite(duration) && Duration.isPositive(duration),
+    { expected: "a finite positive duration" },
+  ),
+);
+
+const FiniteNonNegativeDuration = Schema.Duration.pipe(
+  Schema.refine(
+    (duration): duration is Duration.Duration =>
+      Duration.isFinite(duration) && !Duration.isNegative(duration),
+    { expected: "a finite nonnegative duration" },
+  ),
+);
+
+const SubagentPolicyFields = Schema.Struct({
+  /** Total invocation slots, including reserved descendants, available through this delegation budget. */
+  maxChildren: PositiveInt,
+  /** Concurrently executing children per parent Run. */
+  maxConcurrency: PositiveInt,
+  /** Invocation slots held for the entire descendant subtree; omitted reserves zero. */
+  descendantInvocations: Schema.optionalKey(Natural),
+  /** Model turns reserved for each child invocation. */
+  maxTurns: PositiveInt,
+  /** Tool Calls reserved for each child invocation. */
+  maxToolCalls: PositiveInt,
+  /** Wall-clock duration reserved for each child invocation. */
+  maxDuration: FinitePositiveDuration,
+  /**
+   * Time held back before the in-process parent's deadline; omitted reserves zero.
+   * Does not apply to durable attached children or background workers.
+   */
+  parentReserveDuration: Schema.optionalKey(FiniteNonNegativeDuration),
+  maxInputTokens: Schema.optionalKey(PositiveInt),
+  maxOutputTokens: Schema.optionalKey(PositiveInt),
+  maxCostMicrousd: Schema.optionalKey(Natural),
+  maxResultBytes: Schema.optionalKey(PositiveInt),
+});
+
+type SubagentPolicyFields = typeof SubagentPolicyFields.Type;
+
+/** Inputs normalized and validated by `SubagentPolicy.make`. */
+export type SubagentPolicyInput = Readonly<
+  Omit<SubagentPolicyFields, "maxDuration" | "parentReserveDuration"> & {
+    /** Finite, positive wall-clock duration accepted in any Effect Duration input form. */
+    readonly maxDuration: Duration.Input;
+    /** Finite, nonnegative time reserved for the in-process parent to finish. */
+    readonly parentReserveDuration?: Duration.Input;
+  }
+>;
+
+/**
+ * Finite delegation bounds declared by one Subagent capability.
+ * Structural limits are hard limits; token
+ * and cost caps are optional and enforced only as honestly as provider
+ * reporting allows.
+ */
+export class SubagentPolicy extends Schema.Class<SubagentPolicy>(
+  "@effect-agent/capabilities/SubagentPolicy",
+)(SubagentPolicyFields) {
+  /** Normalize and validate finite delegation bounds, throwing on invalid input. */
+  static override make(input: SubagentPolicyInput): SubagentPolicy {
+    const { maxDuration, parentReserveDuration, ...bounds } = input;
+
+    return super.make({
+      ...bounds,
+      maxDuration: Duration.fromInputUnsafe(maxDuration),
+      ...(parentReserveDuration === undefined
+        ? {}
+        : { parentReserveDuration: Duration.fromInputUnsafe(parentReserveDuration) }),
+    });
+  }
+}
 
 /** Tree authority ceiling. Each child exposes only its own Toolkit's permitted names. */
 export class SubagentGrant extends Schema.Class<SubagentGrant>(

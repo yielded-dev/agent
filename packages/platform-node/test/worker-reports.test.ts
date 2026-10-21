@@ -122,17 +122,16 @@ it.live.each(["worker:after-report-append"] as const)(
           }),
         });
 
-        const background = Subagent.background(declaration, {
-          start: true,
-          followUp: true,
-          reportToParent: true,
-        });
+        const start = Subagent.startTool(declaration);
+        const followUp = Subagent.followUpTool(declaration);
+        const reporting = Subagent.reporting(declaration);
 
-        const source = agent("report-source-agent", background.toolkit);
+        const source = agent("report-source-agent", Toolkit.make(start.tool, followUp.tool));
 
         const registrations = [
           {
             agent: source,
+            reporting: [reporting],
             definitions,
           },
           { agent: child, definitions },
@@ -171,7 +170,7 @@ it.live.each(["worker:after-report-append"] as const)(
                   : Effect.void,
           }).pipe(
             Layer.provide(authority),
-            Layer.provide(background.layer),
+            Layer.provide([start.layer, followUp.layer]),
             Layer.provide(Layer.succeedContext(Clock.Clock.context(clock))),
           ),
         ).pipe(Scope.provide(firstScope));
@@ -269,7 +268,7 @@ it.live.each(["worker:after-report-append"] as const)(
         const second = yield* Layer.build(
           NodeHost.layer(registrations, options).pipe(
             Layer.provide(authority),
-            Layer.provide(background.layer),
+            Layer.provide([start.layer, followUp.layer]),
             Layer.provide(Layer.succeedContext(Clock.Clock.context(clock))),
           ),
         );

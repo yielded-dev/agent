@@ -4,11 +4,28 @@ import * as Schema from "effect/Schema";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { Receipt } from "../../core/Receipt.ts";
 import { type WorkerReport, WorkerCompletion } from "../../core/Worker.ts";
-import { WorkerReportPreparationFailure, type WorkerRunReport } from "../../engine/SubagentHost.ts";
+import {
+  WorkerReportPreparationFailure,
+  type WorkerRunReport,
+  type WorkerReporting,
+} from "../../engine/SubagentHost.ts";
 import { type Declaration } from "./subagent-background.ts";
 import { SubagentExecutionFailure } from "./subagent-contract.ts";
 
 export { WorkerReport } from "../../core/Worker.ts";
+
+export interface ReportingOptions {
+  /**
+   * Select canonical updates to notify the parent. Defaults to all. Decode the encoded value
+   * with the child's update Schema. The first accepted emission freezes this decision.
+   */
+  readonly reportUpdate?: WorkerReporting["reportUpdate"];
+  /**
+   * Select settled Runs before projection. False retains a filtered decision without parent
+   * delivery. Recovery reuses a committed decision, but may reevaluate before it commits.
+   */
+  readonly reportCompletion?: WorkerReporting["reportCompletion"];
+}
 
 const projectReport = <
   const Name extends string,
@@ -97,8 +114,8 @@ const projectReport = <
     return { projected, encodedResult };
   });
 
-/** Project a canonical child outcome into the bounded standard completion message. */
-export const automaticReporting = <
+/** Register this standard completion projection on the parent; registration captures its services. */
+export const reporting = <
   const Name extends string,
   Input extends Schema.Top,
   Output extends Schema.Top,
@@ -109,9 +126,11 @@ export const automaticReporting = <
   Project,
 >(
   declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  options: ReportingOptions = {},
 ) => ({
   delegationId: declaration.delegationId,
   target: declaration.target,
+  ...options,
   prepare: Effect.fnUntraced(function* (report: WorkerRunReport) {
     const { projected, encodedResult } = yield* projectReport(declaration)(report);
 

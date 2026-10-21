@@ -2,7 +2,12 @@ import { NodeDurableHost } from "@yielded/agent-platform-node";
 import { Layer } from "effect";
 
 import { WorkerAccessLive } from "./background-access.ts";
-import { BackgroundCoordinator, ResearchBackground } from "./background-coordinator.ts";
+import {
+  BackgroundCoordinator,
+  StartResearch,
+  FollowUpResearch,
+  ResearchReporting,
+} from "./background-coordinator.ts";
 import { definitions, ModelLive, OpenAiLive } from "./node-agent.ts";
 import { Researcher } from "./researcher.ts";
 import { TravelToolsLive } from "./tools.ts";
@@ -12,6 +17,7 @@ export const HostLive = NodeDurableHost.layer(
     {
       agent: BackgroundCoordinator,
       model: ModelLive,
+      reporting: [ResearchReporting],
       definitions,
     },
     { agent: Researcher, model: ModelLive, definitions },
@@ -23,7 +29,7 @@ export const HostLive = NodeDurableHost.layer(
     workerConcurrency: 4,
   },
 ).pipe(
-  Layer.provide(ResearchBackground.layer),
+  Layer.provide([StartResearch.layer, FollowUpResearch.layer]),
   Layer.provide(TravelToolsLive),
   Layer.provide(WorkerAccessLive),
   Layer.provide(OpenAiLive),

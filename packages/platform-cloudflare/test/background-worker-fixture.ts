@@ -80,16 +80,14 @@ export const backgroundUpdateWorkers = Subagent.make("cf-update-hotel", {
   target: backgroundUpdateTarget,
 });
 
-const updateBackground = Subagent.background(backgroundUpdateTarget, {
-  start: true,
-  reportToParent: true,
-});
+const updateStart = Subagent.startTool(backgroundUpdateWorkers);
+const updateReporting = Subagent.reporting(backgroundUpdateWorkers);
 
 export const backgroundUpdateSource = Agent.make("cf-update-source", {
   input: backgroundSource.input,
   output: backgroundSource.output,
   instructions: "Discuss worker updates and completion reports.",
-  toolkit: updateBackground.toolkit,
+  toolkit: Toolkit.make(updateStart.tool),
   policy: { maxTurns: 10, maxToolCalls: 10, maxDuration: "1 minute" },
 });
 
@@ -230,18 +228,16 @@ export const backgroundReportingWorkers = Subagent.make("reported_research", {
   }),
 });
 
-const standardReports = Subagent.background(backgroundReportingWorkers, {
-  start: true,
-  followUp: true,
-  reportToParent: true,
-});
+const reportStart = Subagent.startTool(backgroundReportingWorkers);
+const reportFollowUp = Subagent.followUpTool(backgroundReportingWorkers);
+const standardReporting = Subagent.reporting(backgroundReportingWorkers);
 
 export const backgroundStandardReportSource = Agent.make("cf-background-standard-report-source", {
   input: backgroundSource.input,
   output: backgroundSource.output,
   instructions: ({ question }) => `Answer ${question} and consume WorkerCompletion messages.`,
   inputPrompt: ({ question }) => question,
-  toolkit: standardReports.toolkit,
+  toolkit: Toolkit.make(reportStart.tool, reportFollowUp.tool),
   policy: backgroundSource.policy,
 });
 
@@ -412,15 +408,15 @@ export const backgroundWorkerBindings = Effect.all([
   DurableWorkerBinding.make(
     Agent.withModel(backgroundUpdateSource, updateSourceModel),
     TEST_DIGESTS,
-  ).pipe(Effect.provide(updateBackground.layer)),
+    [updateReporting],
+  ).pipe(Effect.provide(updateStart.layer)),
   DurableWorkerBinding.make(
     Agent.withModel(backgroundUpdateTarget, updateTargetModel),
     TEST_DIGESTS,
   ),
-  DurableWorkerBinding.make(
-    Agent.withModel(backgroundStandardReportSource, model),
-    TEST_DIGESTS,
-  ).pipe(Effect.provide(standardReports.layer)),
+  DurableWorkerBinding.make(Agent.withModel(backgroundStandardReportSource, model), TEST_DIGESTS, [
+    standardReporting,
+  ]).pipe(Effect.provide([reportStart.layer, reportFollowUp.layer])),
   DurableWorkerBinding.make(Agent.withModel(capturedPolicySource, model), TEST_DIGESTS),
   DurableWorkerBinding.make(Agent.withModel(independentBudgetSource, model), TEST_DIGESTS),
   DurableWorkerBinding.make(Agent.withModel(independentScout, model), TEST_DIGESTS),

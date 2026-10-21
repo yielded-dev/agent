@@ -20,7 +20,7 @@ import {
   type RunDispositionDeclaration,
 } from "../core/Agent.ts";
 import { AgentPolicyError } from "../core/AgentError.ts";
-import { type AgentId, DelegationId, ToolCallId } from "../core/Identifiers.ts";
+import { DelegationId, ToolCallId } from "../core/Identifiers.ts";
 import { IdGenerator } from "../core/IdGenerator.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import type { SubagentDelegationCaps } from "../core/SubagentContract.ts";
@@ -92,12 +92,6 @@ export {
   delegationCapsFromPolicy,
   delegationAllocationFromPolicy,
 } from "./internal/subagent-contract.ts";
-
-import {
-  background as backgroundDeclaration,
-  type BackgroundOptions,
-  type Declaration,
-} from "./internal/subagent-background.ts";
 
 const decodeDelegationId = Schema.decodeSync(DelegationId);
 
@@ -2324,7 +2318,7 @@ export function layer<
   return toolkit.toLayer(build);
 }
 
-export { WorkerReport } from "./internal/subagent-reporting.ts";
+export { WorkerReport, reporting, type ReportingOptions } from "./internal/subagent-reporting.ts";
 
 export {
   Worker,
@@ -2337,103 +2331,11 @@ export {
   list,
   cancel,
   stop,
-  type BackgroundOptions,
-  type BackgroundTools,
+  startTool,
+  followUpTool,
+  inspectTool,
+  summaryTool,
+  listTool,
+  cancelTool,
+  type StartToolOptions,
 } from "./internal/subagent-background.ts";
-
-/**
- * Derive selected background Tools directly from a child Agent, using its ID as the delegation
- * name and its input/output Schemas as the default contract. Pass an explicit Subagent.make
- * declaration to customize the name, projections, grants, or policy bounds.
- */
-export function background<
-  const Name extends string,
-  Input extends Schema.Top,
-  Output extends Schema.Top,
-  Instructions,
-  Tools extends Record<string, Tool.Any>,
-  const Selected extends BackgroundOptions,
->(
-  target: Definition<
-    Input,
-    Output,
-    Instructions,
-    Toolkit.Toolkit<Tools>,
-    RunDispositionDeclaration<Output["Type"], Schema.Top> | undefined,
-    unknown,
-    Schema.Top | undefined
-  > & {
-    readonly id: AgentId & Name;
-  },
-  selected: Selected,
-): ReturnType<
-  typeof backgroundDeclaration<
-    Name,
-    Input,
-    Output,
-    Input,
-    SubagentResult<Output>,
-    typeof Schema.Never,
-    never,
-    never,
-    Selected
-  >
->;
-
-export function background<
-  const Name extends string,
-  Input extends Schema.Top,
-  Output extends Schema.Top,
-  Parameters extends Schema.Top,
-  Success extends Schema.Top,
-  Failure extends Schema.Top,
-  Prepare,
-  Project,
-  const Selected extends BackgroundOptions,
->(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
-  selected: Selected,
-): ReturnType<
-  typeof backgroundDeclaration<
-    Name,
-    Input,
-    Output,
-    Parameters,
-    Success,
-    Failure,
-    Prepare,
-    Project,
-    Selected
-  >
->;
-
-export function background(
-  targetOrDeclaration:
-    | Definition<
-        Schema.Top,
-        Schema.Top,
-        unknown,
-        Toolkit.Toolkit<Record<string, Tool.Any>>,
-        RunDispositionDeclaration<unknown, Schema.Top> | undefined,
-        unknown,
-        Schema.Top | undefined
-      >
-    | Declaration<
-        string,
-        Schema.Top,
-        Schema.Top,
-        Schema.Top,
-        Schema.Top,
-        Schema.Top,
-        unknown,
-        unknown
-      >,
-  selected: BackgroundOptions,
-): unknown {
-  const declaration =
-    "target" in targetOrDeclaration
-      ? targetOrDeclaration
-      : make(targetOrDeclaration.id, { target: targetOrDeclaration });
-
-  return backgroundDeclaration(declaration, selected);
-}
