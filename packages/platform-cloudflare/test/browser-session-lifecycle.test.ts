@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
@@ -21,9 +22,11 @@ it.effect("keeps original cleanup transport causes private when encoding the pub
       lifecycle.close(Redacted.make(sessionId)),
     ).pipe(
       Effect.provide(
-        BrowserRunSessionLifecycle.layer({ accountId, apiToken: Redacted.make("fixture-token") }),
+        BrowserRunSessionLifecycle.layer({
+          accountId,
+          apiToken: Redacted.make("fixture-token"),
+        }).pipe(Layer.provide(FetchHttpClient.layer)),
       ),
-      Effect.provide(FetchHttpClient.layer),
       Effect.provideService(FetchHttpClient.Fetch, async () => {
         throw new Error("PRIVATE transport failure");
       }),

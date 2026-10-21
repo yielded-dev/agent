@@ -34,6 +34,7 @@ const changes = (before: unknown, after: unknown, path: string): ReadonlyArray<s
   if (
     (path === "AgentPolicyEncoded.properties.maxTurns" ||
       path === "AgentPolicyEncoded.properties.maxToolCalls") &&
+    !(isObject(before) && Array.isArray(before.anyOf)) &&
     isObject(after) &&
     Array.isArray(after.anyOf) &&
     after.anyOf.length === 2 &&
