@@ -390,6 +390,9 @@ it.effect.each([
         },
       });
       expect(JSON.stringify(reports)).not.toContain("private-provider-url-and-credential");
+      expect(reports.map((cause) => Cause.pretty(cause)).join("\n")).not.toContain(
+        "private-provider-url-and-credential",
+      );
       expect(JSON.stringify(error)).not.toContain("private-provider-url-and-credential");
     }).pipe(
       Effect.scoped,

@@ -1,3 +1,4 @@
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import type * as Effect from "effect/Effect";
@@ -5,7 +6,7 @@ import * as ErrorReporter from "effect/ErrorReporter";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
-/** Source-authored stages and classifications only; never retain SDK text or session capabilities. */
+/** Browser stage and classification. Original causes stay private and out of public JSON. */
 export class BrowserRunFailure extends Data.TaggedError("BrowserRunFailure")<{
   readonly operation: string;
   readonly reason:
@@ -17,7 +18,7 @@ export class BrowserRunFailure extends Data.TaggedError("BrowserRunFailure")<{
     | "rate-limited"
     | "pending";
   readonly status?: number;
-  readonly cause?: BrowserRunFailure | { readonly name: string };
+  readonly cause?: unknown;
 }> {
   readonly [ErrorReporter.severity] = "Error" as const;
 }
@@ -52,39 +53,38 @@ const failureNames = new Set([
   "ConnectionClosedError",
 ]);
 
-const originalBrowserCauses = new WeakMap<BrowserRunFailure, unknown>();
+/** Construct a reporter-safe copy, never the error carrying the private original cause. */
+const projectBrowserFailure = (operation: string, cause?: unknown): BrowserRunFailure => {
+  const source = cause instanceof BrowserRunFailure ? cause.cause : cause;
 
-/** Recover the native value only when constructing an operator-private diagnostic. */
-export const browserFailureCause = (cause: unknown): unknown =>
-  cause instanceof BrowserRunFailure && originalBrowserCauses.has(cause)
-    ? originalBrowserCauses.get(cause)
-    : cause;
+  return new BrowserRunFailure({
+    operation: cause instanceof BrowserRunFailure ? cause.operation : operation,
+    reason:
+      cause instanceof BrowserRunFailure
+        ? cause.reason
+        : Predicate.isObject(cause) && "reason" in cause && Schema.is(reasonSchema)(cause.reason)
+          ? cause.reason
+          : "provider",
+    ...(Predicate.isObject(cause) && "status" in cause && Schema.is(statusSchema)(cause.status)
+      ? { status: cause.status }
+      : {}),
+    ...(source instanceof BrowserRunFailure
+      ? { cause: projectBrowserFailure(operation, source) }
+      : Predicate.isObject(source) &&
+          "name" in source &&
+          typeof source.name === "string" &&
+          failureNames.has(source.name)
+        ? { cause: { name: source.name } }
+        : {}),
+  });
+};
 
 export const browserFailure = (operation: string, cause?: unknown): BrowserRunFailure => {
   if (cause instanceof BrowserRunFailure) return cause;
 
-  const failure = new BrowserRunFailure({
-    operation,
-    reason:
-      Predicate.isObject(cause) && "reason" in cause && Schema.is(reasonSchema)(cause.reason)
-        ? cause.reason
-        : "provider",
-    ...(Predicate.isObject(cause) && "status" in cause && Schema.is(statusSchema)(cause.status)
-      ? { status: cause.status }
-      : {}),
-    ...(Predicate.isObject(cause) && "cause" in cause && cause.cause instanceof BrowserRunFailure
-      ? { cause: cause.cause }
-      : Predicate.isObject(cause) &&
-          "name" in cause &&
-          typeof cause.name === "string" &&
-          failureNames.has(cause.name)
-        ? { cause: { name: cause.name } }
-        : {}),
-  });
+  const failure = projectBrowserFailure(operation, cause);
 
-  if (cause !== undefined) originalBrowserCauses.set(failure, cause);
-
-  return failure;
+  return cause === undefined ? failure : FailureDiagnostic.withCause(failure, cause);
 };
 
 /** Keep mixed defects and interruptions distinct while discarding all foreign diagnostic content. */
@@ -99,9 +99,9 @@ export const reportBrowserCause = <E>(
         .map((reason) => {
           switch (reason._tag) {
             case "Fail":
-              return Cause.makeFailReason(browserFailure(operation, reason.error));
+              return Cause.makeFailReason(projectBrowserFailure(operation, reason.error));
             case "Die":
-              return Cause.makeDieReason(browserFailure(operation, reason.defect));
+              return Cause.makeDieReason(projectBrowserFailure(operation, reason.defect));
             case "Interrupt":
               return reason;
           }

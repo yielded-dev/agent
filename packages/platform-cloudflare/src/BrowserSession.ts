@@ -35,7 +35,6 @@ import {
   prepareCredential,
 } from "./internal/browser-credentials.ts";
 import {
-  browserFailureCause,
   inheritBrowserReport,
   reportBrowserCause,
   reportedBrowserError,
@@ -172,9 +171,7 @@ const failure = (
 ) => {
   const error = BrowserSessionError.make({ reason, dispatch, cleanup });
 
-  return cause === undefined
-    ? error
-    : FailureDiagnostic.withCause(error, browserFailureCause(cause));
+  return cause === undefined ? error : FailureDiagnostic.withCause(error, cause);
 };
 
 const decode = <A>(schema: Schema.Codec<A>, input: unknown) =>

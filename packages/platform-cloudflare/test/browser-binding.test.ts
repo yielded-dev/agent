@@ -186,6 +186,52 @@ it.effect("retains connection causes privately before binding sanitization", () 
     expect(JSON.stringify(FailureDiagnostic.capture(error))).toContain("nested socket failure");
     expect(JSON.stringify(error)).not.toContain("nested socket failure");
     expect(JSON.stringify(reports)).not.toContain("private connection failure");
+    expect(reports.map((cause) => Cause.pretty(cause)).join("\n")).not.toContain(
+      "private connection failure",
+    );
+  }).pipe(Effect.scoped),
+);
+
+it.effect("retains native cleanup causes through a failed attachment scope", () =>
+  Effect.gen(function* () {
+    const fixture = yield* endpoint("success");
+    const close = fixture.socket.close.bind(fixture.socket);
+
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        Object.defineProperty(fixture.socket, "close", { configurable: true, value: close });
+      }),
+    );
+    Object.defineProperty(fixture.socket, "close", {
+      configurable: true,
+      value: () => {
+        throw new TypeError("native cleanup failure", { cause: new Error("cleanup socket cause") });
+      },
+    });
+
+    const layer = BrowserSessions.layerNoDeps.pipe(
+      Layer.provide(BrowserRunBinding.layer(fixture.browser)),
+      Layer.provide(
+        BrowserRunReadonlyLiveView.layer({
+          accountId: "1234567890abcdef1234567890abcdef",
+          apiToken: Redacted.make("fixture-token"),
+        }).pipe(Layer.provide(FetchHttpClient.layer)),
+      ),
+      Layer.provide(Layer.succeed(BrowserRunSessionLifecycle, { close: () => Effect.void })),
+    );
+
+    const exit = yield* Effect.flatMap(BrowserSessions, (sessions) =>
+      sessions.attach(
+        BrowserSessionReference.make({
+          ...identity,
+          version: 1,
+          expiresAt: 120_000,
+          commandTimeoutMillis: 30_000,
+        }),
+      ),
+    ).pipe(Effect.provide(layer), Effect.scoped, Effect.exit);
+
+    expect(JSON.stringify(FailureDiagnostic.capture(exit))).toContain("cleanup socket cause");
   }).pipe(Effect.scoped),
 );
 
