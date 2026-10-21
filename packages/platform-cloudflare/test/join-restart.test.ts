@@ -1,8 +1,4 @@
-import {
-  DurableObjectContext,
-  threadNamespaceLayer,
-} from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
-import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
+import { DurableObjectContext } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
@@ -269,17 +265,6 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
                     })),
                   ),
                 ),
-                Layer.provideMerge(ThreadObject.layer([])),
-                Layer.provide(
-                  ThreadObject.layerConfig({
-                    deploymentId: "join-restart",
-                    producerPrefix: "join-restart",
-                  }),
-                ),
-                Layer.provide([
-                  DurableObjectContext.layer(state, env),
-                  threadNamespaceLayer(env, "THREADS"),
-                ]),
               ),
             ),
             Effect.provideService(Clock.Clock, clock),

@@ -1991,28 +1991,8 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       if (yield* append(submission.threadId, recordId, decision, current, "report")) break;
       if (attempt === 15) return yield* failure("inspect", "storage");
     }
-    if (decision?._tag !== "WorkerReportPrepared") return;
-    if (Option.isNone(deps.deliveries)) return yield* failure("inspect", "unavailable");
-
-    const envelope = yield* Schema.decodeUnknownEffect(PreparedInput)(decision.envelope).pipe(
-      Effect.mapError((cause) => failure("inspect", "corrupt", cause)),
-    );
-
-    const prepared = yield* withCrypto(
-      prepareMessageDelivery({
-        key: { ownerThreadId: submission.threadId, messageId },
-        envelope,
-        createdAtMillis: decision.createdAtMillis,
-        deadlineAtMillis: decision.deadlineAtMillis,
-        ...(decision.predecessor === undefined ? {} : { predecessor: decision.predecessor }),
-      }),
-    ).pipe(Effect.mapError(storageFailure("inspect")));
-
-    // Until this insertion commits the child ledger stays nonterminal. Afterwards its independent
+    // The decision and its outbox row are already committed together. The outbox's own
     // due index survives both child and source settlement, including Object eviction.
-    yield* hit("worker:before-report-delivery", "inspect");
-    yield* deps.deliveries.value.insert(prepared).pipe(Effect.mapError(storageFailure("inspect")));
-    yield* hit("worker:after-report-delivery", "inspect");
   });
 
   const completeInput = Effect.fnUntraced(function* (submission: SubmissionSnapshot) {

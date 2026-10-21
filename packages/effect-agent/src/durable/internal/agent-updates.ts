@@ -13,12 +13,7 @@ import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { IdempotencyKey } from "../../core/Receipt.ts";
 import { digestJson } from "../Digest.ts";
 import { DurableRuntimeFailpoint } from "../DurableFailpoint.ts";
-import {
-  MessageDeliveryStore,
-  MessageDeliveryRecord,
-  prepareMessageDelivery,
-} from "../MessageDelivery.ts";
-import { PreparedInput } from "../PreparedInputAdmission.ts";
+import { MessageDeliveryStore } from "../MessageDelivery.ts";
 import {
   AgentUpdateEmitted,
   BatchId,
@@ -35,20 +30,8 @@ import {
 import { CurrentRunWriter, readRunEvidenceSnapshot } from "../RunContinuation.ts";
 import { runIdForSubmission } from "../RunJournal.ts";
 import { LedgerError, type SubmissionSnapshot } from "../SubmissionLedger.ts";
-import {
-  getRecord,
-  ThreadReader,
-  ThreadStore,
-  ThreadStoreError,
-  ThreadTailRequest,
-} from "../ThreadStore.ts";
-import {
-  deliveryPredecessor,
-  decodeWorkCursor,
-  encodeWorkCursor,
-  MAX_RECOVERY_PAGES,
-  type ThreadWorkPage,
-} from "../ThreadWork.ts";
+import { getRecord, ThreadReader, ThreadStore, ThreadTailRequest } from "../ThreadStore.ts";
+import { deliveryPredecessor } from "../ThreadWork.ts";
 import { WakeScheduler } from "../WakeScheduler.ts";
 import { WorkerRuntime } from "./worker-runtime.ts";
 
@@ -58,6 +41,11 @@ const storage = () =>
   LedgerError.make({ operation: "agent-update", message: "Durable update persistence failed" });
 
 const rejected = (reason: UpdateError["reason"]) => UpdateError.make({ reason });
+
+const publicationError = (error: { readonly _tag: string; readonly deliveryReason?: string }) =>
+  error.deliveryReason === "capacity" || error.deliveryReason === "conflict"
+    ? rejected(error.deliveryReason)
+    : storage();
 
 const updateDigest = (threadId: ThreadId, runId: RunId, updateId: string) =>
   digestJson([threadId, runId, updateId]);
@@ -90,20 +78,12 @@ export const nativeUpdateAccepted = (
   );
 };
 
-/** Acceptance is fenced by the actual emitting Attempt; recovery only recreates frozen outbox rows. */
+/** The emitting Attempt fences acceptance; native storage publishes its optional outbox row atomically. */
 export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   readonly deploymentId: DeploymentId;
   readonly producerId: ProducerId;
 }) {
   const store = yield* ThreadStore;
-  const work = store.work;
-
-  if (work === undefined)
-    return yield* ThreadStoreError.make({
-      operation: "construct agent update runtime",
-      message: "The storage adapter has no work-discovery port",
-    });
-
   const workers = yield* WorkerRuntime;
   const wake = yield* WakeScheduler;
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
@@ -175,78 +155,6 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
     };
   });
 
-  const pendingUpdates = Effect.fnUntraced(function* (threadId: ThreadId) {
-    const initial = yield* decodeWorkCursor({ threadId, limit: 128 }).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
-      Effect.mapError(storage),
-    );
-
-    let cursor: string | undefined = encodeWorkCursor({ ...initial, source: "canonical" });
-
-    let count = 0;
-
-    for (let pages = 0; pages < MAX_RECOVERY_PAGES; pages++) {
-      const page: ThreadWorkPage = yield* work
-        .page({ threadId, limit: 128, cursor })
-        .pipe(Effect.mapError(() => rejected("unavailable")));
-
-      for (const entry of page.entries) {
-        if (entry.owner._tag === "Handoff" && entry.owner.kind === "update") count++;
-        if (entry.owner._tag === "Delivery") {
-          if (entry.partition === undefined) return yield* rejected("unavailable");
-          if (entry.partition === "update") count++;
-        }
-      }
-      cursor = page.cursor;
-      if (cursor === undefined) return count;
-    }
-
-    return yield* rejected("capacity");
-  });
-
-  const prepareDelivery = Effect.fnUntraced(function* (update: Update, delivery: Delivery) {
-    const envelope = yield* Schema.decodeUnknownEffect(PreparedInput)(delivery.envelope).pipe(
-      Effect.mapError(storage),
-    );
-
-    return yield* prepareMessageDelivery({
-      key: { ownerThreadId: update.threadId, messageId: delivery.messageId },
-      envelope,
-      createdAtMillis: delivery.createdAtMillis,
-      deadlineAtMillis: delivery.deadlineAtMillis,
-      ...(delivery.predecessor === undefined ? {} : { predecessor: delivery.predecessor }),
-    }).pipe(Effect.provideService(Crypto.Crypto, crypto), Effect.mapError(storage));
-  });
-
-  const insert = Effect.fnUntraced(function* (record: AgentUpdateEmitted) {
-    const delivery = record.delivery;
-
-    if (delivery === undefined) return;
-    if (Option.isNone(deliveries)) return yield* storage();
-    const prepared = yield* prepareDelivery(record.update, delivery);
-
-    yield* failpoint.hit("update:before-delivery-insert");
-    yield* deliveries.value.insert(prepared).pipe(Effect.mapError(storage));
-    yield* failpoint.hit("update:after-delivery-insert");
-  });
-
-  const repairRun = Effect.fnUntraced(function* (threadId: ThreadId, submissionId: SubmissionId) {
-    const tail = yield* store
-      .inspectTail(ThreadTailRequest.make({ threadId }))
-      .pipe(Effect.mapError(storage));
-
-    const records = yield* readRunEvidenceSnapshot(threadId, submissionId, tail.tailSequence).pipe(
-      Effect.provideService(ThreadReader, reader),
-      Effect.provideService(Crypto.Crypto, crypto),
-      Effect.mapError(storage),
-    );
-
-    for (const { record } of records) {
-      if (record.payload._tag === "AgentUpdateEmitted" && record.payload.delivery !== undefined)
-        yield* insert(record.payload);
-    }
-  });
-
   const emit = Effect.fnUntraced(
     function* (request: {
       readonly submission: SubmissionSnapshot;
@@ -309,7 +217,6 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
             !Schema.toEquivalence(DefinitionDigests)(existing.definitions, request.definitions)
           )
             return yield* rejected("conflict");
-          yield* insert(existing);
 
           return existing.update;
         }
@@ -352,16 +259,6 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
 
         if (prepared !== undefined) {
           if (Option.isNone(deliveries)) return yield* rejected("unavailable");
-          if (
-            utf8ByteLength(JSON.stringify(prepared.envelope)) >
-            deliveries.value.limits.maxEnvelopeBytes
-          )
-            return yield* rejected("capacity");
-          if (
-            (yield* pendingUpdates(request.submission.threadId)) >=
-            (deliveries.value.limits.maxPendingUpdatesPerOwner ?? 32)
-          )
-            return yield* rejected("capacity");
 
           const predecessor = yield* deliveryPredecessor(
             request.submission.threadId,
@@ -369,14 +266,6 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
           ).pipe(Effect.provideService(ThreadReader, reader), Effect.mapError(storage));
 
           delivery = { ...prepared, ...(predecessor === undefined ? {} : { predecessor }) };
-          const deliveryRecord = yield* prepareDelivery(update, delivery);
-
-          const stored = yield* Schema.encodeEffect(Schema.fromJsonString(MessageDeliveryRecord))(
-            deliveryRecord,
-          ).pipe(Effect.mapError(storage));
-
-          if (utf8ByteLength(stored) > deliveries.value.maxStoredValueBytes)
-            return yield* rejected("capacity");
         }
 
         const payload = AgentUpdateEmitted.make({
@@ -414,14 +303,13 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
           .pipe(
             Effect.as(true),
             Effect.catchTag("AppendConflict", () => Effect.succeed(false)),
-            Effect.mapError(storage),
+            Effect.mapError(publicationError),
           );
 
         if (!appended) continue;
         yield* failpoint.hit("update:after-canonical-append");
         // Canonical progress is observable even when no parent report is selected.
         yield* wake.notify(request.submission.threadId);
-        yield* insert(payload);
 
         return update;
       }
@@ -433,7 +321,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
         writer.withProgress(effect).pipe(
           Effect.catchTags({
             OwnershipLost: () => storage(),
-            ThreadStoreError: () => storage(),
+            ThreadStoreError: publicationError,
             ThreadNotMaterialized: () => storage(),
             AppendConflict: () => storage(),
           }),
@@ -441,5 +329,5 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
       ),
   );
 
-  return { emit, accepted, repair: insert, repairRun };
+  return { emit, accepted };
 });

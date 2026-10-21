@@ -18,6 +18,7 @@ import {
   sameMessageDeliveryIdentity,
   validateMessageDelivery,
 } from "@yielded/agent/message-delivery";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import { ScheduleInstant } from "@yielded/agent/schedule";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import { IdempotencyKey } from "@yielded/agent/submission-ledger";
@@ -25,6 +26,7 @@ import { makeTransferFactCheck } from "@yielded/agent/thread-store";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import type * as SqlError from "effect/sql/SqlError";
@@ -103,6 +105,78 @@ export interface SqlMessageDeliveryStoreOptions {
     body: Effect.Effect<A, MessageDeliveryFailure>,
   ) => Effect.Effect<A, MessageDeliveryFailure | SqlError.SqlError>;
 }
+
+interface CanonicalMessageWriter {
+  readonly owner: StorageOwner["Service"];
+  readonly write: (
+    records: ReadonlyArray<MessageDeliveryRecord>,
+  ) => Effect.Effect<void, MessageDeliveryError>;
+}
+
+const privateWriters = new WeakMap<MessageDeliveryStore["Service"], CanonicalMessageWriter>();
+
+const canonicalWriters = new WeakMap<
+  StorageOwner["Service"],
+  {
+    readonly store: MessageDeliveryStore["Service"];
+    readonly writer: CanonicalMessageWriter;
+    references: number;
+  }
+>();
+
+/** Pair the configured delivery facet with its retained physical owner for this scope. */
+export const registerCanonicalMessageWriter = Effect.fnUntraced(function* (
+  owner: StorageOwner["Service"],
+  store: MessageDeliveryStore["Service"],
+) {
+  yield* Effect.acquireRelease(
+    Effect.gen(function* () {
+      const writer = privateWriters.get(store);
+
+      if (writer === undefined || writer.owner !== owner || owner.isClosed())
+        return yield* MessageDeliveryError.make({
+          reason: "conflict",
+          operation: "canonical-writer-owner",
+        });
+      const current = canonicalWriters.get(owner);
+
+      if (current !== undefined && current.store !== store)
+        return yield* MessageDeliveryError.make({
+          reason: "conflict",
+          operation: "canonical-writer-conflict",
+        });
+      const retained = current ?? { store, writer, references: 0 };
+
+      retained.references++;
+      canonicalWriters.set(owner, retained);
+
+      return retained;
+    }),
+    (retained) =>
+      Effect.sync(() => {
+        if (--retained.references === 0) canonicalWriters.delete(owner);
+      }),
+  );
+});
+
+/**
+ * Publish through the paired private insert body inside the canonical append transaction.
+ * The journal supplies its retained physical owner when constructing its publication operation.
+ */
+export const publishCanonicalDeliveries = Effect.fnUntraced(function* (
+  records: ReadonlyArray<MessageDeliveryRecord>,
+) {
+  if (records.length === 0) return;
+  const owner = yield* StorageOwner;
+  const retained = canonicalWriters.get(owner);
+
+  if (retained === undefined || owner.isClosed())
+    return yield* MessageDeliveryError.make({
+      reason: "conflict",
+      operation: "canonical-writer-missing",
+    });
+  yield* retained.writer.write(records);
+});
 
 const Row = Schema.Struct({
   owner_thread_id: ThreadId,
@@ -188,6 +262,63 @@ const corrupt = (operation: string, cause?: unknown) =>
   });
 
 /**
+ * Layouts with publication handoffs may upgrade only after the previous runtime has
+ * rebuilt discovery and retained every outbox row. Check scalar locators before any
+ * work-index rebuild can discard that evidence; never hydrate the canonical history.
+ */
+export const assertLegacyMessagePublicationDrained = Effect.fnUntraced(function* (
+  namespace?: string,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const { table, execute } = yield* makeSqlQuery(namespace);
+
+  const query = <A extends object>(statement: Statement.Statement<A>) =>
+    execute(statement).pipe(
+      Effect.mapError((cause) => storage("inspect legacy message publication", cause)),
+    );
+
+  if ((yield* query(sql`SELECT 1 FROM ${table("effect_agent_threads")} LIMIT 1`)).length === 0)
+    return;
+
+  const present = yield* query(
+    sql.onDialectOrElse({
+      pg: () => sql`SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname=${namespace ?? "public"} AND c.relname='effect_agent_work_entries' AND c.relkind='r'`,
+      orElse: () =>
+        sql`SELECT 1 FROM sqlite_master WHERE type='table' AND name='effect_agent_work_entries'`,
+    }),
+  );
+
+  if (present.length === 0)
+    return yield* MessageDeliveryError.make({ reason: "conflict", operation: "legacy-work-index" });
+
+  const incomplete = yield* query(sql`SELECT 1 FROM ${table("effect_agent_threads")} AS owner
+    WHERE work_version<>3 OR work_state<>'ready' OR work_through_sequence<>tail_sequence
+      OR work_entry_count<>(SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} AS work WHERE work.thread_id=owner.thread_id)
+    LIMIT 1`);
+
+  if (incomplete.length > 0)
+    return yield* MessageDeliveryError.make({ reason: "conflict", operation: "legacy-work-index" });
+
+  const unpublished = yield* query(sql`SELECT 1 FROM ${table("effect_agent_work_entries")} AS work
+    WHERE owner_tag='Handoff' AND handoff_kind IN ('peer', 'report', 'update')
+      AND (message_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM ${table("effect_agent_message_deliveries")} AS delivery
+        WHERE delivery.owner_thread_id=work.thread_id
+          AND ${sql.onDialectOrElse({
+            pg: () => sql`(delivery.read_metadata ->> 'messageId')`,
+            orElse: () => sql`json_quote(delivery.message_id)`,
+          })}=work.message_id
+      )) LIMIT 1`);
+
+  if (unpublished.length > 0)
+    return yield* MessageDeliveryError.make({
+      reason: "conflict",
+      operation: "legacy-message-publication",
+    });
+});
+
+/**
  * Backfill the retention derivative under the adapter's layout-upgrade transaction.
  * Read one bounded delivery at a time; preserve its JSON and all existing metadata.
  */
@@ -246,6 +377,7 @@ export const backfillPeerMessageRetention = Effect.fnUntraced(function* (namespa
  * Before failpoints precede the atomic transaction; after failpoints run after its commit.
  */
 export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
+  retainedOwner: StorageOwner["Service"],
   limits: MessageDeliveryStoreLimits = defaultMessageDeliveryStoreLimits,
   options: SqlMessageDeliveryStoreOptions = {},
 ) {
@@ -404,7 +536,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
     return (yield* decodeRows(rows))[0] ?? null;
   });
 
-  const insert: MessageDeliveryStore["Service"]["insert"] = Effect.fnUntraced(function* (record) {
+  const prepareInsert = Effect.fnUntraced(function* (record: MessageDeliveryRecord) {
     const text = yield* encode(record);
 
     const input = yield* decodeRecordJson(text).pipe(
@@ -427,30 +559,37 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
     }
     if (bytes(JSON.stringify(input.envelope)) > config.maxEnvelopeBytes)
       return yield* MessageDeliveryError.make({ reason: "capacity", operation: "envelope-bytes" });
-    yield* failpoint.hit("message-delivery:insert:before");
 
-    const result = yield* transaction(
-      Effect.gen(function* () {
-        const existing = yield* get(input.key);
+    return { input, text };
+  });
 
-        if (existing !== null) {
-          if (!sameMessageDeliveryIdentity(existing, input))
-            return yield* MessageDeliveryError.make({ reason: "conflict", operation: "insert" });
+  const insertInTransaction = Effect.fnUntraced(function* ({
+    input,
+    text,
+  }: {
+    readonly input: MessageDeliveryRecord;
+    readonly text: string;
+  }) {
+    const existing = yield* get(input.key);
 
-          yield* work
-            .transferDelivery(input.key.ownerThreadId, input.key.messageId)
-            .pipe(Effect.mapError((cause) => storage("transfer work handoff", cause)));
+    if (existing !== null) {
+      if (!sameMessageDeliveryIdentity(existing, input))
+        return yield* MessageDeliveryError.make({ reason: "conflict", operation: "insert" });
 
-          return existing;
-        }
+      yield* work
+        .initializeDeliveryOwner(input.key.ownerThreadId)
+        .pipe(Effect.mapError((cause) => storage("initialize delivery owner", cause)));
 
-        yield* checkTransfer(input);
-        const update = isWorkerUpdateDelivery(input);
-        const capacity = messageDeliveryCapacity(config, update);
+      return existing;
+    }
 
-        const counts = yield* query(
-          "count",
-          sql`SELECT COUNT(*) AS pending FROM (
+    yield* checkTransfer(input);
+    const update = isWorkerUpdateDelivery(input);
+    const capacity = messageDeliveryCapacity(config, update);
+
+    const counts = yield* query(
+      "count",
+      sql`SELECT COUNT(*) AS pending FROM (
             SELECT 1 FROM ${relation("effect_agent_message_deliveries")}
             ${sql.onDialectOrElse({
               orElse: () => sql`INDEXED BY effect_agent_message_deliveries_capacity`,
@@ -465,48 +604,53 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
               })}
             LIMIT ${capacity.pending}
           ) live_capacity`,
-        );
-
-        const count = (yield* decodeCountRows(counts).pipe(
-          Effect.mapError((cause) => corrupt("count", cause)),
-        ))[0];
-
-        if (count === undefined) return yield* corrupt("count");
-        if (count.pending >= capacity.pending)
-          return yield* MessageDeliveryError.make({ reason: "capacity", operation: "insert" });
-        yield* query(
-          "insert",
-          sql`INSERT INTO ${relation("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })}) VALUES (${input.key.ownerThreadId}, ${input.key.messageId}, ${input.version}, ${input.status}, ${messageDeliveryDeadline(input)}, ${peerMessageRetentionDeadline(input)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(input)}::jsonb` })})`,
-        );
-        yield* work
-          .transferDelivery(input.key.ownerThreadId, input.key.messageId)
-          .pipe(Effect.mapError((cause) => storage("transfer work handoff", cause)));
-        updatePending(input, bytes(text));
-        yield* recordProgress;
-
-        if (lifecycle !== undefined)
-          yield* lifecycle
-            .retain({
-              id: JSON.stringify([
-                input.key.ownerThreadId,
-                "delivery",
-                input.key.messageId,
-                input.version,
-              ]),
-              ownerThreadId: input.key.ownerThreadId,
-              createdAt: DateTime.makeUnsafe(input.createdAtMillis),
-              fact: {
-                _tag: "DeliveryRetained",
-                key: input.key,
-                envelope: input.envelope,
-                createdAtMillis: input.createdAtMillis,
-              },
-            })
-            .pipe(Effect.mapError((cause) => storage("retain lifecycle", cause)));
-
-        return input;
-      }),
     );
+
+    const count = (yield* decodeCountRows(counts).pipe(
+      Effect.mapError((cause) => corrupt("count", cause)),
+    ))[0];
+
+    if (count === undefined) return yield* corrupt("count");
+    if (count.pending >= capacity.pending)
+      return yield* MessageDeliveryError.make({ reason: "capacity", operation: "insert" });
+    yield* query(
+      "insert",
+      sql`INSERT INTO ${relation("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })}) VALUES (${input.key.ownerThreadId}, ${input.key.messageId}, ${input.version}, ${input.status}, ${messageDeliveryDeadline(input)}, ${peerMessageRetentionDeadline(input)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(input)}::jsonb` })})`,
+    );
+    yield* work
+      .initializeDeliveryOwner(input.key.ownerThreadId)
+      .pipe(Effect.mapError((cause) => storage("initialize delivery owner", cause)));
+    updatePending(input, bytes(text));
+    yield* recordProgress;
+
+    if (lifecycle !== undefined)
+      yield* lifecycle
+        .retain({
+          id: JSON.stringify([
+            input.key.ownerThreadId,
+            "delivery",
+            input.key.messageId,
+            input.version,
+          ]),
+          ownerThreadId: input.key.ownerThreadId,
+          createdAt: DateTime.makeUnsafe(input.createdAtMillis),
+          fact: {
+            _tag: "DeliveryRetained",
+            key: input.key,
+            envelope: input.envelope,
+            createdAtMillis: input.createdAtMillis,
+          },
+        })
+        .pipe(Effect.mapError((cause) => storage("retain lifecycle", cause)));
+
+    return input;
+  });
+
+  const insert: MessageDeliveryStore["Service"]["insert"] = Effect.fnUntraced(function* (record) {
+    const prepared = yield* prepareInsert(record);
+
+    yield* failpoint.hit("message-delivery:insert:before");
+    const result = yield* transaction(insertInTransaction(prepared));
 
     yield* failpoint.hit("message-delivery:insert:after");
 
@@ -591,7 +735,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
     },
   );
 
-  return MessageDeliveryStore.of({
+  const store = MessageDeliveryStore.of({
     ...(lifecycle === undefined ? {} : { lifecyclePublications: lifecycle.storage }),
     limits: config,
     maxStoredValueBytes,
@@ -740,4 +884,18 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
       return decoded[0]?.deadline ?? null;
     }),
   });
+
+  privateWriters.set(store, {
+    owner: retainedOwner,
+    write: Effect.fnUntraced(function* (records) {
+      if (Option.isNone(yield* Effect.serviceOption(sql.transactionService)))
+        return yield* MessageDeliveryError.make({
+          reason: "conflict",
+          operation: "canonical-writer-transaction",
+        });
+      for (const record of records) yield* insertInTransaction(yield* prepareInsert(record));
+    }),
+  });
+
+  return store;
 });

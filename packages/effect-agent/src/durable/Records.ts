@@ -1008,7 +1008,7 @@ export class WorkerInputCompleted extends Schema.TaggedClass<WorkerInputComplete
 
 /**
  * Frozen report decision for one actual Run, shared by every joined Receipt. The envelope is
- * a Schema-encoded PreparedInput, validated before append and decoded again on recovery.
+ * a Schema-encoded PreparedInput, committed atomically with its initial delivery row.
  * Keeping the encoded value here avoids a Records/PreparedInput schema dependency cycle.
  */
 export class WorkerReportPrepared extends Schema.TaggedClass<WorkerReportPrepared>()(
@@ -1023,7 +1023,7 @@ export class WorkerReportPrepared extends Schema.TaggedClass<WorkerReportPrepare
   },
 ) {}
 
-/** Accepted update and its optional frozen parent delivery are one atomic canonical fact. */
+/** Accepted update and its optional parent outbox row commit with this canonical fact. */
 export class AgentUpdateEmitted extends Schema.TaggedClass<AgentUpdateEmitted>()(
   "AgentUpdateEmitted",
   {
@@ -1063,7 +1063,7 @@ export class WorkerReportRefused extends Schema.TaggedClass<WorkerReportRefused>
   },
 ) {}
 
-/** Frozen source proof of peer provenance, readable through routed canonical storage. */
+/** Frozen peer provenance, committed with its outbox row and readable through routed storage. */
 export class PeerMessagePrepared extends Schema.TaggedClass<PeerMessagePrepared>()(
   "PeerMessagePrepared",
   {

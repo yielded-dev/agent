@@ -1,8 +1,3 @@
-import {
-  DurableObjectContext,
-  threadNamespaceLayer,
-} from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
-import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
@@ -10,7 +5,7 @@ import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { AbortCommand, LedgerError, SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadStore, ThreadExportRequest } from "@yielded/agent/thread-store";
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
 import { DurableObject } from "effect-cf";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
@@ -34,7 +29,7 @@ import { stubFor } from "./harness.ts";
 it("preserves a returned Tool result across an input-drain failure without replaying its handler", () => {
   const thread = "cf-returned-result-before-drain";
 
-  return runInDurableObject(stubFor(thread), (instance, state) => {
+  return runInDurableObject(stubFor(thread), (instance) => {
     let toolCalls = 0;
     let drainFailures = 0;
 
@@ -122,11 +117,6 @@ it("preserves a returned Tool result across an input-drain failure without repla
     const runtimeLayer = DurableAgentRuntime.layer.pipe(
       Layer.provide(runStorageLayer()),
       Layer.provide(failingDrain),
-      Layer.provideMerge(ThreadObject.layer([])),
-      Layer.provide(
-        ThreadObject.layerConfig({ deploymentId: "input-drain", producerPrefix: "input-drain" }),
-      ),
-      Layer.provide([DurableObjectContext.layer(state, env), threadNamespaceLayer(env, "THREADS")]),
     );
 
     return instance[DurableObject.RunSymbol](
@@ -196,18 +186,8 @@ it("preserves a returned Tool result across an input-drain failure without repla
 it("settles an abort during fresh instructions without a recovery attempt", () => {
   const thread = `cf-abort-fresh-instructions-${crypto.randomUUID()}`;
 
-  return runInDurableObject(stubFor(thread), (instance, state) => {
-    const runtimeLayer = DurableAgentRuntime.layer.pipe(
-      Layer.provide(runStorageLayer()),
-      Layer.provideMerge(ThreadObject.layer([])),
-      Layer.provide(
-        ThreadObject.layerConfig({
-          deploymentId: "startup-abort",
-          producerPrefix: "startup-abort",
-        }),
-      ),
-      Layer.provide([DurableObjectContext.layer(state, env), threadNamespaceLayer(env, "THREADS")]),
-    );
+  return runInDurableObject(stubFor(thread), (instance) => {
+    const runtimeLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()));
 
     return instance[DurableObject.RunSymbol](
       Effect.gen(function* () {

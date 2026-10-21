@@ -261,7 +261,7 @@ it.live.each(["worker:after-report-append"] as const)(
             ownerThreadId: started.worker.threadId,
             limit: 100,
           })).items,
-        ).toHaveLength(0);
+        ).toHaveLength(1);
         yield* Scope.close(firstScope, Exit.void);
 
         // No live source Run or retained wake fiber survives this complete host restart.

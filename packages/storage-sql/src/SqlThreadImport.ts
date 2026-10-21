@@ -1153,7 +1153,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 const now = DateTime.formatIso(DateTime.makeUnsafe(yield* Clock.currentTimeMillis));
 
                 yield* query(
-                  sql`INSERT INTO ${table("effect_agent_threads")} (thread_id, created_at, tail_sequence) VALUES (${threadId}, ${now}, 0)
+                  sql`INSERT INTO ${table("effect_agent_threads")} (thread_id, created_at, tail_sequence, work_version) VALUES (${threadId}, ${now}, 0, ${WORK_INDEX_VERSION})
                   ON CONFLICT(thread_id) DO UPDATE SET created_at=excluded.created_at WHERE ${table("effect_agent_threads")}.created_at IS NULL`,
                 );
               }
@@ -1444,7 +1444,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 yield* checkValues([text]);
                 yield* query(sql`INSERT INTO ${table("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })})
           VALUES (${threadId}, ${delivery.key.messageId}, ${delivery.version}, ${delivery.status}, ${messageDeliveryDeadline(delivery)}, ${peerMessageRetentionDeadline(delivery)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(delivery)}::jsonb` })})`);
-                yield* work.transferDelivery(threadId, delivery.key.messageId);
+                yield* work.initializeDeliveryOwner(threadId);
               }
               if (options.afterPage !== undefined)
                 yield* options

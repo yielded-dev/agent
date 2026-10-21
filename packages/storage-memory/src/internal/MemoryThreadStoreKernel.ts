@@ -1,4 +1,5 @@
 import type { RunId, SubmissionId, ThreadId, ToolCallId } from "@yielded/agent/identifiers";
+import type { MessageDeliveryError, MessageDeliveryRecord } from "@yielded/agent/message-delivery";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
 import type { RecordEnvelope, RecordId } from "@yielded/agent/records";
 import type { StorageOwner } from "@yielded/agent/run-storage";
@@ -31,7 +32,13 @@ import type * as Stream from "effect/Stream";
 export interface PreparedMemoryAppend {
   readonly request: AppendRequest;
   readonly batchJson: string;
+  readonly deliveries: ReadonlyArray<MessageDeliveryRecord>;
 }
+
+/** Validate under the owner's gate, then publish without yielding or throwing. */
+export type MemoryDeliveryWriter = (
+  records: ReadonlyArray<MessageDeliveryRecord>,
+) => Effect.Effect<() => void, MessageDeliveryError>;
 
 /** Private storage, not a whole-Thread preparation value. Publication callbacks never yield. */
 export interface MemoryLedgerImport {
@@ -73,7 +80,6 @@ export interface MemoryDeliveryImport {
   readonly stage: (
     page: PreparedImportPage,
   ) => Effect.Effect<void, ThreadImportRejected | ThreadStoreError>;
-  readonly has: (messageId: IdempotencyKey) => boolean;
   readonly prepareCommit: () => Effect.Effect<
     () => void,
     ThreadImportRejected | ThreadStoreError,
@@ -128,13 +134,9 @@ export class MemoryThreadStoreKernel extends Context.Service<
       kind: "admissions" | "deliveries",
       owner: MemoryWorkOwner,
     ) => Effect.Effect<void>;
-    readonly registerDeliveryLookup: (
-      exists: (threadId: ThreadId, messageId: IdempotencyKey) => boolean,
-    ) => Effect.Effect<void>;
-    /** Synchronous publication with the authoritative retained row, including replay membership. */
+    readonly registerDeliveryWriter: (writer: MemoryDeliveryWriter) => Effect.Effect<void>;
     readonly checkThreadCapacity: (threadId: ThreadId) => Effect.Effect<void, ThreadStoreError>;
     readonly initializeWork: (threadId: ThreadId) => void;
-    readonly retainDelivery: (threadId: ThreadId, messageId: IdempotencyKey) => void;
     readonly registerLedgerTransfer: (transfer: MemoryLedgerTransfer) => Effect.Effect<void>;
     readonly registerDeliveryTransfer: (transfer: MemoryDeliveryTransfer) => Effect.Effect<void>;
     readonly prepareAppend: (

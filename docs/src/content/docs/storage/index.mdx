@@ -82,6 +82,8 @@ the store.
 ## Build another adapter
 
 `@yielded/agent-storage-sql` provides shared SQL implementations. Durable adapters
-must co-own the Thread log, Submission ledger, and atomic settlement publisher.
+must co-own the Thread log, Submission ledger, and atomic settlement publisher. Peer messages,
+worker reports, and parent updates also require a paired delivery store: their frozen source
+records and initial outbox rows commit atomically under the same owner and capacity limits.
 Start with the [package map](/reference/packages/#effect-agent-storage-sql) and
 [adapter verification](/guide/testing/).

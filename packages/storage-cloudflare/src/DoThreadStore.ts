@@ -285,7 +285,9 @@ const makeServices = Effect.fnUntraced(function* () {
                   });
             }
 
-            return storeError("append canonical batch", error);
+            return error._tag === "ThreadStoreError"
+              ? error
+              : storeError("append canonical batch", error);
           }),
         );
 

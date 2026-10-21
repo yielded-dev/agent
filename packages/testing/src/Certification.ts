@@ -192,20 +192,16 @@ export const TIER2_UNREACHED_LOCATIONS: ReadonlyArray<DurableRuntimeFailpointLoc
   // are covered by the same focused worker-host failpoint suite.
   "worker:before-subtree-append",
   "worker:after-subtree-append",
-  // Automatic report decisions and retained delivery insertion have dedicated worker crash tests.
+  // Atomic report publication has dedicated worker crash tests.
   "worker:before-report-append",
   "worker:after-report-append",
-  "worker:before-report-delivery",
-  "worker:after-report-delivery",
-  // None of the six shapes emits Agent updates. All four boundaries are exercised separately
+  // None of the six shapes emits Agent updates. Both publication boundaries are exercised separately
   // by packages/effect-agent/test/durable/worker-host.test.ts ("repairs an accepted parent update after ...").
   // Node restart/lost-ack coverage is in packages/platform-node/test/worker-updates.test.ts;
   // Cloudflare eviction/alarm recovery is in packages/platform-cloudflare/test/background-workers.test.ts.
   // These suites are not executed by this certification runner; its update rows remain not-triggered.
   "update:before-canonical-append",
   "update:after-canonical-append",
-  "update:before-delivery-insert",
-  "update:after-delivery-insert",
 ];
 
 /** Locations of `tier2` rows whose armed fault never fired in ANY scenario, sorted. */

@@ -11,6 +11,7 @@ import {
   SqlLifecycleSource,
   SqlLifecycleRetainer,
 } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
+import { publishCanonicalDeliveries } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { SqlStorageProgress } from "@yielded/agent-storage-sql/sql-storage-progress";
 import {
   canonicalRecordJson,
@@ -23,6 +24,7 @@ import {
   LifecyclePublicationError,
 } from "@yielded/agent/lifecycle-publication";
 import { BatchId, CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import {
   type AppendConflict,
@@ -30,6 +32,7 @@ import {
   ThreadStoreDiagnostic,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
+import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -363,6 +366,21 @@ const makeJournal = Effect.fnUntraced(function* (
   const owner = (yield* SqlStorageOwner) ?? state;
   const progress = yield* SqlStorageProgress;
 
+  const publishDeliveries = Effect.fnUntraced(
+    function* (records: RawAppendRequest["deliveries"]) {
+      yield* publishCanonicalDeliveries(records);
+    },
+    Effect.provideService(StorageOwner, state.owner),
+    Effect.mapError((cause) =>
+      ThreadStoreError.make({
+        operation: "publish canonical message deliveries",
+        message: "Canonical message obligations could not be retained",
+        deliveryReason: cause.reason,
+        cause,
+      }),
+    ),
+  );
+
   const nativeDb =
     isNativeClient(sql) &&
     sql.config.transformQueryNames === undefined &&
@@ -548,11 +566,13 @@ const makeJournal = Effect.fnUntraced(function* (
             INSERT INTO effect_agent_threads (
               thread_id,
               created_at,
-              tail_sequence
+              tail_sequence,
+              work_version
             ) VALUES (
               ${threadId},
               ${createdAt},
-              0
+              0,
+              ${WORK_INDEX_VERSION}
             ) ON CONFLICT(thread_id) DO UPDATE SET created_at=excluded.created_at
               WHERE effect_agent_threads.created_at IS NULL
            RETURNING *`.pipe(
@@ -786,7 +806,7 @@ const makeJournal = Effect.fnUntraced(function* (
     return true;
   });
 
-  const appendPrepared = Effect.fnUntraced(function* (
+  const appendPreparedBody = Effect.fnUntraced(function* (
     request: RawAppendRequest,
   ): Effect.fn.Return<AppendResult, AppendError> {
     const threadRows = yield* getThread(request.threadId);
@@ -1072,6 +1092,16 @@ const makeJournal = Effect.fnUntraced(function* (
 
     return result;
   });
+
+  const appendPrepared = (request: RawAppendRequest) => {
+    const appended = appendPreparedBody(request);
+
+    // All paths, including native fast appends and exact replays, remain inside the
+    // caller's source transaction. The configured writer never opens another one.
+    return request.deliveries.length === 0
+      ? appended
+      : appended.pipe(Effect.tap(() => publishDeliveries(request.deliveries)));
+  };
 
   const append = Effect.fnUntraced(
     function* (

@@ -1,5 +1,8 @@
 import { RECORD_TAGS } from "@yielded/agent-storage-sql/sql-canonical-storage";
-import { backfillPeerMessageRetention } from "@yielded/agent-storage-sql/sql-message-delivery-store";
+import {
+  assertLegacyMessagePublicationDrained,
+  backfillPeerMessageRetention,
+} from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeSqlQuery, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
 import {
   SQL_PROMPT_PREDICATE,
@@ -18,7 +21,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 29;
+export const CurrentPostgresStorageVersion = 30;
 
 /** The released layout 25 already has observe_settlement; only these indexes are new. */
 const layout26IndexStatements = {
@@ -1118,7 +1121,8 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
       (legacy.version === 25 ||
         legacy.version === 26 ||
         legacy.version === 27 ||
-        legacy.version === 28)
+        legacy.version === 28 ||
+        legacy.version === 29)
     )
   )
     return yield* incompatible(legacy.version, `Unsupported storage version ${legacy.version}.`);
@@ -1453,9 +1457,25 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
       header.layoutVersion !== 25 &&
       header.layoutVersion !== 26 &&
       header.layoutVersion !== 27 &&
-      header.layoutVersion !== 28
+      header.layoutVersion !== 28 &&
+      header.layoutVersion !== 29
     )
       return yield* incompatible(header.layoutVersion, "Unsupported layout upgrade.");
+
+    yield* assertLegacyMessagePublicationDrained(namespace).pipe(
+      Effect.mapError((cause) =>
+        cause.reason === "conflict"
+          ? incompatible(
+              header.layoutVersion,
+              "Recover work discovery and drain peer, report and update publication using the previous library version before upgrading.",
+            )
+          : PostgresStorageError.make({
+              operation: cause.operation,
+              message: cause.message,
+              cause,
+            }),
+      ),
+    );
 
     // READ COMMITTED must observe in-flight writers before reading checkpoints for conversion.
     if (header.layoutVersion < 27)
@@ -1493,7 +1513,16 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
       yield* execute(sql`DROP INDEX ${table("effect_agent_canonical_batches_last")}`);
     // Retire only the derived generic snapshot cache. This step preserves the exact
     // canonical and operational bytes; earlier layout conversions remain independent.
-    yield* execute(sql`DROP TABLE ${table("effect_agent_checkpoints")}`);
+    if (header.layoutVersion < 29)
+      yield* execute(sql`DROP TABLE ${table("effect_agent_checkpoints")}`);
+    yield* execute(sql`DROP INDEX IF EXISTS ${table("effect_agent_records_delivery_predecessor")}`);
+    yield* execute(sql`DROP INDEX IF EXISTS ${table("effect_agent_work_entries_message")}`);
+    yield* execute(sql`DROP INDEX IF EXISTS ${table("effect_agent_work_entries_peer")}`);
+    yield* createSqlThreadWorkTables(namespace).pipe(
+      Effect.mapError((cause) =>
+        PostgresStorageError.make({ operation: cause.operation, message: cause.message, cause }),
+      ),
+    );
     yield* execute(
       sql`UPDATE ${table("effect_agent_storage_version")} SET version=${CurrentPostgresStorageVersion} WHERE id=TRUE`,
     );

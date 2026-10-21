@@ -593,7 +593,7 @@ it(
 describe("recovery faults independent of execution history", () => {
   // Regression: https://github.com/yielded-dev/agent/commit/01f16e998e6c0dbedcf29fd5e518e5bf59c154f1
   // A real Object and retained retry deadline expose terminal-only alarm loss and early retry.
-  it("retries a terminal handoff fault by its retained alarm and parks only after repair", () =>
+  it("retries a terminal delivery fault by its retained alarm and parks only after repair", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const owner = `terminal-recovery-${crypto.randomUUID()}`;
@@ -631,7 +631,7 @@ describe("recovery faults independent of execution history", () => {
         const options = submitOptions(owner, messageId);
         const input = { question: "frozen before handoff", ref: owner };
 
-        const appended = yield* run(
+        yield* run(
           ThreadMaintenance.use((maintenance) =>
             maintenance.withMutation(
               Effect.gen(function* () {
@@ -685,9 +685,29 @@ describe("recovery faults independent of execution history", () => {
           ),
         );
 
-        const original = yield* corruptHistory(owner, owner, appended.lastSequence);
+        const original = yield* storage(owner, (state) => {
+          const row = state.storage.sql
+            .exec<{ record_json: string }>(
+              "SELECT record_json FROM effect_agent_message_deliveries WHERE owner_thread_id = ? AND message_id = ?",
+              owner,
+              messageId,
+            )
+            .one();
 
-        yield* run(pass);
+          state.storage.sql.exec(
+            "UPDATE effect_agent_message_deliveries SET record_json = ? WHERE owner_thread_id = ? AND message_id = ?",
+            "{}",
+            owner,
+            messageId,
+          );
+
+          return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.record_json)));
+        });
+
+        expect(yield* run(pass.pipe(Effect.result))).toMatchObject({
+          _tag: "Failure",
+          failure: { _tag: "DurableAlarmError", operation: "prepare message delivery" },
+        });
         const fault = yield* retainedFault(owner, owner);
 
         expect(fault).toMatchObject({ _tag: "Some", value: { attempts: 1 } });
@@ -695,27 +715,32 @@ describe("recovery faults independent of execution history", () => {
         const deadline = yield* Effect.promise(() => scheduledAlarm(owner));
 
         expect(deadline).not.toBeNull();
-        expect(deadline).toBeGreaterThanOrEqual(fault.value.retryAt);
+        // The shared alarm may service the message lane before this Thread's retry.
+        expect(fault.value.retryAt).toBeGreaterThan(now);
 
         yield* Effect.promise(() => evictDurableObject(stubFor(owner)));
         yield* TestClock.setTime(fault.value.retryAt - 1);
         // A fresh host mutation can wake the owner early but cannot bypass a terminal fault's retry.
         yield* run(ThreadMaintenance.use((maintenance) => maintenance.withMutation(Effect.void)));
-        yield* Effect.promise(() => runDurableObjectAlarm(stubFor(owner)));
+        yield* Effect.promise(() =>
+          expect(runDurableObjectAlarm(stubFor(owner))).rejects.toThrow(
+            "Durable message recovery remains pending",
+          ),
+        );
         expect(yield* retainedFault(owner, owner)).toEqual(fault);
         const retryAlarm = yield* Effect.promise(() => scheduledAlarm(owner));
 
         expect(retryAlarm).not.toBeNull();
         if (retryAlarm === null) throw new Error("Expected retained retry alarm");
-        expect(retryAlarm).toBeGreaterThanOrEqual(fault.value.retryAt);
+        expect(retryAlarm).toBeGreaterThan(yield* Clock.currentTimeMillis);
 
         // Restore only the selected evidence: no wake or source-generation mutation enables retry.
         yield* storage(owner, (state) => {
           state.storage.sql.exec(
-            "UPDATE effect_agent_canonical_records SET payload_json = ? WHERE thread_id = ? AND sequence = ?",
+            "UPDATE effect_agent_message_deliveries SET record_json = ? WHERE owner_thread_id = ? AND message_id = ?",
             original,
             owner,
-            appended.lastSequence,
+            messageId,
           );
 
           return Effect.runPromise(invalidate(state.storage));

@@ -1,6 +1,9 @@
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { SqlLifecycleSource } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
-import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
+import {
+  makeSqlMessageDeliveryStore,
+  registerCanonicalMessageWriter,
+} from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import {
   MessageDeliveryStore,
   type MessageDeliveryStoreLimits,
@@ -15,8 +18,9 @@ import { DoStorageFailpoint } from "./DoStorageFailpoint.ts";
 import { initializeDoJournal } from "./internal/do-journal.ts";
 
 /**
- * Message obligations in a Thread Object's own SQL storage. The platform must prearm
- * maintenance before insertion and retain its alarm while nextDeadline is present.
+ * Message obligations paired with the Thread Object's physical storage owner. Canonical
+ * publication uses this configured writer inside the source transaction. The platform must
+ * retain delivery maintenance with that transaction and while nextDeadline is present.
  */
 export const doMessageDeliveryStoreLayer = (limits?: MessageDeliveryStoreLimits) =>
   Layer.effect(
@@ -28,7 +32,7 @@ export const doMessageDeliveryStoreLayer = (limits?: MessageDeliveryStoreLimits)
 
       const journal = yield* initializeDoJournal(sql, failpoint.hit, config.maxStoredValueBytes);
 
-      return yield* makeSqlMessageDeliveryStore(limits, {
+      const store = yield* makeSqlMessageDeliveryStore(journal.state.owner, limits, {
         maxStoredValueBytes: config.maxStoredValueBytes,
       }).pipe(
         Effect.provideService(SqlStorageOwner, journal.owner),
@@ -37,5 +41,9 @@ export const doMessageDeliveryStoreLayer = (limits?: MessageDeliveryStoreLimits)
           beforePending: journal.flushPublications(),
         }),
       );
+
+      yield* registerCanonicalMessageWriter(journal.state.owner, store);
+
+      return store;
     }),
   ).pipe(Layer.provide(BrowserCrypto.layer));

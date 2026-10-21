@@ -34,6 +34,9 @@ chooses the input, never an arbitrary Thread address or principal.
 For application code, acquire `runtime.messagingHost({ sourceThreadId, principal })` and provide
 it to `Messaging.send`. Supply a stable `idempotencyKey`; retries must retain the same input.
 
+The host pairs canonical history and message delivery storage on the same backend. A send
+commits its source proof and pending delivery together; capacity rejection commits neither.
+
 ## Read delivery status
 
 | Status      | What it proves                                               |

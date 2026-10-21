@@ -131,6 +131,11 @@ const backend = () => ({
 
 const ownerKey = (id: ThreadId) => JSON.stringify([id]);
 
+interface PreparedDeliveryInsert {
+  readonly record: MessageDeliveryRecord;
+  readonly encoded: string;
+}
+
 const keysFor = (current: ReturnType<typeof backend>, key: string) => {
   let keys = current.ordered.get(key);
 
@@ -145,7 +150,8 @@ export interface MemoryMessageDeliveryStoreOptions {
 }
 
 /**
- * Pair with MemoryThreadStoreLive so export/import sees every retained delivery obligation.
+ * Pair with MemoryThreadStoreLive to publish canonical messages and their deliveries atomically.
+ * Export/import preserves every retained delivery obligation.
  * Each retained value and live partition is bounded; completed deduplication evidence is never evicted.
  */
 export const memoryMessageDeliveryStoreLayer = (
@@ -166,11 +172,6 @@ export const memoryMessageDeliveryStoreLayer = (
 
       const state = yield* Ref.make(backend());
 
-      yield* journal.registerDeliveryLookup((threadId, messageId) =>
-        MutableRef.get(state.ref).records.has(
-          messageDeliveryKeyString({ ownerThreadId: threadId, messageId }),
-        ),
-      );
       yield* journal.registerWorkOwner("deliveries", {
         threads: (request) =>
           Ref.get(state).pipe(
@@ -346,10 +347,7 @@ export const memoryMessageDeliveryStoreLayer = (
           });
         else current.work.delete(key);
         current.records.set(key, encoded);
-        if (publish) {
-          journal.initializeWork(owner);
-          journal.retainDelivery(owner, record.key.messageId);
-        }
+        if (publish) journal.initializeWork(owner);
       };
 
       const commit = (record: MessageDeliveryRecord, encoded: string) =>
@@ -374,81 +372,124 @@ export const memoryMessageDeliveryStoreLayer = (
         return text;
       });
 
+      const prepareInsert = Effect.fnUntraced(function* (record: MessageDeliveryRecord) {
+        const encoded = yield* encode(record);
+        const input = yield* decode(encoded);
+
+        if (
+          input.version !== 1 ||
+          input.status !== "pending" ||
+          input.leaseUntilMillis !== null ||
+          input.retry.attempts !== 0 ||
+          input.retry.generation !== 0 ||
+          input.retry.automaticAttempts !== 0 ||
+          input.retry.nextAttemptAtMillis !== input.createdAtMillis ||
+          input.retry.lastAttemptAtMillis !== null ||
+          input.retry.lastFailure !== null ||
+          input.deadlineAtMillis !== input.initialDeadlineAtMillis
+        )
+          return yield* MessageDeliveryError.make({
+            reason: "validation",
+            operation: "insert-state",
+          });
+        if (
+          new TextEncoder().encode(JSON.stringify(input.envelope)).byteLength >
+          config.maxEnvelopeBytes
+        )
+          return yield* MessageDeliveryError.make({
+            reason: "capacity",
+            operation: "envelope-bytes",
+          });
+
+        return { record: input, encoded };
+      });
+
+      /** The caller holds the journal gate through staging and synchronous publication. */
+      const stageInsert = Effect.fnUntraced(function* (
+        inputs: ReadonlyArray<PreparedDeliveryInsert>,
+      ) {
+        const current = yield* Ref.get(state);
+        const additions = new Map<string, PreparedDeliveryInsert>();
+        const counts = new Map<ThreadId, { ordinary: number; update: number }>();
+        const retained: Array<MessageDeliveryRecord> = [];
+
+        for (const prepared of inputs) {
+          const input = prepared.record;
+          const owner = input.key.ownerThreadId;
+
+          yield* journal
+            .checkThreadCapacity(owner)
+            .pipe(
+              Effect.mapError(() =>
+                MessageDeliveryError.make({ reason: "capacity", operation: "Thread capacity" }),
+              ),
+            );
+          const key = messageDeliveryKeyString(input.key);
+          const existingText = current.records.get(key);
+
+          const existing =
+            additions.get(key)?.record ??
+            (existingText === undefined ? undefined : yield* decode(existingText));
+
+          if (existing !== undefined) {
+            if (!sameMessageDeliveryIdentity(existing, input))
+              return yield* MessageDeliveryError.make({
+                reason: "conflict",
+                operation: "insert",
+              });
+            retained.push(existing);
+            continue;
+          }
+
+          yield* checkTransfer(input);
+          const update = isWorkerUpdateDelivery(input);
+          const partition = update ? "update" : "ordinary";
+          const capacity = messageDeliveryCapacity(config, update);
+          let count = counts.get(owner);
+
+          if (count === undefined) {
+            const previous = current.counts.get(owner);
+
+            count = { ordinary: previous?.ordinary ?? 0, update: previous?.update ?? 0 };
+            counts.set(owner, count);
+          }
+          if (count[partition] >= capacity.pending)
+            return yield* MessageDeliveryError.make({ reason: "capacity", operation: "insert" });
+          count[partition]++;
+          additions.set(key, prepared);
+          retained.push(input);
+        }
+
+        return {
+          records: retained,
+          commit: () => {
+            for (const { record, encoded } of additions.values())
+              commitInto(current, record, encoded, true);
+          },
+        };
+      });
+
+      yield* journal.registerDeliveryWriter((records) =>
+        Effect.forEach(records, prepareInsert).pipe(
+          Effect.flatMap(stageInsert),
+          Effect.map((staged) => staged.commit),
+        ),
+      );
+
       const insert: MessageDeliveryStore["Service"]["insert"] = Effect.fnUntraced(
         function* (record) {
-          const encoded = yield* encode(record);
-          const input = yield* decode(encoded);
+          const prepared = yield* prepareInsert(record);
 
-          if (
-            input.version !== 1 ||
-            input.status !== "pending" ||
-            input.leaseUntilMillis !== null ||
-            input.retry.attempts !== 0 ||
-            input.retry.generation !== 0 ||
-            input.retry.automaticAttempts !== 0 ||
-            input.retry.nextAttemptAtMillis !== input.createdAtMillis ||
-            input.retry.lastAttemptAtMillis !== null ||
-            input.retry.lastFailure !== null ||
-            input.deadlineAtMillis !== input.initialDeadlineAtMillis
-          ) {
-            return yield* MessageDeliveryError.make({
-              reason: "validation",
-              operation: "insert-state",
-            });
-          }
-          if (
-            new TextEncoder().encode(JSON.stringify(input.envelope)).byteLength >
-            config.maxEnvelopeBytes
-          ) {
-            return yield* MessageDeliveryError.make({
-              reason: "capacity",
-              operation: "envelope-bytes",
-            });
-          }
           yield* failpoint.hit("message-delivery:insert:before");
 
           const inserted = yield* journal.withMutation(
             Effect.uninterruptible(
               Effect.gen(function* () {
-                yield* journal.checkThreadCapacity(input.key.ownerThreadId).pipe(
-                  Effect.mapError(() =>
-                    MessageDeliveryError.make({
-                      reason: "capacity",
-                      operation: "Thread capacity",
-                    }),
-                  ),
-                );
-                const { records } = yield* Ref.get(state);
-                const key = messageDeliveryKeyString(input.key);
-                const existingText = records.get(key);
+                const staged = yield* stageInsert([prepared]);
 
-                if (existingText !== undefined) {
-                  const existing = yield* decode(existingText);
+                yield* Effect.sync(staged.commit);
 
-                  if (!sameMessageDeliveryIdentity(existing, input))
-                    return yield* MessageDeliveryError.make({
-                      reason: "conflict",
-                      operation: "insert",
-                    });
-
-                  journal.retainDelivery(existing.key.ownerThreadId, existing.key.messageId);
-
-                  return existing;
-                }
-
-                yield* checkTransfer(input);
-                const update = isWorkerUpdateDelivery(input);
-                const counts = MutableRef.get(state.ref).counts.get(input.key.ownerThreadId);
-                const capacity = messageDeliveryCapacity(config, update);
-
-                if ((update ? (counts?.update ?? 0) : (counts?.ordinary ?? 0)) >= capacity.pending)
-                  return yield* MessageDeliveryError.make({
-                    reason: "capacity",
-                    operation: "insert",
-                  });
-                yield* commit(input, encoded);
-
-                return input;
+                return staged.records[0];
               }),
             ),
           );
@@ -594,8 +635,6 @@ export const memoryMessageDeliveryStoreLayer = (
 
               return text === undefined ? Effect.succeed(undefined) : transferDecode(text);
             },
-            has: (messageId) =>
-              staged.records.has(messageDeliveryKeyString({ ownerThreadId: threadId, messageId })),
             stage: Effect.fnUntraced(function* (page) {
               for (const record of page.archive.deliveries) {
                 const key = messageDeliveryKeyString(record.key);
