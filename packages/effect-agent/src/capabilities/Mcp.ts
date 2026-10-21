@@ -14,7 +14,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 
-import { utf8ByteLength } from "../core/internal/utf8.ts";
+import { utf8ByteLength, utf8Bytes } from "../core/internal/utf8.ts";
 
 const MAX_MCP_TOOLS = 128;
 const MAX_MCP_DISCOVERY_BYTES = 1024 * 1024;
@@ -178,17 +178,6 @@ const canonicalJson = (value: Schema.Json): Schema.Json => {
   return output;
 };
 
-const utf8 = (value: string): Uint8Array => {
-  const hex = Hex.encode(value);
-  const bytes = new Uint8Array(hex.length / 2);
-
-  for (let index = 0; index < bytes.length; index += 1) {
-    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
-  }
-
-  return bytes;
-};
-
 /**
  * The `outputSchema` a Toolkit member claims. A Tool annotated with
  * `McpToolOutputSchema` reports exactly what discovery advertised, present or
@@ -228,7 +217,7 @@ const digestJson = Effect.fnUntraced(function* (serverId: string, value: unknown
 
   const crypto = yield* Crypto.Crypto;
 
-  const digest = yield* crypto.digest("SHA-256", utf8(encoded)).pipe(
+  const digest = yield* crypto.digest("SHA-256", utf8Bytes(encoded)).pipe(
     Effect.mapError((cause) =>
       McpToolkitMismatch.make({
         cause,

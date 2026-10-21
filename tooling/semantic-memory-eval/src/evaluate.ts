@@ -5,7 +5,11 @@ import {
   inMemorySemanticIndexLayer,
 } from "@yielded/agent-storage-memory/memory-semantic-index";
 import { activityProcessorStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-activity-store";
-import { layer as sqliteThreadStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
+import {
+  storageConfigLayer,
+  storageFailpointLayer,
+  threadStoreLayer,
+} from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import { ActivityProcessorKey, type PreparedActivity } from "@yielded/agent/activity-store";
 import { ActivityPassLimits, processCommittedActivity } from "@yielded/agent/committed-activity";
 import { ThreadId } from "@yielded/agent/identifiers";
@@ -587,13 +591,21 @@ export const runEvaluation = Effect.fn("runSemanticMemoryEvaluation")(function* 
   const fs = yield* FileSystem.FileSystem;
   const directory = yield* fs.makeTempDirectoryScoped({ prefix: "effect-agent-semantic-eval-" });
   const database = `${directory}/evaluation.sqlite`;
-  const sql = SqliteClient.layer({ filename: database, busyTimeout: 5_000 });
+  const sqliteOptions = { filename: database, busyTimeout: 5_000 };
 
-  const storage = Layer.mergeAll(
-    sqliteThreadStoreLayer({ filename: database, busyTimeout: 5_000 }),
-    activityProcessorStoreLayer.pipe(Layer.provide(sql)),
-    memoryStoreLayer.pipe(Layer.provide(sql)),
-    NodeCrypto.layer,
+  const canonical = threadStoreLayer.pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(
+        SqliteClient.layer({ ...sqliteOptions, disableWAL: true }),
+        storageConfigLayer(sqliteOptions),
+        storageFailpointLayer(sqliteOptions),
+        NodeCrypto.layer,
+      ),
+    ),
+  );
+
+  const storage = Layer.mergeAll(activityProcessorStoreLayer, memoryStoreLayer).pipe(
+    Layer.provideMerge(canonical),
   );
 
   const native = yield* makeNativeEmbeddingLayer({

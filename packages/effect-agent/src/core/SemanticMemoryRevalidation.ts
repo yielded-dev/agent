@@ -1,12 +1,11 @@
 import * as Effect from "effect/Effect";
-import * as Hex from "effect/encoding/Hex";
 import * as Schema from "effect/Schema";
 
-import { utf8ByteLength as byteLength } from "./internal/utf8.ts";
+import { readMemoryDocument } from "./internal/memory-document.ts";
+import { utf8ByteLength as byteLength, utf8Bytes } from "./internal/utf8.ts";
 import { MemoryLookup, MemoryPassage } from "./MemoryReference.ts";
 import { MemoryAccess } from "./MemoryRevalidation.ts";
 import type { MemoryKey } from "./MemoryStore.ts";
-import { MemoryDocument, MemoryReader, MemoryStorageError } from "./MemoryStore.ts";
 import type { MemoryIndexCandidate } from "./SemanticMemoryIndex.ts";
 import {
   MemoryIndexError,
@@ -52,32 +51,6 @@ export class SemanticCandidateResult extends Schema.Class<SemanticCandidateResul
   staleExcluded: Schema.Natural,
   unauthorizedExcluded: Schema.Natural,
 }) {}
-
-const readDocument = Effect.fnUntraced(function* (key: MemoryKey) {
-  const reader = yield* MemoryReader;
-
-  const document = yield* reader.get(key).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(MemoryDocument.Wire))),
-    Effect.catchTag("SchemaError", () =>
-      Effect.fail(
-        MemoryStorageError.make({ operation: "validate semantic source", reason: "corrupt" }),
-      ),
-    ),
-  );
-
-  if (
-    document !== null &&
-    (document.key.namespace.address !== key.namespace.address ||
-      document.key.id !== key.id ||
-      document.source.id !== key.id)
-  )
-    return yield* MemoryStorageError.make({
-      operation: "validate semantic source identity",
-      reason: "corrupt",
-    });
-
-  return document;
-});
 
 /**
  * Revalidate one ranked batch locally. No embedding or index access; stale scored text is excluded.
@@ -158,7 +131,7 @@ export const revalidateSemanticMemoryCandidates = Effect.fnUntraced(function* (
 
   for (const group of groups.values()) {
     yield* Effect.yieldNow;
-    const document = yield* readDocument(group.key);
+    const document = yield* readMemoryDocument(group.key);
 
     if (document === null || document._tag === "WithdrawnMemoryDocument") {
       staleExcluded += group.candidates.length;
@@ -189,7 +162,7 @@ export const revalidateSemanticMemoryCandidates = Effect.fnUntraced(function* (
       });
     }
     sourceBytes += encodedBytes;
-    const encodedDocument = Hex.encode(document.content.text);
+    const encodedDocument = utf8Bytes(document.content.text);
 
     for (const { rank, candidate } of current) {
       if (!sameExcerpt(encodedDocument, candidate, profile.maxChunkBytes)) {
@@ -235,7 +208,7 @@ export const revalidateSemanticMemoryCandidates = Effect.fnUntraced(function* (
 });
 
 const sameExcerpt = (
-  encodedDocument: string,
+  encodedDocument: Uint8Array,
   candidate: {
     readonly startByte: number;
     readonly endByte: number;
@@ -243,12 +216,12 @@ const sameExcerpt = (
   },
   maxChunkBytes: number,
 ): boolean => {
-  const hex = Hex.encode(candidate.text);
+  const bytes = utf8Bytes(candidate.text);
 
   return (
     candidate.startByte < candidate.endByte &&
-    hex.length / 2 === candidate.endByte - candidate.startByte &&
-    hex.length / 2 <= maxChunkBytes &&
-    encodedDocument.slice(candidate.startByte * 2, candidate.endByte * 2) === hex
+    bytes.length === candidate.endByte - candidate.startByte &&
+    bytes.length <= maxChunkBytes &&
+    bytes.every((byte, index) => encodedDocument[candidate.startByte + index] === byte)
   );
 };

@@ -8,6 +8,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import type { AnyDefinition } from "../core/Agent.ts";
+import { utf8Bytes } from "../core/internal/utf8.ts";
 import {
   InboxPage,
   MessageRef,
@@ -18,7 +19,6 @@ import {
 import { IdempotencyKey } from "../core/Receipt.ts";
 import { WorkerOperationTool } from "../core/SubagentContract.ts";
 import { MessagingHost } from "../engine/MessagingHost.ts";
-import { utf8Bytes } from "./internal/utf8.ts";
 
 export * from "../core/Messaging.ts";
 

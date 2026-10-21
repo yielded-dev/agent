@@ -35,18 +35,23 @@ const elapsedMillis = (started: bigint, finished: bigint): number =>
 const load = (options: NativeEmbeddingOptions) =>
   Effect.tryPromise({
     try: () =>
-      pipeline("feature-extraction", MODEL_ID, {
-        revision: MODEL_REVISION,
-        dtype: "fp32",
-        cache_dir: options.cachePath,
-        local_files_only: options.offline,
-        session_options: {
-          executionProviders: ["cpu"],
-          intraOpNumThreads: 1,
-          interOpNumThreads: 1,
-          executionMode: "sequential",
+      pipeline(
+        "feature-extraction",
+        // Pipeline discovery probes the Hub before applying the component loader's cache options.
+        options.offline ? `${options.cachePath}/${MODEL_ID}/${MODEL_REVISION}` : MODEL_ID,
+        {
+          revision: MODEL_REVISION,
+          dtype: "fp32",
+          cache_dir: options.cachePath,
+          local_files_only: options.offline,
+          session_options: {
+            executionProviders: ["cpu"],
+            intraOpNumThreads: 1,
+            interOpNumThreads: 1,
+            executionMode: "sequential",
+          },
         },
-      }),
+      ),
     catch: (cause) => aiError("load", cause),
   });
 

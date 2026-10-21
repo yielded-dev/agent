@@ -2,6 +2,7 @@ import * as Prompt from "effect/ai/Prompt";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
+import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import type { ContextMessageTokenEstimator } from "../ContextCompactor.ts";
 import { estimateImageTokens } from "./image-tokens.ts";
 import { boundedCanonicalJsonSnapshot } from "./provider-result-staging.ts";
@@ -73,33 +74,6 @@ const CONTEXT_OVERFLOW_PATTERN =
 export const isContextOverflowMessage = (text: string): boolean =>
   CONTEXT_OVERFLOW_PATTERN.test(text);
 
-const utf8Length = (text: string): number => {
-  let bytes = text.length;
-
-  for (let index = 0; index < text.length; index++) {
-    const codeUnit = text.charCodeAt(index);
-
-    if (codeUnit <= 0x7f) continue;
-    if (codeUnit <= 0x7ff) {
-      bytes++;
-      continue;
-    }
-    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff && index + 1 < text.length) {
-      const next = text.charCodeAt(index + 1);
-
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        // The two UTF-16 code units already contributed two of the four UTF-8 bytes.
-        bytes += 2;
-        index++;
-        continue;
-      }
-    }
-    bytes += 2;
-  }
-
-  return bytes;
-};
-
 /**
  * Deterministic context estimate: UTF-8 bytes/4 for text and structural JSON,
  * plus image reservations based on dimensions when available. Image encodings
@@ -132,7 +106,7 @@ export const estimateMessageTokens = (message: Prompt.Message): number => {
 
   return Math.min(
     Number.MAX_SAFE_INTEGER,
-    imageTokens + (text === undefined ? 0 : Math.ceil(utf8Length(text) / 4)),
+    imageTokens + (text === undefined ? 0 : Math.ceil(utf8ByteLength(text) / 4)),
   );
 };
 
