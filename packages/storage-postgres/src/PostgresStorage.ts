@@ -1,7 +1,10 @@
 import { makeSqlActivityStore } from "@yielded/agent-storage-sql/sql-activity-store";
 import { sqlStorageOwner } from "@yielded/agent-storage-sql/sql-journal";
 import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
-import { makeSqlScheduleStore } from "@yielded/agent-storage-sql/sql-schedule-store";
+import {
+  makeSqlScheduleStore,
+  SqlScheduleWriteTransaction,
+} from "@yielded/agent-storage-sql/sql-schedule-store";
 import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
 import { makeSqlSubmissionLedgerKernel } from "@yielded/agent-storage-sql/sql-submission-ledger";
 import { makeSqlSubscriptionStore } from "@yielded/agent-storage-sql/sql-subscription-store";
@@ -238,15 +241,14 @@ export const submissionLedgerLayer = (options: PostgresStorageOptions = {}) =>
 
 /** Schedules over the application's SqlClient. */
 export const scheduleStoreLayer = (options: PostgresStorageOptions = {}) =>
-  Layer.effect(
-    ScheduleStore,
+  Layer.unwrap(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const config = yield* initialize(options);
+      const run = yield* makeWriteTransaction(sql, config.lockTimeout, config.schema);
 
-      return yield* makeSqlScheduleStore(
-        yield* makeWriteTransaction(sql, config.lockTimeout, config.schema),
-        config.schema,
+      return Layer.effect(ScheduleStore, makeSqlScheduleStore(config.schema)).pipe(
+        Layer.provide(Layer.succeed(SqlScheduleWriteTransaction, { run })),
       );
     }),
   );

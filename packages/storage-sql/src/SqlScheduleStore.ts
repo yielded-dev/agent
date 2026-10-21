@@ -15,37 +15,24 @@ import {
   ScheduleRecord,
   ScheduleStorageError,
   ScheduleStore,
+  type ScheduleStoreFailure,
 } from "@yielded/agent/schedule";
 import {
   scheduleUsesCapacity,
   applyScheduleChange,
   scheduleDeadline,
 } from "@yielded/agent/schedule-transition";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
+import type * as SqlError from "effect/sql/SqlError";
 
 import { sqliteJsonText } from "./internal/sql-json.ts";
-import {
-  makeRowDecoder,
-  makeSqlQuery,
-  SqlInteger,
-  type SqlWriteTransaction,
-} from "./SqlStorage.ts";
+import { makeRowDecoder, makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 
-// Configuration and the immutable pending envelope may each carry the canonical input. Leave
-// room for JSON escaping and bounded status while rejecting an unreadable oversized row.
-const StoredScheduleJson = Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024));
 const StoredDeadline = Schema.NullOr(SqlInteger.pipe(Schema.decodeTo(ScheduleInstant)));
-
-class ScheduleRow extends Schema.Class<ScheduleRow>("@effect-agent/storage-sql/ScheduleRow")({
-  tenant_id: ScheduleOwner.fields.tenantId,
-  owner_id: ScheduleOwner.fields.ownerId,
-  schedule_id: ScheduleId,
-  deadline_at_millis: StoredDeadline,
-  record_json: StoredScheduleJson,
-}) {}
 
 const ScheduleDueRow = Schema.Struct({
   tenant_id: ScheduleOwner.fields.tenantId,
@@ -76,30 +63,6 @@ const { decodeRows } = makeRowDecoder(({ rowKey }) => corrupt(rowKey));
 
 const decodeRecordJson = Schema.decodeEffect(Schema.fromJsonString(ScheduleRecord));
 
-const decodeRecord = Effect.fnUntraced(function* (
-  row: ScheduleRow,
-): Effect.fn.Return<ScheduleRecord, ScheduleStorageError> {
-  const record = yield* decodeRecordJson(row.record_json).pipe(
-    Effect.mapError(() => corrupt("decode schedule")),
-  );
-
-  if (
-    record.owner.tenantId !== row.tenant_id ||
-    record.owner.ownerId !== row.owner_id ||
-    record.scheduleId !== row.schedule_id ||
-    scheduleDeadline(record) !== row.deadline_at_millis
-  ) {
-    return yield* corrupt("decode schedule identity");
-  }
-
-  return record;
-});
-
-const encodeRecord = (record: ScheduleRecord): Effect.Effect<string, ScheduleStorageError> =>
-  Schema.encodeEffect(Schema.fromJsonString(ScheduleRecord))(record).pipe(
-    Effect.mapError(() => corrupt("encode schedule")),
-  );
-
 const decodeInput = <A, I>(
   operation: string,
   schema: Schema.Codec<A, I, never>,
@@ -107,13 +70,72 @@ const decodeInput = <A, I>(
 ): Effect.Effect<A, ScheduleStorageError> =>
   Schema.decodeUnknownEffect(schema)(value).pipe(Effect.mapError(() => corrupt(operation)));
 
+/**
+ * The adapter commits the mutation and any native wake update together. Unchanged results
+ * represent replays and must not replace the wake; failed bodies must remain uncommitted.
+ */
+export class SqlScheduleWriteTransaction extends Context.Service<
+  SqlScheduleWriteTransaction,
+  {
+    readonly run: <A extends { readonly changed: boolean }>(
+      body: Effect.Effect<A, ScheduleStoreFailure>,
+      operation: string,
+    ) => Effect.Effect<A, ScheduleStoreFailure | SqlError.SqlError>;
+  }
+>()("@effect-agent/storage-sql/SqlScheduleWriteTransaction") {}
+
+/** Shared schedule operations over adapter-owned tables, transactions, and JSON length limits. */
 export const makeSqlScheduleStore = Effect.fnUntraced(function* (
-  withWriteTransaction: SqlWriteTransaction,
   namespace?: string,
+  maxStoredJsonLength = 16 * 1024 * 1024,
 ) {
   const sql = yield* SqlClientService.SqlClient;
+  const { run: withWriteTransaction } = yield* SqlScheduleWriteTransaction;
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
   const scheduleFailpoint = yield* ScheduleFailpoint;
+  // Configuration and the pending envelope may each carry the canonical input.
+  // The adapter's UTF-16 code-unit limit applies before writing and after reading.
+  const StoredScheduleJson = Schema.String.check(Schema.isMaxLength(maxStoredJsonLength));
+
+  const ScheduleRow = Schema.Struct({
+    tenant_id: ScheduleOwner.fields.tenantId,
+    owner_id: ScheduleOwner.fields.ownerId,
+    schedule_id: ScheduleId,
+    deadline_at_millis: StoredDeadline,
+    record_json: StoredScheduleJson,
+  });
+
+  const decodeRecord = Effect.fnUntraced(function* (
+    row: typeof ScheduleRow.Type,
+  ): Effect.fn.Return<ScheduleRecord, ScheduleStorageError> {
+    const record = yield* decodeRecordJson(row.record_json).pipe(
+      Effect.mapError(() => corrupt("decode schedule")),
+    );
+
+    if (
+      record.owner.tenantId !== row.tenant_id ||
+      record.owner.ownerId !== row.owner_id ||
+      record.scheduleId !== row.schedule_id ||
+      scheduleDeadline(record) !== row.deadline_at_millis
+    ) {
+      return yield* corrupt("decode schedule identity");
+    }
+
+    return record;
+  });
+
+  const encodeRecord = Effect.fnUntraced(function* (
+    record: ScheduleRecord,
+  ): Effect.fn.Return<string, ScheduleStorageError> {
+    const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(ScheduleRecord))(record).pipe(
+      Effect.mapError(() => corrupt("encode schedule")),
+    );
+
+    return yield* Schema.decodeEffect(StoredScheduleJson)(encoded).pipe(
+      Effect.mapError(() => corrupt("encode schedule bounds")),
+    );
+  });
+
   const decodeScheduleRows = decodeRows(Schema.Array(ScheduleRow));
   const decodeCountRows = decodeRows(Schema.Array(ScheduleCountRow));
   const decodeDueRows = decodeRows(Schema.Array(ScheduleDueRow));
@@ -128,7 +150,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
   const readRows = Effect.fnUntraced(function* (
     key: ScheduleKey,
     operation: string,
-  ): Effect.fn.Return<ReadonlyArray<ScheduleRow>, ScheduleStorageError> {
+  ): Effect.fn.Return<ReadonlyArray<typeof ScheduleRow.Type>, ScheduleStorageError> {
     const rows = yield* sql<Record<string, unknown>>`
       SELECT tenant_id, owner_id, schedule_id, deadline_at_millis, record_json
       FROM ${relation("effect_agent_schedules")}
@@ -167,7 +189,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
 
           if (existing !== null) {
             if (existing.creationFingerprint === canonical.creationFingerprint) {
-              return { record: existing, inserted: false } as const;
+              return { record: existing, changed: false } as const;
             }
 
             return yield* ScheduleConflict.make({
@@ -209,11 +231,12 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
             Effect.mapError(() => unavailable(operation)),
           );
 
-          return { record: canonical, inserted: true } as const;
+          return { record: canonical, changed: true } as const;
         }),
+        operation,
       ).pipe(Effect.catchTag("SqlError", () => Effect.fail(unavailable(operation))));
 
-      if (result.inserted) yield* scheduleFailpoint.hit("schedule:insert:after");
+      if (result.changed) yield* scheduleFailpoint.hit("schedule:insert:after");
 
       return result.record;
     },
@@ -317,6 +340,7 @@ export const makeSqlScheduleStore = Effect.fnUntraced(function* (
 
         return { record: next, changed: true } as const;
       }),
+      operation,
     ).pipe(Effect.catchTag("SqlError", () => Effect.fail(unavailable(operation))));
 
     if (result.changed) {
