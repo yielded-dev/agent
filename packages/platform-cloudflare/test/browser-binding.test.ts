@@ -1,4 +1,5 @@
 import { expect, it } from "@effect/vitest";
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -137,6 +138,56 @@ const endpoint = Effect.fnUntraced(function* (mode: "success" | "pending" | "pen
     viewport,
   };
 });
+
+it.effect("retains connection causes privately before binding sanitization", () =>
+  Effect.gen(function* () {
+    const reports: Array<Cause.Cause<unknown>> = [];
+
+    const layer = BrowserSessions.layerNoDeps.pipe(
+      Layer.provide(
+        BrowserRunBinding.layer({
+          fetch: async () => {
+            throw new Error("private connection failure", {
+              cause: new Error("nested socket failure"),
+            });
+          },
+        }),
+      ),
+      Layer.provide(
+        BrowserRunReadonlyLiveView.layer({
+          accountId: "1234567890abcdef1234567890abcdef",
+          apiToken: Redacted.make("fixture-token"),
+        }).pipe(Layer.provide(FetchHttpClient.layer)),
+      ),
+      Layer.provide(
+        Layer.succeed(BrowserRunSessionLifecycle, {
+          close: () => Effect.die("A refused attachment must not close its retained provider"),
+        }),
+      ),
+    );
+
+    const error = yield* Effect.flatMap(BrowserSessions, (sessions) =>
+      sessions.attach(
+        BrowserSessionReference.make({
+          ...identity,
+          version: 1,
+          expiresAt: 120_000,
+          commandTimeoutMillis: 30_000,
+        }),
+      ),
+    ).pipe(
+      Effect.provide([
+        layer,
+        ErrorReporter.layer([ErrorReporter.make(({ cause }) => reports.push(cause))]),
+      ]),
+      Effect.flip,
+    );
+
+    expect(JSON.stringify(FailureDiagnostic.capture(error))).toContain("nested socket failure");
+    expect(JSON.stringify(error)).not.toContain("nested socket failure");
+    expect(JSON.stringify(reports)).not.toContain("private connection failure");
+  }).pipe(Effect.scoped),
+);
 
 it.effect("retires SDK pending callbacks before acknowledging raw attachment closure", () =>
   Effect.gen(function* () {

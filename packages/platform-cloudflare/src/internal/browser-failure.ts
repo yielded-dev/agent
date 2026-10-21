@@ -52,29 +52,40 @@ const failureNames = new Set([
   "ConnectionClosedError",
 ]);
 
-export const browserFailure = (operation: string, cause?: unknown): BrowserRunFailure =>
-  cause instanceof BrowserRunFailure
-    ? cause
-    : new BrowserRunFailure({
-        operation,
-        reason:
-          Predicate.isObject(cause) && "reason" in cause && Schema.is(reasonSchema)(cause.reason)
-            ? cause.reason
-            : "provider",
-        ...(Predicate.isObject(cause) && "status" in cause && Schema.is(statusSchema)(cause.status)
-          ? { status: cause.status }
-          : {}),
-        ...(Predicate.isObject(cause) &&
-        "cause" in cause &&
-        cause.cause instanceof BrowserRunFailure
-          ? { cause: cause.cause }
-          : Predicate.isObject(cause) &&
-              "name" in cause &&
-              typeof cause.name === "string" &&
-              failureNames.has(cause.name)
-            ? { cause: { name: cause.name } }
-            : {}),
-      });
+const originalBrowserCauses = new WeakMap<BrowserRunFailure, unknown>();
+
+/** Recover the native value only when constructing an operator-private diagnostic. */
+export const browserFailureCause = (cause: unknown): unknown =>
+  cause instanceof BrowserRunFailure && originalBrowserCauses.has(cause)
+    ? originalBrowserCauses.get(cause)
+    : cause;
+
+export const browserFailure = (operation: string, cause?: unknown): BrowserRunFailure => {
+  if (cause instanceof BrowserRunFailure) return cause;
+
+  const failure = new BrowserRunFailure({
+    operation,
+    reason:
+      Predicate.isObject(cause) && "reason" in cause && Schema.is(reasonSchema)(cause.reason)
+        ? cause.reason
+        : "provider",
+    ...(Predicate.isObject(cause) && "status" in cause && Schema.is(statusSchema)(cause.status)
+      ? { status: cause.status }
+      : {}),
+    ...(Predicate.isObject(cause) && "cause" in cause && cause.cause instanceof BrowserRunFailure
+      ? { cause: cause.cause }
+      : Predicate.isObject(cause) &&
+          "name" in cause &&
+          typeof cause.name === "string" &&
+          failureNames.has(cause.name)
+        ? { cause: { name: cause.name } }
+        : {}),
+  });
+
+  if (cause !== undefined) originalBrowserCauses.set(failure, cause);
+
+  return failure;
+};
 
 /** Keep mixed defects and interruptions distinct while discarding all foreign diagnostic content. */
 export const reportBrowserCause = <E>(
