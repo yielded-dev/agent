@@ -9141,7 +9141,7 @@ function executeWithCompletion<
 
           const engineToolServices = Context.make(
             AgentSpawner,
-            makeAgentSpawner(
+            yield* makeAgentSpawner(
               {
                 agentId: context.agentId,
                 threadId: context.threadId,
@@ -11078,6 +11078,8 @@ const spawnWithParent = (
  * enforce inherited nesting ceilings and conserved subtree allocations.
  */
 export interface AgentSpawnerService {
+  /** Owns parent-wide resources until all Tool handlers and attached children have closed. */
+  readonly scope: Scope.Scope;
   /** Resolved defaults for this parent Run; never includes its tools or handlers. */
   readonly policy: AgentPolicy;
   /** Effective deadline of this active parent execution, including RunOptions.durationDeadline. */
@@ -11180,7 +11182,7 @@ export class AgentSpawner extends Context.Service<AgentSpawner, AgentSpawnerServ
   "@effect-agent/engine/AgentSpawner",
 ) {}
 
-const makeAgentSpawner = (
+const makeAgentSpawner = Effect.fnUntraced(function* (
   parent: AgentSpawnerParent,
   depth: number,
   history: ThreadHistory["Service"],
@@ -11191,15 +11193,20 @@ const makeAgentSpawner = (
   budget?: SubagentBudgetReservation,
   budgetScope?: WorkerBudgetScope,
   onChild: (runId: RunId, read: Effect.Effect<RunUsageReport>) => void = () => {},
-): AgentSpawnerService => ({
-  ...(grant === undefined ? {} : { grant }),
-  ...(budget === undefined ? {} : { budget }),
-  ...(budgetScope === undefined ? {} : { budgetScope }),
-  policy,
-  durationDeadline,
-  depth,
-  parent,
-  spawn: spawnWithParent(parent, depth, history, preparation, onChild),
+): Effect.fn.Return<AgentSpawnerService, never, Scope.Scope> {
+  const scope = yield* Scope.Scope;
+
+  return {
+    scope,
+    ...(grant === undefined ? {} : { grant }),
+    ...(budget === undefined ? {} : { budget }),
+    ...(budgetScope === undefined ? {} : { budgetScope }),
+    policy,
+    durationDeadline,
+    depth,
+    parent,
+    spawn: spawnWithParent(parent, depth, history, preparation, onChild),
+  };
 });
 
 /**

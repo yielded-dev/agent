@@ -4,7 +4,7 @@ import { Context, Schema } from "effect";
 import type { BenchmarkError } from "./contracts.js";
 import type { prepareSeeds } from "./diagnostic-aging.js";
 
-export const DIAGNOSTIC_VERSION = "runtime-diagnostic-v4";
+export const DIAGNOSTIC_VERSION = "runtime-diagnostic-v5";
 export const MAX_DIAGNOSTIC_MARKS = 512;
 export const DIAGNOSTIC_SIZES = { cohorts: 2, warmups: 2, samples: 5 } as const;
 

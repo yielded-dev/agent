@@ -397,9 +397,10 @@ dimension marker. A designated Completion Tool remains required.
 
 **In-memory state**
 
-State retained within one application Scope. `InMemory.layer` shares conversation history and
-attached-subagent reservations across Runs for that Scope. State may live as long as the Scope
-remains open, within the store's capacity limits; Scope closure or process loss loses it.
+State retained within one application Scope. `InMemory.layer` shares conversation history across
+Runs for that Scope, within the store's capacity limits. Attached-subagent reservation pools belong
+to their parent Run and are released after child cleanup. Scope closure or process loss loses
+in-memory state.
 
 **Ephemeral execution**
 

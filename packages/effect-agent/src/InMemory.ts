@@ -12,6 +12,7 @@ import { ThreadHistory, layer as historyLayer } from "./engine/ThreadHistory.ts"
  * Run agents and attached subagents with in-memory conversation history.
  * Provide once around the parent program and all child handler Layers so siblings
  * share history and one reservation ledger. Reuse a Thread ID to continue a conversation.
+ * Each parent Run releases its reservation pool after its attached children finish cleanup.
  * Conversations have no per-Thread history quota; individual messages and total host memory are bounded.
  * Use scoped for disposable request workflows within this shared store.
  * Each independent Layer build owns fresh state; state is released when its Scope closes.

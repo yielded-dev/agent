@@ -23,6 +23,7 @@ import {
 } from "@yielded/agent/subagent";
 import {
   type SubagentBudgetExhausted,
+  type SubagentParentBudgetView,
   SubagentReservations,
   SubagentReservationsMemoryLive,
   type SubagentReservationView,
@@ -376,13 +377,27 @@ layer(TestServices)("Subagent.layer S1 attached delegation", (it) => {
         parentModel,
       );
 
+      const reservations = yield* SubagentReservations;
+      const finalBudget = yield* Deferred.make<SubagentParentBudgetView>();
       const runId = decodeRunId("parent-run-deadline");
       const durationDeadline = DateTime.addDuration(yield* DateTime.now, "10 minutes");
 
       const fiber = yield* AgentRuntime.run(
         parent,
         { mission: "m" },
-        { runId, durationDeadline },
+        {
+          runId,
+          durationDeadline,
+          input: {
+            drain: () => Effect.succeed([]),
+            end: () =>
+              reservations.parentSnapshot(runId).pipe(
+                Effect.flatMap((snapshot) => Deferred.succeed(finalBudget, snapshot)),
+                Effect.orDie,
+                Effect.asVoid,
+              ),
+          },
+        },
       ).pipe(
         Effect.provide(Subagent.layer(delegation, Agent.withModel(child, childModel))),
         Effect.scoped,
@@ -427,8 +442,7 @@ layer(TestServices)("Subagent.layer S1 attached delegation", (it) => {
           }),
         }),
       ]);
-      const reservations = yield* SubagentReservations;
-      const snapshot = yield* reservations.parentSnapshot(runId);
+      const snapshot = yield* Deferred.await(finalBudget);
 
       snapshot.reservations.forEach(expectSettledOnce);
     }),
@@ -523,9 +537,26 @@ layer(TestServices)("Subagent.layer S1 attached delegation", (it) => {
         ),
       );
 
+      const reservations = yield* SubagentReservations;
+      const finalBudget = yield* Deferred.make<SubagentParentBudgetView>();
       const runId = decodeRunId("parent-run-interrupted");
 
-      const fiber = yield* AgentRuntime.run(parent, { mission: "m" }, { runId }).pipe(
+      const fiber = yield* AgentRuntime.run(
+        parent,
+        { mission: "m" },
+        {
+          runId,
+          input: {
+            drain: () => Effect.succeed([]),
+            end: () =>
+              reservations.parentSnapshot(runId).pipe(
+                Effect.flatMap((snapshot) => Deferred.succeed(finalBudget, snapshot)),
+                Effect.orDie,
+                Effect.asVoid,
+              ),
+          },
+        },
+      ).pipe(
         Effect.provide(researchLayer(childBinding)),
         Effect.scoped,
         Effect.exit,
@@ -537,8 +568,7 @@ layer(TestServices)("Subagent.layer S1 attached delegation", (it) => {
       // Interruption reached the child Run and its model Layer finalizer.
       yield* Deferred.await(modelReleased);
 
-      const reservations = yield* SubagentReservations;
-      const snapshot = yield* reservations.parentSnapshot(runId);
+      const snapshot = yield* Deferred.await(finalBudget);
       const view = snapshot.reservations[0];
 
       expectSettledOnce(view);

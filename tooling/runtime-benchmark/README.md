@@ -278,7 +278,7 @@ now run alongside default retention, rather than switching retention on and off.
 
 ## Manual diagnostics
 
-`vp run perf:diagnose` runs the separate `runtime-diagnostic-v3` fixture against clean, built
+`vp run perf:diagnose` runs the separate `runtime-diagnostic-v5` fixture against clean, built
 base/head checkouts. Install each checkout's own lockfile and build its public packages as above.
 Run this command from the candidate checkout, with no concurrent builds, tests, or measurements:
 
@@ -369,7 +369,7 @@ The capability cases use these bounded public operations:
 | Memory      | Compare one-provider Runs with recall off, empty, or populated. Measure recall and actual fixture-file reader I/O separately; verify scoped reader release.                                                                                                                                                                                                   |
 | Remembering | Compare the same two-provider, one-tool foreground Run on/off while a previous extraction is held in another host Scope. Verify no foreground extraction/profile I/O; then release the worker and report admission, background completion, and profile readiness separately. The two-job public-port fixture excludes disk durability and host queue latency. |
 | MCP         | Compare the same two-provider Run and three echo results using local handlers or real MCP HTTP transport with an in-process responder. Report connection, reused calls, foreground work, and owned-Scope closure; a fresh connection verifies credentials and discovery. No network is used.                                                                  |
-| Subagents   | Compare the same two-provider parent and two projected results with local handlers or two actual child providers sharing one child slot. Report preparation, actual provider entry, slot wait, and completion separately. A named ten-millisecond first-provider hold creates controlled contention and remains included in elapsed times.                    |
+| Subagents   | Compare the same two-provider parent and two projected results with local handlers or two child providers sharing one child slot. Report preparation, provider entry, projection, and completion. A ten-millisecond first-provider hold after both inputs are prepared creates contention and remains included in elapsed times.                              |
 
 The ledger cases scan a closed seed with 8,192 settled and sixteen unfinished submissions, or a
 768-row unfinished ledger. Each sample receives a fresh copy; the seed is constructed once per
@@ -400,8 +400,9 @@ phases, and model lifetimes can overlap and must not be added together. `postAut
 starts at each handler's own authorization completion, so it includes later serial authorizations
 as well as framework dispatch and bounded scheduling. Use the final authorization mark in each
 batch to derive wait after the whole barrier; neither interval isolates semaphore wait.
-Native subagent span offsets flush at Run exit, including failure, so mark array order need not be
-chronological; use their operation-relative monotonic offsets.
+Subagent preparation-to-provider intervals include admission, slot waiting, and child startup;
+they do not isolate semaphore wait. Released reservations are captured through the Run's input
+end hook before its Scope closes, within the operation interval.
 The diagnostic intervals report elapsed time, not CPU time. Compare matched unprofiled medians and interquartile ranges, including the
 retained slow samples, and preserve the complete environment and exact revision identities.
 
