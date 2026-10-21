@@ -1,5 +1,6 @@
 import { expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
+import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { RunId, ThreadId, TurnId } from "@yielded/agent/identifiers";
 import { RunContextPreparationPassthrough, type RunUsageDelta } from "@yielded/agent/run-options";
@@ -241,6 +242,49 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer, RunContextPreparationPass
         }),
       );
     }
+
+    it.effect("runs beyond default count ceilings with JSON-round-tripped unbounded policy", () =>
+      Effect.gen(function* () {
+        const policy = AgentPolicy.resolve({ maxTurns: null, maxToolCalls: null });
+        const encoded = Schema.encodeSync(Schema.toCodecJson(AgentPolicy))(policy);
+        const restored = Schema.decodeSync(Schema.toCodecJson(AgentPolicy))(encoded);
+
+        expect(encoded).toMatchObject({ maxTurns: null, maxToolCalls: null });
+
+        const { model, prompts } = scriptedModel([
+          ...Array.from({ length: 13 }, (_, index) => [
+            call(`search-${index}`, "search", { query: "source" }),
+            call(`extra-${index}`, "search", { query: "more" }),
+            finish,
+          ]),
+          complete,
+        ]);
+
+        const agent = Agent.withModel(
+          Agent.make("unbounded-completion", {
+            input: Schema.String,
+            output: Schema.String,
+            instructions: "Research before completing.",
+            toolkit: tools,
+            completion: { tool: "complete", project: ({ result }) => result },
+            policy: restored,
+          }),
+          model,
+        );
+
+        const result = yield* AgentRuntime.run(agent, "go").pipe(
+          Effect.provide(
+            tools.toLayer({
+              search: ({ query }) => Effect.succeed(query),
+              complete: ({ answer }) => Effect.succeed(answer),
+            }),
+          ),
+        );
+
+        expect(result.output).toBe("researched");
+        expect(prompts).toHaveLength(14);
+      }),
+    );
 
     it.effect("refuses a canonically declared mixed resume with a settled call", () =>
       Effect.gen(function* () {

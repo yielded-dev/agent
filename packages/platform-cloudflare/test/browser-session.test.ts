@@ -1,4 +1,5 @@
 import { expect, it } from "@effect/vitest";
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -83,6 +84,7 @@ vi.mock("puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js", () => ({
 
       const frame = {
         _id: "checkout-frame",
+        parentFrame: () => null,
         detached: false,
         url: () => "https://merchant.test/login",
         client: {
@@ -266,6 +268,65 @@ beforeEach(() =>
   }),
 );
 
+it.effect("retains native causes privately through the session and CDP bridge", () =>
+  Effect.gen(function* () {
+    const host = yield* BrowserSessions;
+    const reference = yield* host.create(options, () => Effect.void);
+    const session = yield* host.attach(reference);
+    const original = new Error("native command failed", { cause: new Error("socket disappeared") });
+    const error = yield* session.run(Effect.void, () => Promise.reject(original)).pipe(Effect.flip);
+
+    expect(JSON.stringify(FailureDiagnostic.capture(error))).toContain("socket disappeared");
+    expect(JSON.stringify(error)).not.toContain("socket disappeared");
+
+    const { client } = yield* BrowserUse.make(session, {
+      authorize: () => Effect.void,
+      maxCommands: null,
+      maxReturnedBytes: 4096,
+    });
+
+    provider.frameFailure = "target-info";
+
+    const commandError = yield* client
+      .send({ method: "Runtime.evaluate", frameId: "checkout-frame" })
+      .pipe(Effect.flip);
+
+    expect(JSON.stringify(FailureDiagnostic.capture(commandError))).toContain(
+      "private-provider-url-and-credential",
+    );
+    expect(JSON.stringify(commandError)).not.toContain("private-provider-url-and-credential");
+  }).pipe(Effect.provide(layer), Effect.scoped),
+);
+
+it.effect(
+  "allows an unbounded command count while finite attachments still stop before dispatch",
+  () =>
+    Effect.gen(function* () {
+      const host = yield* BrowserSessions;
+      const reference = yield* host.create(options, () => Effect.void);
+      const session = yield* host.attach(reference);
+
+      const unlimited = yield* BrowserUse.make(session, {
+        authorize: () => Effect.void,
+        maxCommands: null,
+        maxReturnedBytes: 4096,
+      });
+
+      for (let index = 0; index < 11; index++) yield* unlimited.client.frames({});
+
+      const limited = yield* BrowserUse.make(session, {
+        authorize: () => Effect.void,
+        maxCommands: 1,
+        maxReturnedBytes: 4096,
+      });
+
+      yield* limited.client.frames({});
+      const error = yield* limited.client.frames({}).pipe(Effect.flip);
+
+      expect(error).toMatchObject({ code: "invalid", dispatch: "not-dispatched" });
+    }).pipe(Effect.provide(layer), Effect.scoped),
+);
+
 // https://github.com/yielded-dev/agent/commit/0090e61f
 // An unpredictable provider rejection must retain its stage without SDK content.
 it.effect.each([
@@ -313,7 +374,7 @@ it.effect.each([
       expect(provider.closed).toEqual([]);
       expect(reports).toHaveLength(1);
       expect(attachmentReports).toHaveLength(0);
-      expect(ErrorReporter.isIgnored(error)).toBe(stage !== "send");
+      expect(ErrorReporter.isIgnored(error)).toBe(false);
       expect(Cause.findErrorOption(reports[0])).toMatchObject({
         value: {
           _tag: "BrowserRunFailure",

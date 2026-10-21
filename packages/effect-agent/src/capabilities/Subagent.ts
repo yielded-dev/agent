@@ -1638,6 +1638,12 @@ export function layer<
     ) {
       const spawner = yield* AgentSpawner;
       const resolved = resolvePolicy(spawner);
+
+      if (resolved === undefined)
+        return yield* prestartDenied(
+          "budget-conflict",
+          "An unbounded parent Run requires an explicit finite delegation policy",
+        );
       const { policy, childPolicy, allocation } = resolved;
 
       const caps =
@@ -2001,7 +2007,14 @@ export function layer<
       durability: SubagentDurabilityDurable,
     ) {
       const spawner = yield* AgentSpawner;
-      const { policy, childPolicy, allocation, caps } = resolvePolicy(spawner);
+      const resolved = resolvePolicy(spawner);
+
+      if (resolved === undefined)
+        return yield* prestartDenied(
+          "budget-conflict",
+          "An unbounded parent Run requires an explicit finite delegation policy",
+        );
+      const { policy, childPolicy, allocation, caps } = resolved;
       const encodedAllocation = yield* encodeAllocationAmounts(allocation).pipe(Effect.orDie);
 
       const conservativeAccounting = yield* encodeDurableAccounting(

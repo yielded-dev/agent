@@ -19,11 +19,7 @@ import type {
 } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import type { BrowserSession, BrowserSessionError } from "./BrowserSession.ts";
-import {
-  browserFailure,
-  reportBrowserCause,
-  reportedBrowserError,
-} from "./internal/browser-failure.ts";
+import { reportBrowserCause } from "./internal/browser-failure.ts";
 
 export type Command =
   | { readonly kind: "connect" | "tabs" | "new-tab" }
@@ -50,8 +46,8 @@ export interface Options<R = never> {
     command: Command,
     context: AuthorizationContext,
   ) => Effect.Effect<void, BrowserUseError, R>;
-  /** Total native operations for this attachment, including authorization refusals. */
-  readonly maxCommands: number;
+  /** Total native operations, including authorization refusals. Null disables the count ceiling. */
+  readonly maxCommands: number | null;
   /** Per-result UTF-8 JSON limit; does not bound the upstream CDP transfer. */
   readonly maxReturnedBytes: number;
   /** Maximum pages discoverable through this attachment. Defaults to 8. */
@@ -59,7 +55,7 @@ export interface Options<R = never> {
 }
 
 const Limits = Schema.Struct({
-  maxCommands: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10_000 })),
+  maxCommands: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10_000 }))),
   maxReturnedBytes: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 8 * 1024 * 1024 })),
   maxTabs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 64 })),
 });
@@ -99,11 +95,14 @@ export const make = Effect.fnUntraced(function* <R>(
   const mapSessionError = (error: BrowserSessionError | BrowserUseError) =>
     error._tag === "BrowserUseError"
       ? error
-      : BrowserUseError.make({
-          code: "browser",
-          message: "Browser command failed; inspect the current state before further input",
-          dispatch: error.dispatch,
-        });
+      : BrowserUseError.withCause(
+          BrowserUseError.make({
+            code: "browser",
+            message: "Browser command failed; inspect the current state before further input",
+            dispatch: error.dispatch,
+          }),
+          error,
+        );
 
   let released = false;
 
@@ -175,7 +174,7 @@ export const make = Effect.fnUntraced(function* <R>(
       .run(
         Effect.gen(function* () {
           if (released) return yield* Effect.fail(invalid("Browser attachment scope is closed"));
-          if (calls++ >= limits.maxCommands)
+          if (limits.maxCommands !== null && calls++ >= limits.maxCommands)
             return yield* Effect.fail(invalid("Browser command limit reached"));
           selected = targetId === undefined ? primary : (pages.get(targetId) ?? primary);
           if (targetId !== undefined && !pages.has(targetId))
@@ -290,12 +289,13 @@ export const make = Effect.fnUntraced(function* <R>(
                   reportBrowserCause("browser-use.frame.target-info", Cause.fail(cause)),
                 );
 
-                return reportedBrowserError(
+                return BrowserUseError.withCause(
                   BrowserUseError.make({
                     code: "browser",
                     message: "Frame inspection failed before the requested command was sent",
                     dispatch: "not-dispatched",
                   }),
+                  cause,
                 );
               }
 
@@ -307,12 +307,13 @@ export const make = Effect.fnUntraced(function* <R>(
               } catch (cause) {
                 await runReport(reportBrowserCause("browser-use.frame.attach", Cause.fail(cause)));
 
-                return reportedBrowserError(
+                return BrowserUseError.withCause(
                   BrowserUseError.make({
                     code: "browser",
                     message: "Frame attachment failed before the requested command was sent",
                     dispatch: "not-dispatched",
                   }),
+                  cause,
                 );
               }
               target = attached;
@@ -335,8 +336,21 @@ export const make = Effect.fnUntraced(function* <R>(
               value.params,
             ]);
           } catch (cause) {
-            // oxlint-disable-next-line effect/no-untyped-throw -- This native Promise preserves existing tab failures and reports sanitized frame stages through BrowserSession.run.
-            throw frame === undefined ? cause : browserFailure("browser-use.frame.send", cause);
+            if (frame !== undefined) {
+              await runReport(reportBrowserCause("browser-use.frame.send", Cause.fail(cause)));
+
+              return BrowserUseError.withCause(
+                BrowserUseError.make({
+                  code: "browser",
+                  message:
+                    "Browser frame command failed; inspect the current state before further input",
+                  dispatch: "possibly-dispatched",
+                }),
+                cause,
+              );
+            }
+            // oxlint-disable-next-line effect/no-untyped-throw -- Preserve the native rejection for BrowserSession.run to retain and project.
+            throw cause;
           }
         },
         value.targetId,

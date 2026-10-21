@@ -192,15 +192,19 @@ const amountCaps = [
 
 const sourceCaps = (policy: AgentPolicy): SubagentDelegationCaps =>
   SubagentDelegationCaps.make({
-    maxTotalChildInvocations: policy.maxToolCalls,
+    ...(Number.isFinite(policy.maxToolCalls)
+      ? {
+          maxTotalChildInvocations: policy.maxToolCalls,
+          maxToolCalls: policy.maxToolCalls,
+          maxResultBytes: Math.min(
+            Number.MAX_SAFE_INTEGER,
+            policy.toolResultBounds.maxBytes * policy.maxToolCalls,
+          ),
+        }
+      : {}),
     maxConcurrentChildren: policy.toolConcurrency,
-    maxTurns: policy.maxTurns,
-    maxToolCalls: policy.maxToolCalls,
+    ...(Number.isFinite(policy.maxTurns) ? { maxTurns: policy.maxTurns } : {}),
     maxDurationMillis: Math.ceil(Duration.toMillis(policy.maxDuration)),
-    maxResultBytes: Math.min(
-      Number.MAX_SAFE_INTEGER,
-      policy.toolResultBounds.maxBytes * policy.maxToolCalls,
-    ),
     ...(policy.tokenBudget === undefined
       ? {}
       : { maxInputTokens: policy.tokenBudget, maxOutputTokens: policy.tokenBudget }),
@@ -3300,6 +3304,8 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                     effectiveScope === "worker-run" ? "root-attached" : "conserved",
                     targetPolicy,
                   );
+
+                  if (limits === undefined) return yield* failure("start", "denied");
 
                   return {
                     ...command,

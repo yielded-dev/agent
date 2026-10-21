@@ -114,7 +114,8 @@ async () => {
 ```
 
 The host authorizes every command with current page and target metadata and sets command,
-tab, and result limits. Code Mode adds execution and aggregate output limits. A result limit
+tab, and result limits. Set the adapter’s `maxCommands: null` to let the host-owned session
+lifetime bound work without an additional command-count cutoff. Code Mode adds execution and aggregate output limits. A result limit
 does not bound the upstream CDP transfer; programs should request small results. CDP events
 are not streamed to the program; inspect state or use bounded page-side conditions.
 
@@ -142,6 +143,11 @@ session; a reference cannot recreate an expired page.
 Keep session references and Live View URLs private. Human takeover requires exclusive control;
 read-only viewers can still see page data. Expiry of a viewing URL limits new connections, not
 already connected viewers.
+
+`BrowserSessionError.cause` and `BrowserUseError.cause` retain original native failures for trusted
+in-process inspection. These properties are non-enumerable and excluded from error Schemas and
+JSON. Use `FailureDiagnostic.capture(error)` before crossing a transport boundary to retain a
+bounded private diagnostic; keep that diagnostic out of model responses and public logs.
 
 ## Fill login or card credentials
 

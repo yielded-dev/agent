@@ -1,9 +1,23 @@
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { ToolResultBounds } from "./ToolResult.ts";
 
 const PositiveInt = Schema.Int.check(Schema.isGreaterThan(0));
+
+const CountLimit = Schema.NullOr(PositiveInt).pipe(
+  Schema.decodeTo(
+    Schema.Number.check(
+      Schema.makeFilter((limit) => limit === Infinity || (Number.isInteger(limit) && limit > 0)),
+    ),
+    SchemaTransformation.transform({
+      decode: (limit) => limit ?? Infinity,
+      encode: (limit) => (limit === Infinity ? null : limit),
+    }),
+  ),
+);
+
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 const CompactionMode = Schema.Literals(["prune", "summarize", "prune-then-summarize"]);
@@ -51,8 +65,10 @@ const FinitePositiveDuration = Schema.Duration.pipe(
 const OnExhaustion = Schema.Literals(["final-answer", "fail"]);
 
 const AgentPolicyFields = Schema.Struct({
-  maxTurns: PositiveInt,
-  maxToolCalls: PositiveInt,
+  /** Null in declarations/JSON disables this ceiling; resolved policies use Infinity. */
+  maxTurns: CountLimit,
+  /** Null in declarations/JSON disables this ceiling; resolved policies use Infinity. */
+  maxToolCalls: CountLimit,
   maxDuration: FinitePositiveDuration,
   toolConcurrency: PositiveInt,
   repeatedFailureLimit: NonNegativeInt,
@@ -96,6 +112,8 @@ type AgentPolicyFields = typeof AgentPolicyFields.Type;
 export type AgentPolicyInput = Readonly<
   Omit<
     AgentPolicyFields,
+    | "maxTurns"
+    | "maxToolCalls"
     | "maxDuration"
     | "repeatedFailureLimit"
     | "onExhaustion"
@@ -104,6 +122,10 @@ export type AgentPolicyInput = Readonly<
     | "compaction"
     | "completionReserveTokens"
   > & {
+    /** Maximum model turns, or null to leave turn count unbounded. */
+    readonly maxTurns: number | null;
+    /** Maximum declared and programmatic Tool Calls, or null to leave count unbounded. */
+    readonly maxToolCalls: number | null;
     /** Finite, positive wall-clock duration accepted in any Effect Duration input form. */
     readonly maxDuration: Duration.Input;
     /** Non-negative repeated-failure bound; defaults to `3`. */
@@ -121,7 +143,7 @@ export type AgentPolicyInput = Readonly<
   }
 >;
 
-/** Schema class for finite agent run limits. */
+/** Schema class for agent run limits; wall-clock duration remains finite. */
 export class AgentPolicy extends Schema.Class<AgentPolicy>("AgentPolicy")(AgentPolicyFields) {
   /** Resolve an optional declaration against finite standalone or parent defaults. */
   static resolve(input: Partial<AgentPolicyInput> = {}, parent?: AgentPolicy): AgentPolicy {
@@ -154,6 +176,8 @@ export class AgentPolicy extends Schema.Class<AgentPolicy>("AgentPolicy")(AgentP
 
     return super.make({
       ...input,
+      maxTurns: input.maxTurns === null ? Infinity : input.maxTurns,
+      maxToolCalls: input.maxToolCalls === null ? Infinity : input.maxToolCalls,
       maxDuration: Duration.fromInputUnsafe(input.maxDuration),
       repeatedFailureLimit: input.repeatedFailureLimit ?? 3,
       onExhaustion: input.onExhaustion ?? "final-answer",

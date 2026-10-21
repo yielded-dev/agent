@@ -339,3 +339,10 @@ export const Failure = Schema.Struct({
 }).pipe(strictSchema);
 
 export type Failure = typeof Failure.Type;
+
+/**
+ * Attach an original cause for trusted in-process inspection without adding it to JSON or
+ * Schema fields. Model/public transports stay unchanged; capture() retains the cause privately.
+ */
+export const withCause = <A extends object>(error: A, cause: unknown): A =>
+  Object.defineProperty(error, "cause", { value: cause, configurable: true });
