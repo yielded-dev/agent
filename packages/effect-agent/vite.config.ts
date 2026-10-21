@@ -41,7 +41,6 @@ export default defineConfig({
       "src/core/MemoryStore.ts",
       "src/capabilities/Messaging.ts",
       "src/engine/MessagingHost.ts",
-      "src/capabilities/ModelContext.ts",
       "src/engine/Output.ts",
       "src/sandbox/PageCapture.ts",
       "src/sandbox/PageCrawl.ts",
