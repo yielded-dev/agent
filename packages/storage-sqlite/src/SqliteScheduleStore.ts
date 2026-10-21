@@ -1,4 +1,7 @@
-import { makeSqlScheduleStore } from "@yielded/agent-storage-sql/sql-schedule-store";
+import {
+  makeSqlScheduleStore,
+  SqlScheduleWriteTransaction,
+} from "@yielded/agent-storage-sql/sql-schedule-store";
 import { ScheduleStore } from "@yielded/agent/schedule";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -17,10 +20,19 @@ export const scheduleStoreLayer: Layer.Layer<
 > = Layer.effect(
   ScheduleStore,
   Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-
     yield* initializeSqliteStorage();
 
-    return yield* makeSqlScheduleStore(sql.withTransaction);
+    return yield* makeSqlScheduleStore();
   }),
+).pipe(
+  Layer.provide(
+    Layer.effect(
+      SqlScheduleWriteTransaction,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        return { run: sql.withTransaction };
+      }),
+    ),
+  ),
 );

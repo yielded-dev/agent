@@ -22,6 +22,7 @@ import {
   applyScheduleChange,
   scheduleDeadline,
 } from "@yielded/agent/schedule-transition";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -73,18 +74,23 @@ const decodeInput = <A, I>(
  * The adapter commits the mutation and any native wake update together. Unchanged results
  * represent replays and must not replace the wake; failed bodies must remain uncommitted.
  */
-export type SqlScheduleWriteTransaction = <A extends { readonly changed: boolean }>(
-  body: Effect.Effect<A, ScheduleStoreFailure>,
-  operation: string,
-) => Effect.Effect<A, ScheduleStoreFailure | SqlError.SqlError>;
+export class SqlScheduleWriteTransaction extends Context.Service<
+  SqlScheduleWriteTransaction,
+  {
+    readonly run: <A extends { readonly changed: boolean }>(
+      body: Effect.Effect<A, ScheduleStoreFailure>,
+      operation: string,
+    ) => Effect.Effect<A, ScheduleStoreFailure | SqlError.SqlError>;
+  }
+>()("@effect-agent/storage-sql/SqlScheduleWriteTransaction") {}
 
 /** Shared schedule operations over adapter-owned tables, transactions, and JSON length limits. */
 export const makeSqlScheduleStore = Effect.fnUntraced(function* (
-  withWriteTransaction: SqlScheduleWriteTransaction,
   namespace?: string,
   maxStoredJsonLength = 16 * 1024 * 1024,
 ) {
   const sql = yield* SqlClientService.SqlClient;
+  const { run: withWriteTransaction } = yield* SqlScheduleWriteTransaction;
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
   const scheduleFailpoint = yield* ScheduleFailpoint;
   // Configuration and the pending envelope may each carry the canonical input.

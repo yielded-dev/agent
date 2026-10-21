@@ -1,6 +1,6 @@
 import {
   makeSqlScheduleStore,
-  type SqlScheduleWriteTransaction,
+  SqlScheduleWriteTransaction,
 } from "@yielded/agent-storage-sql/sql-schedule-store";
 import {
   ScheduleFailpoint,
@@ -220,7 +220,7 @@ const makeServices = Effect.gen(function* () {
     yield* scheduleFailpoint.hit("schedule:alarm:after");
   });
 
-  const transact: SqlScheduleWriteTransaction = (body, operation) =>
+  const run: SqlScheduleWriteTransaction["Service"]["run"] = (body, operation) =>
     transactions.run((replace) =>
       Effect.gen(function* () {
         const result = yield* body;
@@ -232,8 +232,6 @@ const makeServices = Effect.gen(function* () {
         return result;
       }),
     );
-
-  const store = yield* makeSqlScheduleStore(transact, undefined, MAX_STORED_SCHEDULE_LENGTH);
 
   const prearm = Effect.fnUntraced(function* (
     deadlineAtMillis: number,
@@ -256,7 +254,7 @@ const makeServices = Effect.gen(function* () {
     yield* scheduleFailpoint.hit("schedule:reconcile:after");
   });
 
-  return Context.make(ScheduleStore, store).pipe(
+  return Context.make(SqlScheduleWriteTransaction, { run }).pipe(
     Context.add(DoScheduleAlarmControl, { prearm, reconcile }),
   );
 });
@@ -269,4 +267,11 @@ export const scheduleStoreLayer: Layer.Layer<
   ScheduleStore | DoScheduleAlarmControl,
   ScheduleStorageError,
   SqlClientService.SqlClient | DoScheduleTransaction
-> = Layer.effectContext(makeServices);
+> = Layer.effectContext(
+  Effect.gen(function* () {
+    const store = yield* makeSqlScheduleStore(undefined, MAX_STORED_SCHEDULE_LENGTH);
+    const alarms = yield* DoScheduleAlarmControl;
+
+    return Context.make(ScheduleStore, store).pipe(Context.add(DoScheduleAlarmControl, alarms));
+  }),
+).pipe(Layer.provide(Layer.effectContext(makeServices)));
