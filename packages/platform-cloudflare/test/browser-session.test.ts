@@ -578,6 +578,37 @@ it.effect("preserves the whole failed retention cause when annotating allocation
   }).pipe(Effect.scoped, Effect.provide(layer)),
 );
 
+it.effect.each(["create", "command"] as const)(
+  "keeps a detach-only failure typed during %s",
+  (stage) =>
+    Effect.gen(function* () {
+      const host = yield* BrowserSessions;
+
+      const session =
+        stage === "command" ? yield* host.createAttached(options, () => Effect.void) : undefined;
+
+      provider.cdpDetachFailure = true;
+
+      const failed = yield* (
+        session === undefined
+          ? host.create(options, () => Effect.void).pipe(Effect.asVoid)
+          : session.getHandoffState(Effect.void).pipe(Effect.asVoid)
+      ).pipe(Effect.exit);
+
+      expect(failed._tag).toBe("Failure");
+      if (failed._tag !== "Failure") return;
+      expect(Cause.findErrorOption(failed.cause)).toMatchObject({
+        value: {
+          _tag: "BrowserSessionError",
+          reason: "provider",
+          dispatch: stage === "create" ? "not-dispatched" : "possibly-dispatched",
+        },
+      });
+      expect(Cause.hasDies(failed.cause)).toBe(false);
+      expect(JSON.stringify(FailureDiagnostic.capture(failed))).toContain("private-cdp-detach");
+    }).pipe(Effect.scoped, Effect.provide(layer)),
+);
+
 // https://github.com/yielded-dev/agent/commit/72e07a3501
 it.effect.each(["connect", "command"] as const)(
   "retains mixed causes through BrowserUse %s",
@@ -666,6 +697,54 @@ it.effect("retains the browser command failure when its diagnostic reporter thro
     expect(encoded).not.toContain("private-provider-url-and-credential");
     expect(JSON.stringify(error.value)).not.toContain("private-provider-url-and-credential");
   }).pipe(Effect.scoped, Effect.provide(layer)),
+);
+
+it.effect.each(["connect", "command"] as const)(
+  "keeps typed cleanup failure through interrupted BrowserUse %s",
+  (stage) =>
+    Effect.gen(function* () {
+      const host = yield* BrowserSessions;
+      const session = yield* host.createAttached(options, () => Effect.void);
+      const started = yield* Deferred.make<void>();
+
+      const error = BrowserUseError.make({
+        code: "browser",
+        message: "private-authorization-cleanup",
+        dispatch: "not-dispatched",
+      });
+
+      const bridge = BrowserUse.make(session, {
+        maxCommands: null,
+        maxReturnedBytes: 4096,
+        authorize: (command) =>
+          command.kind === "connect" && stage !== "connect"
+            ? Effect.void
+            : Effect.acquireUseRelease(
+                Effect.void,
+                () => Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+                () => Effect.fail(error),
+              ),
+      });
+
+      const operation =
+        stage === "connect"
+          ? bridge.pipe(Effect.asVoid)
+          : bridge.pipe(
+              Effect.flatMap(({ client }) => client.frames({})),
+              Effect.asVoid,
+            );
+
+      const fiber = yield* operation.pipe(Effect.forkChild);
+
+      yield* Deferred.await(started);
+      yield* Fiber.interrupt(fiber);
+      const failed = yield* Fiber.await(fiber);
+
+      expect(failed._tag).toBe("Failure");
+      if (failed._tag !== "Failure") return;
+      expect(Cause.hasInterrupts(failed.cause)).toBe(true);
+      expect(Cause.findErrorOption(failed.cause)).toMatchObject({ value: error });
+    }).pipe(Effect.scoped, Effect.provide(layer)),
 );
 
 // https://github.com/yielded-dev/agent/commit/72e07a3501
@@ -781,6 +860,37 @@ it.effect("bounds a pending CDP release with the command timeout", () =>
   }).pipe(Effect.scoped, Effect.provide(layer)),
 );
 
+it.effect("keeps a typed CDP cleanup failure when the caller cancels during release", () =>
+  Effect.gen(function* () {
+    const host = yield* BrowserSessions;
+    const session = yield* host.createAttached(options, () => Effect.void);
+    const releasing = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+    provider.cdpDetachReply = async () => {
+      await runPromise(Deferred.succeed(releasing, undefined));
+      await runPromise(Deferred.await(release));
+    };
+    provider.cdpDetachFailure = true;
+    const fiber = yield* session.getHandoffState(Effect.void).pipe(Effect.forkChild);
+
+    yield* Deferred.await(releasing);
+    fiber.interruptUnsafe();
+    yield* Deferred.succeed(release, undefined);
+    const failed = yield* Fiber.await(fiber);
+
+    expect(failed._tag).toBe("Failure");
+    if (failed._tag !== "Failure") return;
+    expect(Cause.hasInterrupts(failed.cause)).toBe(true);
+    expect(Cause.findErrorOption(failed.cause)).toMatchObject({
+      value: { _tag: "BrowserSessionError", reason: "provider" },
+    });
+    expect(Cause.hasDies(failed.cause)).toBe(false);
+    expect(JSON.stringify(FailureDiagnostic.capture(failed))).toContain("private-cdp-detach");
+  }).pipe(Effect.scoped, Effect.provide(layer)),
+);
+
 it.effect("preserves acquisition finalizer defects when creation times out", () =>
   Effect.gen(function* () {
     const host = yield* BrowserSessions;
@@ -867,6 +977,39 @@ it.effect("timeout retains target probe cleanup failure", () =>
     expect(diagnostic).toContain("private-cdp-detach");
     expect(diagnostic).toContain("timeout");
   }).pipe(Effect.scoped, Effect.provide(layer)),
+);
+
+// Actual cancellation must preserve the target probe's typed cleanup failure.
+it.effect.each(["create", "createAttached"] as const)(
+  "preserves target probe cleanup during interrupted %s",
+  (method) =>
+    Effect.gen(function* () {
+      const host = yield* BrowserSessions;
+      const started = yield* Deferred.make<void>();
+      const reply = yield* Deferred.make<void>();
+      const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      provider.cdpSendReply = async () => {
+        await runPromise(Deferred.succeed(started, undefined));
+        await runPromise(Deferred.await(reply));
+      };
+      provider.cdpDetachFailure = true;
+
+      const fiber = yield* host[method](options, () => Effect.void).pipe(Effect.forkChild);
+
+      yield* Deferred.await(started);
+      yield* Fiber.interrupt(fiber);
+      const failed = yield* Fiber.await(fiber);
+
+      yield* Deferred.succeed(reply, undefined);
+      expect(failed._tag).toBe("Failure");
+      if (failed._tag !== "Failure") return;
+      expect(Cause.hasInterrupts(failed.cause)).toBe(true);
+      expect(Cause.findErrorOption(failed.cause)).toMatchObject({
+        value: { _tag: "BrowserSessionError", reason: "provider" },
+      });
+      expect(JSON.stringify(FailureDiagnostic.capture(failed))).toContain("private-cdp-detach");
+    }).pipe(Effect.scoped, Effect.provide(layer)),
 );
 
 it.effect("closes a late allocation reply without retaining or connecting it", () =>

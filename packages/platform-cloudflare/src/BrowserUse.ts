@@ -19,7 +19,7 @@ import type {
 } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import type { BrowserSession, BrowserSessionError } from "./BrowserSession.ts";
-import { reportBrowserCause } from "./internal/browser-failure.ts";
+import { mapBrowserError, reportBrowserCause } from "./internal/browser-failure.ts";
 
 export type Command =
   | { readonly kind: "connect" | "tabs" | "new-tab" }
@@ -65,12 +65,8 @@ const invalid = (message: string) =>
 
 const decode = <A>(schema: Schema.Codec<A>, input: unknown) =>
   Schema.decodeUnknownEffect(schema)(input).pipe(
-    Effect.catchCause((cause) =>
-      Effect.failCause(
-        Cause.map(cause, (error) =>
-          BrowserUseError.withCause(invalid("Invalid browser command or limits"), error),
-        ),
-      ),
+    mapBrowserError((error) =>
+      BrowserUseError.withCause(invalid("Invalid browser command or limits"), error),
     ),
   );
 
@@ -109,6 +105,8 @@ export const make = Effect.fnUntraced(function* <R>(
           }),
           error,
         );
+
+  const mapSessionFailure = mapBrowserError(mapSessionError);
 
   let released = false;
 
@@ -149,7 +147,7 @@ export const make = Effect.fnUntraced(function* <R>(
 
   const primary = yield* session
     .run(authorize({ kind: "connect" }, {}), attach)
-    .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapSessionError))));
+    .pipe(mapSessionFailure);
 
   const context = primary.page.browserContext();
   let calls = 0;
@@ -220,10 +218,7 @@ export const make = Effect.fnUntraced(function* <R>(
           return { ok: true as const, value: await action(selected, frame) };
         },
       )
-      .pipe(
-        serial.withPermits(1),
-        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapSessionError))),
-      );
+      .pipe(serial.withPermits(1), mapSessionFailure);
 
     if (!result.ok) return yield* Effect.fail(result.error);
     // Only host-created failures belong in E; a protocol response with similar fields is data.

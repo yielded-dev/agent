@@ -6,6 +6,14 @@ import * as ErrorReporter from "effect/ErrorReporter";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
+/** Translate typed failures without dropping cleanup reasons during actual cancellation. */
+export const mapBrowserError =
+  <E, E2>(map: (error: E) => E2) =>
+  <A, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E2, R> =>
+    Effect.uninterruptibleMask((restore) =>
+      restore(effect).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, map)))),
+    );
+
 /** Browser stage and classification. Original causes stay private and out of public JSON. */
 export class BrowserRunFailure extends Data.TaggedError("BrowserRunFailure")<{
   readonly operation: string;
