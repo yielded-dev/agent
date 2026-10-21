@@ -9141,8 +9141,7 @@ function executeWithCompletion<
 
           const engineToolServices = Context.make(
             AgentSpawner,
-            makeAgentSpawner(
-              yield* Scope.Scope,
+            yield* makeAgentSpawner(
               {
                 agentId: context.agentId,
                 threadId: context.threadId,
@@ -11183,8 +11182,7 @@ export class AgentSpawner extends Context.Service<AgentSpawner, AgentSpawnerServ
   "@effect-agent/engine/AgentSpawner",
 ) {}
 
-const makeAgentSpawner = (
-  scope: Scope.Scope,
+const makeAgentSpawner = Effect.fnUntraced(function* (
   parent: AgentSpawnerParent,
   depth: number,
   history: ThreadHistory["Service"],
@@ -11195,16 +11193,20 @@ const makeAgentSpawner = (
   budget?: SubagentBudgetReservation,
   budgetScope?: WorkerBudgetScope,
   onChild: (runId: RunId, read: Effect.Effect<RunUsageReport>) => void = () => {},
-): AgentSpawnerService => ({
-  scope,
-  ...(grant === undefined ? {} : { grant }),
-  ...(budget === undefined ? {} : { budget }),
-  ...(budgetScope === undefined ? {} : { budgetScope }),
-  policy,
-  durationDeadline,
-  depth,
-  parent,
-  spawn: spawnWithParent(parent, depth, history, preparation, onChild),
+): Effect.fn.Return<AgentSpawnerService, never, Scope.Scope> {
+  const scope = yield* Scope.Scope;
+
+  return {
+    scope,
+    ...(grant === undefined ? {} : { grant }),
+    ...(budget === undefined ? {} : { budget }),
+    ...(budgetScope === undefined ? {} : { budgetScope }),
+    policy,
+    durationDeadline,
+    depth,
+    parent,
+    spawn: spawnWithParent(parent, depth, history, preparation, onChild),
+  };
 });
 
 /**
