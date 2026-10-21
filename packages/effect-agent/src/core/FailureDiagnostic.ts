@@ -341,8 +341,8 @@ export const Failure = Schema.Struct({
 export type Failure = typeof Failure.Type;
 
 /**
- * Attach an original cause for trusted in-process inspection without adding it to JSON or
- * Schema fields. Model/public transports stay unchanged; capture() retains the cause privately.
+ * Attach an original cause for trusted in-process inspection without enumerable JSON.
+ * Error Schemas must omit cause to exclude it from Schema transports; capture() retains it.
  */
 export const withCause = <A extends object>(error: A, cause: unknown): A =>
-  Object.defineProperty(error, "cause", { value: cause, configurable: true });
+  Object.defineProperty(error, "cause", { value: cause, enumerable: false, configurable: true });
