@@ -57,7 +57,7 @@ for recovery, use a durable host. See [storage](/storage/).
 | Define, run, or stream           | [Agents](/guide/agents/), [execution](/guide/run-agents/)      |
 | Tools, MCP, approvals, discovery | [Tools](/guide/tools/)                                         |
 | Delegate or exchange work        | [Subagents](/guide/subagents/), [messaging](/guide/messaging/) |
-| Compaction, recall, remembering  | [Context management](/guide/context-management/)               |
+| Compaction and memory recall     | [Context management](/guide/context-management/)               |
 | Browser or generated code        | [Browser](/guide/browser/), [Code Mode](/guide/code-mode/)     |
 | Scheduled or event-driven input  | [Operations](/guide/operations/)                               |
 

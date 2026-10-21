@@ -69,7 +69,6 @@
     "./records": "./src/durable/Records.ts",
     "./recovery": "./src/durable/Recovery.ts",
     "./redaction": "./src/capabilities/Redaction.ts",
-    "./remembering": "./src/capabilities/Remembering.ts",
     "./remembering-store": "./src/core/RememberingStore.ts",
     "./run-event": "./src/core/RunEvent.ts",
     "./run-event-sink": "./src/engine/RunEventSink.ts",
