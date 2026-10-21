@@ -1,5 +1,17 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.188
+
+### Patch Changes
+
+- [#1071](https://github.com/yielded-dev/agent/pull/1071) [`fcf63d5`](https://github.com/yielded-dev/agent/commit/fcf63d5d8be7a0b363f13e99d09e1647a88bad27) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Enable Kitesurf page captures and PNG screenshots through the Cloudflare Browser Run binding while preserving Chromium as the default and requiring explicit Workers AI authorization for structured extraction.
+
+- [#1082](https://github.com/yielded-dev/agent/pull/1082) [`e19b934`](https://github.com/yielded-dev/agent/commit/e19b934f19ca3f551d045bc76e25924f34636ae0) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Raise the default web-capture response budget to 5 MiB and accept large page text and scraped elements within that budget. Preserve oversized tool outputs with a host-provided store and retrieve omitted text through `read_tool_result`, including a private R2 adapter for Cloudflare hosts.
+- Updated dependencies [[`9243e4c`](https://github.com/yielded-dev/agent/commit/9243e4c9cf91a89809b0e65544004f9e0f580368), [`04b5b3d`](https://github.com/yielded-dev/agent/commit/04b5b3d80741806b02ae332ed710bb0283895a3a), [`100ea4c`](https://github.com/yielded-dev/agent/commit/100ea4ce5e631fd412a1587d4a6453611fa0ad00), [`fcf63d5`](https://github.com/yielded-dev/agent/commit/fcf63d5d8be7a0b363f13e99d09e1647a88bad27), [`117fda5`](https://github.com/yielded-dev/agent/commit/117fda5d33d0a0c6c6620efcbbe5080e4a503fdc), [`1532ba3`](https://github.com/yielded-dev/agent/commit/1532ba39292e62e0b131ebb534a52dc3e98869ad), [`36ba1bc`](https://github.com/yielded-dev/agent/commit/36ba1bc1cb477ee152e7f6edabccf9f331a0f66a), [`eaf9f15`](https://github.com/yielded-dev/agent/commit/eaf9f158658dac20811dc252a9a2ecbd9b042309), [`e0bd59c`](https://github.com/yielded-dev/agent/commit/e0bd59cca79f9dbbc591736cef5dbb3b584f64f2), [`2113410`](https://github.com/yielded-dev/agent/commit/2113410f1c30ecc7761245b57e43bef769ec73dd), [`8732a30`](https://github.com/yielded-dev/agent/commit/8732a3055232349fd23f4d7deda82e179d6c9080), [`e19b934`](https://github.com/yielded-dev/agent/commit/e19b934f19ca3f551d045bc76e25924f34636ae0)]:
+  - @yielded/agent@0.1.0-beta.188
+  - @yielded/agent-storage-sql@0.1.0-beta.188
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.188
+
 ## 0.1.0-beta.187
 
 ### Patch Changes

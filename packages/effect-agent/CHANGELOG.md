@@ -1,5 +1,33 @@
 # @yielded/agent
 
+## 0.1.0-beta.188
+
+### Minor Changes
+
+- [#1044](https://github.com/yielded-dev/agent/pull/1044) [`1532ba3`](https://github.com/yielded-dev/agent/commit/1532ba39292e62e0b131ebb534a52dc3e98869ad) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Keep recovery, delegation, and accounting inputs inside the interpreter and expose application-only Run options. Remove interpreter-only output helpers and the unused terminal-defect wrapper, and drop the unused provider type parameter from binding and delegation signatures.
+
+- [#1060](https://github.com/yielded-dev/agent/pull/1060) [`36ba1bc`](https://github.com/yielded-dev/agent/commit/36ba1bc1cb477ee152e7f6edabccf9f331a0f66a) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Retire generic `ThreadCheckpoint` storage and `ThreadProjection` replay APIs, including their TravelPlanner helpers. Discard only the retired derived cache in the layout 28 → 29 upgrade, preserving conversation and operational bytes and retaining supported older upgrades.
+
+  BEHAVIOR CHANGE: Keep application projections in application-owned storage; `ExecutionCheckpoint` and `PromptCheckpoint` remain supported.
+
+- [#1045](https://github.com/yielded-dev/agent/pull/1045) [`2113410`](https://github.com/yielded-dev/agent/commit/2113410f1c30ecc7761245b57e43bef769ec73dd) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Require the designated completion Tool whenever one is configured, and retire action-tool completion, Agent metadata, and Tool inspection helpers. Use the same validated completion metadata for results and events.
+
+- [#1046](https://github.com/yielded-dev/agent/pull/1046) [`8732a30`](https://github.com/yielded-dev/agent/commit/8732a3055232349fd23f4d7deda82e179d6c9080) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Use one cost-estimator request and an explicit estimate object, and express Run scheduling overrides as positive concurrency values. Keep recovery protocols internal and restrict child-spawn options to application settings and delegation facts.
+
+### Patch Changes
+
+- [#1055](https://github.com/yielded-dev/agent/pull/1055) [`9243e4c`](https://github.com/yielded-dev/agent/commit/9243e4c9cf91a89809b0e65544004f9e0f580368) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Summarize settled work within an active run using a retained context window. Allow native model layers to supply their context capacity through `ModelCallContext.current`.
+
+- [#1059](https://github.com/yielded-dev/agent/pull/1059) [`04b5b3d`](https://github.com/yielded-dev/agent/commit/04b5b3d80741806b02ae332ed710bb0283895a3a) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reject incomplete durable storage adapters during runtime and work-discovery Layer construction, before accepting work. Handle `ThreadStoreError` when constructing custom runtimes or certifying adapters; prompt checkpoints and fresh-admission accelerators remain optional.
+
+- [#1080](https://github.com/yielded-dev/agent/pull/1080) [`100ea4c`](https://github.com/yielded-dev/agent/commit/100ea4ce5e631fd412a1587d4a6453611fa0ad00) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Estimate native image inputs automatically without counting their binary or base64 payload as text. Preserve the original images across context admission and compaction.
+
+- [#1071](https://github.com/yielded-dev/agent/pull/1071) [`fcf63d5`](https://github.com/yielded-dev/agent/commit/fcf63d5d8be7a0b363f13e99d09e1647a88bad27) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Allow hosts to set `WebCapture`'s `urls` policy to `"*"` for agents that research arbitrary HTTPS pages and subresources.
+
+- [#1037](https://github.com/yielded-dev/agent/pull/1037) [`eaf9f15`](https://github.com/yielded-dev/agent/commit/eaf9f158658dac20811dc252a9a2ecbd9b042309) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reuse tool parameter wrappers across turns while preserving request-time decoding and tool visibility.
+
+- [#1082](https://github.com/yielded-dev/agent/pull/1082) [`e19b934`](https://github.com/yielded-dev/agent/commit/e19b934f19ca3f551d045bc76e25924f34636ae0) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Raise the default web-capture response budget to 5 MiB and accept large page text and scraped elements within that budget. Preserve oversized tool outputs with a host-provided store and retrieve omitted text through `read_tool_result`, including a private R2 adapter for Cloudflare hosts.
+
 ## 0.1.0-beta.187
 
 ### Patch Changes

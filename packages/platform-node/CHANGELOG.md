@@ -1,5 +1,15 @@
 # @yielded/agent-platform-node
 
+## 0.1.0-beta.188
+
+### Patch Changes
+
+- [#1059](https://github.com/yielded-dev/agent/pull/1059) [`04b5b3d`](https://github.com/yielded-dev/agent/commit/04b5b3d80741806b02ae332ed710bb0283895a3a) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reject incomplete durable storage adapters during runtime and work-discovery Layer construction, before accepting work. Handle `ThreadStoreError` when constructing custom runtimes or certifying adapters; prompt checkpoints and fresh-admission accelerators remain optional.
+- Updated dependencies [[`9243e4c`](https://github.com/yielded-dev/agent/commit/9243e4c9cf91a89809b0e65544004f9e0f580368), [`04b5b3d`](https://github.com/yielded-dev/agent/commit/04b5b3d80741806b02ae332ed710bb0283895a3a), [`100ea4c`](https://github.com/yielded-dev/agent/commit/100ea4ce5e631fd412a1587d4a6453611fa0ad00), [`fcf63d5`](https://github.com/yielded-dev/agent/commit/fcf63d5d8be7a0b363f13e99d09e1647a88bad27), [`1532ba3`](https://github.com/yielded-dev/agent/commit/1532ba39292e62e0b131ebb534a52dc3e98869ad), [`36ba1bc`](https://github.com/yielded-dev/agent/commit/36ba1bc1cb477ee152e7f6edabccf9f331a0f66a), [`eaf9f15`](https://github.com/yielded-dev/agent/commit/eaf9f158658dac20811dc252a9a2ecbd9b042309), [`2113410`](https://github.com/yielded-dev/agent/commit/2113410f1c30ecc7761245b57e43bef769ec73dd), [`8732a30`](https://github.com/yielded-dev/agent/commit/8732a3055232349fd23f4d7deda82e179d6c9080), [`e19b934`](https://github.com/yielded-dev/agent/commit/e19b934f19ca3f551d045bc76e25924f34636ae0)]:
+  - @yielded/agent@0.1.0-beta.188
+  - @yielded/agent-storage-sqlite@0.1.0-beta.188
+  - @yielded/agent-workflow@0.1.0-beta.188
+
 ## 0.1.0-beta.187
 
 ### Patch Changes
