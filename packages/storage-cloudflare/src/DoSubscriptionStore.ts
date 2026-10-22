@@ -1,3 +1,8 @@
+/**
+ * Subscription storage and alarm replacement within one Durable Object transaction.
+ *
+ * @since 0.1.0
+ */
 import {
   backfillSubscriptionSettlementObservation,
   makeSqlSubscriptionStore,
@@ -30,16 +35,33 @@ const StoreStateRow = Schema.Struct({
   alarm_generation: Schema.Natural,
 });
 
+/**
+ * The next alarm deadline retained with a subscription state mutation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DoSubscriptionAlarmReplacement {
   readonly deadlineAtMillis: number | null;
   readonly generation: number;
 }
 
+/**
+ * Replace the partition alarm inside the subscription transaction.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DoSubscriptionReplaceAlarm = (
   replacement: DoSubscriptionAlarmReplacement,
 ) => Effect.Effect<void, SubscriptionError>;
 
-/** One Durable Object transaction combining subscription SQL and its single native alarm. */
+/**
+ * One Durable Object transaction combining subscription SQL and its single native alarm.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class DoSubscriptionTransaction extends Context.Service<
   DoSubscriptionTransaction,
   {
@@ -49,6 +71,12 @@ export class DoSubscriptionTransaction extends Context.Service<
   }
 >()("@effect-agent/storage-cloudflare/DoSubscriptionTransaction") {}
 
+/**
+ * Host alarm operations sharing the subscription transaction.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class DoSubscriptionAlarmControl extends Context.Service<
   DoSubscriptionAlarmControl,
   {
@@ -318,6 +346,12 @@ const makeSubscriptionStore = Effect.fnUntraced(function* (owned: SourcePartitio
   );
 });
 
+/**
+ * Provide SQLite subscription storage with transaction and alarm authority supplied by the host.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const doSubscriptionStoreLayer = (
   partition: SourcePartition,
 ): Layer.Layer<

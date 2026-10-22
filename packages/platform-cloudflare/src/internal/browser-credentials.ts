@@ -22,7 +22,9 @@ import {
   type CredentialAccessRequest,
 } from "../BrowserCredentials.ts";
 
-/** Supplied only under the attachment lock, with the remaining command/session budget. */
+/** Supplied only under the attachment lock, with the remaining command/session budget.
+ * @internal
+ */
 export class BrowserSessionPage extends Context.Service<
   BrowserSessionPage,
   {
@@ -302,7 +304,9 @@ const openForm = Effect.fnUntraced(function* (input: CredentialForm) {
   return { held, target, validate, binding };
 });
 
-/** Bind a host-owned request to this exact document and fields without reading their values. */
+/** Bind a host-owned request to this exact document and fields without reading their values.
+ * @internal
+ */
 export const prepareCredential = Effect.fnUntraced(
   function* (input: CredentialForm) {
     const form = yield* openForm(input);
@@ -317,6 +321,7 @@ export const prepareCredential = Effect.fnUntraced(
  * Fill explicit native fields on an existing page without submitting. The owning browser session
  * serializes operations and closes on timeout, interruption or uncertain dispatch; this function releases
  * only its local handles. Ordinary native observations remain available, including credential echoes.
+ * @internal
  */
 export const fillCredential = Effect.fnUntraced(function* (
   input: FillCredentialRequest,

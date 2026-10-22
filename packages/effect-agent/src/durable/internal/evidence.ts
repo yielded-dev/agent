@@ -12,11 +12,21 @@ const failure = (message: string, cause?: unknown) =>
     ...(cause === undefined ? {} : { cause }),
   });
 
-/** References identify immutable facts; schema and owning readers validate their meaning. */
+/**
+ * References identify immutable facts; schema and owning readers validate their meaning.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const reference = (record: RecordEnvelope) =>
   Effect.succeed(EvidenceReference.make({ recordId: record.recordId }));
 
-/** Resolve an immutable fact by Thread and record identity. A failed reference leaves the original work owed. */
+/**
+ * Resolve an immutable fact by Thread and record identity. A failed reference leaves the original work owed.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const resolveEvidence = Effect.fnUntraced(function* (
   threadId: ThreadId,
   ref: EvidenceReference,

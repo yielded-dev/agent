@@ -40,6 +40,7 @@ const overheads = {
  * Extra fields, accessors, and nonempty metadata use the general ownership path.
  * No provider object survives, including an empty metadata object's hidden storage.
  * Unlike a generic footprint shortcut, this cannot retain an exotic backing buffer.
+ * @internal
  */
 export const capturePrimitiveTextPart = (part: unknown, maxBytes: number) => {
   try {

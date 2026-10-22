@@ -46,6 +46,7 @@ const projectHistoryRecord = (
   );
 };
 
+/** @internal */
 export const encodeRunHistory = (prompt: Prompt.Prompt) =>
   encodePrompt(prompt).pipe(
     Effect.map(canonicalJson),
@@ -54,6 +55,7 @@ export const encodeRunHistory = (prompt: Prompt.Prompt) =>
     ),
   );
 
+/** @internal */
 export const digestRunHistory = (prompt: Prompt.Prompt) =>
   encodeRunHistory(prompt).pipe(
     Effect.flatMap(digestCanonicalJson),
@@ -62,6 +64,7 @@ export const digestRunHistory = (prompt: Prompt.Prompt) =>
     ),
   );
 
+/** @internal */
 export const validateContextBoundary = (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
@@ -172,7 +175,10 @@ const readProjectedHistory = Effect.fnUntraced(function* (
   };
 });
 
-/** Both readers preserve the exact saved context and historyDigest. */
+/**
+ * Both readers preserve the exact saved context and historyDigest.
+ * @internal
+ */
 export const readRunContext = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,

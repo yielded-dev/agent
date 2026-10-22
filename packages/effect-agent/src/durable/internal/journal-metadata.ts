@@ -13,16 +13,30 @@ import {
 // Keep the canonical Schemas as the validation boundary for incoming and persisted values.
 const makeRecordId = Brand.nominal<RecordId>();
 
-/** Deterministic canonical record identity of one Turn's Tool result. */
+/**
+ * Deterministic canonical record identity of one Turn's Tool result.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const toolCallSettledRecordId = (
   runId: RunId,
   turn: number,
   toolCallId: ToolCallId,
 ): RecordId => makeRecordId(`tool-settled:${runId}:${turn}:${toolCallId}`);
 
+/**
+ * Canonical or prompt-only envelope accepted by context reconstruction.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type JournalRecordEnvelope = CanonicalRecordEnvelope | PromptRecordEnvelope;
 
-/** Metadata for one exact canonical prefix, including the exact selected Run evidence. */
+/**
+ * Metadata for one exact canonical prefix, including the exact selected Run evidence.
+ * @internal
+ */
 export interface JournalMetadata {
   readonly ownerRunId: RunId | undefined;
   readonly firstSequenceByRun: ReadonlyMap<string, number>;
@@ -51,6 +65,7 @@ export interface JournalMetadata {
  * including records omitted from the control view. Calling finish transfers its collections;
  * discard the collector afterward. The metadata may only accompany a replay stream bounded at
  * that same captured tail. A later prefix requires a new collector.
+ * @internal
  */
 export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
   const firstSequenceByRun = new Map<string, number>();

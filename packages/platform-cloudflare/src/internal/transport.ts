@@ -23,6 +23,7 @@ import { callThreadObject, ThreadObjectNamespace } from "../CloudflareBindings.t
  * surfaces as `PortTransportError` (preserving the platform stub's own `retryable` signal
  * when present) and NEVER as a fabricated answer: on `resolveAdmission` the routing layer
  * turns exactly this error into `AdmissionIndeterminate` (SUB-031).
+ * @internal
  */
 export const threadPortTransportLayer: Layer.Layer<
   ThreadPortTransport,

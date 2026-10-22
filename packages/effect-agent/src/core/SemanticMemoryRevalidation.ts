@@ -1,3 +1,10 @@
+/**
+ * Validate ranked semantic passages against current source revisions, access, exact UTF-8 excerpts,
+ * and aggregate output limits.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -13,6 +20,13 @@ import {
   SemanticMemoryProfile,
 } from "./SemanticMemoryIndex.ts";
 
+/**
+ * Semantic recall or indexing failed input validation, embedding validation, timing, resource
+ * limits, source stability, or availability checks.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SemanticMemoryError extends Schema.TaggedError<SemanticMemoryError>()(
   "SemanticMemoryError",
   {
@@ -28,6 +42,13 @@ export class SemanticMemoryError extends Schema.TaggedError<SemanticMemoryError>
   },
 ) {}
 
+/**
+ * Schema for candidate-count, scan, score, and aggregate UTF-8 JSON byte bounds during
+ * authoritative revalidation. Source and output limits default to 16 MiB each.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SemanticCandidateLimits extends Schema.Class<SemanticCandidateLimits>(
   "@effect-agent/core/SemanticCandidateLimits",
 )({
@@ -43,6 +64,12 @@ export class SemanticCandidateLimits extends Schema.Class<SemanticCandidateLimit
   minScore: Schema.Finite.check(Schema.isBetween({ minimum: -1, maximum: 1 })),
 }) {}
 
+/**
+ * Schema for revalidated recall passages and counts of scanned, stale, and unauthorized candidates.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SemanticCandidateResult extends Schema.Class<SemanticCandidateResult>(
   "@effect-agent/core/SemanticCandidateResult",
 )({
@@ -57,6 +84,9 @@ export class SemanticCandidateResult extends Schema.Class<SemanticCandidateResul
  * Charge each accepted passage's full JSON encoding before retaining it, including duplicates and
  * authoritative metadata/attribution. maxOutputBytes bounds their aggregate, not source reads or
  * a transport envelope. One passage is constructed at a time before this check.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const revalidateSemanticMemoryCandidates = Effect.fnUntraced(function* (
   found: MemoryIndexSearch,

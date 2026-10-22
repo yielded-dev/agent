@@ -1,3 +1,8 @@
+/**
+ * Execute bounded Code Mode programs in Cloudflare Dynamic Workers.
+ *
+ * @since 0.1.0
+ */
 import {
   CodeExecutionHost,
   CodeExecutionResourceUse,
@@ -41,6 +46,9 @@ import { safeCauseDiagnostic, safeCauseMessage } from "./internal/boundary.ts";
  * deadline interrupts asynchronously suspended passes. Deployment class `E`
  * only: the adapter records no persistent state and a later pass may run in a
  * completely different isolate.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export const dynamicWorkerImplementation = SandboxImplementation.make({
   isolation: "isolated",
@@ -411,6 +419,12 @@ type HostDispatchError =
 /** Reserved global names the harness owns inside the dynamic worker. */
 const reservedHarnessGlobals = new Set(["console"]);
 
+/**
+ * Host Worker Loader binding and optional compatibility date for isolated Code Mode execution.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface DynamicWorkerCodeExecutorOptions {
   /** The `worker_loader` binding. */
   readonly loader: WorkerLoader;
@@ -863,7 +877,12 @@ const classifyWorkerFailure = (
   });
 };
 
-/** Layer building the Dynamic Worker `CodeExecutor` from resolved bindings. */
+/**
+ * Layer building the Dynamic Worker `CodeExecutor` from resolved bindings.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const dynamicWorkerCodeExecutorLayer = (
   options: DynamicWorkerCodeExecutorOptions,
 ): Layer.Layer<CodeExecutor> =>
@@ -876,7 +895,12 @@ export const dynamicWorkerCodeExecutorLayer = (
     }),
   );
 
-/** Assemble Code Mode handlers with the isolated Dynamic Worker executor. */
+/**
+ * Assemble Code Mode handlers with the isolated Dynamic Worker executor.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const CloudflareCodeMode = {
   /**
    * Provide the selected tool handlers at construction, where Code Mode captures them.

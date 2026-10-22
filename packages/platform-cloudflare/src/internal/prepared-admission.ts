@@ -16,7 +16,9 @@ const passthroughAgent = (agentId: AgentId): DurableSubmitAgent<typeof Persisted
   definition: { id: agentId, input: PersistedJson },
 });
 
-/** Ordinary prepared admission through one freshly addressed Thread Object call. */
+/** Ordinary prepared admission through one freshly addressed Thread Object call.
+ * @internal
+ */
 export const cloudflarePreparedInputAdmissionLayer: Layer.Layer<
   PreparedInputAdmission,
   never,

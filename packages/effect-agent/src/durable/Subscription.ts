@@ -1,3 +1,11 @@
+/**
+ * Versioned source-partition registrations, accepted events, selected deliveries, and their host
+ * authorization and storage contracts. Selection pins the configuration needed to finish delivery
+ * after later edits.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -10,6 +18,13 @@ import { DefinitionDigests, Digest, PersistedJson } from "./Records.ts";
 import { ScheduleDestination, ScheduleInstant, ScheduleRetry } from "./Schedule.ts";
 import { AdmissionFence, AdmissionGroup, IdempotencyKey, Principal } from "./SubmissionLedger.ts";
 
+/**
+ * Nonempty subscription-domain name, bounded to 256 characters and excluding unpaired UTF-16
+ * surrogates.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionName = Schema.NonEmptyString.check(
   Schema.isMaxLength(256),
   Schema.isPattern(/^[^\p{Surrogate}]*$/u),
@@ -17,37 +32,92 @@ export const SubscriptionName = Schema.NonEmptyString.check(
 
 const Positive = Schema.Int.check(Schema.isGreaterThan(0));
 
-/** Stable storage identity. Deployment and payload values must never change its routing. */
+/**
+ * Stable storage identity. Deployment and payload values must never change its routing.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SourcePartition = Schema.Struct({
   tenantId: SubscriptionName,
   address: SubscriptionName,
 });
 
+/**
+ * Decoded value of {@link SourcePartition}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SourcePartition = typeof SourcePartition.Type;
 
+/**
+ * Stable source name and semantic version selecting normalization and matching behavior.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const EventSourceVersion = Schema.Struct({
   name: SubscriptionName,
   version: SubscriptionName,
 });
 
+/**
+ * Decoded value of {@link EventSourceVersion}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type EventSourceVersion = typeof EventSourceVersion.Type;
 
+/**
+ * Addresses one owner's subscription within its tenant-qualified source partition.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionKey = Schema.Struct({
   partition: SourcePartition,
   ownerId: SubscriptionName,
   subscriptionId: SubscriptionName,
 });
 
+/**
+ * Decoded value of {@link SubscriptionKey}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionKey = typeof SubscriptionKey.Type;
 
+/**
+ * Source partition and owner being managed, paired with the caller's principal for host
+ * authorization.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionScope = Schema.Struct({
   partition: SourcePartition,
   ownerId: SubscriptionName,
   principal: Principal,
 });
 
+/**
+ * Decoded value of {@link SubscriptionScope}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionScope = typeof SubscriptionScope.Type;
 
+/**
+ * Versioned event matching, lifetime, destination, delivery authority, and input-preparation
+ * context pinned by a registration.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionConfiguration = Schema.Struct({
   source: EventSourceVersion,
   matchingKey: SubscriptionName,
@@ -64,8 +134,21 @@ export const SubscriptionConfiguration = Schema.Struct({
   definitions: DefinitionDigests,
 });
 
+/**
+ * Decoded value of {@link SubscriptionConfiguration}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionConfiguration = typeof SubscriptionConfiguration.Type;
 
+/**
+ * Retained source-reconciliation attempts and next epoch-millisecond retry; null retry time records
+ * a conclusive failure.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SourceRecovery = Schema.Struct({
   attempts: Schema.Natural,
   /** Null retains a conclusive source failure without continuing provider polling. */
@@ -75,6 +158,13 @@ export const SourceRecovery = Schema.Struct({
   Schema.makeFilter((value) => value.nextAttemptAtMillis !== null || value.lastFailure !== null),
 );
 
+/**
+ * Retained registration identity, current configuration revision, selection order, lifecycle state,
+ * and source recovery progress.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionRecord = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   key: SubscriptionKey,
@@ -99,8 +189,21 @@ export const SubscriptionRecord = Schema.Struct({
   ),
 );
 
+/**
+ * Decoded value of {@link SubscriptionRecord}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionRecord = typeof SubscriptionRecord.Type;
 
+/**
+ * Retained normalized event identity, payload digest, eligibility cutoff, and routing progress
+ * within one source partition.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const AcceptedEvent = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   partition: SourcePartition,
@@ -126,28 +229,71 @@ export const AcceptedEvent = Schema.Struct({
   ),
 );
 
+/**
+ * Decoded value of {@link AcceptedEvent}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type AcceptedEvent = typeof AcceptedEvent.Type;
 
+/**
+ * Acknowledges retained event routing work; it is not a destination Submission receipt.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const EventAcknowledgement = Schema.Struct({
   partition: SourcePartition,
   eventId: SubscriptionName,
   acceptedAtMillis: ScheduleInstant,
 });
 
+/**
+ * Decoded value of {@link EventAcknowledgement}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type EventAcknowledgement = typeof EventAcknowledgement.Type;
 
+/**
+ * Identifies one selected event delivery for a particular subscription.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionDeliveryKey = Schema.Struct({
   subscription: SubscriptionKey,
   eventId: SubscriptionName,
 });
 
+/**
+ * Decoded value of {@link SubscriptionDeliveryKey}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionDeliveryKey = typeof SubscriptionDeliveryKey.Type;
 
+/**
+ * Bounded reason for conclusive input-preparation or destination-admission refusal.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionRefusal = Schema.Struct({
   phase: Schema.Literals(["preparation", "admission"]),
   code: SubscriptionName,
 });
 
+/**
+ * Frozen subscription/event selection and its prepared envelope, retries, destination receipt, and
+ * completion evidence.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionDelivery = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   key: SubscriptionDeliveryKey,
@@ -191,9 +337,20 @@ export const SubscriptionDelivery = Schema.Struct({
   }),
 );
 
+/**
+ * Decoded value of {@link SubscriptionDelivery}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionDelivery = typeof SubscriptionDelivery.Type;
 
-/** Management projections intentionally exclude parameters, context, payload, and input. */
+/**
+ * Management projections intentionally exclude parameters, context, payload, and input.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionSnapshot = Schema.Struct({
   key: SubscriptionKey,
   source: EventSourceVersion,
@@ -209,8 +366,21 @@ export const SubscriptionSnapshot = Schema.Struct({
   recovery: Schema.NullOr(SourceRecovery),
 });
 
+/**
+ * Decoded value of {@link SubscriptionSnapshot}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionSnapshot = typeof SubscriptionSnapshot.Type;
 
+/**
+ * Management view of a selected delivery's state, retries, receipt, and refusal without private
+ * envelope contents.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionDeliverySnapshot = Schema.Struct({
   key: SubscriptionDeliveryKey,
   state: SubscriptionDelivery.fields.state,
@@ -222,6 +392,13 @@ export const SubscriptionDeliverySnapshot = Schema.Struct({
   refusal: Schema.NullOr(SubscriptionRefusal),
 });
 
+/**
+ * Typed validation, conflict, capacity, authorization, source/binding, or storage failure in
+ * subscription processing.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubscriptionError extends Schema.TaggedError<SubscriptionError>()(
   "SubscriptionError",
   {
@@ -245,7 +422,12 @@ export class SubscriptionError extends Schema.TaggedError<SubscriptionError>()(
   },
 ) {}
 
-/** Host source adapters classify expected failures; raw provider diagnostics are never stored. */
+/**
+ * Host source adapters classify expected failures; raw provider diagnostics are never stored.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubscriptionSourceError extends Schema.TaggedError<SubscriptionSourceError>()(
   "SubscriptionSourceError",
   {
@@ -254,27 +436,65 @@ export class SubscriptionSourceError extends Schema.TaggedError<SubscriptionSour
   },
 ) {}
 
+/**
+ * An injected failure at a subscription storage mutation boundary.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubscriptionFailpointError extends Schema.TaggedError<SubscriptionFailpointError>()(
   "SubscriptionFailpointError",
   { point: Schema.String },
 ) {}
 
+/**
+ * Expected subscription storage failures and injected mutation failures.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionStoreFailure = SubscriptionError | SubscriptionFailpointError;
 
+/**
+ * Optional subscription-storage fault injection; the default handler does nothing.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const SubscriptionFailpoint = Context.Reference<{
   readonly hit: (point: string) => Effect.Effect<void, SubscriptionFailpointError>;
 }>("@effect-agent/thread/SubscriptionFailpoint", {
   defaultValue: () => ({ hit: () => Effect.void }),
 });
 
+/**
+ * Replay horizon and completed-evidence lifetime in milliseconds, with a bounded
+ * deduplication-tombstone allowance.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionRetentionPolicy = Schema.Struct({
   replayHorizonMillis: Positive,
   completedRetentionMillis: Schema.Natural,
   maxTombstones: Positive.check(Schema.isLessThanOrEqualTo(100_000)),
 });
 
+/**
+ * Decoded value of {@link SubscriptionRetentionPolicy}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionRetentionPolicy = typeof SubscriptionRetentionPolicy.Type;
 
+/**
+ * Partition and owner capacities, payload/context byte limits, lifetime, retry, timeout, and
+ * concurrency bounds.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionLimits = Schema.Struct({
   retention: Schema.optionalKey(SubscriptionRetentionPolicy),
   /** Partition-wide active/paused, unexpired registration capacity. */
@@ -297,8 +517,21 @@ export const SubscriptionLimits = Schema.Struct({
   operationTimeoutMillis: Positive.check(Schema.isLessThanOrEqualTo(300_000)),
 });
 
+/**
+ * Decoded value of {@link SubscriptionLimits}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionLimits = typeof SubscriptionLimits.Type;
 
+/**
+ * Default limits allow 10,000 registrations, events, and deliveries per partition, 1,000 per owner,
+ * four concurrent operations, and eight automatic attempts.
+ *
+ * @category defaults
+ * @since 0.1.0
+ */
 export const defaultSubscriptionLimits: SubscriptionLimits = {
   maxRegistrations: 10_000,
   maxRegistrationsPerOwner: 1_000,
@@ -315,6 +548,13 @@ export const defaultSubscriptionLimits: SubscriptionLimits = {
   maxAutomaticAttempts: 8,
 };
 
+/**
+ * Atomic revision-checked registration changes for recovery, configuration replacement, pause, and
+ * resume.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionChange = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("Recover"), nowMillis: ScheduleInstant }),
   Schema.Struct({
@@ -326,8 +566,21 @@ export const SubscriptionChange = Schema.Union([
   Schema.Struct({ _tag: Schema.Literals(["Pause", "Resume"]) }),
 ]);
 
+/**
+ * Decoded value of {@link SubscriptionChange}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionChange = typeof SubscriptionChange.Type;
 
+/**
+ * Atomic selected-delivery changes for preparation, admission, refusal, retry, recovery, and
+ * settlement observation.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const DeliveryChange = Schema.Union([
   Schema.Struct({
     _tag: Schema.Literal("ObserveSettlement"),
@@ -360,15 +613,32 @@ export const DeliveryChange = Schema.Union([
   }),
 ]);
 
+/**
+ * Decoded value of {@link DeliveryChange}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DeliveryChange = typeof DeliveryChange.Type;
 
-/** Progress of bounded recovery sweeps, independent of individual work success. */
+/**
+ * Progress of bounded recovery sweeps, independent of individual work success.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubscriptionScanCursors = Schema.Struct({
   events: Schema.String,
   deliveries: Schema.String,
   recovery: Schema.Natural,
 });
 
+/**
+ * Decoded value of {@link SubscriptionScanCursors}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionScanCursors = typeof SubscriptionScanCursors.Type;
 
 /**
@@ -377,6 +647,9 @@ export type SubscriptionScanCursors = typeof SubscriptionScanCursors.Type;
  * Without retention, records remain for the partition lifetime. Partition-wide and per-owner
  * quotas bound live work, never completed replay history. Retention controls evidence reclamation.
  * No pruning may discard creation replay, deduplication, or unfinished-work evidence.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SubscriptionStore extends Context.Service<
   SubscriptionStore,
@@ -492,7 +765,12 @@ export class SubscriptionStore extends Context.Service<
   }
 >()("@effect-agent/thread/SubscriptionStore") {}
 
-/** Explicit host policy. Management scope is not inferred from handle possession. */
+/**
+ * Explicit host policy. Management scope is not inferred from handle possession.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class SubscriptionAuthorizer extends Context.Service<
   SubscriptionAuthorizer,
   {
@@ -526,8 +804,21 @@ export class SubscriptionAuthorizer extends Context.Service<
   }
 >()("@effect-agent/thread/SubscriptionAuthorizer") {}
 
+/**
+ * Encodes the full partition, owner, and subscription identity as an unambiguous JSON tuple.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionKeyString = (key: SubscriptionKey): string =>
   JSON.stringify([key.partition.tenantId, key.partition.address, key.ownerId, key.subscriptionId]);
 
+/**
+ * Encodes owner, subscription, and event identity for lookup within an already selected source
+ * partition.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionDeliveryKeyString = (key: SubscriptionDeliveryKey): string =>
   JSON.stringify([key.subscription.ownerId, key.subscription.subscriptionId, key.eventId]);

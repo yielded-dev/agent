@@ -1,3 +1,8 @@
+/**
+ * Dedicated Durable Object owners and clients for namespace-scoped memory.
+ *
+ * @since 0.1.0
+ */
 import {
   type DoMemoryStorageLimits,
   defaultDoMemoryStorageLimits,
@@ -48,10 +53,22 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
+/**
+ * Native RPC contract exposed by a memory owner.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface MemoryObjectRpc extends Rpc.DurableObjectBranded {
   memory(encoded: string): Promise<string>;
 }
 
+/**
+ * Host-supplied namespace used to route memory operations.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class MemoryObjectNamespace extends Context.Service<
   MemoryObjectNamespace,
   {
@@ -59,7 +76,12 @@ export class MemoryObjectNamespace extends Context.Service<
   }
 >()("@effect-agent/platform-cloudflare/MemoryObjectNamespace") {}
 
-/** Namespace version and identity are already canonicalized by MemoryNamespace. */
+/**
+ * Namespace version and identity are already canonicalized by MemoryNamespace.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const memoryObjectName = (namespace: MemoryNamespace.Any): string => namespace.address;
 
 /**
@@ -270,6 +292,12 @@ const makeMemoryClient = Effect.fnUntraced(function* <Namespace extends MemoryNa
   return { get, recall, revalidate, revalidateSemantic, change };
 });
 
+/**
+ * Construct authorized clients for namespace-scoped memory owners.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const CloudflareMemoryClient = {
   /** Bind access and principal using the MemoryObjectNamespace supplied by the application. */
   make: makeMemoryClient,
@@ -291,6 +319,9 @@ export const CloudflareMemoryClient = {
  * Optional activity-processor destination. Keeps domain write errors intact; transport,
  * authorization and deadline failures become the existing MemoryStorageError contract.
  * Receipts remain authoritative, including after caller interruption or lost replies.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const cloudflareMemoryWriterLayer = (
   access: MemoryAccess,
@@ -328,12 +359,24 @@ export const cloudflareMemoryWriterLayer = (
 
 type OwnerServices = MemoryReader | MemoryWriter | MemoryOwnerAuthorizer | MemoryOwnerIdentity;
 
+/**
+ * A deployed memory owner instance with its native RPC endpoint.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface MemoryObjectInstance extends InstanceType<
   EffectCfDurableObject.DurableObjectClass<Record<never, never>, OwnerServices>
 > {
   memory(encoded: string): Promise<string>;
 }
 
+/**
+ * Constructor of a deployed memory owner.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface MemoryObjectClass {
   new (ctx: globalThis.DurableObjectState, env: Cloudflare.Env): MemoryObjectInstance;
 }
@@ -411,6 +454,12 @@ const makeMemoryObject = <E>(
   >(runtime, { rpc });
 };
 
+/**
+ * Construct a dedicated SQLite memory owner with host authorization.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const MemoryObject = {
   /** Build the SQLite Durable Object class with the application's owner authorization Layer. */
   make: makeMemoryObject,

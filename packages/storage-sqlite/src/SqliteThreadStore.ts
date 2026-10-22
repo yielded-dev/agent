@@ -1,3 +1,8 @@
+/**
+ * SQLite Thread history, exclusive storage ownership, and snapshot exports.
+ *
+ * @since 0.1.0
+ */
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { sqlStorageOwner } from "@yielded/agent-storage-sql/sql-journal";
 import { makeSqlRunStorage } from "@yielded/agent-storage-sql/sql-run-storage";
@@ -46,6 +51,12 @@ import {
   type SqliteStorageFailpointHandler,
 } from "./SqliteStorageFailpoint.ts";
 
+/**
+ * Connection, durability, and validation options for SQLite storage.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqliteStorageOptions {
   readonly filename: string;
   readonly observationPollInterval?: number | undefined;
@@ -65,6 +76,12 @@ export interface SqliteStorageOptions {
   readonly failpoint?: SqliteStorageFailpointHandler | undefined;
 }
 
+/**
+ * Failures while configuring, validating, or opening SQLite storage.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type SqliteStorageInitializationError =
   | SqliteStorageCompatibilityError
   | SqliteStorageCorruptionError
@@ -94,6 +111,9 @@ const DatabaseHeader = Schema.Tuple([
  * retires local capabilities; no ownership is restored from the database. Only the exact
  * declared triggers on Thread storage tables are permitted before any initialization;
  * application and optional memory tables retain their own schema contracts.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const exclusiveHostClientLayer: Layer.Layer<
   SqlClientService.SqlClient | ExclusiveSqliteHost,
@@ -181,6 +201,9 @@ const makeServices = Effect.fnUntraced(function* () {
  * authority kept visible in its input channel.
  * Inject a client opened with `disableWAL: true`; this adapter enables WAL only for a
  * fresh file so unsupported files reject before persistent driver configuration changes.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const threadStoreLayer: Layer.Layer<
   ThreadStore | ThreadReader | ThreadImport | StorageOwner,
@@ -208,6 +231,9 @@ export const threadStoreLayer: Layer.Layer<
  * root consumes the mutation ports privately and exposes only ThreadReader to application
  * bindings. Its private construction witness binds the exact exclusive client; supplying a
  * generic SqlClient cannot bypass the required exclusive acquisition.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const exclusiveRunStorageLayer = Layer.effectContext(
   Effect.gen(function* () {
@@ -266,6 +292,9 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
  * Validated SQLite storage configuration Layer with the documented defaults applied. Shared
  * by the ThreadStore and SubmissionLedger convenience layers so their defaults cannot
  * drift.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const storageConfigLayer = (
   options: SqliteStorageOptions,
@@ -287,7 +316,12 @@ export const storageConfigLayer = (
     ),
   );
 
-/** The failpoint Layer selected by convenience options: explicit handler or the no-op default. */
+/**
+ * The failpoint Layer selected by convenience options: explicit handler or the no-op default.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const storageFailpointLayer = (
   options: SqliteStorageOptions,
 ): Layer.Layer<SqliteStorageFailpoint> =>
@@ -298,6 +332,9 @@ export const storageFailpointLayer = (
 /**
  * A composition-root convenience Layer for canonical Threads. Durable accepted work is
  * served by the separate SubmissionLedger port.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = (
   options: SqliteStorageOptions,
@@ -324,6 +361,9 @@ export const layer = (
 /**
  * Export a quiesced current-layout database without initializing layout or retiring
  * ownership. Its read-only connection closes before returning; the source remains untouched.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function* (
   options: Pick<SqliteStorageOptions, "filename" | "busyTimeout">,
@@ -379,7 +419,12 @@ export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function
   );
 });
 
-/** Read-only page exports retain native diagnostics in the transfer port's typed storage failure. */
+/**
+ * Read-only page exports retain native diagnostics in the transfer port's typed storage failure.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const exportSourceLayer = (
   options: Pick<SqliteStorageOptions, "filename" | "busyTimeout">,
 ): Layer.Layer<ThreadExportSource> => {

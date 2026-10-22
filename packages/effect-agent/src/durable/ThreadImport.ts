@@ -1,3 +1,10 @@
+/**
+ * Streaming validation and atomic restoration of bounded Thread transfer pages. The destination
+ * stages exact canonical wire and rejects incomplete, unsupported, or conflicting archives.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Pull from "effect/Pull";
@@ -66,12 +73,32 @@ import {
 import { transferDependencies, sameTransferManifest, transferSections } from "./ThreadTransfer.ts";
 import { workIndexChanges } from "./ThreadWork.ts";
 
-export { ThreadImportReader, ThreadDeliveryImportReader } from "./internal/thread-import-reader.ts";
+export {
+  /**
+   * Exact indexes for one captured Thread transaction. Run records and commands enforce count and byte bounds.
+   *
+   * @category services
+   * @since 0.1.0
+   */
+  ThreadImportReader,
+  /**
+   * Delivery evidence reads: the importing Thread uses staged facts; foreign Threads use retained facts.
+   *
+   * @category services
+   * @since 0.1.0
+   */
+  ThreadDeliveryImportReader,
+} from "./internal/thread-import-reader.ts";
 
 const sameInputMessage = Schema.toEquivalence(InputMessage);
 
-/** One owned wire page. Canonical batches precede admissions; all admissions precede accepted commands.
- * Every fact section is required, including empty sections. This order permits indexed atomic staging. */
+/**
+ * One owned wire page. Canonical batches precede admissions; all admissions precede accepted commands.
+ * Every fact section is required, including empty sections. This order permits indexed atomic staging.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ThreadArchive = Schema.Struct({
   ...ThreadExport.fields,
   records: Schema.Array(
@@ -79,6 +106,12 @@ export const ThreadArchive = Schema.Struct({
   ).check(Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS)),
 });
 
+/**
+ * Decoded value of {@link ThreadArchive}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadArchive = typeof ThreadArchive.Type;
 
 const admissionFitsTransfer = makeTransferFactCheck(ThreadAdmission);
@@ -87,6 +120,13 @@ const approvalFitsTransfer = makeTransferFactCheck(ThreadApprovalFact);
 const resolutionFitsTransfer = makeTransferFactCheck(ThreadResolutionFact);
 const deliveryFitsTransfer = makeTransferFactCheck(MessageDeliveryRecord);
 
+/**
+ * Imported Thread identity, record format, final canonical sequence, and restored record and
+ * submission counts.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ThreadImportResult extends Schema.Class<ThreadImportResult>(
   "@effect-agent/thread/ThreadImportResult",
 )({
@@ -97,6 +137,13 @@ export class ThreadImportResult extends Schema.Class<ThreadImportResult>(
   submissionCount: Schema.Natural,
 }) {}
 
+/**
+ * A transfer cannot be imported because its format, evidence, destination state, obligations,
+ * policy, or capacity is unsupported or conflicting.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadImportRejected extends Schema.TaggedError<ThreadImportRejected>()(
   "ThreadImportRejected",
   {
@@ -115,7 +162,12 @@ export class ThreadImportRejected extends Schema.TaggedError<ThreadImportRejecte
   },
 ) {}
 
-/** One owner transaction consumes the stream; E and R are preserved, including rollback on interruption. */
+/**
+ * One owner transaction consumes the stream; E and R are preserved, including rollback on interruption.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadImport extends Context.Service<
   ThreadImport,
   {
@@ -125,6 +177,13 @@ export class ThreadImport extends Context.Service<
   }
 >()("@effect-agent/thread/ThreadImport") {}
 
+/**
+ * One admitted Submission reconstructed from exact canonical input, terminal, suspension, approval,
+ * and reconciliation evidence.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RebuiltSubmission extends Schema.Class<RebuiltSubmission>(
   "@effect-agent/thread/RebuiltSubmission",
 )({
@@ -140,6 +199,13 @@ export class RebuiltSubmission extends Schema.Class<RebuiltSubmission>(
   resolutions: Schema.Array(UnknownResolutionIntent),
 }) {}
 
+/**
+ * Validated batch and its exact encoded record strings, with the canonical sequence range to stage
+ * atomically.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface PreparedImportBatch {
   readonly batch: CanonicalBatch;
   readonly batchJson: string;
@@ -148,13 +214,24 @@ export interface PreparedImportBatch {
   readonly lastSequence: CanonicalSequence;
 }
 
+/**
+ * Captured transfer page with decoded records and validated batches ready for destination staging.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface PreparedImportPage {
   readonly archive: ThreadArchive;
   readonly records: ReadonlyArray<CanonicalRecordEnvelope>;
   readonly batches: ReadonlyArray<PreparedImportBatch>;
 }
 
-/** Resolve every declared immutable reference, even in a preparation without a continuation. */
+/**
+ * Resolve every declared immutable reference, even in a preparation without a continuation.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const verifyImportedReferences = Effect.fnUntraced(function* (
   entry: CanonicalRecordEnvelope,
 ) {
@@ -315,6 +392,12 @@ const sequence = Schema.decodeSync(CanonicalSequence);
 const digest = (value: Schema.Json) =>
   digestJson(value).pipe(Effect.mapError(() => invalid("Unable to digest imported facts")));
 
+/**
+ * Constructs a typed invalid-archive rejection, optionally identifying the affected Thread.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const invalidThreadArchive = (message: string, threadId?: ThreadId) =>
   ThreadImportRejected.make({
     reason: "invalid-archive",
@@ -324,7 +407,12 @@ export const invalidThreadArchive = (message: string, threadId?: ThreadId) =>
 
 const invalid = invalidThreadArchive;
 
-/** Validate authoritative active state against the same staged/captured history and admissions. */
+/**
+ * Validate authoritative active state against the same staged/captured history and admissions.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateImportedExecution = Effect.fnUntraced(function* (
   threadId: ThreadId,
   checkpoint: ExecutionCheckpoint,
@@ -429,7 +517,12 @@ export const validateImportedExecution = Effect.fnUntraced(function* (
   }
 });
 
-/** An executed unfinished Run cannot be imported without its authoritative operational owner. */
+/**
+ * An executed unfinished Run cannot be imported without its authoritative operational owner.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateImportedRunExecution = Effect.fnUntraced(function* (
   threadId: ThreadId,
   runId: RunId,
@@ -457,7 +550,12 @@ export const validateImportedRunExecution = Effect.fnUntraced(function* (
     return yield* invalid("Unfinished execution is missing its authoritative checkpoint", threadId);
 });
 
-/** Own the first page before entering a destination gate; reuse the same scoped source pull. */
+/**
+ * Own the first page before entering a destination gate; reuse the same scoped source pull.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const captureImportSource = <E, R, A, E2, R2>(
   pages: Stream.Stream<ThreadArchive, E, R>,
   use: (captured: Stream.Stream<ThreadArchive, E, R>) => Effect.Effect<A, E2, R2>,
@@ -495,7 +593,12 @@ export const captureImportSource = <E, R, A, E2, R2>(
     }),
   );
 
-/** Constant-size fold state; identity uniqueness belongs to staged destination indexes. */
+/**
+ * Constant-size fold state; identity uniqueness belongs to staged destination indexes.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ThreadImportProgress {
   manifest: ThreadArchive | undefined;
   sequence: number;
@@ -510,6 +613,12 @@ export interface ThreadImportProgress {
   };
 }
 
+/**
+ * Creates empty bounded fold state for validating one ordered transfer stream.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeThreadImportProgress = (): ThreadImportProgress => ({
   manifest: undefined,
   sequence: 0,
@@ -518,7 +627,12 @@ export const makeThreadImportProgress = (): ThreadImportProgress => ({
   counts: { admissions: 0, aborts: 0, approvals: 0, resolutions: 0, deliveries: 0 },
 });
 
-/** Capture before awaiting any writes; the retained manifest never retains page payload arrays. */
+/**
+ * Capture before awaiting any writes; the retained manifest never retains page payload arrays.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const prepareImportPage = Effect.fnUntraced(function* (
   state: ThreadImportProgress,
   input: ThreadArchive,
@@ -721,6 +835,13 @@ export const prepareImportPage = Effect.fnUntraced(function* (
   return { archive, records, batches: prepared } satisfies PreparedImportPage;
 });
 
+/**
+ * Rejects incomplete canonical or fact sections and returns restored counts after the transfer's
+ * final page.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const finishThreadImport = Effect.fnUntraced(function* (state: ThreadImportProgress) {
   const page = state.manifest;
 
@@ -743,7 +864,12 @@ export const finishThreadImport = Effect.fnUntraced(function* (state: ThreadImpo
   });
 });
 
-/** An executed receipt must settle strictly after its own input. FIFO inputs are checked in one pass. */
+/**
+ * An executed receipt must settle strictly after its own input. FIFO inputs are checked in one pass.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const verifyImportedInputOrder = Effect.fnUntraced(function* (
   admission: Pick<ThreadAdmission, "threadId" | "submissionId" | "queueSequence">,
 ) {
@@ -767,7 +893,12 @@ export const verifyImportedInputOrder = Effect.fnUntraced(function* (
     );
 });
 
-/** Rebuild ONE admitted submission from exact staged evidence; terminal state does not erase uncertainty. */
+/**
+ * Rebuild ONE admitted submission from exact staged evidence; terminal state does not erase uncertainty.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const rebuildImportedSubmission = Effect.fnUntraced(function* (admission: ThreadAdmission) {
   const reader = yield* ThreadImportReader;
   const threadId = admission.threadId;
@@ -1051,7 +1182,12 @@ export const rebuildImportedSubmission = Effect.fnUntraced(function* (admission:
   });
 });
 
-/** Immediate persistent history has no ledger/checkpoint owner, but still needs a terminal Run fact. */
+/**
+ * Immediate persistent history has no ledger/checkpoint owner, but still needs a terminal Run fact.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateClosedRun = Effect.fnUntraced(function* (threadId: ThreadId, runId: RunId) {
   const reader = yield* ThreadImportReader;
   const records = yield* reader.runRecords(runId);
@@ -1075,7 +1211,12 @@ export const validateClosedRun = Effect.fnUntraced(function* (threadId: ThreadId
   if (opened && !closed) return yield* invalid("Transfer contains an unfinished Run", threadId);
 });
 
-/** Idle transfer keeps closed receipts, never the authority to finish their former work. */
+/**
+ * Idle transfer keeps closed receipts, never the authority to finish their former work.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const rebuildClosedSubmission = Effect.fnUntraced(function* (admission: ThreadAdmission) {
   if (admission.settledAt === undefined)
     return yield* invalid(
@@ -1133,7 +1274,12 @@ export const rebuildClosedSubmission = Effect.fnUntraced(function* (admission: T
   return rebuilt;
 });
 
-/** Encode one page at a time and retain upstream stream errors and requirements. */
+/**
+ * Encode one page at a time and retain upstream stream errors and requirements.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const reencodeThread = Effect.fnUntraced(function* <E, R>(
   source: Stream.Stream<ThreadExport, E, R>,
 ) {

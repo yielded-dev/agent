@@ -9,7 +9,11 @@ const internalFailure =
   (error: { readonly message: string }): LedgerError =>
     LedgerError.make({ operation, message: error.message, cause: error });
 
-/** Classify raw SQL failures: write-lock timeouts stay retryable typed contention. */
+/**
+ * Classify raw SQL failures: write-lock timeouts stay retryable typed contention.
+ *
+ * @internal
+ */
 export const sqlFailure =
   (operation: string) =>
   (error: SqlError.SqlError): LedgerError => {

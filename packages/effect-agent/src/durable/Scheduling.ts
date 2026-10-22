@@ -1,3 +1,10 @@
+/**
+ * Authorized schedule management and a separate privileged delivery driver. Resolved occurrences
+ * enter ordinary Submission admission through immutable prepared envelopes.
+ *
+ * @since 0.1.0
+ */
+
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -57,6 +64,12 @@ import {
 } from "./Schedule.ts";
 import { type AdmissionFence, IdempotencyKey, type Principal } from "./SubmissionLedger.ts";
 
+/**
+ * Owner scope, timing, destination, delivery authority, and definition identity for a new schedule.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ScheduleCreateOptions {
   readonly scope: ScheduleScope;
   readonly scheduleId: ScheduleId;
@@ -68,20 +81,44 @@ export interface ScheduleCreateOptions {
   readonly definitions: DefinitionDigests;
 }
 
+/**
+ * Replacement schedule configuration guarded by the currently expected configuration revision.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ScheduleUpdateOptions extends ScheduleCreateOptions {
   readonly expectedRevision: number;
 }
 
+/**
+ * Optional owner-local continuation cursor and page-size bound for schedule management views.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ScheduleListOptions {
   readonly after?: ScheduleId | undefined;
   readonly limit?: number | undefined;
 }
 
+/**
+ * Validation, authorization, or storage failure from a schedule management operation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScheduleManagementFailure =
   | ScheduleValidationError
   | ScheduleAuthorizationError
   | ScheduleStoreFailure;
 
+/**
+ * Validation or storage failure while preparing or delivering a scheduled occurrence.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScheduleProcessFailure =
   | ScheduleValidationError
   | ScheduleStoreFailure
@@ -962,6 +999,13 @@ const validateLimits = (limits: SchedulingLimits) =>
     ),
   );
 
+/**
+ * Authorized schedule management over typed Agent inputs and redacted status views; the separate
+ * host driver advances delivery.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class Scheduling extends Context.Service<
   Scheduling,
   {
@@ -1025,12 +1069,24 @@ export class Scheduling extends Context.Service<
   }
 }
 
+/**
+ * Provides inert wake hints for hosts that drive schedule recovery through their own polling or
+ * alarms.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const ScheduleWakeNoop: Layer.Layer<ScheduleWake> = Layer.succeed(ScheduleWake, {
   notify: Effect.void,
   await: Effect.never,
 });
 
-/** Privileged host capability. Never provide this service to management callers or model tools. */
+/**
+ * Privileged host capability. Never provide this service to management callers or model tools.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ScheduleDriver extends Context.Service<
   ScheduleDriver,
   {

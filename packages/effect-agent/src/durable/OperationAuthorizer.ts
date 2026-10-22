@@ -1,3 +1,11 @@
+/**
+ * Host authorization for durable observation, settlement waits, administrative commands, and effect
+ * resolution. The default uses service possession; hosts can supply a caller-aware decision
+ * procedure.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -11,6 +19,9 @@ import { Principal } from "./SubmissionLedger.ts";
  * DUR-017 "authenticated per-read authorization"). The union covers every operation the durable
  * runtime consults the authorizer for: canonical observation, settlement waits, aborts,
  * administration, and the two durable resolution paths.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const AuthorizedOperation = Schema.Literals([
   "observe",
@@ -25,12 +36,21 @@ export const AuthorizedOperation = Schema.Literals([
   "resolveApproval",
 ]);
 
+/**
+ * Decoded value of {@link AuthorizedOperation}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type AuthorizedOperation = typeof AuthorizedOperation.Type;
 
 /**
  * One authorization question. `principal` is present only when the host authenticated a caller
  * identity and threaded it through — the framework never parses bearer tokens (SEC-001); absent
  * identity under the default authorizer keeps the pre-P7 service-possession behavior.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class OperationAuthorizationRequest extends Schema.Class<OperationAuthorizationRequest>(
   "@effect-agent/thread/OperationAuthorizationRequest",
@@ -41,7 +61,12 @@ export class OperationAuthorizationRequest extends Schema.Class<OperationAuthori
   principal: Schema.optionalKey(Principal),
 }) {}
 
-/** A typed, fail-closed authorization denial (never a defect, never silent). */
+/**
+ * A typed, fail-closed authorization denial (never a defect, never silent).
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class OperationDenied extends Schema.TaggedError<OperationDenied>()("OperationDenied", {
   operation: AuthorizedOperation,
   reason: Schema.String.check(Schema.isMaxLength(4_096)),
@@ -54,6 +79,9 @@ export class OperationDenied extends Schema.TaggedError<OperationDenied>()("Oper
  * `resolveUnknown`/`resolveApproval` resolution paths. `authorize` either succeeds (allow) or
  * fails with the typed `OperationDenied` (deny) — the runtime propagates the denial fail-closed
  * and performs no reads or writes for the denied operation.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface OperationAuthorizerService {
   readonly authorize: (
@@ -67,6 +95,9 @@ export interface OperationAuthorizerService {
  * exactly the pre-P7 boundary, unchanged. Hosts that authenticate callers substitute a real
  * decision procedure through `operationAuthorizerLayer`; the framework enforces the decision
  * fail-closed without inventing an identity system (D10/DUR-017 stance, plan §3).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const possessionOperationAuthorizer: OperationAuthorizerService = {
   authorize: () => Effect.void,
@@ -77,12 +108,20 @@ export const possessionOperationAuthorizer: OperationAuthorizerService = {
  * coordinator consults it unconditionally, and only a host-supplied non-default Layer changes
  * the answer. References resolve at Layer construction, so provide the override when building
  * `DurableAgentRuntime.layer` (e.g. `Layer.provide(operationAuthorizerLayer(...))`).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const OperationAuthorizer: Context.Reference<OperationAuthorizerService> =
   Context.Reference<OperationAuthorizerService>("@effect-agent/thread/OperationAuthorizer", {
     defaultValue: () => possessionOperationAuthorizer,
   });
 
-/** Layer carrying a host-supplied authorization decision procedure. */
+/**
+ * Layer carrying a host-supplied authorization decision procedure.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const operationAuthorizerLayer = (service: OperationAuthorizerService): Layer.Layer<never> =>
   Layer.succeedContext(Context.make(OperationAuthorizer, service));

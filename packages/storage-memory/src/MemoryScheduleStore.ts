@@ -1,3 +1,8 @@
+/**
+ * Process-local schedules with atomic transitions and deadline selection.
+ *
+ * @since 0.1.0
+ */
 import {
   ScheduleCapacityError,
   ScheduleDueCursor,
@@ -316,7 +321,19 @@ const makeScheduleStore = Effect.gen(function* () {
   return ScheduleStore.of({ insert, get, list, change, due, nextDeadline });
 });
 
+/**
+ * Constructs an isolated process-local ScheduleStore whose state lasts for the Layer scope.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const memoryScheduleStoreLayer = (): Layer.Layer<ScheduleStore> =>
   Layer.effect(ScheduleStore, makeScheduleStore);
 
+/**
+ * Default process-local ScheduleStore Layer.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const MemoryScheduleStoreLive: Layer.Layer<ScheduleStore> = memoryScheduleStoreLayer();

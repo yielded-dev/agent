@@ -1,3 +1,10 @@
+/**
+ * Pure schedule identity, ordering, capacity, deadline, and lifecycle functions used inside
+ * adapter-owned atomic mutations.
+ *
+ * @since 0.1.0
+ */
+
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
@@ -14,13 +21,30 @@ import { AdmissionFence } from "./SubmissionLedger.ts";
 const equivalentDefinitions = Schema.toEquivalence(DefinitionDigests);
 const equivalentInput = Schema.toEquivalence(PersistedJson);
 
+/**
+ * Encodes tenant and owner as an unambiguous JSON tuple for storage lookup.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const scheduleOwnerKey = (owner: ScheduleOwner): string =>
   JSON.stringify([owner.tenantId, owner.ownerId]);
 
+/**
+ * Encodes the complete tenant, owner, and schedule identity as an unambiguous JSON tuple.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const scheduleKeyString = (key: ScheduleKey): string =>
   JSON.stringify([key.owner.tenantId, key.owner.ownerId, key.scheduleId]);
 
-/** Locale-independent Unicode scalar ordering, matching UTF-8/BINARY order for valid text. */
+/**
+ * Locale-independent Unicode scalar ordering, matching UTF-8/BINARY order for valid text.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const compareScheduleNames = (left: string, right: string): number => {
   const leftPoints = Array.from(left, (value) => value.codePointAt(0) ?? 0);
   const rightPoints = Array.from(right, (value) => value.codePointAt(0) ?? 0);
@@ -35,17 +59,35 @@ export const compareScheduleNames = (left: string, right: string): number => {
   return leftPoints.length - rightPoints.length;
 };
 
+/**
+ * Orders schedule keys by tenant, owner, then schedule using locale-independent Unicode scalar
+ * ordering.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const compareScheduleKeys = (left: ScheduleKey, right: ScheduleKey): number =>
   compareScheduleNames(left.owner.tenantId, right.owner.tenantId) ||
   compareScheduleNames(left.owner.ownerId, right.owner.ownerId) ||
   compareScheduleNames(left.scheduleId, right.scheduleId);
 
+/**
+ * Extracts the tenant-qualified storage key from a retained schedule.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const scheduleKeyOf = (record: ScheduleRecord): ScheduleKey => ({
   owner: record.owner,
   scheduleId: record.scheduleId,
 });
 
-/** Pending recovery always outranks preparation, even after pause or cancellation. */
+/**
+ * Pending recovery always outranks preparation, even after pause or cancellation.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const scheduleDeadline = (record: ScheduleRecord): number | null => {
   if (record.pending !== null)
     return record.pending.retry.parked === true ? null : record.pending.retry.nextAttemptAtMillis;
@@ -53,7 +95,12 @@ export const scheduleDeadline = (record: ScheduleRecord): number | null => {
   return record.state === "active" ? record.nextAtMillis : null;
 };
 
-/** Paused work reserves capacity; terminal replay evidence does not. */
+/**
+ * Paused work reserves capacity; terminal replay evidence does not.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const scheduleUsesCapacity = (record: ScheduleRecord): boolean =>
   record.pending !== null || (record.state !== "cancelled" && record.nextAtMillis !== null);
 
@@ -70,6 +117,9 @@ const changed = (
  * The adapter-neutral local transaction reducer. Adapters call it only after decoding the row and
  * command. A stale delivery completion returns the original record without changing even bounded
  * status or the CAS version.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const applyScheduleChange = (
   record: ScheduleRecord,

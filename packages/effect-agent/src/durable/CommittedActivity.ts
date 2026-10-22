@@ -1,3 +1,10 @@
+/**
+ * Finite processing of a captured committed Thread prefix into application-owned outputs. Durable
+ * progress pins each output before application; destination effects require their own idempotency.
+ *
+ * @since 0.1.0
+ */
+
 import * as Clock from "effect/Clock";
 import type * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -23,6 +30,13 @@ import {
   type ThreadStoreError,
 } from "./ThreadStore.ts";
 
+/**
+ * Bounds for one finite activity pass: 1–4,096 records, pages of 1–128 records, and a 1–300,000
+ * millisecond timeout.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ActivityPassLimits extends Schema.Class<ActivityPassLimits>(
   "@effect-agent/thread/ActivityPassLimits",
 )({
@@ -31,6 +45,12 @@ export class ActivityPassLimits extends Schema.Class<ActivityPassLimits>(
   timeoutMillis: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 300_000 })),
 }) {}
 
+/**
+ * Invalid processor input, noncontiguous committed evidence, or a timed-out activity pass.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ActivityProcessingError extends Schema.TaggedError<ActivityProcessingError>()(
   "ActivityProcessingError",
   {
@@ -39,6 +59,13 @@ export class ActivityProcessingError extends Schema.TaggedError<ActivityProcessi
   },
 ) {}
 
+/**
+ * Progress through the captured Thread tail, with processed and remaining record counts and
+ * epoch-millisecond start and finish times.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ActivityPassResult extends Schema.Class<ActivityPassResult>(
   "@effect-agent/thread/ActivityPassResult",
 )({
@@ -51,6 +78,13 @@ export class ActivityPassResult extends Schema.Class<ActivityPassResult>(
   finishedAt: Schema.Finite,
 }) {}
 
+/**
+ * Application-owned extraction and idempotent application of committed records, with a versioned
+ * progress identity and finite pass limits.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface CommittedActivityProcessor<E = never, R = never, EApply = never, RApply = never> {
   readonly key: ActivityProcessorKey;
   readonly limits: ActivityPassLimits;
@@ -75,7 +109,12 @@ const contiguous = () =>
     message: "Committed activity does not match its captured Thread prefix or pinned record",
   });
 
-/** Stable work identity independent of local sessions, retry count, extraction, and clocks. */
+/**
+ * Stable work identity independent of local sessions, retry count, extraction, and clocks.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const activityWorkId = (key: ActivityProcessorKey, sequence: CanonicalSequence) =>
   digestJson([
     "effect-agent/activity@1",
@@ -96,6 +135,9 @@ export const activityWorkId = (key: ActivityProcessorKey, sequence: CanonicalSeq
  * promise exactly-once external side effects. Each callback owns a Scope; the finite pass has
  * a timeout. Its local session closes with the pass Scope and rejects late mutations;
  * recovery reuses durable progress immediately under the same single-owner routing contract.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const processCommittedActivity = Effect.fnUntraced(function* <
   E = never,

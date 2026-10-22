@@ -1,3 +1,10 @@
+/**
+ * Scoped local wake hints for durable workers and observers. Consumers recheck storage because
+ * hints may be lost, coalesced, or duplicated.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -11,6 +18,9 @@ import { type ThreadId } from "../core/Identifiers.ts";
  * Incarnation-local, thread-keyed wake registrations. A registration is installed before
  * its returned Effect can be awaited, which lets a caller subscribe, check durable authority,
  * and then park without a lost-wakeup window.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface WakeSubscriptionHub {
   /** Register one Scope-owned waiter and return its one-shot wake Effect. */
@@ -26,6 +36,9 @@ export interface WakeSubscriptionHub {
  * contains hints only: eviction may discard it, while a reconnecting caller re-subscribes and
  * rechecks canonical storage. Scope finalizers remove cancelled waiters, and notify broadcasts
  * instead of consuming a signal that belongs to another waiter.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeWakeSubscriptionHub: Effect.Effect<WakeSubscriptionHub> = Effect.sync(() => {
   const registrations = new Map<ThreadId, Set<Deferred.Deferred<void>>>();
@@ -81,6 +94,9 @@ export const makeWakeSubscriptionHub: Effect.Effect<WakeSubscriptionHub> = Effec
  * Each run of `wakes` creates its own subscription whose resources live in that run's Scope and
  * are released when the consuming stream ends or is interrupted. Implementations must not spawn
  * daemon fibers.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class WakeScheduler extends Context.Service<
   WakeScheduler,

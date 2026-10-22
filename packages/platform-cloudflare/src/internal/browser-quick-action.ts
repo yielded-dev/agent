@@ -49,6 +49,7 @@ import * as Schema from "effect/Schema";
  *
  * Rendered output is untrusted, attacker-influenced content; this adapter
  * only bounds and types it. Deployment class `E` only: no durability claim.
+ * @internal
  */
 export const browserQuickActionImplementation = SandboxImplementation.make({
   isolation: "isolated",
@@ -58,6 +59,9 @@ export const browserQuickActionImplementation = SandboxImplementation.make({
 /**
  * Effect-native client captured by the binding service. Compose the pinned
  * action types with the documented Kitesurf selector for links and scrape.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface BrowserQuickActionClient {
   readonly screenshot: (
@@ -80,7 +84,12 @@ export interface BrowserQuickActionClient {
   ) => Effect.Effect<Response, BrowserQuickActionRpcError>;
 }
 
-/** A native binding RPC rejected before it returned an HTTP response. */
+/**
+ * A native binding RPC rejected before it returned an HTTP response.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BrowserQuickActionRpcError extends Schema.TaggedError<BrowserQuickActionRpcError>()(
   "BrowserQuickActionRpcError",
   {
@@ -89,12 +98,23 @@ export class BrowserQuickActionRpcError extends Schema.TaggedError<BrowserQuickA
   },
 ) {}
 
+/**
+ * Host-supplied Browser Run binding for stateless page capture and screenshots.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface BrowserQuickActionCaptureOptions {
   /** The resolved Wrangler `browser` binding (DEPLOY-014: supplied, never ambient). */
   readonly browser: BrowserRun;
 }
 
-/** Host-owned browser binding authority, supplied explicitly at the composition root. */
+/**
+ * Host-owned browser binding authority, supplied explicitly at the composition root.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class BrowserQuickActionBrowserBinding extends Context.Service<
   BrowserQuickActionBrowserBinding,
   BrowserQuickActionClient
@@ -125,14 +145,24 @@ export class BrowserQuickActionBrowserBinding extends Context.Service<
   }
 }
 
-/** Host-owned authorization and accounting for one Workers AI extraction. */
+/**
+ * Host-owned authorization and accounting for one Workers AI extraction.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserQuickActionWorkersAiPolicy {
   readonly authorizeAndAccount: (
     request: PageCaptureRequest,
   ) => Effect.Effect<void, BrowserQuickActionWorkersAiPolicyError>;
 }
 
-/** Host-only diagnostic for a denied or unaccounted Workers AI extraction. */
+/**
+ * Host-only diagnostic for a denied or unaccounted Workers AI extraction.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BrowserQuickActionWorkersAiPolicyError extends Schema.TaggedError<BrowserQuickActionWorkersAiPolicyError>()(
   "BrowserQuickActionWorkersAiPolicyError",
   {
@@ -142,7 +172,12 @@ export class BrowserQuickActionWorkersAiPolicyError extends Schema.TaggedError<B
   },
 ) {}
 
-/** Explicit host-owned authority and accounting for separately billed Workers AI extraction. */
+/**
+ * Explicit host-owned authority and accounting for separately billed Workers AI extraction.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class BrowserQuickActionWorkersAi extends Context.Service<
   BrowserQuickActionWorkersAi,
   BrowserQuickActionWorkersAiPolicy
@@ -595,6 +630,9 @@ const makeCapture = (
 /**
  * Ordinary Quick Actions require host-owned browser binding authority. Workers
  * AI stays unavailable unless the host deliberately selects its separate Layer.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const browserQuickActionCaptureLayer = (): Layer.Layer<
   PageCapture,
@@ -608,7 +646,12 @@ export const browserQuickActionCaptureLayer = (): Layer.Layer<
     ),
   );
 
-/** Structured Quick Actions require host-owned browser and Workers AI authority. */
+/**
+ * Structured Quick Actions require host-owned browser and Workers AI authority.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const browserQuickActionWorkersAiCaptureLayer = (): Layer.Layer<
   PageCapture,
   never,
@@ -624,12 +667,22 @@ export const browserQuickActionWorkersAiCaptureLayer = (): Layer.Layer<
     }),
   );
 
-/** Host-owned Quick Action binding and optional, separately billed extraction authority. */
+/**
+ * Host-owned Quick Action binding and optional, separately billed extraction authority.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface CloudflareBrowserOptions extends BrowserQuickActionCaptureOptions {
   readonly workersAi?: BrowserQuickActionWorkersAiPolicy;
 }
 
-/** Compose WebCapture handlers with the Cloudflare Quick Action adapter. */
+/**
+ * Compose WebCapture handlers with the Cloudflare Quick Action adapter.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const CloudflareBrowser = {
   /**
    * Supply a WebCapture definition and the resolved Worker browser binding.
@@ -834,7 +887,12 @@ const makeScreenshot = (browser: BrowserQuickActionClient): PageScreenshotCaptur
     });
   });
 
-/** Native Browser Run screenshot adapter. It retains PNG bytes only for the caller's result. */
+/**
+ * Native Browser Run screenshot adapter. It retains PNG bytes only for the caller's result.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const browserQuickActionScreenshotLayer = (): Layer.Layer<
   PageScreenshot,
   never,

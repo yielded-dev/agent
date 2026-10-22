@@ -1,3 +1,10 @@
+/**
+ * Canonical JSON serialization, UTF-8 size accounting, and digests for persisted values and
+ * definition identity.
+ *
+ * @since 0.1.0
+ */
+
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
@@ -9,9 +16,22 @@ import { canonicalJson as stringifyCanonicalJson } from "./internal/canonical-js
 import type { DefinitionDigestInput } from "./Records.ts";
 import { DefinitionDigests, Digest } from "./Records.ts";
 
-/** Measure persisted text without allocating a UTF-8 copy. */
-export { utf8ByteLength } from "../core/internal/utf8.ts";
+export {
+  /**
+   * Count encoded bytes without allocating an encoded copy of the text.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  utf8ByteLength,
+} from "../core/internal/utf8.ts";
 
+/**
+ * Canonical serialization or digest computation failed for the supplied value.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DigestError extends Schema.TaggedError<DigestError>()("DigestError", {
   message: Schema.String,
   cause: Schema.optionalKey(Schema.Defect()),
@@ -19,7 +39,12 @@ export class DigestError extends Schema.TaggedError<DigestError>()("DigestError"
 
 const decodeDigest = Schema.decodeEffect(Digest);
 
-/** Serialize schema-encoded JSON with the canonical digest's locale-independent key order. */
+/**
+ * Serialize schema-encoded JSON with the canonical digest's locale-independent key order.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const canonicalJson = (value: Schema.Json): string => stringifyCanonicalJson(value);
 
 const digestText = Effect.fnUntraced(function* (
@@ -42,17 +67,37 @@ const digestText = Effect.fnUntraced(function* (
   );
 });
 
-/** Digest a JSON value using a stable, locale-independent object-key ordering (UTF-16 code units, RFC 8785 style). */
+/**
+ * Digest a JSON value using a stable, locale-independent object-key ordering (UTF-16 code units, RFC 8785 style).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const digestJson = (value: Schema.Json): Effect.Effect<Digest, DigestError, Crypto.Crypto> =>
   Effect.suspend(() => digestText(canonicalJson(value)));
 
-/** Hash captured canonical JSON directly, sharing its encoding with accounting and storage. */
+/**
+ * Hash captured canonical JSON directly, sharing its encoding with accounting and storage.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const digestCanonicalJson = (json: string) => digestText(json);
 
-/** Digest one schema-encoded Agent, Model, or Toolkit definition. */
+/**
+ * Digest one schema-encoded Agent, Model, or Toolkit definition.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const digestDefinition = (definition: Schema.Json) => digestJson(definition);
 
-/** Digest all replay-relevant definitions without hiding which authority changed. */
+/**
+ * Digest all replay-relevant definitions without hiding which authority changed.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const digestDefinitions = (
   definitions: DefinitionDigestInput,
 ): Effect.Effect<DefinitionDigests, DigestError, Crypto.Crypto> =>

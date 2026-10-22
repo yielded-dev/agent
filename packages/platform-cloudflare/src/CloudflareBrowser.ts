@@ -1,4 +1,8 @@
-/** Public CloudflareBrowser API. Implementation helpers remain private. */
+/**
+ * Stateless page capture and screenshots through Cloudflare Browser Run bindings.
+ *
+ * @since 0.1.0
+ */
 export {
   BrowserQuickActionBrowserBinding,
   BrowserQuickActionRpcError,

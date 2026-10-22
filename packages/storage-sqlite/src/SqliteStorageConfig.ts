@@ -1,3 +1,8 @@
+/**
+ * Validated configuration and service authority for SQLite storage.
+ *
+ * @since 0.1.0
+ */
 import * as Context from "effect/Context";
 import * as Schema from "effect/Schema";
 
@@ -8,6 +13,9 @@ const BusyTimeoutMillis = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
  * Validated construction configuration consumed by the SQLite storage Layer. The database
  * identity itself belongs to the SqlClient Layer; duplicating it here could silently diverge
  * from the connection actually in use.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export class SqliteStorageConfigValue extends Schema.Class<SqliteStorageConfigValue>(
   "@effect-agent/storage-sqlite/SqliteStorageConfigValue",
@@ -24,7 +32,12 @@ export class SqliteStorageConfigValue extends Schema.Class<SqliteStorageConfigVa
   verifyOnOpen: Schema.Boolean,
 }) {}
 
-/** Explicit SQLite storage configuration authority. */
+/**
+ * Explicit SQLite storage configuration authority.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class SqliteStorageConfig extends Context.Service<
   SqliteStorageConfig,
   SqliteStorageConfigValue

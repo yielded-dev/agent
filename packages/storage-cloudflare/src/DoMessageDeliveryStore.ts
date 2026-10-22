@@ -1,3 +1,8 @@
+/**
+ * Durable message delivery obligations stored beside their owning Thread.
+ *
+ * @since 0.1.0
+ */
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { SqlLifecycleSource } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
 import {
@@ -21,6 +26,9 @@ import { initializeDoJournal } from "./internal/do-journal.ts";
  * Message obligations paired with the Thread Object's physical storage owner. Canonical
  * publication uses this configured writer inside the source transaction. The platform must
  * retain delivery maintenance with that transaction and while nextDeadline is present.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const doMessageDeliveryStoreLayer = (limits?: MessageDeliveryStoreLimits) =>
   Layer.effect(

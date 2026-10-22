@@ -1,3 +1,8 @@
+/**
+ * Indexed canonical and execution reads shared by SQL storage adapters.
+ *
+ * @since 0.1.0
+ */
 import { RunId, ThreadId } from "@yielded/agent/identifiers";
 import { decodeExportRecordJson } from "@yielded/agent/record-format";
 import {
@@ -69,7 +74,12 @@ import type { RawAppendRequest } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger, makeSqlTransaction } from "./SqlStorage.ts";
 import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 
-/** Closed library tags must match SQLite partial-index predicates at prepare time. */
+/**
+ * Closed library tags must match SQLite partial-index predicates at prepare time.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const SQL_PROMPT_PREDICATE = `record_tag IN (${PROMPT_EVIDENCE_TAGS.map((tag) => RECORD_TAGS[tag]).join(", ")})`;
 
 const canonicalColumns = {
@@ -112,6 +122,9 @@ const wireField = (wire: RecordJson, path: ReadonlyArray<string>): unknown => {
  * Derive disposable locators from privately captured wire before the writer can suspend.
  * Membership is canonical read ownership, not progress accounting or execution authority:
  * a joined SubmissionSettled retains both its host and its own Submission's Run.
+ *
+ * @category utilities
+ * @since 0.1.0
  */
 export const canonicalRecordMetadata = (
   record: Pick<PreparedAppend["records"][number], "wire" | "canonical">,
@@ -169,7 +182,11 @@ export const canonicalRecordMetadata = (
   });
 };
 
-/** Exact opaque identities. Callers publish these persistent pointers with their canonical rows. */
+/**
+ * Exact opaque identities. Callers publish these persistent pointers with their canonical rows.
+ *
+ * @internal
+ */
 export const canonicalRecordPointers = (record: CanonicalRecord) => {
   const payload = record.payload;
 
@@ -189,6 +206,12 @@ export const canonicalRecordPointers = (record: CanonicalRecord) => {
   };
 };
 
+/**
+ * Indexed selector metadata derived from one canonical record.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CanonicalRecordMetadata = ReturnType<typeof canonicalRecordMetadata>;
 
 const failure = (operation: string, cause?: unknown) =>
@@ -241,7 +264,12 @@ const boundedCandidates = (
   return join(groups);
 };
 
-/** One current value and one retry descriptor; imported checkpoints have no local retry intent. */
+/**
+ * One current value and one retry descriptor; imported checkpoints have no local retry intent.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const StoredExecution = Schema.Struct({
   thread_id: ThreadId,
   run_id: Schema.fromJsonString(RunId),
@@ -256,6 +284,11 @@ export const StoredExecution = Schema.Struct({
 
 const decodeCheckpoint = Schema.decodeEffect(Schema.fromJsonString(ExecutionCheckpoint));
 
+/**
+ * Decodes an active checkpoint and verifies its identity against the native row.
+ *
+ * @internal
+ */
 export const decodeStoredExecution = Effect.fnUntraced(function* (
   row: typeof StoredExecution.Type,
 ) {
@@ -278,6 +311,9 @@ export const decodeStoredExecution = Effect.fnUntraced(function* (
 /**
  * Convert released checkpoint v1 rows inside the adapter's layout transaction. Both progress
  * copies must agree before one is discarded. History, accounting and retry intent stay intact.
+ *
+ * @category utilities
+ * @since 0.1.0
  */
 export const upgradeExecutionCheckpoints = Effect.fnUntraced(
   function* (namespace: string | undefined) {
@@ -345,7 +381,11 @@ const decodeExecutionRows = Schema.decodeUnknownEffect(
 const decodeExecutionRead = Schema.decodeEffect(ExecutionRead);
 const decodePromptRead = Schema.decodeEffect(ThreadPromptRead);
 
-/** This read never synthesizes canonical history. */
+/**
+ * This read never synthesizes canonical history.
+ *
+ * @internal
+ */
 export const makeExecutionRead = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
@@ -372,7 +412,11 @@ export const makeExecutionRead = Effect.fnUntraced(function* (namespace?: string
   );
 });
 
-/** Read initial canonical evidence inside the append transaction, bounded by its captured tail. */
+/**
+ * Read initial canonical evidence inside the append transaction, bounded by its captured tail.
+ *
+ * @internal
+ */
 export const makeInitialProgressRead = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
 
@@ -484,7 +528,12 @@ const decodeTailRows = Schema.decodeUnknownEffect(
   ),
 );
 
-/** Exclusive-owner snapshot and header reuse for indexed canonical reads. */
+/**
+ * Exclusive-owner snapshot and header reuse for indexed canonical reads.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SelectedReadOwner {
   readonly snapshot: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
   readonly tail: (threadId: SelectedThreadRead["threadId"]) => Effect.Effect<
@@ -496,11 +545,23 @@ export interface SelectedReadOwner {
   >;
 }
 
+/**
+ * Optional snapshot and tail reads supplied by an exclusive SQL owner.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const SelectedReadOwner = Context.Reference<SelectedReadOwner | undefined>(
   "@effect-agent/storage-sql/SelectedReadOwner",
   { defaultValue: () => undefined },
 );
 
+/**
+ * Constructs indexed canonical reads using the adapter's record decoder and namespace.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSelectedReads = Effect.fnUntraced(function* (
   envelope: (row: typeof Row.Type) => Effect.Effect<CanonicalRecordEnvelope, ThreadStoreError>,
   namespace?: string,

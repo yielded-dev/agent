@@ -1,3 +1,10 @@
+/**
+ * A scoped port for bounded isolated JavaScript execution with explicit host-call namespaces and
+ * resource limits.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import type * as Effect from "effect/Effect";
@@ -93,7 +100,12 @@ const reservedIdentifiers = new Set([
   "yield",
 ]);
 
-/** A JavaScript identifier safe to bind as a sandbox global or method name. */
+/**
+ * A JavaScript identifier safe to bind as a sandbox global or method name.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const JsIdentifier = Schema.NonEmptyString.check(
   Schema.isMaxLength(128),
   Schema.isPattern(/^[A-Za-z_$][A-Za-z0-9_$]*$/),
@@ -103,9 +115,20 @@ export const JsIdentifier = Schema.NonEmptyString.check(
   }),
 );
 
+/**
+ * Decoded value of {@link JsIdentifier}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type JsIdentifier = typeof JsIdentifier.Type;
 
-/** One callable namespace exposed to the generated program as a typed global. */
+/**
+ * One callable namespace exposed to the generated program as a typed global.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CodeExecutionNamespace extends Schema.Class<CodeExecutionNamespace>(
   "CodeExecutionNamespace",
 )({
@@ -116,6 +139,9 @@ export class CodeExecutionNamespace extends Schema.Class<CodeExecutionNamespace>
 /**
  * Limits an executor must either enforce or reject (CAP-015). Byte bounds are
  * measured on UTF-8 encoded JSON at the sandbox boundary.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CodeExecutionLimits extends Schema.Class<CodeExecutionLimits>("CodeExecutionLimits")({
   maxSourceBytes: PositiveInt.check(Schema.isLessThanOrEqualTo(4 * 1024 * 1024)),
@@ -134,6 +160,9 @@ export class CodeExecutionLimits extends Schema.Class<CodeExecutionLimits>("Code
  * One isolated execution pass over bounded generated JavaScript. The source
  * must be a single expression evaluating to one async function; the executor
  * harness invokes it exactly once with no arguments (ADR-0017 decision 5).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CodeExecutionRequest extends Schema.Class<CodeExecutionRequest>(
   "CodeExecutionRequest",
@@ -145,14 +174,24 @@ export class CodeExecutionRequest extends Schema.Class<CodeExecutionRequest>(
   limits: CodeExecutionLimits,
 }) {}
 
-/** One host invocation from generated code. Data only: the broker owns identity. */
+/**
+ * One host invocation from generated code. Data only: the broker owns identity.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CodeHostCall extends Schema.Class<CodeHostCall>("CodeHostCall")({
   namespace: JsIdentifier,
   method: JsIdentifier,
   argument: Schema.Json,
 }) {}
 
-/** A host call settled with the encoded Tool success value. */
+/**
+ * A host call settled with the encoded Tool success value.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CodeHostCallSuccess extends Schema.TaggedClass<CodeHostCallSuccess>()(
   "CodeHostCallSuccess",
   {
@@ -166,6 +205,9 @@ export class CodeHostCallSuccess extends Schema.TaggedClass<CodeHostCallSuccess>
  * program can catch and branch on expected failures. Object and array failures
  * stringify to their encoded JSON, preserving recovery details in String(error)
  * without changing the enumerable fields returned or rethrown by the program.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class CodeHostCallFailure extends Schema.TaggedClass<CodeHostCallFailure>()(
   "CodeHostCallFailure",
@@ -174,8 +216,19 @@ export class CodeHostCallFailure extends Schema.TaggedClass<CodeHostCallFailure>
   },
 ) {}
 
-/** Outcome of one host call as data; transport failures stay executor errors. */
+/**
+ * Outcome of one host call as data; transport failures stay executor errors.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CodeHostCallResult = Schema.Union([CodeHostCallSuccess, CodeHostCallFailure]);
+/**
+ * Decoded value of {@link CodeHostCallResult}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CodeHostCallResult = typeof CodeHostCallResult.Type;
 
 /**
@@ -184,6 +237,9 @@ export type CodeHostCallResult = typeof CodeHostCallResult.Type;
  * bindings are scoped resources, and it is never persisted (ADR-0017
  * decision 2). Broker-level failures return as `CodeHostCallFailure` data;
  * an unexpected host defect remains a defect.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class CodeExecutionHost extends Context.Service<
   CodeExecutionHost,
@@ -192,7 +248,12 @@ export class CodeExecutionHost extends Context.Service<
   }
 >()("@effect-agent/sandbox/CodeExecutionHost") {}
 
-/** Accounting one executor observed for one pass. */
+/**
+ * Accounting one executor observed for one pass.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CodeExecutionResourceUse extends Schema.Class<CodeExecutionResourceUse>(
   "CodeExecutionResourceUse",
 )({
@@ -207,6 +268,9 @@ export class CodeExecutionResourceUse extends Schema.Class<CodeExecutionResource
  * The bounded outcome of one successful pass. `value` and `logs` are the raw
  * executor capture; the aggregate model-visible egress budget and redaction
  * pass are owned by the Code Mode capability, not the executor (CAP-016).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CodeExecutionResult extends Schema.Class<CodeExecutionResult>("CodeExecutionResult")({
   implementation: SandboxImplementation,
@@ -215,14 +279,24 @@ export class CodeExecutionResult extends Schema.Class<CodeExecutionResult>("Code
   resourceUse: CodeExecutionResourceUse,
 }) {}
 
-/** The source is not one async function expression the executor can run. */
+/**
+ * The source is not one async function expression the executor can run.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CodeSourceError extends Schema.TaggedError<CodeSourceError>()("CodeSourceError", {
   implementation: SandboxImplementation,
   reason: Schema.Literals(["invalid", "oversized", "not-a-function"]),
   message: BoundedMessage,
 }) {}
 
-/** The executor cannot honestly enforce one requested feature, limit, or policy. */
+/**
+ * The executor cannot honestly enforce one requested feature, limit, or policy.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CodeExecutorUnsupportedError extends Schema.TaggedError<CodeExecutorUnsupportedError>()(
   "CodeExecutorUnsupportedError",
   {
@@ -239,7 +313,12 @@ export class CodeExecutorUnsupportedError extends Schema.TaggedError<CodeExecuto
   },
 ) {}
 
-/** The executor could not start the isolated pass. */
+/**
+ * The executor could not start the isolated pass.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CodeExecutorStartError extends Schema.TaggedError<CodeExecutorStartError>()(
   "CodeExecutorStartError",
   {
@@ -249,7 +328,12 @@ export class CodeExecutorStartError extends Schema.TaggedError<CodeExecutorStart
   },
 ) {}
 
-/** The pass exceeded its CPU or wall-clock budget and was terminated. */
+/**
+ * The pass exceeded its CPU or wall-clock budget and was terminated.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CodeExecutionTimeoutError extends Schema.TaggedError<CodeExecutionTimeoutError>()(
   "CodeExecutionTimeoutError",
   {
@@ -260,7 +344,12 @@ export class CodeExecutionTimeoutError extends Schema.TaggedError<CodeExecutionT
   },
 ) {}
 
-/** A bounded surface (logs, result, or a per-call byte bound) was exceeded. */
+/**
+ * A bounded surface (logs, result, or a per-call byte bound) was exceeded.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CodeOutputLimitError extends Schema.TaggedError<CodeOutputLimitError>()(
   "CodeOutputLimitError",
   {
@@ -272,7 +361,12 @@ export class CodeOutputLimitError extends Schema.TaggedError<CodeOutputLimitErro
   },
 ) {}
 
-/** The pass issued more host calls than its executor-owned cap allows. */
+/**
+ * The pass issued more host calls than its executor-owned cap allows.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CodeHostCallLimitError extends Schema.TaggedError<CodeHostCallLimitError>()(
   "CodeHostCallLimitError",
   {
@@ -286,6 +380,9 @@ export class CodeHostCallLimitError extends Schema.TaggedError<CodeHostCallLimit
  * The generated program finished by failing: it threw, its promise rejected,
  * or it returned a value that is not JSON. The bounded thrown value and log
  * capture flow back so a model can correct the program without a blind retry.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class CodeProgramFailedError extends Schema.TaggedError<CodeProgramFailedError>()(
   "CodeProgramFailedError",
@@ -298,7 +395,12 @@ export class CodeProgramFailedError extends Schema.TaggedError<CodeProgramFailed
   },
 ) {}
 
-/** The executor or its transport produced a value outside the protocol Schemas. */
+/**
+ * The executor or its transport produced a value outside the protocol Schemas.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CodeExecutionProtocolError extends Schema.TaggedError<CodeExecutionProtocolError>()(
   "CodeExecutionProtocolError",
   {
@@ -310,6 +412,9 @@ export class CodeExecutionProtocolError extends Schema.TaggedError<CodeExecution
 /**
  * The pass was terminated externally — isolate eviction or a platform kill —
  * with no terminal program result. No result is fabricated.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class CodeExecutorTerminatedError extends Schema.TaggedError<CodeExecutorTerminatedError>()(
   "CodeExecutorTerminatedError",
@@ -319,7 +424,12 @@ export class CodeExecutorTerminatedError extends Schema.TaggedError<CodeExecutor
   },
 ) {}
 
-/** Expected Code Mode execution failures. Interruption stays an Effect interruption. */
+/**
+ * Expected Code Mode execution failures. Interruption stays an Effect interruption.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CodeExecutionError = Schema.Union([
   CodeSourceError,
   CodeExecutorUnsupportedError,
@@ -332,6 +442,12 @@ export const CodeExecutionError = Schema.Union([
   CodeExecutorTerminatedError,
 ]);
 
+/**
+ * Decoded value of {@link CodeExecutionError}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CodeExecutionError = typeof CodeExecutionError.Type;
 
 /**
@@ -342,6 +458,9 @@ export type CodeExecutionError = typeof CodeExecutionError.Type;
  * `CodeExecutionHost` service in its requirement channel. Implementations must
  * identify their isolation posture honestly; an `unisolated` executor is never
  * a security boundary (CAP-010, CAP-015).
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class CodeExecutor extends Context.Service<
   CodeExecutor,
@@ -352,7 +471,12 @@ export class CodeExecutor extends Context.Service<
   }
 >()("@effect-agent/sandbox/CodeExecutor") {}
 
-/** Type helper for implementations that preserve the public CodeExecutor contract. */
+/**
+ * Type helper for implementations that preserve the public CodeExecutor contract.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CodeExecutorExecute = (
   request: CodeExecutionRequest,
 ) => Effect.Effect<CodeExecutionResult, CodeExecutionError, Scope.Scope | CodeExecutionHost>;

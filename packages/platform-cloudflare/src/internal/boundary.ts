@@ -5,7 +5,9 @@ const MAX_FOREIGN_DIAGNOSTIC_LENGTH = 8_192;
 const boundForeignDiagnostic = (message: string): string =>
   message.slice(0, MAX_FOREIGN_DIAGNOSTIC_LENGTH);
 
-/** Render a foreign failure without trusting accessors or coercion hooks on the value. */
+/** Render a foreign failure without trusting accessors or coercion hooks on the value.
+ * @internal
+ */
 export const safeCauseMessage = (cause: unknown, fallback: string): string => {
   try {
     const message = cause instanceof Error ? cause.message : cause;
@@ -16,7 +18,9 @@ export const safeCauseMessage = (cause: unknown, fallback: string): string => {
   }
 };
 
-/** Include an Error name when worker-failure classification needs it. */
+/** Include an Error name when worker-failure classification needs it.
+ * @internal
+ */
 export const safeCauseDiagnostic = (cause: unknown, fallback: string): string => {
   try {
     return cause instanceof Error
@@ -27,12 +31,15 @@ export const safeCauseDiagnostic = (cause: unknown, fallback: string): string =>
   }
 };
 
+/** @internal */
 export interface CloudflareFailureSignals {
   readonly retryable?: boolean | undefined;
   readonly overloaded?: boolean | undefined;
 }
 
-/** Read Cloudflare RPC classifications without letting a hostile proxy defect the client. */
+/** Read Cloudflare RPC classifications without letting a hostile proxy defect the client.
+ * @internal
+ */
 export const cloudflareFailureSignals = (cause: unknown): CloudflareFailureSignals => {
   if (!Predicate.isObjectKeyword(cause)) return {};
   try {

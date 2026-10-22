@@ -15,6 +15,7 @@ interface ForeignDiagnostic {
  * Inspect a foreign failure without trusting its property accessors. Schema owns the accepted
  * fields, while the guards around each decode keep hostile proxies and getters from escaping as
  * defects during diagnostic projection.
+ * @internal
  */
 export const inspectForeignDiagnostic = (value: unknown): ForeignDiagnostic => {
   let tag: string | undefined;
@@ -38,7 +39,10 @@ export const inspectForeignDiagnostic = (value: unknown): ForeignDiagnostic => {
   };
 };
 
-/** Render an opaque foreign value without allowing its coercion hooks to escape. */
+/**
+ * Render an opaque foreign value without allowing its coercion hooks to escape.
+ * @internal
+ */
 export const safeUnknownString = (value: unknown, fallback: string): string => {
   try {
     return String(value);

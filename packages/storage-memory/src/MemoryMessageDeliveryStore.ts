@@ -1,3 +1,8 @@
+/**
+ * Process-local message delivery obligations paired with a memory Thread store.
+ *
+ * @since 0.1.0
+ */
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
   applyMessageDeliveryChange,
@@ -41,8 +46,8 @@ import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
-import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
 import { boundedWorkSelection } from "./internal/WorkSelection.ts";
+import { MemoryThreadStoreKernel } from "./MemoryThreadStore.ts";
 
 const codec = Schema.fromJsonString(MessageDeliveryRecord);
 const deliveryFitsTransfer = makeTransferFactCheck(MessageDeliveryRecord);
@@ -144,6 +149,12 @@ const keysFor = (current: ReturnType<typeof backend>, key: string) => {
   return keys;
 };
 
+/**
+ * Persisted value bounds for a process-local message delivery store.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface MemoryMessageDeliveryStoreOptions {
   /** UTF-8 bound on the complete stored record, including a processed Settlement. */
   readonly maxStoredValueBytes?: number;
@@ -153,6 +164,9 @@ export interface MemoryMessageDeliveryStoreOptions {
  * Pair with MemoryThreadStoreLive to publish canonical messages and their deliveries atomically.
  * Export/import preserves every retained delivery obligation.
  * Each retained value and live partition is bounded; completed deduplication evidence is never evicted.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const memoryMessageDeliveryStoreLayer = (
   limits: MessageDeliveryStoreLimits = defaultMessageDeliveryStoreLimits,
@@ -989,4 +1003,10 @@ export const memoryMessageDeliveryStoreLayer = (
     }),
   );
 
+/**
+ * Default memory delivery Layer; provide the paired MemoryThreadStoreKernel.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const MemoryMessageDeliveryStoreLive = memoryMessageDeliveryStoreLayer();

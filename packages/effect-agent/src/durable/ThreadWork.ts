@@ -1,3 +1,10 @@
+/**
+ * Bounded native discovery of pending admissions, canonical obligations, and deliveries. Disposable
+ * indexes can be rebuilt from canonical evidence without granting execution ownership.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -23,20 +30,79 @@ import { runIdForSubmission } from "./RunJournal.ts";
 import type { SubmissionWorkItem } from "./SubmissionLedger.ts";
 import { ThreadReader, ThreadStore, ThreadStoreError } from "./ThreadStore.ts";
 
+/**
+ * Current format version for disposable work-discovery state and cursors.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const WORK_INDEX_VERSION = 4;
+/**
+ * Maximum number of work entries returned in one discovery page: 128.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_WORK_PAGE_ENTRIES = 128;
+/**
+ * Maximum encoded size of one work-discovery entry: 8 KiB.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_WORK_ENTRY_BYTES = 8 * 1024;
+/**
+ * Maximum combined encoded size of a work-discovery page: 1 MiB.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_WORK_PAGE_BYTES = MAX_WORK_PAGE_ENTRIES * MAX_WORK_ENTRY_BYTES;
+/**
+ * Maximum canonical record count folded in one work-index rebuild pass: 256.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_WORK_REBUILD_RECORDS = 256;
+/**
+ * Maximum canonical encoded bytes folded in one work-index rebuild pass: 32 MiB.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_WORK_REBUILD_BYTES = 32 * 1024 * 1024;
+/**
+ * Maximum number of selected work entries handled by one recovery sweep: 32.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RECOVERY_WORK_ITEMS = 32;
+/**
+ * Maximum work-discovery pages traversed by one bounded recovery sweep: eight.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RECOVERY_PAGES = 8;
+/**
+ * Maximum character count of a serialized work-discovery cursor: 32,768.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_WORK_CURSOR_CHARS = 32 * 1024;
 
 const Cursor = Schema.NonEmptyString.check(Schema.isMaxLength(MAX_WORK_CURSOR_CHARS));
 const WorkId = Schema.NonEmptyString.check(Schema.isMaxLength(4096));
 
-/** Stable logical owners. Finding an owner does not acquire its lease, grant, or authority. */
+/**
+ * Stable logical owners. Finding an owner does not acquire its lease, grant, or authority.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkOwner = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("Admission"), submissionId: SubmissionId }),
   Schema.Struct({ _tag: Schema.Literal("Operation"), runId: RunId, toolCallId: ToolCallId }),
@@ -63,8 +129,21 @@ export const WorkOwner = Schema.Union([
   }),
 ]);
 
+/**
+ * Decoded value of {@link WorkOwner}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkOwner = typeof WorkOwner.Type;
 
+/**
+ * Locator for the authoritative Submission, canonical record, or versioned delivery behind a work
+ * entry.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkStateReference = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("Submission"), submissionId: SubmissionId }),
   Schema.Struct({ _tag: Schema.Literal("Canonical"), recordId: RecordId }),
@@ -75,7 +154,12 @@ export const WorkStateReference = Schema.Union([
   }),
 ]);
 
-/** Content-free scheduling metadata; resolve the selected owner through its storage port. */
+/**
+ * Content-free scheduling metadata; resolve the selected owner through its storage port.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ThreadWorkEntry = Schema.Struct({
   id: WorkId,
   owner: WorkOwner,
@@ -103,9 +187,20 @@ export const ThreadWorkEntry = Schema.Struct({
   partition: Schema.optionalKey(Schema.Literals(["ordinary", "update"])),
 });
 
+/**
+ * Decoded value of {@link ThreadWorkEntry}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadWorkEntry = typeof ThreadWorkEntry.Type;
 
-/** The initial declaration remains addressable while later facts change an operation's state. */
+/**
+ * The initial declaration remains addressable while later facts change an operation's state.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CanonicalWorkEntry = Schema.Struct({
   ...ThreadWorkEntry.fields,
   createdSequence: CanonicalSequence,
@@ -113,24 +208,62 @@ export const CanonicalWorkEntry = Schema.Struct({
   originRecordId: RecordId,
 });
 
+/**
+ * Decoded value of {@link CanonicalWorkEntry}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CanonicalWorkEntry = typeof CanonicalWorkEntry.Type;
 
+/**
+ * Thread-scoped work inventory page request with a continuation cursor and a 1–128 entry limit.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ThreadWorkRequest = Schema.Struct({
   threadId: ThreadId,
   cursor: Schema.optionalKey(Cursor),
   limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_WORK_PAGE_ENTRIES })),
 });
 
+/**
+ * Decoded value of {@link ThreadWorkRequest}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadWorkRequest = typeof ThreadWorkRequest.Type;
 
+/**
+ * Bounded work inventory page; a returned cursor requires another page even when the current
+ * entries are empty.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ThreadWorkPage = Schema.Struct({
   entries: Schema.Array(ThreadWorkEntry).check(Schema.isMaxLength(MAX_WORK_PAGE_ENTRIES)),
   /** An empty page with a cursor is progress, not a complete empty inventory. */
   cursor: Schema.optionalKey(Cursor),
 });
 
+/**
+ * Decoded value of {@link ThreadWorkPage}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadWorkPage = typeof ThreadWorkPage.Type;
 
+/**
+ * Versioned discovery position bound to the exact Thread and its admission, canonical, or delivery
+ * source.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ThreadWorkCursor = Schema.Struct({
   version: Schema.Literal(WORK_INDEX_VERSION),
   /** Bind the exact admitted identity without copying it into every continuation. */
@@ -139,26 +272,74 @@ export const ThreadWorkCursor = Schema.Struct({
   after: Schema.optionalKey(WorkId),
 });
 
+/**
+ * Decoded value of {@link ThreadWorkCursor}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadWorkCursor = typeof ThreadWorkCursor.Type;
 
-/** Local snapshot request; it grants no claim or dispatch authority. */
+/**
+ * Local snapshot request; it grants no claim or dispatch authority.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const FreshAdmissionWork = Schema.Struct({ threadId: ThreadId, submissionId: SubmissionId });
+/**
+ * Decoded value of {@link FreshAdmissionWork}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type FreshAdmissionWork = typeof FreshAdmissionWork.Type;
 
+/**
+ * Keyset request for at most 32 Thread identities with discoverable work.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkThreadsRequest = Schema.Struct({
   afterThreadId: Schema.optionalKey(ThreadId),
   limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 32 })),
 });
 
+/**
+ * Decoded value of {@link WorkThreadsRequest}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkThreadsRequest = typeof WorkThreadsRequest.Type;
 
+/**
+ * A bounded list of work-owning Threads and optional Thread cursor for continuation.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkThreadsPage = Schema.Struct({
   threadIds: Schema.Array(ThreadId).check(Schema.isMaxLength(32)),
   afterThreadId: Schema.optionalKey(ThreadId),
 });
 
+/**
+ * Decoded value of {@link WorkThreadsPage}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkThreadsPage = typeof WorkThreadsPage.Type;
 
+/**
+ * Requests a bounded fold of canonical history into the disposable work index, optionally
+ * restarting a damaged index.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkIndexRebuildRequest = Schema.Struct({
   threadId: ThreadId,
   /** Explicitly discard a damaged derivative; canonical facts and owner state are untouched. */
@@ -169,8 +350,21 @@ export const WorkIndexRebuildRequest = Schema.Struct({
   ),
 });
 
+/**
+ * Decoded value of {@link WorkIndexRebuildRequest}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkIndexRebuildRequest = typeof WorkIndexRebuildRequest.Type;
 
+/**
+ * Current rebuild position and captured tail, with record and byte counts processed in the latest
+ * pass.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkIndexProgress = Schema.Struct({
   version: Schema.Literal(WORK_INDEX_VERSION),
   threadId: ThreadId,
@@ -181,8 +375,21 @@ export const WorkIndexProgress = Schema.Struct({
   processedBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_WORK_REBUILD_BYTES)),
 });
 
+/**
+ * Decoded value of {@link WorkIndexProgress}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkIndexProgress = typeof WorkIndexProgress.Type;
 
+/**
+ * Native work inventory is unsupported, missing, or not yet fully rebuilt; discovery must fail
+ * closed.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class WorkDiscoveryUnavailable extends Schema.TaggedError<WorkDiscoveryUnavailable>()(
   "WorkDiscoveryUnavailable",
   {
@@ -191,9 +398,15 @@ export class WorkDiscoveryUnavailable extends Schema.TaggedError<WorkDiscoveryUn
   },
 ) {}
 
-/** Native owner pages and canonical-index maintenance, implemented at the storage owner. */
+/**
+ * Native owner pages and canonical-index maintenance, implemented at the storage owner.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ThreadWorkStorage {
-  /** Native proof that this untouched root admission has no other recovery obligations.
+  /**
+   * Native proof that this untouched root admission has no other recovery obligations.
    * A caller must still claim and validate current controls before dispatch. */
   readonly isOnlyFreshAdmission?: (
     request: FreshAdmissionWork,
@@ -216,6 +429,9 @@ export interface ThreadWorkStorage {
  * Cursors are Thread-bound, forward-only live scans. Revalidate selected candidates; creations
  * before an already consumed cursor appear in the next scan. Rebuild never runs implicitly.
  * Layer construction requires the adapter's native work-discovery port.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ThreadWorkDiscovery extends Context.Service<ThreadWorkDiscovery, ThreadWorkStorage>()(
   "@effect-agent/thread/ThreadWorkDiscovery",
@@ -236,10 +452,22 @@ export class ThreadWorkDiscovery extends Context.Service<ThreadWorkDiscovery, Th
   );
 }
 
-/** Opaque tuple identity; never split or reinterpret an application identifier. */
+/**
+ * Opaque tuple identity; never split or reinterpret an application identifier.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const workId = (kind: string, ...ids: ReadonlyArray<string>): string =>
   JSON.stringify([kind, ...ids]);
 
+/**
+ * Projects a ledger work item into content-free discovery metadata, preserving readiness and
+ * waiting conditions.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const admissionWork = (row: SubmissionWorkItem): ThreadWorkEntry => ({
   id: workId("admission", row.submissionId),
   owner: { _tag: "Admission", submissionId: row.submissionId },
@@ -261,6 +489,13 @@ export const admissionWork = (row: SubmissionWorkItem): ThreadWorkEntry => ({
         : {}),
 });
 
+/**
+ * Creates the initial discovery cursor or decodes and verifies a supplied cursor against the
+ * requested Thread.
+ *
+ * @category encoding
+ * @since 0.1.0
+ */
 export const decodeWorkCursor = Effect.fnUntraced(function* (request: ThreadWorkRequest) {
   const threadDigest = yield* digestJson({ threadId: request.threadId }).pipe(
     Effect.mapError((cause) =>
@@ -300,9 +535,20 @@ export const decodeWorkCursor = Effect.fnUntraced(function* (request: ThreadWork
   return cursor;
 });
 
+/**
+ * Serializes a validated work-discovery position for a later request to the same Thread.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const encodeWorkCursor = Schema.encodeSync(Schema.fromJsonString(ThreadWorkCursor));
 
-/** Validate metadata before returning a page, including a resident encoded-byte ceiling. */
+/**
+ * Validate metadata before returning a page, including a resident encoded-byte ceiling.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateWorkPage = Effect.fnUntraced(function* (page: ThreadWorkPage, limit: number) {
   yield* Schema.decodeEffect(ThreadWorkPage)(page).pipe(
     Effect.mapError((cause) =>
@@ -327,7 +573,12 @@ export const validateWorkPage = Effect.fnUntraced(function* (page: ThreadWorkPag
   return page;
 });
 
-/** Exact current canonical owner state, checked against the inventory's immutable fingerprint. */
+/**
+ * Exact current canonical owner state, checked against the inventory's immutable fingerprint.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const resolveWorkEvidence = Effect.fnUntraced(function* (
   threadId: ThreadId,
   entry: ThreadWorkEntry,
@@ -341,7 +592,12 @@ export const resolveWorkEvidence = Effect.fnUntraced(function* (
   return yield* resolveEvidence(threadId, entry.stateReference);
 });
 
-/** Own-call facts plus the original batch's shared approval proof, without another Run's history. */
+/**
+ * Own-call facts plus the original batch's shared approval proof, without another Run's history.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const operationEvidence = (
   threadId: ThreadId,
   owner: Extract<WorkOwner, { _tag: "Operation" }>,
@@ -434,7 +690,12 @@ export const operationEvidence = (
     ),
   );
 
-/** The last frozen report/update, independent of completed deliveries and unrelated history. */
+/**
+ * The last frozen report/update, independent of completed deliveries and unrelated history.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const deliveryPredecessor = Effect.fnUntraced(function* (
   threadId: ThreadId,
   throughSequence: CanonicalSequence,
@@ -474,9 +735,20 @@ export const deliveryPredecessor = Effect.fnUntraced(function* (
   });
 });
 
-/** Origin reporting mode retained by the disposable fold, including private worker inputs. */
+/**
+ * Origin reporting mode retained by the disposable fold, including private worker inputs.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerReportingMode = "none" | "private" | "standard";
 
+/**
+ * Canonical-fold commands to add or remove work metadata or retain a worker's reporting mode.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkIndexChange =
   | { readonly _tag: "Put"; readonly entry: CanonicalWorkEntry }
   | { readonly _tag: "Remove"; readonly id: string; readonly stateRecordId?: RecordId }
@@ -486,6 +758,9 @@ export type WorkIndexChange =
  * Fold only canonical creation, factual closure, and durable handoff evidence. Storage commits
  * these changes with the source batch. Peer/report/update delivery work belongs directly to
  * the outbox rows published in that transaction.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const workIndexChanges = Effect.fnUntraced(function* (
   envelope: CanonicalRecordEnvelope,
@@ -695,7 +970,12 @@ export const workIndexChanges = Effect.fnUntraced(function* (
   }
 });
 
-/** Backfill is chronological. A state's creation identity never changes on later updates. */
+/**
+ * Backfill is chronological. A state's creation identity never changes on later updates.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const advanceWorkEntry = (
   previous: CanonicalWorkEntry | undefined,
   next: CanonicalWorkEntry,

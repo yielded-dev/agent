@@ -1,3 +1,10 @@
+/**
+ * Adapter certification results and shared port-conformance execution. Reports distinguish checks
+ * that ran from unsupported or unexercised recovery scenarios.
+ *
+ * @since 0.1.0
+ */
+
 import * as Cause from "effect/Cause";
 import type * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -25,6 +32,9 @@ const BoundedCertificationDetail = Schema.String.check(Schema.isMaxLength(4_096)
  * Adapter self-description carried by a certificate. `durability` is read from the candidate
  * ledger's `capabilities` — the adapter's honest claim (persistence.md), never inferred by the
  * certification runner.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CertifiedAdapterIdentity extends Schema.Class<CertifiedAdapterIdentity>(
   "@effect-agent/thread/CertifiedAdapterIdentity",
@@ -35,16 +45,32 @@ export class CertifiedAdapterIdentity extends Schema.Class<CertifiedAdapterIdent
   durability: LedgerCapabilities.fields.durability,
 }) {}
 
-/** Which shared suite one Tier-1 (or lever-driven Tier-3) case belongs to. */
+/**
+ * Which shared suite one Tier-1 (or lever-driven Tier-3) case belongs to.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CertificationSuite = Schema.Literals([
   "submission-ledger",
   "thread-store",
   "real-loss",
 ]);
 
+/**
+ * Decoded value of {@link CertificationSuite}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CertificationSuite = typeof CertificationSuite.Type;
 
-/** One executed certification case: a conformance contract case or a Tier-3 lever row. */
+/**
+ * One executed certification case: a conformance contract case or a Tier-3 lever row.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CertificationCaseResult extends Schema.Class<CertificationCaseResult>(
   "@effect-agent/thread/CertificationCaseResult",
 )({
@@ -57,6 +83,9 @@ export class CertificationCaseResult extends Schema.Class<CertificationCaseResul
 /**
  * The six Tier-2 scenario shapes: each reached coordinator fault boundary is armed once
  * per shape. Locations outside a shape's path share its verified clean run.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const CertificationScenario = Schema.Literals([
   "plain",
@@ -67,6 +96,12 @@ export const CertificationScenario = Schema.Literals([
   "delegation",
 ]);
 
+/**
+ * Decoded value of {@link CertificationScenario}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CertificationScenario = typeof CertificationScenario.Type;
 
 /**
@@ -77,11 +112,25 @@ export type CertificationScenario = typeof CertificationScenario.Type;
  * - `not-triggered` — the location was not reached with that fault armed, or was absent from
  *   the scenario's verified clean path (shared across such locations). Never fault coverage;
  * - `failed` — anything else.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const CertificationSweepStatus = Schema.Literals(["converged", "not-triggered", "failed"]);
+/**
+ * Decoded value of {@link CertificationSweepStatus}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CertificationSweepStatus = typeof CertificationSweepStatus.Type;
 
-/** One Tier-2 scenario/location result, including locations outside the verified path. */
+/**
+ * One Tier-2 scenario/location result, including locations outside the verified path.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CertificationSweepResult extends Schema.Class<CertificationSweepResult>(
   "@effect-agent/thread/CertificationSweepResult",
 )({
@@ -98,6 +147,9 @@ export class CertificationSweepResult extends Schema.Class<CertificationSweepRes
  * exercised a real loss lever in this run (`exercised`), cites committed real-loss evidence
  * (`recorded-evidence`), honestly records that nothing exercised it (`not-exercised`), or is a
  * non-durable reference adapter with no real loss to exercise (`not-applicable`).
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const CertificationTierThreeStatus = Schema.Literals([
   "exercised",
@@ -106,9 +158,20 @@ export const CertificationTierThreeStatus = Schema.Literals([
   "not-applicable",
 ]);
 
+/**
+ * Decoded value of {@link CertificationTierThreeStatus}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CertificationTierThreeStatus = typeof CertificationTierThreeStatus.Type;
 
-/** The Tier-3 (real loss lever) section of a certificate. */
+/**
+ * The Tier-3 (real loss lever) section of a certificate.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CertificationTierThreeReport extends Schema.Class<CertificationTierThreeReport>(
   "@effect-agent/thread/CertificationTierThreeReport",
 )({
@@ -129,6 +192,9 @@ export class CertificationTierThreeReport extends Schema.Class<CertificationTier
  * a durable adapter and passing real-loss cases executed in this run. Citations alone do not
  * certify recovery. A non-durable adapter can pass conformance but is never fully certified.
  * The semantic assertions live in the runner tests.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CertificationReport extends Schema.Class<CertificationReport>(
   "@effect-agent/thread/CertificationReport",
@@ -186,6 +252,9 @@ const caseResult = <A, E>(
  * complete contract surface. Requires the co-owned `SubmissionLedger`, `ThreadStore`, and
  * `SettlementPublisher` plus `Crypto.Crypto`, and must run under a TestClock (the ledger cases
  * verify that elapsed time never replaces a live owner).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const certifyPorts = Effect.fn("Thread.certifyPorts")(function* (): Effect.fn.Return<
   ReadonlyArray<CertificationCaseResult>,

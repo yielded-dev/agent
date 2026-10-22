@@ -1,3 +1,8 @@
+/**
+ * Eviction-based fault injection for real Durable Object storage tests.
+ *
+ * @since 0.1.0
+ */
 import * as Effect from "effect/Effect";
 
 import type { DoStorageFailpointLocation } from "./DoStorageError.ts";
@@ -14,6 +19,9 @@ import type { DoStorageFailpointHandler } from "./DoStorageFailpoint.ts";
  *
  * The handles stay injected: this package never imports `cloudflare:workers`, so the harness
  * that owns a `DurableObjectState` supplies the thunk.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const evictionFailpointHandler =
   (options: {

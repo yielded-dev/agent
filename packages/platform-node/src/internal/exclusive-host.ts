@@ -1,6 +1,10 @@
 import * as Context from "effect/Context";
 
-/** Only the automatically managed host owns the SQLite connection for its entire lifetime. */
+/**
+ * Only the automatically managed host owns the SQLite connection for its entire lifetime.
+ *
+ * @internal
+ */
 export const ExclusiveSqliteHost = Context.Reference<boolean>(
   "@effect-agent/platform-node/internal/ExclusiveSqliteHost",
   { defaultValue: () => false },

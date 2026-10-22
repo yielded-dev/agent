@@ -1,3 +1,10 @@
+/**
+ * Browser automation through Code Mode and a host-owned Chrome DevTools Protocol transport. The
+ * host owns authorization, browser lifetime, and execution limits.
+ *
+ * @since 0.1.0
+ */
+
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
@@ -9,8 +16,20 @@ import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
 import type { CodeExecutionLimits } from "../sandbox/CodeExecutor.ts";
 import * as CodeMode from "./CodeMode.ts";
 
+/**
+ * Schema for a bounded browser target or frame identifier supplied by the host transport.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const TargetId = Schema.NonEmptyString.check(Schema.isMaxLength(256));
 
+/**
+ * Schema for one Chrome DevTools Protocol command with optional page and frame routing.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SendRequest = Schema.Struct({
   method: Schema.String.check(
     Schema.isMaxLength(128),
@@ -19,23 +38,53 @@ export const SendRequest = Schema.Struct({
   params: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)),
   /** Omit to address the session's original page. Discover other pages with cdp.tabs(). */
   targetId: Schema.optionalKey(TargetId),
-  /** Route to a frame's CDP session, including out-of-process frames. Obtain IDs with cdp.frames().
+  /**
+   * Route to a frame's CDP session, including out-of-process frames. Obtain IDs with cdp.frames().
    * The model toolkit requires this for world creation and context-scoped evaluation.
    */
   frameId: Schema.optionalKey(TargetId),
 });
 
+/**
+ * Schema for a browser page identifier, URL, and title.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const Tab = Schema.Struct({ targetId: TargetId, url: Schema.String, title: Schema.String });
+/**
+ * Schema identifying the browser page to close.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CloseTabRequest = Schema.Struct({ targetId: TargetId });
+/**
+ * Schema selecting a page whose frames should be listed; omission selects the original page.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const FramesRequest = Schema.Struct({ targetId: Schema.optionalKey(TargetId) });
 
+/**
+ * Schema for a frame identifier, nullable parent identity, and current URL.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const FrameInfo = Schema.Struct({
   frameId: TargetId,
   parentFrameId: Schema.NullOr(TargetId),
   url: Schema.String,
 });
 
-/** A command may have changed the website even when its response is unavailable. Never replay it automatically. */
+/**
+ * A command may have changed the website even when its response is unavailable. Never replay it automatically.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BrowserUseError extends Schema.TaggedError<BrowserUseError>()("BrowserUseError", {
   code: Schema.Literals(["invalid", "browser", "evaluation"]),
   message: Schema.String,
@@ -53,6 +102,9 @@ export class BrowserUseError extends Schema.TaggedError<BrowserUseError>()("Brow
  * A host-confirmed policy refusal before dispatch. Hosts must establish that the
  * entire Cause is expected before using this error; never hide mixed failures,
  * defects or interruption behind it. Fields contain no provider or page content.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class BrowserUsePolicyError extends Schema.TaggedError<BrowserUsePolicyError>()(
   "BrowserUsePolicyError",
@@ -64,10 +116,28 @@ export class BrowserUsePolicyError extends Schema.TaggedError<BrowserUsePolicyEr
   },
 ) {}
 
+/**
+ * Schema for browser command failures and host-confirmed policy refusals. A missing response does
+ * not establish that the command had no effect.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const BrowserUseFailure = Schema.Union([BrowserUseError, BrowserUsePolicyError]);
+/**
+ * Decoded value of {@link BrowserUseFailure}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type BrowserUseFailure = typeof BrowserUseFailure.Type;
 
-/** Host-owned CDP transport. The host authorizes every call and owns browser lifetime and limits. */
+/**
+ * Host-owned CDP transport. The host authorizes every call and owns browser lifetime and limits.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class BrowserCdp extends Context.Service<
   BrowserCdp,
   {
@@ -132,6 +202,9 @@ const PageException = Schema.decodeUnknownOption(Schema.Struct({ exceptionDetail
  * Provide this layer to the Code Mode executor, backed by a scoped BrowserCdp adapter.
  * Page exceptions reject the program's cdp.send Promise even when CDP transport succeeded.
  * Evaluation may have partially mutated the page; the failure never permits automatic replay.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = tools.toLayer(
   Effect.gen(function* () {
@@ -181,7 +254,12 @@ export const layer = tools.toLayer(
   }),
 );
 
-/** One Code Mode tool. Generated code chooses how to inspect and operate each website. */
+/**
+ * One Code Mode tool. Generated code chooses how to inspect and operate each website.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const make = (
   options: {
     readonly limits?: CodeExecutionLimits;

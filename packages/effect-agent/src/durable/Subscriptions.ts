@@ -1,3 +1,10 @@
+/**
+ * Owner-authorized subscription management, trusted event intake, and bounded delivery recovery.
+ * Hosts own polling and alarms; subscriptions retain delivery obligations rather than active Runs.
+ *
+ * @since 0.1.0
+ */
+
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -100,6 +107,13 @@ const deliverySnapshot = (
   refusal: record.refusal,
 });
 
+/**
+ * Source matching, preparation context, lifetime, destination, and authority supplied when
+ * registering an event subscription.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubscribeOptions {
   readonly subscriptionId: string;
   readonly source: EventSourceVersion;
@@ -115,9 +129,20 @@ export interface SubscribeOptions {
   readonly definitions: SubscriptionConfiguration["definitions"];
 }
 
+/**
+ * Expected subscription storage or versioned source-adapter failure.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubscriptionFailure = SubscriptionStoreFailure | SubscriptionSourceError;
 
-/** Only management and redacted status. Do not provide intake or drivers to Agent Tools. */
+/**
+ * Only management and redacted status. Do not provide intake or drivers to Agent Tools.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class Subscriptions extends Context.Service<
   Subscriptions,
   {
@@ -187,7 +212,12 @@ export class Subscriptions extends Context.Service<
   }
 }
 
-/** Trusted intake acknowledges retained routing work, never a Thread Submission Receipt. */
+/**
+ * Trusted intake acknowledges retained routing work, never a Thread Submission Receipt.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class SubscriptionIntake extends Context.Service<
   SubscriptionIntake,
   {
@@ -215,7 +245,12 @@ export class SubscriptionIntake extends Context.Service<
   }
 }
 
-/** One bounded sweep. The platform owns polling/alarm recovery; no subscription retains a Run. */
+/**
+ * One bounded sweep. The platform owns polling/alarm recovery; no subscription retains a Run.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class SubscriptionDriver extends Context.Service<
   SubscriptionDriver,
   {

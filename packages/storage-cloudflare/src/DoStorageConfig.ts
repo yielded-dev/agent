@@ -1,13 +1,19 @@
+/**
+ * Validated configuration for Durable Object SQLite storage adapters.
+ *
+ * @since 0.1.0
+ */
 import * as Context from "effect/Context";
 import * as Schema from "effect/Schema";
 
 const ObservationPollInterval = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 /**
- * Default per-value byte bound, kept under the Durable Object platform's 2 MB SQLite value
- * limit with a safety margin. This is the DC analogue of Node's 16 MB `BoundedStoredText`
- * bound: both fail typed before mutating, only the threshold differs (a documented DN/DC
- * behavioral difference; Travel Planner payloads sit orders of magnitude below both).
+ * Default per-value byte bound, below the Durable Object SQLite limit.
+ * Values exceeding the configured bound fail before mutation.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export const DEFAULT_MAX_STORED_VALUE_BYTES = 1_900_000;
 
@@ -21,6 +27,9 @@ const MaxStoredValueBytes = Schema.Int.check(
  * Validated construction configuration consumed by the Durable Object storage Layers. The
  * storage identity itself belongs to the SqlClient Layer (built from `ctx.storage`);
  * duplicating it here could silently diverge from the handle actually in use.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export class DoStorageConfigValue extends Schema.Class<DoStorageConfigValue>(
   "@effect-agent/storage-cloudflare/DoStorageConfigValue",
@@ -39,7 +48,12 @@ export class DoStorageConfigValue extends Schema.Class<DoStorageConfigValue>(
   verifyOnOpen: Schema.Boolean,
 }) {}
 
-/** Explicit Durable Object storage configuration authority. */
+/**
+ * Explicit Durable Object storage configuration authority.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class DoStorageConfig extends Context.Service<DoStorageConfig, DoStorageConfigValue>()(
   "@effect-agent/storage-cloudflare/DoStorageConfig",
 ) {}

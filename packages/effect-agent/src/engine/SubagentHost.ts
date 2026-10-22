@@ -1,3 +1,10 @@
+/**
+ * Host ports for attached and continuing Subagents, including retained admission, observation,
+ * reporting, and worker control.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -26,7 +33,12 @@ import {
   type WorkerSummary,
 } from "../core/Worker.ts";
 
-/** Prepared values cross this port only to be Schema-decoded before durable storage. */
+/**
+ * Prepared values cross this port only to be Schema-decoded before durable storage.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface StartWorkerRequest {
   readonly delegationId: DelegationId;
   /** Start a distinct assignment using verified completed predecessor authority. */
@@ -50,6 +62,9 @@ export interface StartWorkerRequest {
  * arguments; changing them requires a new command key. Current caller authorization still applies.
  * Preparation must be free of external effects: concurrent first admissions can prepare before
  * the retained delivery chooses its first writer.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface DeferredStartWorkerRequest<E = never, R = never> extends Pick<
   StartWorkerRequest,
@@ -66,6 +81,13 @@ export interface DeferredStartWorkerRequest<E = never, R = never> extends Pick<
   readonly prepare: Effect.Effect<Pick<StartWorkerRequest, "encodedInput">, E, R>;
 }
 
+/**
+ * Prepared follow-up input and parameters for one worker, with a stable idempotency key and target
+ * definition.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface FollowUpWorkerRequest {
   readonly worker: WorkerRef;
   readonly target: Agent.AnyDefinition;
@@ -78,6 +100,9 @@ export interface FollowUpWorkerRequest {
  * Like deferred starts, follow-ups prepare only after current authorization and retained-command
  * lookup. Replays compare declared parameters and reuse the original input and worker authority.
  * Preparation must be free of external effects because concurrent first admissions can prepare.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface DeferredFollowUpWorkerRequest<E = never, R = never> extends Omit<
   FollowUpWorkerRequest,
@@ -86,12 +111,24 @@ export interface DeferredFollowUpWorkerRequest<E = never, R = never> extends Omi
   readonly prepare: Effect.Effect<Pick<FollowUpWorkerRequest, "encodedInput">, E, R>;
 }
 
+/**
+ * Identify a worker and one exact accepted Receipt for authorized outcome inspection.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WorkerReceiptRequest {
   readonly worker: WorkerRef;
   readonly target: Agent.AnyDefinition;
   readonly receipt: Receipt;
 }
 
+/**
+ * Identify a worker and one retained MessageRef for authorized delivery-status inspection.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WorkerMessageRequest {
   readonly worker: WorkerRef;
   readonly target: Agent.AnyDefinition;
@@ -101,6 +138,9 @@ export interface WorkerMessageRequest {
 /**
  * Canonical terminal values remain encoded until the capability decodes the saved parameters
  * and target output and applies its declared result projection. Child E does not survive settlement.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type WorkerObservation =
   | { readonly _tag: "Pending"; readonly receipt: Receipt }
@@ -118,7 +158,12 @@ export type WorkerObservation =
       readonly budgetExhausted: boolean;
     };
 
-/** One actual canonical Run, independent of how many input Receipts joined it. */
+/**
+ * One actual canonical Run, independent of how many input Receipts joined it.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WorkerRunReport {
   readonly worker: WorkerRef;
   readonly context: WorkerContext;
@@ -127,7 +172,12 @@ export interface WorkerRunReport {
   };
 }
 
-/** A bounded projection failure; raw application errors never enter durable report records. */
+/**
+ * A bounded projection failure; raw application errors never enter durable report records.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class WorkerReportPreparationFailure extends Schema.TaggedError<WorkerReportPreparationFailure>()(
   "WorkerReportPreparationFailure",
   { stage: Schema.Literals(["projection", "input", "preparation"]) },
@@ -137,6 +187,9 @@ export class WorkerReportPreparationFailure extends Schema.TaggedError<WorkerRep
  * Source-owned standard projection supplied explicitly at durable registration.
  * The concrete descriptor retains its E/R; durable registration captures R and records
  * bounded preparation failure rather than serializing arbitrary application errors.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface WorkerReporting<E = never, R = never> {
   readonly delegationId: DelegationId;
@@ -158,6 +211,9 @@ export interface WorkerReporting<E = never, R = never> {
  * Trusted, caller-bound host port. The interpreter supplies a fresh facet for each Tool Call;
  * programmatic callers acquire a separately authorized Thread facet. Request values cannot
  * choose the source identity, replace worker provenance or expand its authority and budgets.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SubagentHost extends Context.Service<
   SubagentHost,

@@ -1,7 +1,10 @@
 import type { RunId, TurnId } from "../../core/Identifiers.ts";
 import type { CanonicalRecordEnvelope, ToolOperation } from "../Records.ts";
 
-/** Derived from a validated canonical response; never a second persisted execution record. */
+/**
+ * Derived from a validated canonical response; never a second persisted execution record.
+ * @internal
+ */
 export interface ToolOperationState {
   readonly operation: ToolOperation;
   readonly runId: RunId;
@@ -66,6 +69,7 @@ const toolOperationFacts = (records: ReadonlyArray<CanonicalRecordEnvelope>, run
  * Initial-dispatch proof can pass between approval suspensions while a canonical blocker
  * remains. It comes only from an undecided or denied request carrying that proof, never a
  * ledger intent, parameter rejection, or permission to retry an earlier execution.
+ * @internal
  */
 export const initialDispatchBlockedTurns = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
@@ -83,6 +87,7 @@ export const initialDispatchBlockedTurns = (
  * proof blocks the Turn until its decision is canonically approved. A resumed Attempt may
  * carry that proof forward to the next approval before dispatch. Parameter rejection blocks
  * only its own call and cannot certify the whole Turn.
+ * @internal
  */
 export const toolOperationStates = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
@@ -117,7 +122,10 @@ export const toolOperationStates = (
   });
 };
 
-/** Explicit Unknown evidence stays unresolved even if other facts claim dispatch was blocked. */
+/**
+ * Explicit Unknown evidence stays unresolved even if other facts claim dispatch was blocked.
+ * @internal
+ */
 export const isUnresolvedToolOperation = (state: ToolOperationState): boolean =>
   !state.settled &&
   !state.resolved &&
@@ -126,7 +134,10 @@ export const isUnresolvedToolOperation = (state: ToolOperationState): boolean =>
       (state.operation.executionClass !== "readonly" ||
         state.operation.executionKind !== "ordinary")));
 
-/** Unclosed effects derived from canonical declaration and closure facts. */
+/**
+ * Unclosed effects derived from canonical declaration and closure facts.
+ * @internal
+ */
 export const unresolvedToolOperations = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
   runId?: RunId,

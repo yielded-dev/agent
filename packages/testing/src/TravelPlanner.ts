@@ -1,4 +1,8 @@
-/** Shared Travel Planner definitions, deterministic services, and durability fixtures. */
+/**
+ * Travel planning fixtures, deterministic services, and durable planning and delegation scenarios.
+ *
+ * @since 0.1.0
+ */
 export {
   AirportCode,
   QuoteId,

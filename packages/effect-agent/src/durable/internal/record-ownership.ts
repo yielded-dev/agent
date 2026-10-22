@@ -4,7 +4,12 @@ import type { ModelCallUsage } from "../../core/Usage.ts";
 import type { RecordEnvelope } from "../Records.ts";
 import { runIdForSubmission } from "../RunJournal.ts";
 
-/** Index membership comes from canonical owner fields, never parsing opaque identities. */
+/**
+ * Index membership comes from canonical owner fields, never parsing opaque identities.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const canonicalRunIds = ({ payload }: RecordEnvelope): ReadonlyArray<RunId> => {
   const ids = new Set<RunId>();
 
@@ -22,7 +27,12 @@ export const canonicalRunIds = ({ payload }: RecordEnvelope): ReadonlyArray<RunI
   return [...ids];
 };
 
-/** A joined Receipt's closure is discoverable from its host, but owns no host execution charge. */
+/**
+ * A joined Receipt's closure is discoverable from its host, but owns no host execution charge.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const executionRunIds = (record: RecordEnvelope): ReadonlyArray<RunId> =>
   record.payload._tag === "SubmissionSettled"
     ? [runIdForSubmission(record.payload.submissionId)]
@@ -33,6 +43,9 @@ export const executionRunIds = (record: RecordEnvelope): ReadonlyArray<RunId> =>
  * Their canonical tag/identity index is published with the preparation and survives Run
  * settlement. WorkerInputCompleted closes capacity only with factual effectsResolved evidence;
  * ToolCallSettled/Resolved close operations, and destination delivery state owns transport closure.
+ *
+ * @category guards
+ * @since 0.1.0
  */
 export const isWorkHandoff = ({ payload }: RecordEnvelope): boolean =>
   payload._tag === "WorkerInputRequested" ||
@@ -43,7 +56,12 @@ export const isWorkHandoff = ({ payload }: RecordEnvelope): boolean =>
   payload._tag === "SubagentRequested" ||
   (payload._tag === "AgentUpdateEmitted" && payload.delivery !== undefined);
 
-/** A host can prepare independent work before the source admission ever starts a Run. */
+/**
+ * A host can prepare independent work before the source admission ever starts a Run.
+ *
+ * @category guards
+ * @since 0.1.0
+ */
 export const isPreContinuationFact = (record: RecordEnvelope): boolean =>
   (isWorkHandoff(record) &&
     record.payload._tag !== "SubagentRequested" &&
@@ -52,11 +70,19 @@ export const isPreContinuationFact = (record: RecordEnvelope): boolean =>
   record.payload._tag === "AbortRequested" ||
   record.payload._tag === "SubmissionSettled";
 
-/** Grouped usage is no larger than its original identities/components plus bounded counters. */
+/**
+ * Grouped usage is no larger than its original identities/components plus bounded counters.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const terminalUsageCharge = (calls: ReadonlyArray<ModelCallUsage>): number =>
   calls.reduce((bytes, call) => bytes + utf8ByteLength(JSON.stringify(call)) + 512, 0);
 
-/** These facts end accepted work or durably request its termination. */
+/**
+ * These facts end accepted work or durably request its termination.
+ * @internal
+ */
 export const isTerminalBudgetFact = ({ payload }: RecordEnvelope): boolean =>
   payload._tag === "AbortRequested" ||
   payload._tag === "RunFailed" ||

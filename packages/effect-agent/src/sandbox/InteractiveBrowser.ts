@@ -1,3 +1,10 @@
+/**
+ * Scoped interactive browser passes with explicit network policy, finite action and byte limits,
+ * and typed operation evidence.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -15,7 +22,12 @@ const FieldValue = Schema.String.check(Schema.isMaxLength(64 * 1024));
 const ScrollDelta = Schema.Int.check(Schema.isBetween({ minimum: -100_000, maximum: 100_000 }));
 const decodeUrl = Schema.decodeUnknownOption(Schema.URLFromString);
 
-/** Absolute, bounded HTTP(S) navigation URL without embedded credentials. */
+/**
+ * Absolute, bounded HTTP(S) navigation URL without embedded credentials.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const InteractiveBrowserTargetUrl = Schema.NonEmptyString.check(
   Schema.isMaxLength(8 * 1024),
   Schema.makeFilter(
@@ -36,9 +48,20 @@ export const InteractiveBrowserTargetUrl = Schema.NonEmptyString.check(
   ),
 );
 
+/**
+ * Decoded value of {@link InteractiveBrowserTargetUrl}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type InteractiveBrowserTargetUrl = typeof InteractiveBrowserTargetUrl.Type;
 
-/** Canonical HTTPS host authority, optionally carrying a non-default port. */
+/**
+ * Canonical HTTPS host authority, optionally carrying a non-default port.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const InteractiveBrowserHost = Schema.NonEmptyString.check(
   Schema.isMaxLength(255),
   Schema.makeFilter(
@@ -60,6 +83,12 @@ export const InteractiveBrowserHost = Schema.NonEmptyString.check(
   ),
 );
 
+/**
+ * Decoded value of {@link InteractiveBrowserHost}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type InteractiveBrowserHost = typeof InteractiveBrowserHost.Type;
 
 /**
@@ -68,6 +97,9 @@ export type InteractiveBrowserHost = typeof InteractiveBrowserHost.Type;
  * traffic, including human navigation. Adapters that cannot enforce it must fail
  * with InteractiveBrowserUnsupportedError before acquiring a browser.
  * Unrestricted explicitly opts out of URL/host and private-network containment.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const InteractiveBrowserNetworkPolicy = Schema.Union([
   Schema.TaggedStruct("ExactHosts", {
@@ -81,9 +113,20 @@ export const InteractiveBrowserNetworkPolicy = Schema.Union([
   Schema.TaggedStruct("Unrestricted", {}),
 ]);
 
+/**
+ * Decoded value of {@link InteractiveBrowserNetworkPolicy}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type InteractiveBrowserNetworkPolicy = typeof InteractiveBrowserNetworkPolicy.Type;
 
-/** Caller-owned finite per-pass budgets. Elapsed time includes pauses; provider idle limits are separate. */
+/**
+ * Caller-owned finite per-pass budgets. Elapsed time includes pauses; provider idle limits are separate.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class InteractiveBrowserPolicy extends Schema.Class<InteractiveBrowserPolicy>(
   "InteractiveBrowserPolicy",
 )(
@@ -95,15 +138,32 @@ export class InteractiveBrowserPolicy extends Schema.Class<InteractiveBrowserPol
   }),
 ) {}
 
+/**
+ * Schema for navigation to one credential-free HTTP(S) URL under the browser pass’s fixed policy.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserNavigateRequest extends Schema.Class<BrowserNavigateRequest>(
   "BrowserNavigateRequest",
 )({ url: InteractiveBrowserTargetUrl }) {}
 
+/**
+ * Schema selecting text from the current page, optionally restricted to a CSS selector.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserReadTextRequest extends Schema.Class<BrowserReadTextRequest>(
   "BrowserReadTextRequest",
 )({ selector: Schema.optionalKey(Selector) }) {}
 
-/** Observed control state, without an input value. Absence is part of the snapshot. */
+/**
+ * Observed control state, without an input value. Absence is part of the snapshot.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const BrowserExpectedTargetState = Schema.Struct({
   kind: Schema.String.check(Schema.isMaxLength(128)),
   inputType: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(64))),
@@ -116,9 +176,20 @@ export const BrowserExpectedTargetState = Schema.Struct({
   formValid: Schema.optionalKey(Schema.Boolean),
 });
 
+/**
+ * Decoded value of {@link BrowserExpectedTargetState}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type BrowserExpectedTargetState = typeof BrowserExpectedTargetState.Type;
 
-/** Exact observed document/node identity. A replacement node is refused before input dispatch. */
+/**
+ * Exact observed document/node identity. A replacement node is refused before input dispatch.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const BrowserExpectedTarget = Schema.Struct({
   documentId: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
   nodeId: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
@@ -126,20 +197,45 @@ export const BrowserExpectedTarget = Schema.Struct({
   scopeSelector: Schema.optionalKey(Selector),
 });
 
+/**
+ * Decoded value of {@link BrowserExpectedTarget}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type BrowserExpectedTarget = typeof BrowserExpectedTarget.Type;
 
+/**
+ * Schema for filling a selected control, optionally requiring its previously observed node identity
+ * and state.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserFillRequest extends Schema.Class<BrowserFillRequest>("BrowserFillRequest")({
   selector: Selector,
   value: FieldValue,
   expectedTarget: Schema.optionalKey(BrowserExpectedTarget),
 }) {}
 
+/**
+ * Schema for clicking a selected control, optionally requiring its previously observed node
+ * identity and state.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserClickRequest extends Schema.Class<BrowserClickRequest>("BrowserClickRequest")({
   selector: Selector,
   expectedTarget: Schema.optionalKey(BrowserExpectedTarget),
 }) {}
 
-/** Caller-owned bytes; no host filesystem paths or model-supplied script crosses this port. */
+/**
+ * Caller-owned bytes; no host filesystem paths or model-supplied script crosses this port.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserSelectFileRequest extends Schema.Class<BrowserSelectFileRequest>(
   "BrowserSelectFileRequest",
 )({
@@ -157,7 +253,12 @@ export class BrowserSelectFileRequest extends Schema.Class<BrowserSelectFileRequ
   bytes: Schema.Uint8Array.check(Schema.isMinLength(1), Schema.isMaxLength(8 * 1024 * 1024)),
 }) {}
 
-/** Confirms selection in the input. It does not confirm a website received or submitted the file. */
+/**
+ * Confirms selection in the input. It does not confirm a website received or submitted the file.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserFileSelectionResult extends Schema.Class<BrowserFileSelectionResult>(
   "BrowserFileSelectionResult",
 )({
@@ -167,12 +268,22 @@ export class BrowserFileSelectionResult extends Schema.Class<BrowserFileSelectio
   size: PositiveInt.check(Schema.isLessThanOrEqualTo(8 * 1024 * 1024)),
 }) {}
 
-/** Capture the current page without navigating or opening another browser. */
+/**
+ * Capture the current page without navigating or opening another browser.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserScreenshotRequest extends Schema.Class<BrowserScreenshotRequest>(
   "BrowserScreenshotRequest",
 )({ fullPage: Schema.Boolean }) {}
 
-/** Scroll the current viewport by signed CSS pixel deltas. */
+/**
+ * Scroll the current viewport by signed CSS pixel deltas.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserScrollRequest extends Schema.Class<BrowserScrollRequest>(
   "BrowserScrollRequest",
 )({
@@ -180,21 +291,42 @@ export class BrowserScrollRequest extends Schema.Class<BrowserScrollRequest>(
   deltaY: ScrollDelta,
 }) {}
 
+/**
+ * Schema for the URL observed after navigation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserNavigationResult extends Schema.Class<BrowserNavigationResult>(
   "BrowserNavigationResult",
 )({ url: InteractiveBrowserTargetUrl }) {}
 
+/**
+ * Schema for bounded text read from the current browser page. Page content remains untrusted.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserTextResult extends Schema.Class<BrowserTextResult>("BrowserTextResult")({
   text: BoundedText,
 }) {}
 
-/** Post-action URL observation; no provider session state crosses this boundary. */
+/**
+ * Post-action URL observation; no provider session state crosses this boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BrowserActionResult extends Schema.Class<BrowserActionResult>("BrowserActionResult")({
   url: InteractiveBrowserTargetUrl,
 }) {}
 
-/** Safe execution evidence, independent of provider messages and application receipts.
+/**
+ * Safe execution evidence, independent of provider messages and application receipts.
  * completed proves SDK input completion, never website acceptance or durable settlement.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const InteractiveBrowserFailureEvidence = Schema.Struct({
   stage: Schema.Literals(["preparation", "input", "observation"]),
@@ -202,8 +334,20 @@ export const InteractiveBrowserFailureEvidence = Schema.Struct({
   session: Schema.Literals(["attached", "disconnected", "lost"]),
 });
 
+/**
+ * Decoded value of {@link InteractiveBrowserFailureEvidence}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type InteractiveBrowserFailureEvidence = typeof InteractiveBrowserFailureEvidence.Type;
 
+/**
+ * A browser operation was refused by the pass’s fixed policy.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InteractiveBrowserPolicyDeniedError extends Schema.TaggedError<InteractiveBrowserPolicyDeniedError>()(
   "InteractiveBrowserPolicyDeniedError",
   {
@@ -213,16 +357,34 @@ export class InteractiveBrowserPolicyDeniedError extends Schema.TaggedError<Inte
   },
 ) {}
 
+/**
+ * The browser pass cannot accept an overlapping operation while previous work remains active.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InteractiveBrowserBusyError extends Schema.TaggedError<InteractiveBrowserBusyError>()(
   "InteractiveBrowserBusyError",
   { implementation: SandboxImplementation, message: BoundedMessage },
 ) {}
 
+/**
+ * The browser implementation has no capacity to acquire another pass.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InteractiveBrowserCapacityError extends Schema.TaggedError<InteractiveBrowserCapacityError>()(
   "InteractiveBrowserCapacityError",
   { implementation: SandboxImplementation, message: BoundedMessage },
 ) {}
 
+/**
+ * The browser pass or its provider session is no longer available.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InteractiveBrowserExpiredError extends Schema.TaggedError<InteractiveBrowserExpiredError>()(
   "InteractiveBrowserExpiredError",
   {
@@ -232,6 +394,13 @@ export class InteractiveBrowserExpiredError extends Schema.TaggedError<Interacti
   },
 ) {}
 
+/**
+ * A browser action failed; any attached dispatch evidence determines whether input may already have
+ * occurred.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InteractiveBrowserActionError extends Schema.TaggedError<InteractiveBrowserActionError>()(
   "InteractiveBrowserActionError",
   {
@@ -252,6 +421,12 @@ export class InteractiveBrowserActionError extends Schema.TaggedError<Interactiv
   },
 ) {}
 
+/**
+ * The browser transport or provider response violated the expected protocol.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InteractiveBrowserProtocolError extends Schema.TaggedError<InteractiveBrowserProtocolError>()(
   "InteractiveBrowserProtocolError",
   {
@@ -262,6 +437,12 @@ export class InteractiveBrowserProtocolError extends Schema.TaggedError<Interact
   },
 ) {}
 
+/**
+ * A browser pass exceeded its action count, elapsed-time, or returned-byte limit.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InteractiveBrowserLimitError extends Schema.TaggedError<InteractiveBrowserLimitError>()(
   "InteractiveBrowserLimitError",
   {
@@ -274,6 +455,12 @@ export class InteractiveBrowserLimitError extends Schema.TaggedError<Interactive
   },
 ) {}
 
+/**
+ * The implementation cannot support a requested operation or enforce the browser policy.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InteractiveBrowserUnsupportedError extends Schema.TaggedError<InteractiveBrowserUnsupportedError>()(
   "InteractiveBrowserUnsupportedError",
   {
@@ -292,6 +479,12 @@ export class InteractiveBrowserUnsupportedError extends Schema.TaggedError<Inter
   },
 ) {}
 
+/**
+ * Schema for policy, lifecycle, action, protocol, capacity, and limit failures from a browser pass.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const InteractiveBrowserError = Schema.Union([
   InteractiveBrowserPolicyDeniedError,
   InteractiveBrowserBusyError,
@@ -303,9 +496,20 @@ export const InteractiveBrowserError = Schema.Union([
   InteractiveBrowserUnsupportedError,
 ]);
 
+/**
+ * Decoded value of {@link InteractiveBrowserError}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type InteractiveBrowserError = typeof InteractiveBrowserError.Type;
 
-/** A live handle is intentionally not a Schema value and cannot cross persistence/transport boundaries. */
+/**
+ * A live handle is intentionally not a Schema value and cannot cross persistence/transport boundaries.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserHandle {
   readonly navigate: (
     request: BrowserNavigateRequest,
@@ -333,6 +537,13 @@ export interface BrowserHandle {
   readonly close: Effect.Effect<void, InteractiveBrowserError>;
 }
 
+/**
+ * Scoped browser capability that acquires one live handle under a fixed network policy and finite
+ * per-pass limits. The Scope owns its resources.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class InteractiveBrowser extends Context.Service<
   InteractiveBrowser,
   {

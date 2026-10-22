@@ -2,12 +2,14 @@ import type * as SqlClient from "effect/sql/SqlClient";
 import type * as Statement from "effect/sql/Statement";
 
 /** Exact SQLite expressions are part of existing expression-index layouts. */
+/** @internal */
 export const sqliteJsonText = (
   sql: SqlClient.SqlClient,
   column: string,
   path: ReadonlyArray<string>,
 ): Statement.Fragment => sql.literal(sqliteExtract(column, path));
 
+/** @internal */
 export const sqliteJsonIsTrue = (
   sql: SqlClient.SqlClient,
   column: string,
@@ -15,12 +17,14 @@ export const sqliteJsonIsTrue = (
 ): Statement.Fragment => sql.literal(`COALESCE(${sqliteExtract(column, path)}, 0) = 1`);
 
 /** `IS JSON` is a Postgres 16 predicate. */
+/** @internal */
 export const jsonIsValid = (sql: SqlClient.SqlClient, column: string): Statement.Fragment =>
   sql.onDialectOrElse({
     orElse: () => sql.literal(`json_valid(${column})`),
     pg: () => sql.literal(`(${column} IS JSON)`),
   });
 
+/** @internal */
 export const nullSafeEquals = (
   sql: SqlClient.SqlClient,
   left: Statement.Fragment,
@@ -35,6 +39,7 @@ const sqliteExtract = (column: string, path: ReadonlyArray<string>): string =>
   `json_extract(${column}, '$.${path.join(".")}')`;
 
 /** Escape identifiers in derived Postgres JSON, including NUL and lone UTF-16 surrogates. */
+/** @internal */
 export const queryIdentifier = (sql: SqlClient.SqlClient, value: string | null): string | null =>
   value === null
     ? null

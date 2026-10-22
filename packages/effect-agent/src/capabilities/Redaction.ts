@@ -1,3 +1,9 @@
+/**
+ * Structural redaction of decoded values into bounded audit and model previews.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -9,7 +15,12 @@ const MAX_REDACTED_PREVIEW_BYTES = 8 * 1024;
 const MAX_REDACTION_NODES = 4_096;
 const MAX_REDACTION_DEPTH = 16;
 
-/** Branded evidence that a preview passed through the configured structural Redactor. */
+/**
+ * Branded evidence that a preview passed through the configured structural Redactor.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RedactedPreview = Schema.String.pipe(
   Schema.refine((value): value is string => utf8ByteLength(value) <= MAX_REDACTED_PREVIEW_BYTES, {
     expected: `redacted preview of at most ${MAX_REDACTED_PREVIEW_BYTES} UTF-8 bytes`,
@@ -17,15 +28,31 @@ export const RedactedPreview = Schema.String.pipe(
   Schema.brand("@effect-agent/capabilities/RedactedPreview"),
 );
 
+/**
+ * Decoded value of {@link RedactedPreview}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RedactedPreview = typeof RedactedPreview.Type;
 
-/** Structural redaction failed closed rather than returning unreviewed caller text. */
+/**
+ * Structural redaction failed closed rather than returning unreviewed caller text.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class RedactionError extends Schema.TaggedError<RedactionError>()("RedactionError", {
   reason: Schema.Literals(["input-too-deep", "input-too-large", "encoding-failed"]),
   message: Schema.String,
 }) {}
 
-/** Redaction owns the boundary from decoded Tool values to bounded audit/model previews. */
+/**
+ * Redaction owns the boundary from decoded Tool values to bounded audit/model previews.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class Redactor extends Context.Service<
   Redactor,
   {
@@ -141,6 +168,9 @@ const truncateUtf8 = (value: string, maxBytes: number): string => {
  * Default structural implementation. It exposes only collection shape and
  * scalar types, so an ordinary field such as `note` cannot bypass redaction.
  * Tool-specific Layers may expose explicitly reviewed fields instead.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const StructuralRedactorLive = Layer.succeed(Redactor)({
   redact: Effect.fnUntraced(function* (decodedValue) {

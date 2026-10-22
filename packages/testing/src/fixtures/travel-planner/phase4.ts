@@ -1,3 +1,8 @@
+/**
+ * A durable read-only planner and worker services backed by replay-safe catalog searches.
+ *
+ * @since 0.1.0
+ */
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { type DurableSubmitOptions } from "@yielded/agent/durable-agent-runtime";
@@ -35,28 +40,56 @@ import {
   TravelGuidanceLayer,
 } from "./deterministic-layers.ts";
 
+/**
+ * Deployment identity for the durable read-only planner fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase4TravelPlannerDeploymentId = Schema.decodeSync(DeploymentId)(
   "travel-planner-p4-deployment",
 );
 
+/**
+ * Producer identity for the durable read-only planner fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase4TravelPlannerProducerId = Schema.decodeSync(ProducerId)(
   "travel-planner-p4-producer",
 );
 
+/**
+ * Principal submitting the durable read-only planner fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase4TravelPlannerPrincipal = Schema.decodeSync(Principal)(
   "travel-planner-p4-principal",
 );
 
 const digest = (character: string) => Schema.decodeSync(Digest)(character.repeat(64));
 
-/** Redacted, deterministic definition identities for the current fixture version. */
+/**
+ * Redacted, deterministic definition identities for the current fixture version.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase4TravelPlannerDefinitionDigests = DefinitionDigests.make({
   agent: digest("d"),
   model: digest("e"),
   tools: digest("f"),
 });
 
-/** Durable admission options for one Travel Planner Submission on one trip lane. */
+/**
+ * Durable admission options for one Travel Planner Submission on one trip lane.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const phase4TravelPlannerSubmitOptions = (
   threadId: ThreadId,
   idempotencyKey: IdempotencyKey,
@@ -67,7 +100,12 @@ export const phase4TravelPlannerSubmitOptions = (
   definitions: phase4TravelPlannerDefinitionDigests,
 });
 
-/** Read-only catalog searches can repeat safely after an interrupted Attempt. */
+/**
+ * Read-only catalog searches can repeat safely after an interrupted Attempt.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const DurableSearchFlights = Tool.make("search_flights", {
   parameters: Schema.Struct(FlightQuery.fields),
   success: FlightOption,
@@ -76,6 +114,12 @@ export const DurableSearchFlights = Tool.make("search_flights", {
   dependencies: [FlightCatalog],
 }).annotate(ToolExecutionClass, "readonly");
 
+/**
+ * A lodging search tool declared safe to replay after ownership loss.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const DurableSearchLodging = Tool.make("search_lodging", {
   parameters: Schema.Struct(LodgingQuery.fields),
   success: LodgingOption,
@@ -84,6 +128,12 @@ export const DurableSearchLodging = Tool.make("search_lodging", {
   dependencies: [LodgingCatalog],
 }).annotate(ToolExecutionClass, "readonly");
 
+/**
+ * An activity search tool declared safe to replay after ownership loss.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const DurableSearchActivities = Tool.make("search_activities", {
   parameters: Schema.Struct(ActivityQuery.fields),
   success: ActivitySearchResult,
@@ -92,12 +142,24 @@ export const DurableSearchActivities = Tool.make("search_activities", {
   dependencies: [ActivityCatalog],
 }).annotate(ToolExecutionClass, "readonly");
 
+/**
+ * Replay-safe flight, lodging, and activity tools for durable planning.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const TravelPlannerPhase4Toolkit = Toolkit.make(
   DurableSearchFlights,
   DurableSearchLodging,
   DurableSearchActivities,
 );
 
+/**
+ * Connects the replay-safe planner tools to their catalog services.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const TravelPlannerPhase4ToolkitLayer = TravelPlannerPhase4Toolkit.toLayer({
   search_flights: (query) =>
     Effect.flatMap(FlightCatalog, (catalog) => catalog.search(FlightQuery.make(query))),
@@ -107,7 +169,12 @@ export const TravelPlannerPhase4ToolkitLayer = TravelPlannerPhase4Toolkit.toLaye
     Effect.flatMap(ActivityCatalog, (catalog) => catalog.search(ActivityQuery.make(query))),
 });
 
-/** A durable review-only planner over deterministic, safe-to-repeat catalog searches. */
+/**
+ * A durable review-only planner over deterministic, safe-to-repeat catalog searches.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const TravelPlannerPhase4 = Agent.make("travel-planner-phase-4", {
   input: TripRequest,
   output: TravelPlan,
@@ -128,6 +195,9 @@ export const TravelPlannerPhase4 = Agent.make("travel-planner-phase-4", {
  * Everything a durable worker needs beyond the runtime stack, reusing the deterministic P1
  * travel-service Layers. The durable coordinator supplies its own deterministic `IdGenerator`,
  * so this Layer deliberately provides none.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const phase4TravelPlannerWorkerLayer = Layer.mergeAll(
   TravelPlannerPhase4ToolkitLayer,

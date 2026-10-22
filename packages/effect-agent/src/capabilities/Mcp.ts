@@ -1,3 +1,10 @@
+/**
+ * Contracts for bounded MCP connections, discovered Tool metadata, and explicit validation of
+ * remote Tool definitions.
+ *
+ * @since 0.1.0
+ */
+
 import * as McpSchema from "effect/ai/McpSchema";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
@@ -19,7 +26,12 @@ const MAX_MCP_DISCOVERY_BYTES = 1024 * 1024;
 const PositiveInt = Schema.Int.check(Schema.isGreaterThan(0));
 const Sha256Digest = Schema.String.check(Schema.isPattern(/^sha256:[a-f0-9]{64}$/));
 
-/** Server identity copied directly from Effect AI's native MCP initialization schema. */
+/**
+ * Server identity copied directly from Effect AI's native MCP initialization schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class McpServerIdentity extends Schema.Class<McpServerIdentity>(
   "@effect-agent/capabilities/McpServerIdentity",
 )({
@@ -34,6 +46,9 @@ export class McpServerIdentity extends Schema.Class<McpServerIdentity>(
  * against: when a connector derives its Toolkit from live discovery, a server
  * that adds, removes, or reshapes a tool fails closed instead of silently
  * changing what the model can call.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class McpConnectionRequest extends Schema.Class<McpConnectionRequest>(
   "@effect-agent/capabilities/McpConnectionRequest",
@@ -50,6 +65,9 @@ export class McpConnectionRequest extends Schema.Class<McpConnectionRequest>(
  * The model-visible result of a remote MCP tool call: the server's content
  * blocks and, when the tool declares an `outputSchema`, its structured result.
  * A result with `isError` never becomes this value; it fails the Tool Call.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class McpToolResult extends Schema.Class<McpToolResult>(
   "@effect-agent/capabilities/McpToolResult",
@@ -62,6 +80,9 @@ export class McpToolResult extends Schema.Class<McpToolResult>(
  * Typed failure of one remote MCP tool call. `tool-error` carries the server's
  * error content; the other reasons describe why no trustworthy result exists.
  * None of them claims the remote effect did not happen.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class McpToolCallFailed extends Schema.TaggedError<McpToolCallFailed>()(
   "McpToolCallFailed",
@@ -79,6 +100,9 @@ export class McpToolCallFailed extends Schema.TaggedError<McpToolCallFailed>()(
  * server's JSON Schema, so handlers receive `unknown` and the server validates
  * arguments; `Tool.getJsonSchema` still advertises the discovered schema. A
  * failed call returns `McpToolCallFailed` to the model as a failed tool result.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type McpTool = Tool.Tool<
   string,
@@ -90,7 +114,12 @@ export type McpTool = Tool.Tool<
   }
 >;
 
-/** Toolkit of discovered MCP tools; every member forwards `tools/call` to its server. */
+/**
+ * Toolkit of discovered MCP tools; every member forwards `tools/call` to its server.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type McpToolkit = Toolkit.Toolkit<Record<string, McpTool>>;
 
 const executionClassFor = (
@@ -132,7 +161,12 @@ const makeMcpTool = (tool: McpSchema.Tool, trustToolAnnotations: boolean): McpTo
   return dynamic;
 };
 
-/** Typed remote connection failure; no remote execution is claimed exactly-once. */
+/**
+ * Typed remote connection failure; no remote execution is claimed exactly-once.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class McpConnectionError extends Schema.TaggedError<McpConnectionError>()(
   "McpConnectionError",
   {
@@ -142,7 +176,12 @@ export class McpConnectionError extends Schema.TaggedError<McpConnectionError>()
   },
 ) {}
 
-/** Discovery exceeded an explicit caller or framework hard bound. */
+/**
+ * Discovery exceeded an explicit caller or framework hard bound.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class McpDiscoveryLimitExceeded extends Schema.TaggedError<McpDiscoveryLimitExceeded>()(
   "McpDiscoveryLimitExceeded",
   {
@@ -153,7 +192,12 @@ export class McpDiscoveryLimitExceeded extends Schema.TaggedError<McpDiscoveryLi
   },
 ) {}
 
-/** Native dynamic Toolkit names did not match the bounded MCP discovery response. */
+/**
+ * Native dynamic Toolkit names did not match the bounded MCP discovery response.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class McpToolkitMismatch extends Schema.TaggedError<McpToolkitMismatch>()(
   "McpToolkitMismatch",
   {
@@ -163,7 +207,12 @@ export class McpToolkitMismatch extends Schema.TaggedError<McpToolkitMismatch>()
   },
 ) {}
 
-/** Validated discovery metadata; native Effect AI MCP values retain provider detail. */
+/**
+ * Validated discovery metadata; native Effect AI MCP values retain provider detail.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class McpDiscovery extends Schema.Class<McpDiscovery>(
   "@effect-agent/capabilities/McpDiscovery",
 )({
@@ -177,6 +226,9 @@ export class McpDiscovery extends Schema.Class<McpDiscovery>(
 /**
  * Raw discovery and execution from one scoped server. The framework constructs
  * its Toolkit from these descriptors; connectors do not supply another copy.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface McpConnectedServer {
   readonly identity: McpServerIdentity;
@@ -190,14 +242,24 @@ export interface McpConnectedServer {
   readonly trustToolAnnotations?: boolean | undefined;
 }
 
-/** Scoped connection with one Toolkit derived from validated, optionally pinned discovery. */
+/**
+ * Scoped connection with one Toolkit derived from validated, optionally pinned discovery.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface McpConnection {
   readonly discovery: McpDiscovery;
   readonly toolkit: McpToolkit;
   readonly handlers: Layer.Layer<Tool.Handler<string>>;
 }
 
-/** Adapter port for native Effect AI MCP protocol/schema integration. */
+/**
+ * Adapter port for native Effect AI MCP protocol/schema integration.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class McpConnector extends Context.Service<
   McpConnector,
   {
@@ -268,7 +330,12 @@ const digestJson = Effect.fnUntraced(function* (serverId: string, value: unknown
   return `sha256:${Hex.encode(digest)}`;
 });
 
-/** Validate native discovery data before it enters Agent Tool context. */
+/**
+ * Validate native discovery data before it enters Agent Tool context.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateMcpDiscovery = Effect.fnUntraced(function* (
   request: McpConnectionRequest,
   server: Pick<McpConnectedServer, "identity" | "capabilities" | "tools">,
@@ -391,6 +458,9 @@ export const validateMcpDiscovery = Effect.fnUntraced(function* (
 /**
  * Acquire a native connection in Scope, enforce a Clock-controlled timeout,
  * then validate discovery before exposing its Toolkit.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const connectMcp = Effect.fnUntraced(function* (request: McpConnectionRequest) {
   const connector = yield* McpConnector;

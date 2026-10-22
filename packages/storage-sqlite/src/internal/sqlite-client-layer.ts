@@ -4,6 +4,7 @@ import * as Layer from "effect/Layer";
 
 import { SqliteStorageError } from "../SqliteStorageError.ts";
 
+/** @internal */
 export const sqliteClientLayer = (
   options: Parameters<typeof SqliteClient.layer>[0],
   operation: string,

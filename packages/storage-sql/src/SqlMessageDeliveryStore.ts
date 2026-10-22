@@ -1,3 +1,8 @@
+/**
+ * SQL message delivery storage and atomic publication alongside canonical records.
+ *
+ * @since 0.1.0
+ */
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
   applyMessageDeliveryChange,
@@ -78,7 +83,11 @@ const encodeMetadata = Schema.encodeSync(
   ),
 );
 
-/** Shared importer and delivery writer use identical native selector metadata. */
+/**
+ * Shared importer and delivery writer use identical native selector metadata.
+ *
+ * @internal
+ */
 export const messageDeliveryMetadata = (record: MessageDeliveryRecord): string => {
   const origin = record.envelope.workerAdmission?.origin;
 
@@ -96,6 +105,12 @@ export const messageDeliveryMetadata = (record: MessageDeliveryRecord): string =
   });
 };
 
+/**
+ * Adapter namespace, persisted value limit, and atomic delivery write boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlMessageDeliveryStoreOptions {
   readonly namespace?: string;
   /** UTF-8 bound on the complete persisted record, including a processed Settlement. */
@@ -124,7 +139,12 @@ const canonicalWriters = new WeakMap<
   }
 >();
 
-/** Pair the configured delivery facet with its retained physical owner for this scope. */
+/**
+ * Pair the configured delivery facet with its retained physical owner for this scope.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const registerCanonicalMessageWriter = Effect.fnUntraced(function* (
   owner: StorageOwner["Service"],
   store: MessageDeliveryStore["Service"],
@@ -162,6 +182,9 @@ export const registerCanonicalMessageWriter = Effect.fnUntraced(function* (
 /**
  * Publish through the paired private insert body inside the canonical append transaction.
  * The journal supplies its retained physical owner when constructing its publication operation.
+ *
+ * @category utilities
+ * @since 0.1.0
  */
 export const publishCanonicalDeliveries = Effect.fnUntraced(function* (
   records: ReadonlyArray<MessageDeliveryRecord>,
@@ -265,6 +288,9 @@ const corrupt = (operation: string, cause?: unknown) =>
  * Layouts with publication handoffs may upgrade only after the previous runtime has
  * rebuilt discovery and retained every outbox row. Check scalar locators before any
  * work-index rebuild can discard that evidence; never hydrate the canonical history.
+ *
+ * @category utilities
+ * @since 0.1.0
  */
 export const assertLegacyMessagePublicationDrained = Effect.fnUntraced(function* (
   namespace?: string,
@@ -321,6 +347,9 @@ export const assertLegacyMessagePublicationDrained = Effect.fnUntraced(function*
 /**
  * Backfill the retention derivative under the adapter's layout-upgrade transaction.
  * Read one bounded delivery at a time; preserve its JSON and all existing metadata.
+ *
+ * @category utilities
+ * @since 0.1.0
  */
 export const backfillPeerMessageRetention = Effect.fnUntraced(function* (namespace?: string) {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
@@ -375,6 +404,9 @@ export const backfillPeerMessageRetention = Effect.fnUntraced(function* (namespa
  * deadline_at_millis (nullable effective wake deadline), peer_retained_until_millis, record_json. Index non-null deadlines
  * by (deadline_at_millis, owner_thread_id, message_id). No source/receiver ledger joins.
  * Before failpoints precede the atomic transaction; after failpoints run after its commit.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
   retainedOwner: StorageOwner["Service"],

@@ -1,3 +1,10 @@
+/**
+ * Tools for bounded page content, structured extraction, and selector scraping under a fixed host
+ * policy. Captured content remains untrusted.
+ *
+ * @since 0.1.0
+ */
+
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Effect from "effect/Effect";
@@ -46,22 +53,48 @@ const BoundedUrl = Schema.NonEmptyString.check(Schema.isMaxLength(8 * 1024));
 const BoundedContent = Schema.String.check(Schema.isMaxLength(maxResponseBytesLimit));
 const BoundedSelector = Schema.NonEmptyString.check(Schema.isMaxLength(1_024));
 
-/** The model-selectable capture actions the first slice exposes. */
+/**
+ * The model-selectable capture actions the first slice exposes.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WebCaptureAction = Schema.Literals(["markdown", "content", "links"]);
+/**
+ * Decoded value of {@link WebCaptureAction}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WebCaptureAction = typeof WebCaptureAction.Type;
 
-/** Model-decoded parameters: one absolute https URL plus one capture action. */
+/**
+ * Model-decoded parameters: one absolute https URL plus one capture action.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WebCaptureParameters = Schema.Struct({
   url: BoundedUrl,
   action: WebCaptureAction,
 });
 
-/** Model-decoded extraction parameters: one absolute https URL. */
+/**
+ * Model-decoded extraction parameters: one absolute https URL.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WebCaptureExtractParameters = Schema.Struct({
   url: BoundedUrl,
 });
 
-/** Model-decoded scrape parameters: one allowed URL and 1..64 CSS selectors. */
+/**
+ * Model-decoded scrape parameters: one allowed URL and 1..64 CSS selectors.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WebCaptureScrapeParameters = Schema.Struct({
   url: BoundedUrl,
   selectors: Schema.Array(BoundedSelector).check(Schema.isMinLength(1), Schema.isMaxLength(64)),
@@ -70,6 +103,9 @@ export const WebCaptureScrapeParameters = Schema.Struct({
 /**
  * The bounded model-visible capture success. Exactly the field matching the
  * requested action is present.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class WebCaptureSuccess extends Schema.Class<WebCaptureSuccess>(
   "@effect-agent/capabilities/WebCaptureSuccess",
@@ -86,6 +122,9 @@ export class WebCaptureSuccess extends Schema.Class<WebCaptureSuccess>(
  * it into a failed Tool result, so a model can pick a different target or
  * action without a blind retry. `retryAfterMillis` carries the platform's
  * backoff hint when the capture was rate-limited.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class WebCaptureFailure extends Schema.TaggedError<WebCaptureFailure>()(
   "WebCaptureFailure",
@@ -96,7 +135,12 @@ export class WebCaptureFailure extends Schema.TaggedError<WebCaptureFailure>()(
   },
 ) {}
 
-/** The bounded model-visible selector scrape success. */
+/**
+ * The bounded model-visible selector scrape success.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WebCaptureScrapeSuccess extends Schema.Class<WebCaptureScrapeSuccess>(
   "@effect-agent/capabilities/WebCaptureScrapeSuccess",
 )({
@@ -104,7 +148,12 @@ export class WebCaptureScrapeSuccess extends Schema.Class<WebCaptureScrapeSucces
   groups: PageScrapeCaptured.fields.groups,
 }) {}
 
-/** The native Effect AI Tool created by `WebCapture.make`. */
+/**
+ * The native Effect AI Tool created by `WebCapture.make`.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WebCaptureTool<Name extends string> = Tool.Tool<
   Name,
   {
@@ -115,7 +164,12 @@ export type WebCaptureTool<Name extends string> = Tool.Tool<
   }
 >;
 
-/** The native Effect AI Tool created by `WebCapture.makeExtract`. */
+/**
+ * The native Effect AI Tool created by `WebCapture.makeExtract`.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WebCaptureExtractTool<Name extends string, S extends Schema.Top> = Tool.Tool<
   Name,
   {
@@ -127,7 +181,12 @@ export type WebCaptureExtractTool<Name extends string, S extends Schema.Top> = T
   S["DecodingServices"]
 >;
 
-/** The native Effect AI Tool created by `WebCapture.makeScrape`. */
+/**
+ * The native Effect AI Tool created by `WebCapture.makeScrape`.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WebCaptureScrapeTool<Name extends string> = Tool.Tool<
   Name,
   {
@@ -138,22 +197,42 @@ export type WebCaptureScrapeTool<Name extends string> = Tool.Tool<
   }
 >;
 
-/** Singleton Tool record provided by one web-capture handler Layer. */
+/**
+ * Singleton Tool record provided by one web-capture handler Layer.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WebCaptureTools<Name extends string> = {
   readonly [Key in Name]: WebCaptureTool<Name>;
 };
 
-/** Singleton Tool record provided by one extraction handler Layer. */
+/**
+ * Singleton Tool record provided by one extraction handler Layer.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WebCaptureExtractTools<Name extends string, S extends Schema.Top> = {
   readonly [Key in Name]: WebCaptureExtractTool<Name, S>;
 };
 
-/** Singleton Tool record provided by one selector-scrape handler Layer. */
+/**
+ * Singleton Tool record provided by one selector-scrape handler Layer.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WebCaptureScrapeTools<Name extends string> = {
   readonly [Key in Name]: WebCaptureScrapeTool<Name>;
 };
 
-/** Construction requirements of a schema-shaped extraction handler Layer. */
+/**
+ * Construction requirements of a schema-shaped extraction handler Layer.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WebCaptureExtractLayerRequirements<S extends Schema.Top> =
   | PageCapture
   | S["DecodingServices"];
@@ -179,11 +258,24 @@ interface WebCaptureSharedOptions {
   readonly maxResponseBytes?: number | undefined;
 }
 
+/**
+ * Configure a web capture Tool’s fixed host policy, byte limits, and allowed content actions.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WebCaptureOptions extends WebCaptureSharedOptions {
   /** Model-selectable actions; defaults to every first-slice action. */
   readonly actions?: ReadonlyArray<WebCaptureAction> | undefined;
 }
 
+/**
+ * Configure structured web extraction with an application Schema that validates the untrusted
+ * capture result.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WebCaptureExtractOptions<S extends Schema.Top> extends WebCaptureSharedOptions {
   /**
    * The extraction Schema. Its derived JSON Schema shapes the platform-side
@@ -196,12 +288,21 @@ export interface WebCaptureExtractOptions<S extends Schema.Top> extends WebCaptu
   readonly prompt?: string | undefined;
 }
 
+/**
+ * Configure a selector-scraping Tool with fixed host policy and bounded capture output.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WebCaptureScrapeOptions extends WebCaptureSharedOptions {}
 
 /**
  * An immutable web-capture definition: one model-facing Tool over a fixed
  * URL policy, plus the handler Layer that runs captures through the
  * `PageCapture` port. It owns no acquired resources.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface WebCaptureDefinition<Name extends string> {
   readonly name: Name;
@@ -218,7 +319,12 @@ export interface WebCaptureDefinition<Name extends string> {
   readonly handlers: Layer.Layer<Tool.HandlersFor<WebCaptureTools<Name>>, never, PageCapture>;
 }
 
-/** An immutable schema-shaped extraction definition. */
+/**
+ * An immutable schema-shaped extraction definition.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WebCaptureExtractDefinition<Name extends string, S extends Schema.Top> {
   readonly name: Name;
   readonly description: string;
@@ -235,7 +341,12 @@ export interface WebCaptureExtractDefinition<Name extends string, S extends Sche
   >;
 }
 
-/** An immutable selector-scrape definition. */
+/**
+ * An immutable selector-scrape definition.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WebCaptureScrapeDefinition<Name extends string> {
   readonly name: Name;
   readonly description: string;
@@ -397,7 +508,13 @@ const captureAction = (action: WebCaptureAction): PageCaptureAction => {
   }
 };
 
-const make = <const Name extends string>(
+/**
+ * Create a Tool and handler Layer for bounded page content under fixed URL and action policies.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
+export const make = <const Name extends string>(
   name: Name,
   options: WebCaptureOptions,
 ): WebCaptureDefinition<Name> => {
@@ -521,7 +638,13 @@ const make = <const Name extends string>(
   });
 };
 
-const makeExtract = <const Name extends string, S extends Schema.Top>(
+/**
+ * Create a Tool and handler Layer that validates captured page content with an application Schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
+export const makeExtract = <const Name extends string, S extends Schema.Top>(
   name: Name,
   options: WebCaptureExtractOptions<S>,
 ): WebCaptureExtractDefinition<Name, S> => {
@@ -644,7 +767,13 @@ const makeExtract = <const Name extends string, S extends Schema.Top>(
   });
 };
 
-const makeScrape = <const Name extends string>(
+/**
+ * Create a Tool and handler Layer for bounded selector scraping under a fixed host policy.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
+export const makeScrape = <const Name extends string>(
   name: Name,
   options: WebCaptureScrapeOptions,
 ): WebCaptureScrapeDefinition<Name> => {
@@ -730,6 +859,3 @@ const makeScrape = <const Name extends string>(
     handlers,
   });
 };
-
-/** Web capture builder namespace (capability spec §9.2). */
-export { make, makeExtract, makeScrape };

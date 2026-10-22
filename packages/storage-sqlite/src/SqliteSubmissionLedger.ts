@@ -1,3 +1,8 @@
+/**
+ * SQLite submission admission and canonical settlement publication.
+ *
+ * @since 0.1.0
+ */
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { makeSqlSubmissionLedgerKernel } from "@yielded/agent-storage-sql/sql-submission-ledger";
 import { StorageOwner } from "@yielded/agent/run-storage";
@@ -43,6 +48,9 @@ const makeServices = Effect.fnUntraced(function* () {
  * SQLite submission transitions and canonical settlement publication share the journal's
  * database file, scoped owner, and mutation gate. Configuration, failpoint, SQL, and Crypto
  * authority stay visible in the input channel.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const submissionLedgerLayer: Layer.Layer<
   SubmissionLedger | SettlementPublisher | StorageOwner,
@@ -53,6 +61,9 @@ export const submissionLedgerLayer: Layer.Layer<
 /**
  * A composition-root Layer for submission transitions and settlement publication. Point it
  * at the same exclusive client as ThreadStore so every mutation shares its local owner.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const ledgerLayer = (
   options: SqliteStorageOptions,

@@ -15,8 +15,11 @@ import { submissionSettlementRecordId } from "../SubmissionLedger.ts";
 import { getRecord, getRunInput, PROMPT_EVIDENCE_TAGS, ThreadReader } from "../ThreadStore.ts";
 import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 
-/** A captured original input can prepare context before its atomic publication. It carries
- * an expected position, never a committed observation cursor or dispatch authority. */
+/**
+ * A captured original input can prepare context before its atomic publication. It carries
+ * an expected position, never a committed observation cursor or dispatch authority.
+ * @internal
+ */
 export type InitialContextInput =
   | CanonicalRecordEnvelope
   | {
@@ -28,7 +31,10 @@ export type InitialContextInput =
 const invalid = (message: string) => RunJournalError.make({ message });
 const promptTag = new Set<string>(PROMPT_EVIDENCE_TAGS);
 
-/** Fresh admission trusts validated immutable history; recovery verifies its saved Prompt digest. */
+/**
+ * Fresh admission trusts validated immutable history; recovery verifies its saved Prompt digest.
+ * @internal
+ */
 export const initialContext = Effect.fnUntraced(function* (original: InitialContextInput) {
   const reader = yield* ThreadReader;
   const threadId = original.threadId;

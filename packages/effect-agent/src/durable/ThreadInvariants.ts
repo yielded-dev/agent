@@ -1,3 +1,10 @@
+/**
+ * Read-only streaming verification of canonical history, admission facts, and active checkpoints
+ * against one captured Thread snapshot.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -28,7 +35,12 @@ import {
 } from "./ThreadImport.ts";
 import { ThreadExport, ThreadStoreError, type ExecutionCheckpoint } from "./ThreadStore.ts";
 
-/** All reads share the export snapshot. No lifetime identity sets or materialization. */
+/**
+ * All reads share the export snapshot. No lifetime identity sets or materialization.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
   readonly threadId: ThreadId;
   readonly pages: Stream.Stream<ThreadExport, E, R>;
@@ -40,7 +52,12 @@ export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
   readonly requireAllSettled?: boolean;
 }
 
-/** Indexed streaming verification; bounded Run evidence is the only retained selection. */
+/**
+ * Indexed streaming verification; bounded Run evidence is the only retained selection.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
   input: ThreadInvariantInput<E, R>,
 ) {

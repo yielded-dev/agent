@@ -1,3 +1,10 @@
+/**
+ * Host-retained bindings that turn a selected event and its pinned registration into typed Agent
+ * input. Exact source and destination definitions are required during recovery.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -15,7 +22,12 @@ import {
   SubscriptionSourceError,
 } from "./Subscription.ts";
 
-/** Host-retained preparation code for one source and exact destination Agent definition. */
+/**
+ * Host-retained preparation code for one source and exact destination Agent definition.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubscriptionInputBinding {
   readonly source: EventSourceVersion;
   readonly agentId: AgentId;
@@ -27,12 +39,23 @@ export interface SubscriptionInputBinding {
   ) => Effect.Effect<PersistedJson, SubscriptionSourceError>;
 }
 
+/**
+ * Host-assembled registry of exact source and destination-definition input preparation bindings.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class SubscriptionInputBindings extends Context.Service<
   SubscriptionInputBindings,
   { readonly bindings: ReadonlyArray<SubscriptionInputBinding> }
 >()("@effect-agent/thread/SubscriptionInputBindings") {}
 
-/** Missing or ambiguous code stays pending. Never substitute a newer destination definition. */
+/**
+ * Missing or ambiguous code stays pending. Never substitute a newer destination definition.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const resolveSubscriptionInput = (
   bindings: ReadonlyArray<SubscriptionInputBinding>,
   configuration: Pick<SubscriptionConfiguration, "source" | "agentId" | "definitions">,
@@ -58,6 +81,9 @@ export const resolveSubscriptionInput = (
  * requires new definition digests. Preparation may repeat until its envelope is committed.
  * Each operation owns a fresh Scope for its callbacks and codecs; captured host services
  * retain their host lifetime. Operation resources finalize on success, failure, or interruption.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSubscriptionInputBinding = Effect.fnUntraced(function* <
   Event extends Schema.Top,

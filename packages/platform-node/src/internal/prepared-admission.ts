@@ -22,13 +22,21 @@ const ambiguous = (): PreparedInputRetryable =>
 const corrupt = (operation: string): ScheduleStorageError =>
   ScheduleStorageError.make({ operation, reason: "corrupt" });
 
-/** Host-owned admission gate, available while the host's worker pool is being assembled. */
+/**
+ * Host-owned admission gate, available while the host's worker pool is being assembled.
+ *
+ * @internal
+ */
 export class NodeAdmission extends Context.Service<
   NodeAdmission,
   Pick<NodeDurableHost["Service"], "submit" | "submissionStatus">
 >()("@effect-agent/platform-node/internal/NodeAdmission") {}
 
-/** Acquire the gated source once; worker callers cannot replace its admission authority. */
+/**
+ * Acquire the gated source once; worker callers cannot replace its admission authority.
+ *
+ * @internal
+ */
 export const makeNodePreparedInputAdmission = Effect.gen(function* () {
   const host = yield* NodeAdmission;
 

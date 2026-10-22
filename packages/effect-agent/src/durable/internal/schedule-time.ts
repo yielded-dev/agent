@@ -69,6 +69,7 @@ const validateCronFrequency = (
     : invalid(`Cron may fire more often than the configured ${minimumMillis}ms minimum`);
 };
 
+/** @internal */
 export const parseScheduleCron = (
   expression: string,
   timeZone: string,
@@ -84,6 +85,7 @@ export const parseScheduleCron = (
     : Result.succeed(parsed.success);
 };
 
+/** @internal */
 export const normalizeScheduleTiming = (
   request: ScheduleTimingRequest,
   nowMillis: number,
@@ -132,7 +134,10 @@ const parsedStoredCron = (timing: Extract<ScheduleTiming, { _tag: "Cron" }>) => 
     : Result.succeed(parsed.success);
 };
 
-/** Strictly selects the first occurrence after an instant. */
+/**
+ * Strictly selects the first occurrence after an instant.
+ * @internal
+ */
 export const scheduleNextAfter = (
   timing: ScheduleTiming,
   afterMillis: number,
@@ -172,20 +177,27 @@ export const scheduleNextAfter = (
   }
 };
 
-/** Initial cursor. Past one-shots remain due; recurring rules start strictly after registration. */
+/**
+ * Initial cursor. Past one-shots remain due; recurring rules start strictly after registration.
+ * @internal
+ */
 export const scheduleInitialCursor = (
   timing: ScheduleTiming,
   nowMillis: number,
 ): Result.Result<number | null, ScheduleValidationError> =>
   timing._tag === "At" ? Result.succeed(timing.atMillis) : scheduleNextAfter(timing, nowMillis);
 
+/** @internal */
 export interface DueScheduleOccurrence {
   readonly intendedAtMillis: number;
   readonly nextAtMillis: number | null;
   readonly skippedRange: ScheduleSkippedRange | null;
 }
 
-/** Coalesces recurring occurrences using the same forward sequence as registration. */
+/**
+ * Coalesces recurring occurrences using the same forward sequence as registration.
+ * @internal
+ */
 export const scheduleDueOccurrence = (
   timing: ScheduleTiming,
   cursorMillis: number,
@@ -296,6 +308,7 @@ export const scheduleDueOccurrence = (
   });
 };
 
+/** @internal */
 export const scheduleResumeCursor = (
   timing: ScheduleTiming,
   existingCursor: number | null,

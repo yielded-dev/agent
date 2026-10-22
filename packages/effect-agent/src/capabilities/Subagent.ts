@@ -1,3 +1,10 @@
+/**
+ * Declare and invoke typed Subagent capabilities with explicit input projection, authority
+ * ceilings, budgets, and attached or background lifetimes.
+ *
+ * @since 0.1.0
+ */
+
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Cause from "effect/Cause";
@@ -12,6 +19,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
+import type * as Agent from "../core/Agent.ts";
 import {
   type Definition,
   type InputPromptSource,
@@ -32,7 +40,9 @@ import {
   SubagentReservationAmounts,
 } from "../core/SubagentContract.ts";
 import { type RunTotals, RunUsageReport, unknownRunTotals } from "../core/Usage.ts";
+import type { WorkerRef } from "../core/Worker.ts";
 import {
+  type RunSubagentChildIdentity,
   type AgentRuntimeFailure,
   type AgentRuntimeRequirements,
   AgentSpawner,
@@ -46,7 +56,6 @@ import {
   ToolCallWaiting,
 } from "../engine/AgentRuntime.ts";
 import type { SpawnInterpreterOptions } from "../engine/internal/agent-runtime.ts";
-import type { RunSubagentChildIdentity } from "../engine/internal/interpreter-options.ts";
 import {
   RunEventSink,
   type SubagentEventBasePayload,
@@ -78,18 +87,107 @@ import {
   SubagentReservations,
 } from "./SubagentReservations.ts";
 
-export { WorkerCompletion } from "../core/Worker.ts";
-
-export { SubagentGrant } from "../core/SubagentContract.ts";
+export {
+  /**
+   * Framework message stored separately from the parent's application input.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
+  WorkerCompletion,
+} from "../core/Worker.ts";
 
 export {
+  /**
+   * Tree authority ceiling. Each child exposes only its own Toolkit's permitted names.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  SubagentGrant,
+} from "../core/SubagentContract.ts";
+
+export {
+  /**
+   * Finite delegation bounds declared by one Subagent capability.
+   * Structural limits are hard limits; token
+   * and cost caps are optional and enforced only as honestly as provider
+   * reporting allows.
+   *
+   * @category models
+   * @since 0.1.0
+   */
   SubagentPolicy,
+  /**
+   * Inputs normalized and validated by `SubagentPolicy.make`.
+   *
+   * @category models
+   * @since 0.1.0
+   */
   type SubagentPolicyInput,
+  /**
+   * Delegation preflight denied before any child started.
+   * No reservation, identity, or event exists for the
+   * denied invocation; retry requires a new authorized parent Tool Call.
+   *
+   * @category errors
+   * @since 0.1.0
+   */
   SubagentPrestartDenied,
+  /**
+   * Input or result projection failed its Schema or bounds.
+   * Fail closed: the message is a fixed description and
+   * never carries the raw child value.
+   *
+   * @category errors
+   * @since 0.1.0
+   */
   SubagentProjectionFailure,
+  /**
+   * Classification of one bounded durable delegation failure.
+   * `"child-failed"` and `"child-aborted"` project the
+   * child's canonical failed/aborted Settlement; `"child-compatibility"`
+   * projects the framework's `ChildCompatibilityFailure` child Settlement (the
+   * stored child Binding digest was unavailable — recovery never substituted
+   * current code); `"establishment-denied"` is a fail-closed coordinator
+   * refusal (lineage/digest verification, divergent replay); and
+   * `"declaration-unavailable"` is retained for decoding failures recorded by
+   * versions that required an explicit durable digest declaration.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
   SubagentExecutionFailureClassification,
+  /**
+   * Bounded framework projection of a durable child failure, shared by attached joins and reports.
+   * A failed or aborted durable child
+   * joins its parent Tool Call as exactly this typed failure: a classification,
+   * the child references, and the coordinator's bounded `{errorTag, message}`
+   * projection — never a raw Cause, stack, provider response, secret, or child
+   * payload. The typed child failure union does not survive a durable
+   * Settlement, so `mapChildFailure` remains the ephemeral-path contract;
+   * Schema-declared durable domain-failure mapping is a recorded later
+   * extension.
+   *
+   * @category errors
+   * @since 0.1.0
+   */
   SubagentExecutionFailure,
+  /**
+   * Derive the parent-Run delegation caps registered with
+   * `SubagentReservations` from one delegation policy: the per-invocation
+   * bounds scaled by `maxChildren` plus the invocation and concurrency limits.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   delegationCapsFromPolicy,
+  /**
+   * Derive the all-or-nothing per-invocation reservation from one delegation policy.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   delegationAllocationFromPolicy,
 } from "./internal/subagent-contract.ts";
 
@@ -98,6 +196,9 @@ const decodeDelegationId = Schema.decodeSync(DelegationId);
 /**
  * Bounded parent metadata visible to `prepareInput`.
  * It never contains the parent transcript, prompt, or a root runtime Context.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type SubagentPrepareContext = {
   readonly delegationId: DelegationId;
@@ -120,6 +221,9 @@ export type SubagentPrepareContext = {
  * the child result's `finishReason`, on the durable path from the child
  * Settlement's honest marker — so the projection can surface a
  * budget-truncated partial to the orchestrator.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface SubagentResultContext {
   readonly budgetExhausted: boolean;
@@ -128,10 +232,21 @@ export interface SubagentResultContext {
   readonly delegatedUsage?: RunTotals;
 }
 
-/** Default delegation result, preserving partial-output information. */
+/**
+ * Default delegation result, preserving partial-output information.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubagentResult = <Output extends Schema.Top>(output: Output) =>
   Schema.Struct({ output, budgetExhausted: Schema.Boolean });
 
+/**
+ * Type produced by {@link SubagentResult}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type SubagentResult<Output extends Schema.Top> = ReturnType<typeof SubagentResult<Output>>;
 
 /**
@@ -146,6 +261,9 @@ export type SubagentResult<Output extends Schema.Top> = ReturnType<typeof Subage
  * `failureMode: "error"` (S2 plan §2); neither ever reaches an ephemeral
  * caller, and a waiting signal is not a Tool failure — the batch executor
  * keeps the raising call open and suspends the Run.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type SubagentToolFailure<Failure extends Schema.Top> = Schema.Union<
   readonly [
@@ -176,6 +294,9 @@ export type SubagentToolFailure<Failure extends Schema.Top> = Schema.Union<
  * declared success and the contained failure family, and exactly
  * `ToolCallWaiting` and `SubagentDurabilityError` stay in the error channel,
  * preserving durable suspension semantics by construction.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type SubagentFailureMode = "error" | "return";
 
@@ -184,6 +305,9 @@ export type SubagentFailureMode = "error" | "return";
  * `failureMode: "return"`: the author-declared failure plus every expected
  * framework delegation failure. The engine-signal members are excluded by
  * construction.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type SubagentContainedFailure<Failure extends Schema.Top> = Schema.Union<
   readonly [
@@ -200,6 +324,9 @@ export type SubagentContainedFailure<Failure extends Schema.Top> = Schema.Union<
  * engine-owned waiting signal (consumed by the batch executor, never a Tool
  * failure) and the durable coordinator-seam error. Neither ever reaches an
  * ephemeral caller.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type SubagentReturnModeFailure = Schema.Union<
   readonly [typeof ToolCallWaiting, typeof SubagentDurabilityError]
@@ -212,6 +339,9 @@ export type SubagentReturnModeFailure = Schema.Union<
  * requirement except the inherited Thread history policy is a construction requirement
  * of `Subagent.layer`. The engine excludes its own per-batch services from the runtime's
  * public requirements. Runtime IDs use the overridable default reference.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type SubagentTool<
   Name extends string,
@@ -241,7 +371,12 @@ export type SubagentTool<
       AgentSpawner | RunEventSink | SubagentDurability
     >;
 
-/** Singleton Tool record provided by one `Subagent.layer`. */
+/**
+ * Singleton Tool record provided by one `Subagent.layer`.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type SubagentTools<
   Name extends string,
   Parameters extends Schema.Top,
@@ -252,7 +387,12 @@ export type SubagentTools<
   readonly [Key in Name]: SubagentTool<Name, Parameters, Success, Failure, Mode>;
 };
 
-/** Explicit options accepted by `Subagent.make`. */
+/**
+ * Explicit options accepted by `Subagent.make`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentDefineOptions<
   TargetInput extends Schema.Top,
   TargetOutput extends Schema.Top,
@@ -346,6 +486,9 @@ export interface SubagentDefineOptions<
  * a parent as one Effect AI Tool with explicit projections, policy, and
  * authority ceiling. It owns no acquired resources and
  * is not executable until `Subagent.layer` supplies the child's model Layer.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface SubagentDelegation<
   Name extends string,
@@ -517,7 +660,12 @@ const makeExplicit = <
 };
 
 /** Pure Subagent authoring surface. */
-/** Optional authoring fields; schemas default to the child's input and result envelope. */
+/**
+ * Optional authoring fields; schemas default to the child's input and result envelope.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type SubagentDeclarationOptions<
   Input extends Schema.Top,
   Output extends Schema.Top,
@@ -578,8 +726,11 @@ export type SubagentDeclarationOptions<
  * name is preserved as both Tool name and delegation identity; no prefix is required.
  * Parameters and result projections default to the child's input and result envelope.
  * Throws when the name is empty. Nested Tool visibility follows the effective inherited grant.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
-function make<
+export function make<
   const Name extends string,
   Input extends Schema.Top,
   Output extends Schema.Top,
@@ -634,7 +785,8 @@ function make<
   Project,
   "return"
 > & { readonly target: Target };
-function make<
+
+export function make<
   const Name extends string,
   Input extends Schema.Top,
   Output extends Schema.Top,
@@ -688,7 +840,8 @@ function make<
   Prepare,
   Project
 > & { readonly target: Target };
-function make<
+
+export function make<
   const Name extends string,
   Input extends Schema.Top,
   Output extends Schema.Top,
@@ -801,8 +954,6 @@ function make<
       >(name, { ...resolved, failureMode: "error" });
 }
 
-export { make };
-
 type InstructionResultOf<Instructions, Input> = Instructions extends (input: Input) => infer Result
   ? Result
   : Instructions;
@@ -830,6 +981,9 @@ type InstructionRequirementsOf<Instructions, Input> =
  * the child's inferred Agent failures plus
  * the interpreter's policy, protocol, and approval failures. Interruption and
  * defects are not members; they retain their distinct semantics.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type SubagentChildRunFailure<
   TargetInput extends Schema.Top,
@@ -871,6 +1025,9 @@ export type SubagentChildRunFailure<
  * requirements, and the parent-owned reservation service. Nothing here leaks
  * into the per-call Tool handler requirements. ThreadHistory and RunContextPreparation belong
  * to the parent Run's AgentSpawner and are inherited at invocation rather than captured here.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type SubagentLayerRequirements<
   TargetInput extends Schema.Top,
@@ -924,6 +1081,9 @@ export type SubagentLayerRequirements<
  * owns the canonical accounting decision on `SubagentJoined` and may replace
  * structural dimensions from canonical child evidence; this value is opaque
  * encoded policy math to the engine and to storage adapters (D8).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubagentDurableAccounting extends Schema.Class<SubagentDurableAccounting>(
   "@effect-agent/capabilities/SubagentDurableAccounting",
@@ -938,7 +1098,12 @@ export class SubagentDurableAccounting extends Schema.Class<SubagentDurableAccou
   basis: Schema.Literals(["reserved-conservative"]),
 }) {}
 
-/** Options accepted by `Subagent.layer`. */
+/**
+ * Options accepted by `Subagent.layer`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentRuntimeOptions<
   Failure extends Schema.Top,
   ChildFailure,
@@ -1173,6 +1338,9 @@ type SubagentHandler<
  *   decoding, `projectResult`, and ONE atomic settlement join carrying the
  *   conservative accounting summary. Failed children join as the bounded
  *   `SubagentExecutionFailure`; no in-process child fiber ever starts.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export function layer<
   Name extends string,
@@ -1259,6 +1427,36 @@ export function layer<
   >
 >;
 
+/**
+ * Build the Toolkit handler Layer using the provided model requirement, or pass
+ * a native model / explicit child Binding as an override. Without an override,
+ * provide the model with Layer.provide; the handler captures it at construction.
+ * AutoModel resolves each new child's own Thread ID and projected first task.
+ * Share its selection store across parent Runs and child handler Layers.
+ *
+ * Construction requirements carry the child Binding's full runtime needs and
+ * both projections; they are captured once via `Effect.context` so the
+ * per-call handler requirements stay exactly the Tool's declared engine
+ * dependencies. The handler dispatches on the engine-provided per-batch
+ * `SubagentDurability` service mode:
+ *
+ * - **ephemeral** (the explicit engine default when no durable coordinator
+ *   supplied `InterpreterOptions.subagent`): the S1 path unchanged — preflight, an
+ *   in-process scoped child Run (SUB-011/012), stable lifecycle events,
+ *   total-mapped expected child failures, and Scope-finalizer reservation
+ *   settlement on every exit path.
+ * - **durable** (S2): the same fail-closed preflight and input projection,
+ *   then idempotent establishment through the coordinator (spec §12 steps
+ *   2-9) with construction-fixed child Binding digests, encoded grant, and
+ *   encoded allocation; the engine-owned waiting signal while the attached
+ *   child is nonterminal; and, on re-entry with a settled child, output
+ *   decoding, `projectResult`, and ONE atomic settlement join carrying the
+ *   conservative accounting summary. Failed children join as the bounded
+ *   `SubagentExecutionFailure`; no in-process child fiber ever starts.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layer<
   Name extends string,
   TargetInput extends Schema.Top,
@@ -1372,6 +1570,36 @@ export function layer<
   >
 >;
 
+/**
+ * Build the Toolkit handler Layer using the provided model requirement, or pass
+ * a native model / explicit child Binding as an override. Without an override,
+ * provide the model with Layer.provide; the handler captures it at construction.
+ * AutoModel resolves each new child's own Thread ID and projected first task.
+ * Share its selection store across parent Runs and child handler Layers.
+ *
+ * Construction requirements carry the child Binding's full runtime needs and
+ * both projections; they are captured once via `Effect.context` so the
+ * per-call handler requirements stay exactly the Tool's declared engine
+ * dependencies. The handler dispatches on the engine-provided per-batch
+ * `SubagentDurability` service mode:
+ *
+ * - **ephemeral** (the explicit engine default when no durable coordinator
+ *   supplied `InterpreterOptions.subagent`): the S1 path unchanged — preflight, an
+ *   in-process scoped child Run (SUB-011/012), stable lifecycle events,
+ *   total-mapped expected child failures, and Scope-finalizer reservation
+ *   settlement on every exit path.
+ * - **durable** (S2): the same fail-closed preflight and input projection,
+ *   then idempotent establishment through the coordinator (spec §12 steps
+ *   2-9) with construction-fixed child Binding digests, encoded grant, and
+ *   encoded allocation; the engine-owned waiting signal while the attached
+ *   child is nonterminal; and, on re-entry with a settled child, output
+ *   decoding, `projectResult`, and ONE atomic settlement join carrying the
+ *   conservative accounting summary. Failed children join as the bounded
+ *   `SubagentExecutionFailure`; no in-process child fiber ever starts.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layer<
   Name extends string,
   TargetInput extends Schema.Top,
@@ -2329,24 +2557,202 @@ export function layer<
   return toolkit.toLayer(build);
 }
 
-export { WorkerReport, reporting, type ReportingOptions } from "./internal/subagent-reporting.ts";
+export {
+  /**
+   * One projected canonical Run outcome. Joined receipts share this identity.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  WorkerReport,
+  /**
+   * Register this standard completion projection on the parent; registration captures its services.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  reporting,
+  /**
+   * Select which child updates and completed Runs are reported to the parent. Accepted decisions
+   * are retained for recovery.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  type ReportingOptions,
+} from "./internal/subagent-reporting.ts";
 
 export {
+  /**
+   * Portable identity checked against this declaration; possession grants no authority.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   Worker,
+  /**
+   * One exact Receipt, including private canonical failure evidence for programmatic callers.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   WorkerObservation,
+  /**
+   * Retain a first worker input. The same explicit key reuses its durable delivery identity.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   start,
+  /**
+   * Retain typed follow-up parameters for the same worker Thread; inspect its MessageRef for delivery.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   followUp,
+  /**
+   * Inspect a worker summary, retained MessageRef, or the result of one exact accepted Receipt.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   inspect,
+  /**
+   * Read an authorized finite history snapshot; pass the last emitted sequence to resume.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   observe,
+  /**
+   * Wait for the exact Receipt. Interrupting this Effect never cancels accepted work.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   awaitWorker as await,
+  /**
+   * List only workers visible through the caller-bound host facet.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   list,
+  /**
+   * Request cancellation of exactly one Receipt; JoinedToHost remains a typed conflict.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   cancel,
+  /**
+   * Seal a continuing worker, retaining a stable command identity across retries and Runs.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   stop,
+  /**
+   * Retain new worker input under the current Tool Call's stable identity.
+   *
+   * @category tools
+   * @since 0.1.0
+   */
   startTool,
+  /**
+   * Retain follow-up input for an existing worker under the current Tool Call's identity.
+   *
+   * @category tools
+   * @since 0.1.0
+   */
   followUpTool,
+  /**
+   * Inspect one delivery or accepted Receipt without resending input.
+   *
+   * @category tools
+   * @since 0.1.0
+   */
   inspectTool,
+  /**
+   * Inspect a continuing worker's state and latest accepted input.
+   *
+   * @category tools
+   * @since 0.1.0
+   */
   summaryTool,
+  /**
+   * List workers visible through the current caller's host facet.
+   *
+   * @category tools
+   * @since 0.1.0
+   */
   listTool,
+  /**
+   * Request cancellation of one exact worker Receipt.
+   *
+   * @category tools
+   * @since 0.1.0
+   */
   cancelTool,
+  /**
+   * Opt in to each model-facing operation. Waiting remains programmatic only.
+   *
+   * @category models
+   * @since 0.1.0
+   */
   type StartToolOptions,
 } from "./internal/subagent-background.ts";
+
+/**
+ * Structural Subagent declaration accepted by background worker operations.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
+export type BackgroundDeclaration<
+  Name extends string,
+  Input extends Schema.Top,
+  Output extends Schema.Top,
+  Parameters extends Schema.Top,
+  Success extends Schema.Top,
+  Failure extends Schema.Top,
+  Prepare,
+  Project,
+> = Pick<
+  SubagentDefineOptions<
+    Input,
+    Output,
+    unknown,
+    Record<string, Tool.Any>,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
+  | "parameters"
+  | "success"
+  | "failure"
+  | "prepareInput"
+  | "projectResult"
+  | "policy"
+  | "needsApproval"
+> & {
+  readonly name: Name;
+  readonly delegationId: WorkerRef["delegationId"];
+  readonly target: Agent.AnyDefinition & { readonly input: Input; readonly output: Output };
+  readonly grant: SubagentGrant;
+};
+
+/**
+ * Identity-only declaration used to address a capability's continuing workers.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
+export type WorkerDeclaration<Name extends string> = {
+  readonly name: Name;
+  readonly delegationId: WorkerRef["delegationId"];
+  readonly target: Pick<Agent.AnyDefinition, "id">;
+};

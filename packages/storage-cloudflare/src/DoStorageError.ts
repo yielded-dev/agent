@@ -1,8 +1,18 @@
+/**
+ * Typed storage failures and fault-injection locations for Durable Object adapters.
+ *
+ * @since 0.1.0
+ */
 import { CanonicalSequence } from "@yielded/agent/records";
 import { ThreadStoreDiagnostic } from "@yielded/agent/thread-store";
 import * as Schema from "effect/Schema";
 
-/** The Durable Object's SQLite storage uses a private-development format this adapter cannot read. */
+/**
+ * The stored layout version is incompatible with this adapter.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DoStorageCompatibilityError extends Schema.TaggedError<DoStorageCompatibilityError>()(
   "DoStorageCompatibilityError",
   {
@@ -12,7 +22,12 @@ export class DoStorageCompatibilityError extends Schema.TaggedError<DoStorageCom
   },
 ) {}
 
-/** Stored bytes failed the current Schema and cannot be used as recovery truth. */
+/**
+ * Stored bytes failed the current Schema and cannot be used as recovery truth.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DoStorageCorruptionError extends Schema.TaggedError<DoStorageCorruptionError>()(
   "DoStorageCorruptionError",
   {
@@ -23,7 +38,12 @@ export class DoStorageCorruptionError extends Schema.TaggedError<DoStorageCorrup
   },
 ) {}
 
-/** Durable Object SQLite infrastructure failed while opening or operating the store. */
+/**
+ * Durable Object SQLite infrastructure failed while opening or operating the store.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DoStorageError extends Schema.TaggedError<DoStorageError>()("DoStorageError", {
   cause: Schema.optionalKey(Schema.Defect()),
   message: Schema.String,
@@ -35,6 +55,9 @@ export class DoStorageError extends Schema.TaggedError<DoStorageError>()("DoStor
  * Durable Object SQLite infrastructure failed while operating the Submission Ledger. Surfaces
  * at the SubmissionLedger port as the typed `LedgerError` with this error preserved as its
  * cause, so the adapter-level tag is never erased.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class DoLedgerError extends Schema.TaggedError<DoLedgerError>()("DoLedgerError", {
   cause: Schema.optionalKey(Schema.Defect()),
@@ -43,11 +66,10 @@ export class DoLedgerError extends Schema.TaggedError<DoLedgerError>()("DoLedger
 }) {}
 
 /**
- * A value to be stored exceeds the configured Durable Object per-value bound
- * (`DoStorageConfigValue.maxStoredValueBytes`, kept under the platform's 2 MB SQLite value
- * limit). The refusal happens typed BEFORE any durable mutation; no partial state is written.
- * Payloads of this size are the designed overflow case for a future R2-backed AttachmentStore
- * (deployment spec §3.1, deferred until a real attachment requirement exists).
+ * A stored value exceeds the configured per-value byte bound. The write is refused before mutation.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class DoValueBoundExceeded extends Schema.TaggedError<DoValueBoundExceeded>()(
   "DoValueBoundExceeded",
@@ -69,6 +91,9 @@ export class DoValueBoundExceeded extends Schema.TaggedError<DoValueBoundExceede
 /**
  * A canonical batch retry conflicts with existing append state. Tail conflicts carry the
  * actual committed tail as a diagnostic resume hint.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class DoAppendConflict extends Schema.TaggedError<DoAppendConflict>()("DoAppendConflict", {
   message: Schema.String,
@@ -77,12 +102,10 @@ export class DoAppendConflict extends Schema.TaggedError<DoAppendConflict>()("Do
 }) {}
 
 /**
- * Deterministic fault-injection locations at Durable Object storage operation boundaries.
+ * Fault-injection locations at storage operation boundaries, shared with the SQLite adapter.
  *
- * The string list is copied VERBATIM from `SqliteStorageFailpointLocation`
- * (`packages/storage-sqlite/src/errors.ts`) so every crash-matrix row keeps the same name on
- * both platforms — the DN process-kill evidence and the DC eviction evidence address identical
- * locations. There is intentionally no Cloudflare-only location.
+ * @category schemas
+ * @since 0.1.0
  */
 export const DoStorageFailpointLocation = Schema.Literals([
   "materialize:before",
@@ -131,9 +154,20 @@ export const DoStorageFailpointLocation = Schema.Literals([
   "ledger:child-settled:after",
 ]);
 
+/**
+ * Decoded value of the DoStorageFailpointLocation schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DoStorageFailpointLocation = typeof DoStorageFailpointLocation.Type;
 
-/** Deterministic test-only fault or pause injected at a Durable Object storage boundary. */
+/**
+ * Deterministic test-only fault or pause injected at a Durable Object storage boundary.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DoStorageFailpointError extends Schema.TaggedError<DoStorageFailpointError>()(
   "DoStorageFailpointError",
   {

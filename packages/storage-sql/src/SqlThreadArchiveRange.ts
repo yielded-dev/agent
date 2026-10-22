@@ -1,3 +1,8 @@
+/**
+ * Canonical archive range reads and publication over adapter-owned SQL tables.
+ *
+ * @since 0.1.0
+ */
 import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
 import { CanonicalSequence } from "@yielded/agent/records";
@@ -39,6 +44,9 @@ const failure = (operation: string, cause?: unknown) =>
 /**
  * Keep indexed selectors on the identity table, including SQLite's INDEXED BY hints. A scalar
  * locator probe prevents the planner from expanding archive ownership into a Thread-wide join.
+ *
+ * @category utilities
+ * @since 0.1.0
  */
 export const canonicalRecordJson = (
   sql: SqlClient.SqlClient,
@@ -57,7 +65,11 @@ export const canonicalRecordJson = (
   ))`;
 };
 
-/** Exact canonical metadata; records remain the only hot payload copy. */
+/**
+ * Exact canonical metadata; records remain the only hot payload copy.
+ *
+ * @internal
+ */
 export const canonicalBatchHeaderJson = (batch: typeof ThreadExportBatch.Type): string =>
   canonicalJson({ batchId: batch.batchId, producerId: batch.producerId });
 
@@ -109,11 +121,19 @@ const canonicalBatchValue = (
   ) ELSE ${hot} END`;
 };
 
-/** Byte-identical to PreparedAppend and canonical import serialization. */
+/**
+ * Byte-identical to PreparedAppend and canonical import serialization.
+ *
+ * @internal
+ */
 export const canonicalBatchJson = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) =>
   canonicalBatchValue(sql, namespace, alias, false);
 
-/** Inspect sizes without allocating a reconstructed batch payload. */
+/**
+ * Inspect sizes without allocating a reconstructed batch payload.
+ *
+ * @internal
+ */
 export const canonicalBatchBytes = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) =>
   canonicalBatchValue(sql, namespace, alias, true);
 
@@ -146,6 +166,12 @@ const decodeReplayPlan = Schema.decodeUnknownEffect(
   ).check(Schema.isMaxLength(1)),
 );
 
+/**
+ * Adapter-provided snapshot and atomic write boundaries for canonical archives.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlArchiveTransactions {
   readonly read: <A, E, R>(
     body: Effect.Effect<A, E, R>,
@@ -155,7 +181,12 @@ export interface SqlArchiveTransactions {
   ) => Effect.Effect<A, E | ThreadStoreError, R>;
 }
 
-/** Adapter layout DDL owns these authoritative tables; this module never initializes them. */
+/**
+ * Adapter layout DDL owns these authoritative tables; this module never initializes them.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
   transactions: SqlArchiveTransactions,
   namespace?: string,

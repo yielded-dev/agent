@@ -1,3 +1,8 @@
+/**
+ * SQL-backed activity checkpoints with adapter-owned initialization and storage bounds.
+ *
+ * @since 0.1.0
+ */
 import {
   ActivityBusy,
   ActivityMutationFailpoint,
@@ -121,6 +126,9 @@ const validateProgress = Effect.fnUntraced(function* (
 /**
  * Initialize standalone activity progress and provide its transitions. The adapter supplies
  * its transaction semantics and optional namespace setup, which runs in the initialization transaction.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSqlActivityStore = Effect.fnUntraced(function* (
   transact: SqlWriteTransaction,

@@ -1,3 +1,8 @@
+/**
+ * Scoped Node scheduling services with deadline polling and wake hints.
+ *
+ * @since 0.1.0
+ */
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   type ScheduleAuthorizer,
@@ -20,7 +25,12 @@ import * as Result from "effect/Result";
 import type { NodeDurableHost } from "./NodeDurableHost.ts";
 import { nodePreparedInputAdmissionLayer } from "./NodeSubscriptions.ts";
 
-/** One bounded hint slot for the single supported Node scheduler. Indexed polling repairs loss. */
+/**
+ * One bounded hint slot for the single supported Node scheduler. Indexed polling repairs loss.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const nodeScheduleWakeLayer: Layer.Layer<ScheduleWake> = Layer.effect(
   ScheduleWake,
   Effect.gen(function* () {
@@ -91,6 +101,12 @@ const nodeSchedulingDriverLayer = (
     }),
   );
 
+/**
+ * Limits for the Node scheduling service and its driver.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface NodeSchedulingOptions {
   readonly limits?: SchedulingLimits | undefined;
 }
@@ -98,8 +114,17 @@ export interface NodeSchedulingOptions {
 /**
  * Optional Scope-owned Node scheduling service and driver. The caller must provide the existing
  * host, its SQLite ScheduleStore, and an explicit ScheduleAuthorizer.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class NodeScheduling {
+  /**
+   * Provide scheduling services and start the scoped deadline driver.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static layer(
     options: NodeSchedulingOptions = {},
   ): Layer.Layer<

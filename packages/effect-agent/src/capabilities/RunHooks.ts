@@ -1,3 +1,9 @@
+/**
+ * Adapters connecting usage budgets, Thread snapshots, context transforms, and scheduling to Run hooks.
+ *
+ * @since 0.1.0
+ */
+
 import type * as Prompt from "effect/ai/Prompt";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -21,13 +27,23 @@ import {
 } from "../engine/RunOptions.ts";
 import { type BudgetExceeded, UsageDelta, type UsageBudgetNode } from "./Budget.ts";
 
-/** Engine usage data did not satisfy the non-negative budget delta Schema. */
+/**
+ * Engine usage data did not satisfy the non-negative budget delta Schema.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BudgetAdapterError extends Schema.TaggedError<BudgetAdapterError>()(
   "BudgetAdapterError",
   { message: Schema.String },
 ) {}
 
-/** Adapt one hierarchical budget node to the engine's usage accounting seam. */
+/**
+ * Adapt one hierarchical budget node to the engine's usage accounting seam.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toRunBudgetHook = (
   budget: UsageBudgetNode,
 ): RunBudgetHook<BudgetExceeded | BudgetAdapterError, never> => ({
@@ -52,6 +68,12 @@ export const toRunBudgetHook = (
     ),
 });
 
+/**
+ * Expected failures from explicit Thread snapshot and incremental-history hooks.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadAdapterError =
   | ThreadNotFound
   | ThreadLimitExceeded
@@ -71,6 +93,9 @@ export type ThreadAdapterError =
  * Native Effect AI parts and provider options are preserved without a role/text projection.
  * For retaining only successful Runs, provide ThreadHistory through PersistentHistory.layer
  * with a memory or SQLite store instead. This adapter does not provide durable recovery.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const toRunThreadOptions = Effect.fnUntraced(function* (
   threadId: import("../core/Identifiers.ts").ThreadId,
@@ -90,7 +115,12 @@ export const toRunThreadOptions = Effect.fnUntraced(function* (
   };
 });
 
-/** Prompt transform used by the adapter; the engine retains the authoritative source separately. */
+/**
+ * Prompt transform used by the adapter; the engine retains the authoritative source separately.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface EnginePromptTransform<Error = never, Requirements = never> {
   readonly prepare: (
     source: Prompt.Prompt,
@@ -98,7 +128,12 @@ export interface EnginePromptTransform<Error = never, Requirements = never> {
   ) => Effect.Effect<Prompt.Prompt, Error, Requirements>;
 }
 
-/** Adapt a prompt-only context transform without granting it authority over engine source history. */
+/**
+ * Adapt a prompt-only context transform without granting it authority over engine source history.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toRunContextHook = <Error, Requirements>(
   transform: EnginePromptTransform<Error, Requirements>,
 ): RunContextHook<Error, Requirements> => ({
@@ -106,7 +141,12 @@ export const toRunContextHook = <Error, Requirements>(
     transform.prepare(request.source, request).pipe(Effect.map((prompt) => ({ prompt }))),
 });
 
-/** Scheduling values are structurally aligned and only reduce finite concurrency. */
+/**
+ * Scheduling values are structurally aligned and only reduce finite concurrency.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toRunSchedulingHook = (
   runOverride: RunSchedulingHook["runOverride"],
   toolRequiresSequential?: (toolName: string) => boolean,

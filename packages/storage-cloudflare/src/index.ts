@@ -1,3 +1,8 @@
+/**
+ * Durable Object SQLite storage and owner-routed protocols for durable Threads.
+ *
+ * @since 0.1.0
+ */
 export * as DoMessageDeliveryStore from "./DoMessageDeliveryStore.ts";
 export * as DoMemoryStore from "./DoMemoryStore.ts";
 export * as DoScheduleStore from "./DoScheduleStore.ts";

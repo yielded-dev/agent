@@ -1,3 +1,10 @@
+/**
+ * Composite destination admission for host-authorized worker input. Retried admission completes the
+ * same retained submission and materialization protocol.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -26,6 +33,9 @@ import { WakeScheduler } from "./WakeScheduler.ts";
  * Storage admission after source authorization, input validation and capacity reservation.
  * This is an internal host port, not an authorization entrypoint. Hosts route the whole
  * operation to the destination owner and enroll recovery before executing it.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class WorkerAdmissionRequest extends Schema.Class<WorkerAdmissionRequest>(
   "@effect-agent/thread/WorkerAdmissionRequest",
@@ -35,6 +45,13 @@ export class WorkerAdmissionRequest extends Schema.Class<WorkerAdmissionRequest>
   producerId: ProducerId,
 }) {}
 
+/**
+ * Expected admission, policy, ledger, Thread-storage, append, or injected failure from composite
+ * worker admission.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerAdmissionFailure = Schema.Union([
   AdmissionConflict,
   AdmissionPolicyError,
@@ -45,7 +62,12 @@ export const WorkerAdmissionFailure = Schema.Union([
   DurableRuntimeFailpointError,
 ]);
 
-/** Local implementation shared by every host; retries finish the same admitted row. */
+/**
+ * Local implementation shared by every host; retries finish the same admitted row.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const admitWorker = Effect.fnUntraced(function* (request: WorkerAdmissionRequest) {
   const origin = request.workerAdmission.origin;
 
@@ -92,7 +114,12 @@ export const admitWorker = Effect.fnUntraced(function* (request: WorkerAdmission
   return admitted;
 });
 
-/** Placement adapter for the composite operation; local hosts use the same implementation. */
+/**
+ * Placement adapter for the composite operation; local hosts use the same implementation.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const WorkerAdmissionPort = Context.Reference<{ readonly admit: typeof admitWorker }>(
   "@effect-agent/thread/WorkerAdmissionPort",
   { defaultValue: () => ({ admit: admitWorker }) },

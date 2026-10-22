@@ -1,3 +1,10 @@
+/**
+ * Revalidate recalled candidates against current authoritative sources and host-bound access,
+ * preserving current attribution and bounded output.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -25,11 +32,34 @@ class MemoryAccessWire extends Schema.Class<MemoryAccessWire>(
   scope: MemoryScope,
 }) {}
 
+export type {
+  /**
+   * Portable access value decoded by {@link MemoryAccess.Wire} before namespace restoration.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  MemoryAccessWire,
+};
+
+/**
+ * Type produced by {@link MemoryAccess}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type MemoryAccess<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> = Omit<
   MemoryAccessWire,
   "namespace"
 > & { readonly namespace: Namespace };
 
+/**
+ * Schema and constructor binding a host-selected namespace to the access scope used for
+ * authoritative recall checks.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryAccess = {
   Wire: MemoryAccessWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -52,6 +82,9 @@ export const MemoryAccess = {
  * There is no cache. One invocation reads each distinct source once. Checks begun after a
  * successful withdrawal or access revocation exclude that source; an in-flight snapshot can
  * finish, including its same-Turn overflow retry. Original history and prior outputs remain.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const revalidateMemoryLookup = Effect.fnUntraced(function* (
   lookup: MemoryLookup,

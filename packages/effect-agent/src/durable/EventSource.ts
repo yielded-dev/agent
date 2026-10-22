@@ -1,3 +1,11 @@
+/**
+ * Versioned host adapters that validate and normalize event input, derive matching keys, and
+ * reconcile source state. Callback dependencies are captured at assembly and per-operation
+ * resources are scoped.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -11,6 +19,13 @@ import {
   SubscriptionSourceError,
 } from "./Subscription.ts";
 
+/**
+ * Schema-encoded event payload with a stable source identity, matching key, and optional
+ * epoch-millisecond occurrence time.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface NormalizedEvent {
   readonly eventId: string;
   readonly occurredAtMillis?: number;
@@ -18,7 +33,12 @@ export interface NormalizedEvent {
   readonly payload: PersistedJson;
 }
 
-/** Runtime-only versioned behavior. Never persist this object or silently replace its version. */
+/**
+ * Runtime-only versioned behavior. Never persist this object or silently replace its version.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface EventSource {
   readonly source: EventSourceVersion;
   readonly continuity: string;
@@ -38,6 +58,12 @@ export interface EventSource {
   ) => Effect.Effect<NormalizedEvent | null, SubscriptionSourceError>;
 }
 
+/**
+ * Host-assembled registry of versioned event normalization, matching, and reconciliation behavior.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class EventSources extends Context.Service<
   EventSources,
   {
@@ -53,6 +79,9 @@ const invalid = () => SubscriptionSourceError.make({ code: "source-schema", retr
  * The returned source accepts Schema-encoded values at intake and management boundaries.
  * Each operation owns a fresh Scope for its callbacks and codecs; captured host services
  * retain their host lifetime. Operation resources finalize on success, failure, or interruption.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeEventSource = Effect.fnUntraced(function* <
   Event extends Schema.Top,

@@ -1,3 +1,10 @@
+/**
+ * Versioned events describing Run, model, Tool, context, and Subagent progress and terminal
+ * outcomes.
+ *
+ * @since 0.1.0
+ */
+
 import * as Schema from "effect/Schema";
 
 import { Update } from "./AgentUpdates.ts";
@@ -22,28 +29,53 @@ const RunEventBase = {
   toolCallId: Schema.optionalKey(ToolCallId),
 };
 
-/** A schema-encoded Agent update accepted by the owning Run. */
+/**
+ * A schema-encoded Agent update accepted by the owning Run.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AgentUpdateEmitted extends Schema.TaggedClass<AgentUpdateEmitted>()(
   "AgentUpdateEmitted",
   { ...RunEventBase, update: Update },
 ) {}
 
-/** Signals that the runtime has created a run and assigned its identities. */
+/**
+ * Signals that the runtime has created a run and assigned its identities.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunStarted extends Schema.TaggedClass<RunStarted>()("RunStarted", RunEventBase) {}
 
-/** Signals the start of a positive-numbered model turn. */
+/**
+ * Signals the start of a positive-numbered model turn.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class TurnStarted extends Schema.TaggedClass<TurnStarted>()("TurnStarted", {
   ...RunEventBase,
   turn: Schema.Int.check(Schema.isGreaterThan(0)),
 }) {}
 
-/** Signals that the model request for a turn is starting. */
+/**
+ * Signals that the model request for a turn is starting.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ModelStarted extends Schema.TaggedClass<ModelStarted>()("ModelStarted", {
   ...RunEventBase,
   turn: Schema.Int.check(Schema.isGreaterThan(0)),
 }) {}
 
-/** Discard all drafts for this turnId; a new model request will include joined input. */
+/**
+ * Discard all drafts for this turnId; a new model request will include joined input.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ModelRestarted extends Schema.TaggedClass<ModelRestarted>()("ModelRestarted", {
   ...RunEventBase,
   turnId: TurnId,
@@ -51,19 +83,34 @@ export class ModelRestarted extends Schema.TaggedClass<ModelRestarted>()("ModelR
   reason: Schema.Literal("joined-input"),
 }) {}
 
-/** Carries one live assistant text delta. */
+/**
+ * Carries one live assistant text delta.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class TextDelta extends Schema.TaggedClass<TextDelta>()("TextDelta", {
   ...RunEventBase,
   text: Schema.String,
 }) {}
 
-/** Carries reasoning content explicitly exposed by the provider. */
+/**
+ * Carries reasoning content explicitly exposed by the provider.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReasoningDelta extends Schema.TaggedClass<ReasoningDelta>()("ReasoningDelta", {
   ...RunEventBase,
   text: Schema.String,
 }) {}
 
-/** Reports a complete model-declared Tool Call and its execution boundary. */
+/**
+ * Reports a complete model-declared Tool Call and its execution boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ToolCallDeclared extends Schema.TaggedClass<ToolCallDeclared>()("ToolCallDeclared", {
   ...RunEventBase,
   toolCallId: ToolCallId,
@@ -72,14 +119,24 @@ export class ToolCallDeclared extends Schema.TaggedClass<ToolCallDeclared>()("To
   providerExecuted: Schema.Boolean,
 }) {}
 
-/** Signals that a validated Tool Call handler has started. */
+/**
+ * Signals that a validated Tool Call handler has started.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ToolCallStarted extends Schema.TaggedClass<ToolCallStarted>()("ToolCallStarted", {
   ...RunEventBase,
   toolCallId: ToolCallId,
   toolName: Schema.NonEmptyString,
 }) {}
 
-/** Carries a preliminary Tool result that is not the call's terminal outcome. */
+/**
+ * Carries a preliminary Tool result that is not the call's terminal outcome.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ToolProgress extends Schema.TaggedClass<ToolProgress>()("ToolProgress", {
   ...RunEventBase,
   toolCallId: ToolCallId,
@@ -88,7 +145,12 @@ export class ToolProgress extends Schema.TaggedClass<ToolProgress>()("ToolProgre
   providerExecuted: Schema.Boolean,
 }) {}
 
-/** Records the successful terminal result of a Tool Call. */
+/**
+ * Records the successful terminal result of a Tool Call.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ToolCallSucceeded extends Schema.TaggedClass<ToolCallSucceeded>()(
   "ToolCallSucceeded",
   {
@@ -106,6 +168,9 @@ export class ToolCallSucceeded extends Schema.TaggedClass<ToolCallSucceeded>()(
  * `returned-to-model` records the result path; delivery still requires the complete batch to
  * commit and a later model call. A sibling, policy or later operation can still fail the Run.
  * This classification never implies that side effects were rolled back.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ToolFailureHandling = Schema.Literals([
   "propagated",
@@ -113,9 +178,20 @@ export const ToolFailureHandling = Schema.Literals([
   "returned-to-caller",
 ]);
 
+/**
+ * Decoded value of {@link ToolFailureHandling}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ToolFailureHandling = typeof ToolFailureHandling.Type;
 
-/** Records a terminal Tool Call failure using safe, serializable diagnostics. */
+/**
+ * Records a terminal Tool Call failure using safe, serializable diagnostics.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ToolCallFailed extends Schema.TaggedClass<ToolCallFailed>()("ToolCallFailed", {
   ...RunEventBase,
   toolCallId: ToolCallId,
@@ -131,7 +207,12 @@ export class ToolCallFailed extends Schema.TaggedClass<ToolCallFailed>()("ToolCa
   budgetRejected: Schema.optionalKey(Schema.Literal(true)),
 }) {}
 
-/** Signals that a decoded Tool Call requires approval before execution. */
+/**
+ * Signals that a decoded Tool Call requires approval before execution.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ApprovalRequested extends Schema.TaggedClass<ApprovalRequested>()(
   "ApprovalRequested",
   {
@@ -141,7 +222,12 @@ export class ApprovalRequested extends Schema.TaggedClass<ApprovalRequested>()(
   },
 ) {}
 
-/** Records the normalized finish reason for a completed assistant turn. */
+/**
+ * Records the normalized finish reason for a completed assistant turn.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class TurnCompleted extends Schema.TaggedClass<TurnCompleted>()("TurnCompleted", {
   ...RunEventBase,
   turn: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -157,7 +243,12 @@ export class TurnCompleted extends Schema.TaggedClass<TurnCompleted>()("TurnComp
   ]),
 }) {}
 
-/** Advisory that one policy limit crossed its warning fraction; emitted once per limit per run. */
+/**
+ * Advisory that one policy limit crossed its warning fraction; emitted once per limit per run.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class BudgetWarning extends Schema.TaggedClass<BudgetWarning>()("BudgetWarning", {
   ...RunEventBase,
   limit: Schema.Literals(["tokens", "tool-calls", "turns", "duration", "context"]),
@@ -165,7 +256,12 @@ export class BudgetWarning extends Schema.TaggedClass<BudgetWarning>()("BudgetWa
   limitValue: Schema.Natural,
 }) {}
 
-/** Records that the engine reduced model context at a Turn seam without erasing source history. */
+/**
+ * Records that the engine reduced model context at a Turn seam without erasing source history.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CompactionPerformed extends Schema.TaggedClass<CompactionPerformed>()(
   "CompactionPerformed",
   {
@@ -177,13 +273,22 @@ export class CompactionPerformed extends Schema.TaggedClass<CompactionPerformed>
   },
 ) {}
 
-/**
- * Dimension that bound when a Run settled through the final-answer resolution
- * (RUN-018; the token dimension per RUN-025). This is the exhausted marker
- * the re-delegation grant flow (RUN-021) consumes and the durable
- * `SubmissionSettled` record persists (RUN-011).
- */
-export { ExhaustedLimit } from "./internal/completion.ts";
+export {
+  /**
+   * Shared terminal metadata for Run results, events and interpreter commits.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
+  CompletionMetadata,
+  /**
+   * The policy dimension reported by a budget-exhausted Run or Subagent.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
+  ExhaustedLimit,
+} from "./internal/completion.ts";
 
 const RunCompletedFields = Schema.Struct({
   ...RunEventBase,
@@ -208,13 +313,21 @@ const RunCompletedFields = Schema.Struct({
  * `"budget-exhausted"`, and a budget-exhausted completion has no application
  * run disposition. The checked Struct enforces both rules during construction,
  * decoding, and encoding without replacing the class in `RunEvent`.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RunCompleted extends Schema.TaggedClass<RunCompleted>()(
   "RunCompleted",
   RunCompletedFields,
 ) {}
 
-/** Terminal event for a run that failed with an expected error. */
+/**
+ * Terminal event for a run that failed with an expected error.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunFailed extends Schema.TaggedClass<RunFailed>()("RunFailed", {
   ...RunEventBase,
   usage: Schema.optionalKey(RunTotals),
@@ -223,13 +336,23 @@ export class RunFailed extends Schema.TaggedClass<RunFailed>()("RunFailed", {
   message: Schema.String,
 }) {}
 
-/** Terminal event for a run stopped by interruption. */
+/**
+ * Terminal event for a run stopped by interruption.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunInterrupted extends Schema.TaggedClass<RunInterrupted>()("RunInterrupted", {
   ...RunEventBase,
   message: Schema.String,
 }) {}
 
-/** Terminal event for a run awaiting resumable external input. */
+/**
+ * Terminal event for a run awaiting resumable external input.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunSuspended extends Schema.TaggedClass<RunSuspended>()("RunSuspended", {
   ...RunEventBase,
   usage: Schema.optionalKey(RunTotals),
@@ -250,19 +373,34 @@ const SubagentEventBase = {
   depth: DelegationDepth,
 };
 
-/** Signals that a delegation Tool Call passed preflight with preallocated child identity. */
+/**
+ * Signals that a delegation Tool Call passed preflight with preallocated child identity.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentRequested extends Schema.TaggedClass<SubagentRequested>()(
   "SubagentRequested",
   SubagentEventBase,
 ) {}
 
-/** Signals that the child run has started inside its parent-owned scoped region. */
+/**
+ * Signals that the child run has started inside its parent-owned scoped region.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentStarted extends Schema.TaggedClass<SubagentStarted>()(
   "SubagentStarted",
   SubagentEventBase,
 ) {}
 
-/** Carries a bounded child progress summary without duplicating the child event stream. */
+/**
+ * Carries a bounded child progress summary without duplicating the child event stream.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentProgress extends Schema.TaggedClass<SubagentProgress>()("SubagentProgress", {
   ...SubagentEventBase,
   summary: SubagentText,
@@ -273,6 +411,9 @@ export class SubagentProgress extends Schema.TaggedClass<SubagentProgress>()("Su
  * Same invariant as `RunCompleted`: `exhausted` is present exactly when
  * `finishReason` is `"budget-exhausted"` (the pair travels verbatim from the
  * child's terminal event); consumers treat a divergent pair fail-safe.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubagentCompleted extends Schema.TaggedClass<SubagentCompleted>()(
   "SubagentCompleted",
@@ -288,7 +429,12 @@ export class SubagentCompleted extends Schema.TaggedClass<SubagentCompleted>()(
   }).check(completionMetadataCheck),
 ) {}
 
-/** Records the child run's expected terminal failure using safe, serializable diagnostics. */
+/**
+ * Records the child run's expected terminal failure using safe, serializable diagnostics.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentFailed extends Schema.TaggedClass<SubagentFailed>()("SubagentFailed", {
   ...SubagentEventBase,
   usage: Schema.optionalKey(RunTotals),
@@ -297,7 +443,12 @@ export class SubagentFailed extends Schema.TaggedClass<SubagentFailed>()("Subage
   message: SubagentText,
 }) {}
 
-/** Records that the child run was stopped by interruption before a terminal outcome. */
+/**
+ * Records that the child run was stopped by interruption before a terminal outcome.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentInterrupted extends Schema.TaggedClass<SubagentInterrupted>()(
   "SubagentInterrupted",
   {
@@ -308,14 +459,24 @@ export class SubagentInterrupted extends Schema.TaggedClass<SubagentInterrupted>
   },
 ) {}
 
-/** Records that the child's terminal outcome was joined into its parent delegation Tool Call. */
+/**
+ * Records that the child's terminal outcome was joined into its parent delegation Tool Call.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentJoined extends Schema.TaggedClass<SubagentJoined>()("SubagentJoined", {
   ...SubagentEventBase,
   usage: Schema.optionalKey(RunTotals),
   delegatedUsage: Schema.optionalKey(RunTotals),
 }) {}
 
-/** Versioned union of stable semantic run events, excluding raw provider chunks. */
+/**
+ * Versioned union of stable semantic run events, excluding raw provider chunks.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RunEvent = Schema.Union([
   AgentUpdateEmitted,
   RunStarted,
@@ -346,4 +507,10 @@ export const RunEvent = Schema.Union([
   SubagentJoined,
 ]);
 
+/**
+ * Decoded value of {@link RunEvent}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RunEvent = typeof RunEvent.Type;

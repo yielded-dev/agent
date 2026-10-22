@@ -1,3 +1,10 @@
+/**
+ * Compose host-selected recall sources under shared limits and deadlines, returning model-visible
+ * text with host-only provenance and source outcomes.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
@@ -15,6 +22,9 @@ import {
  * Host-selected read capability. Close over authorization and query policy here; neither
  * source selection nor access scope is model-controlled. Convert only intended expected
  * failures to Unavailable. All other errors, defects, and interruptions propagate.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface MemoryRecallSource<E = never, R = never> {
   readonly id: string;
@@ -22,6 +32,13 @@ export interface MemoryRecallSource<E = never, R = never> {
   readonly read: Effect.Effect<MemoryLookup, E, R>;
 }
 
+/**
+ * Schema for one recall source’s availability and counts of selected, duplicate, and omitted
+ * passages.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemorySourceOutcome = Schema.Struct({
   sourceId: Schema.NonEmptyString,
   status: Schema.Literals(["Found", "NoMatch", "Unavailable", "InsufficientFreshness"]),
@@ -30,7 +47,12 @@ export const MemorySourceOutcome = Schema.Struct({
   omitted: Schema.Natural,
 });
 
-/** Model-visible text with host-only passages and outcomes. Do not persist it as Thread history. */
+/**
+ * Model-visible text with host-only passages and outcomes. Do not persist it as Thread history.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RecalledMemory extends Schema.Class<RecalledMemory>(
   "@effect-agent/core/RecalledMemory",
 )({
@@ -113,8 +135,11 @@ const render = (passages: ReadonlyArray<SelectedPassage>): string => {
  * The default estimate is one token per UTF-8 byte. Supply the selected model's tokenizer
  * for tighter selection. The engine independently enforces its full per-call context budget.
  * The deadline owns a Scope, so temporary reader resources finalize on every exit path.
+ *
+ * @category operations
+ * @since 0.1.0
  */
-const recall = Effect.fnUntraced(function* <E = never, R = never>(
+export const recall = Effect.fnUntraced(function* <E = never, R = never>(
   sources: ReadonlyArray<MemoryRecallSource<E, R>>,
   limits: MemoryRecallLimits,
   estimateTokens: (text: string) => number = bytes,
@@ -288,6 +313,3 @@ const recall = Effect.fnUntraced(function* <E = never, R = never>(
     }),
   );
 });
-
-/** Compose host-selected readers under one shared recall budget and deadline. */
-export { recall };

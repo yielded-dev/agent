@@ -1,3 +1,10 @@
+/**
+ * Pure eligibility checks and atomic lifecycle reducers for registrations and selected event
+ * deliveries.
+ *
+ * @since 0.1.0
+ */
+
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
@@ -21,10 +28,21 @@ const conflict = (code: string) => SubscriptionError.make({ reason: "conflict", 
 const sameDefinitions = Schema.toEquivalence(DefinitionDigests);
 const sameReceipt = Schema.toEquivalence(Receipt);
 
+/**
+ * Compares both tenant and source address when checking partition identity.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const sameSourcePartition = (left: SourcePartition, right: SourcePartition): boolean =>
   left.tenantId === right.tenantId && left.address === right.address;
 
-/** The retained event is authoritative. An absent historical occurrence stays unknown on replay. */
+/**
+ * The retained event is authoritative. An absent historical occurrence stays unknown on replay.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const sameAcceptedEventIdentity = (left: AcceptedEvent, right: AcceptedEvent): boolean =>
   sameSourcePartition(left.partition, right.partition) &&
   left.eventId === right.eventId &&
@@ -34,6 +52,12 @@ export const sameAcceptedEventIdentity = (left: AcceptedEvent, right: AcceptedEv
   left.payloadDigest === right.payloadDigest &&
   (left.occurredAtMillis === undefined || left.occurredAtMillis === right.occurredAtMillis);
 
+/**
+ * Checks source name, source version, and matching key before evaluating registration eligibility.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionMatchesEvent = (
   subscription: SubscriptionRecord,
   event: AcceptedEvent,
@@ -42,7 +66,12 @@ export const subscriptionMatchesEvent = (
   subscription.configuration.source.version === event.source.version &&
   subscription.configuration.matchingKey === event.matchingKey;
 
-/** Paused registrations reserve capacity; terminal and expired replay evidence does not. */
+/**
+ * Paused registrations reserve capacity; terminal and expired replay evidence does not.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionUsesCapacity = (
   subscription: SubscriptionRecord,
   nowMillis: number,
@@ -51,12 +80,24 @@ export const subscriptionUsesCapacity = (
   (subscription.configuration.expiresAtMillis === null ||
     subscription.configuration.expiresAtMillis > nowMillis);
 
-/** Parked work still owns a slot. A receipt releases it unless settlement is being observed. */
+/**
+ * Parked work still owns a slot. A receipt releases it unless settlement is being observed.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionDeliveryUsesCapacity = (delivery: SubscriptionDeliveryType): boolean =>
   delivery.state === "selected" ||
   delivery.state === "prepared" ||
   (delivery.state === "delivered" && delivery.observeSettlement === true);
 
+/**
+ * Checks matching, active state, expiry, and the event's registration cutoff; only explicit
+ * reconciliation may bypass the cutoff.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionCanSelect = (
   subscription: SubscriptionRecord,
   event: AcceptedEvent,
@@ -69,6 +110,13 @@ export const subscriptionCanSelect = (
     subscription.configuration.expiresAtMillis > nowMillis) &&
   (bypassCutoff || subscription.ordinal <= event.cutoff);
 
+/**
+ * Verifies that a new selected delivery exactly pins the current registration, event, destination,
+ * and admission identity.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionDeliveryCanSelect = (
   delivery: SubscriptionDeliveryType,
   subscription: SubscriptionRecord,
@@ -105,6 +153,13 @@ export const subscriptionDeliveryCanSelect = (
   );
 };
 
+/**
+ * Compares complete schema-encoded delivery state, including its frozen envelope and operational
+ * progress.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const sameSubscriptionDelivery = (
   left: SubscriptionDeliveryType,
   right: SubscriptionDeliveryType,
@@ -112,7 +167,12 @@ export const sameSubscriptionDelivery = (
   Schema.encodeSync(Schema.fromJsonString(SubscriptionDelivery))(left) ===
   Schema.encodeSync(Schema.fromJsonString(SubscriptionDelivery))(right);
 
-/** Pure lifecycle transition used inside each adapter's local atomic mutation. */
+/**
+ * Pure lifecycle transition used inside each adapter's local atomic mutation.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const applySubscriptionDeliveryChange = (
   existing: SubscriptionDeliveryType,
   subscription: SubscriptionRecord,
@@ -253,7 +313,12 @@ export const applySubscriptionDeliveryChange = (
   }
 };
 
-/** CAS management never mutates a selected or prepared delivery. */
+/**
+ * CAS management never mutates a selected or prepared delivery.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const applySubscriptionChange = (
   existing: SubscriptionRecord,
   expectedRevision: number,
@@ -298,7 +363,12 @@ export const applySubscriptionChange = (
   });
 };
 
-/** Called only after retained identity lookup: unfinished work remains replayable past the horizon. */
+/**
+ * Called only after retained identity lookup: unfinished work remains replayable past the horizon.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateEventRetention = (
   event: AcceptedEvent,
   limits: SubscriptionLimits,

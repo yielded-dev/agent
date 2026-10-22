@@ -1,3 +1,10 @@
+/**
+ * Scoped MCP transports for discovery and remote Tool calls. The Mcp module validates descriptors
+ * and constructs native Effect AI Tools; remote calls retain ordinary Tool recovery semantics.
+ *
+ * @since 0.1.0
+ */
+
 import * as McpProtocol from "effect/ai/McpProtocol";
 import * as McpSchema from "effect/ai/McpSchema";
 import * as Cause from "effect/Cause";
@@ -32,7 +39,19 @@ import {
   McpToolCallFailed,
 } from "./Mcp.ts";
 
+/**
+ * Result and failure schemas for remote MCP Tool calls.
+ *
+ * @category exports
+ * @since 0.1.0
+ */
 export { McpToolResult, McpToolCallFailed } from "./Mcp.ts";
+/**
+ * Native Tool and Toolkit types derived from validated MCP discovery.
+ *
+ * @category exports
+ * @since 0.1.0
+ */
 export type { McpTool, McpToolkit } from "./Mcp.ts";
 
 // ---------------------------------------------------------------------------
@@ -55,6 +74,9 @@ const JSON_RPC_METHOD_NOT_FOUND = -32601;
  * The protocol revisions this client negotiates, as implemented by Effect AI's
  * native MCP protocol adapters. The newest revision is offered first; a server
  * answering with any other listed revision is accepted, anything else fails.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const McpClientProtocolVersion = Schema.Literals([
   McpProtocol.v2025_11_25.protocolVersion,
@@ -63,11 +85,22 @@ export const McpClientProtocolVersion = Schema.Literals([
   McpProtocol.v2024_11_05.protocolVersion,
 ]);
 
+/**
+ * Decoded value of {@link McpClientProtocolVersion}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type McpClientProtocolVersion = typeof McpClientProtocolVersion.Type;
 
 const OFFERED_PROTOCOL_VERSION: McpClientProtocolVersion = McpProtocol.v2025_11_25.protocolVersion;
 
-/** Identity this client presents to servers during `initialize`. */
+/**
+ * Identity this client presents to servers during `initialize`.
+ *
+ * @category defaults
+ * @since 0.1.0
+ */
 export const defaultMcpClientInfo = McpSchema.Implementation.make({
   name: "effect-agent",
   version: "1.0.0",
@@ -77,6 +110,9 @@ export const defaultMcpClientInfo = McpSchema.Implementation.make({
  * One reachable MCP server. `protocol` acquires a JSON-RPC transport in the
  * caller's Scope; `R` names the platform services that transport needs so the
  * connector Layer keeps them in its requirements.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface McpServerTransport<R = never> {
   readonly serverId: string;
@@ -94,7 +130,12 @@ export interface McpServerTransport<R = never> {
   >;
 }
 
-/** Streamable HTTP server address. Header values may carry credentials the application owns. */
+/**
+ * Streamable HTTP server address. Header values may carry credentials the application owns.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface McpHttpTransportOptions {
   readonly serverId: string;
   readonly url: string;
@@ -104,7 +145,12 @@ export interface McpHttpTransportOptions {
   readonly trustToolAnnotations?: boolean | undefined;
 }
 
-/** A local MCP server process speaking newline-delimited JSON-RPC on stdio. */
+/**
+ * A local MCP server process speaking newline-delimited JSON-RPC on stdio.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface McpStdioTransportOptions {
   readonly serverId: string;
   readonly command: string;
@@ -646,7 +692,12 @@ const makeStdioProtocol = Effect.fnUntraced(function* (options: McpStdioTranspor
   );
 });
 
-/** Streamable HTTP transport for one remote MCP server; requires `HttpClient`. */
+/**
+ * Streamable HTTP transport for one remote MCP server; requires `HttpClient`.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const McpHttpTransport = {
   make: (options: McpHttpTransportOptions): McpServerTransport<HttpClient.HttpClient> => ({
     serverId: options.serverId,
@@ -655,7 +706,12 @@ export const McpHttpTransport = {
   }),
 } as const;
 
-/** stdio transport for one local MCP server process; requires `ChildProcessSpawner`. */
+/**
+ * stdio transport for one local MCP server process; requires `ChildProcessSpawner`.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const McpStdioTransport = {
   make: (
     options: McpStdioTransportOptions,
@@ -820,7 +876,12 @@ const connectServer = Effect.fnUntraced(function* <R>(
   } satisfies McpConnectedServer;
 });
 
-/** Platform services one transport needs, as declared by `McpServerTransport<R>`. */
+/**
+ * Platform services one transport needs, as declared by `McpServerTransport<R>`.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type McpTransportRequirements<Transport> =
   Transport extends McpServerTransport<infer R> ? R : never;
 
@@ -866,6 +927,9 @@ const makeConnectorLayer = <R>(
  * request bounds, and returns discovery metadata plus a typed call operation.
  * `connectMcp` constructs the Toolkit and handlers. The Layer requires the union of every
  * transport's platform services.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = <const Transports extends ReadonlyArray<McpServerTransport<unknown>>>(
   transports: Transports,

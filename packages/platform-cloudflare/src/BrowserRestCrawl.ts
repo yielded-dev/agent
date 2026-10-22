@@ -1,3 +1,8 @@
+/**
+ * Bounded crawl submission and retrieval through Cloudflare Browser Run.
+ *
+ * @since 0.1.0
+ */
 import {
   PageCrawl,
   PageCrawlLimitError,
@@ -25,7 +30,12 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
-/** Node-safe REST crawl implementation. It never exposes or persists provider job identity. */
+/**
+ * Node-safe REST crawl implementation. It never exposes or persists provider job identity.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const browserRestCrawlImplementation = SandboxImplementation.make({
   isolation: "isolated",
   identity: "cloudflare-browser-rest-crawl",
@@ -82,7 +92,12 @@ const DeleteEnvelope = Schema.Struct({
   }),
 });
 
-/** Explicit credentials. The token is projected only into fixed-origin Authorization headers. */
+/**
+ * Explicit credentials. The token is projected only into fixed-origin Authorization headers.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface BrowserRestCrawlOptions {
   readonly accountId: string;
   readonly apiToken: Redacted.Redacted<string>;
@@ -521,7 +536,12 @@ const makeCrawl =
       }),
     );
 
-/** Cloudflare REST PageCrawl Layer for Node and other non-Worker composition roots. */
+/**
+ * Cloudflare REST PageCrawl Layer for Node and other non-Worker composition roots.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const browserRestCrawlLayer = (
   options: BrowserRestCrawlOptions,
 ): Layer.Layer<PageCrawl, never, HttpClient.HttpClient> =>

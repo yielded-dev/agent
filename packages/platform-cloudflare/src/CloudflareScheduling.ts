@@ -1,3 +1,8 @@
+/**
+ * Durable Object scheduling owners, alarm dispatch, and clients.
+ *
+ * @since 0.1.0
+ */
 import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   DoScheduleAlarmControl,
@@ -62,6 +67,12 @@ const ScheduleAlarmPayload = Schema.Struct({
   generation: Schema.Int.check(Schema.isGreaterThan(0)),
 });
 
+/**
+ * A scheduling alarm payload failed protocol validation.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ScheduleAlarmProtocolError extends Schema.TaggedError<ScheduleAlarmProtocolError>()(
   "ScheduleAlarmProtocolError",
   { message: Schema.String },
@@ -70,6 +81,12 @@ export class ScheduleAlarmProtocolError extends Schema.TaggedError<ScheduleAlarm
 const boundedProtocolMessage = (message: string): string =>
   message.length <= 4_096 ? message : `${message.slice(0, 4_093)}...`;
 
+/**
+ * A schedule owner request or response failed protocol validation.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ScheduleOwnerProtocolError extends Schema.TaggedError<ScheduleOwnerProtocolError>()(
   "ScheduleOwnerProtocolError",
   { message: Schema.String.check(Schema.isMaxLength(4_096)) },
@@ -169,10 +186,22 @@ const scheduleProtocolFailure = (message: string): ScheduleOwnerResponse => ({
   failure: ScheduleOwnerProtocolError.make({ message: boundedProtocolMessage(message) }),
 });
 
+/**
+ * Native RPC contract exposed by a schedule owner.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ScheduleOwnerObjectRpc extends Rpc.DurableObjectBranded {
   schedule(encoded: unknown): Promise<unknown>;
 }
 
+/**
+ * Host-supplied namespace used to locate schedule owners.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ScheduleOwnerNamespace extends Context.Service<
   ScheduleOwnerNamespace,
   { readonly namespace: DurableObjectNamespace<ScheduleOwnerObjectRpc> }
@@ -184,7 +213,12 @@ const passthroughAgent = (agentId: AgentId): DurableSubmitAgent<typeof Persisted
 
 const requestOwner = (request: ScheduleOwnerRequest): ScheduleOwner => request.scope.owner;
 
-/** Provides the same authorized management service as NodeScheduling.layer. */
+/**
+ * Provides the same authorized management service as NodeScheduling.layer.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class CloudflareSchedulingClient {
   static readonly layer: Layer.Layer<Scheduling, never, ScheduleOwnerNamespace> = Layer.effect(
     Scheduling,
@@ -390,6 +424,12 @@ export class CloudflareSchedulingClient {
   );
 }
 
+/**
+ * Identity of the schedule owner handling the current operation.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ScheduleOwnerIdentity extends Context.Service<
   ScheduleOwnerIdentity,
   { readonly owner: ScheduleOwner }
@@ -655,6 +695,12 @@ export const scheduleAlarmHandler = (limits: SchedulingLimits) =>
     Effect.asVoid,
   );
 
+/**
+ * A deployed schedule owner with native RPC and alarm entrypoints.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface ScheduleOwnerObjectInstance extends InstanceType<
   EffectCfDurableObject.DurableObjectClass<Record<never, never>, ScheduleRuntimeServices>
 > {
@@ -662,6 +708,12 @@ export interface ScheduleOwnerObjectInstance extends InstanceType<
   alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> | void;
 }
 
+/**
+ * Constructor of a deployed schedule owner.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface ScheduleOwnerObjectClass {
   new (ctx: DurableObjectState, env: Cloudflare.Env): ScheduleOwnerObjectInstance;
 }
@@ -671,6 +723,9 @@ export interface ScheduleOwnerObjectClass {
  * Cloudflare eviction does not guarantee its finalizers run. Do not acquire resources requiring
  * cleanup in this Layer; acquire them inside scoped `manage` / `prepare` operations instead.
  * Native services belong to effect-cf; the database and alarm runtime remain instance-owned.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeScheduleOwnerObjectClass = <E>(
   host: Layer.Layer<

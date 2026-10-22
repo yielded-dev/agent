@@ -1,3 +1,8 @@
+/**
+ * Submission transitions and retained admission facts shared by SQL adapters.
+ *
+ * @since 0.1.0
+ */
 import type { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { InputMessage } from "@yielded/agent/messaging";
 import {
@@ -325,6 +330,12 @@ const internalFailure =
   (error: { readonly message: string }): LedgerError =>
     LedgerError.make({ operation, message: error.message, cause: error });
 
+/**
+ * Adapter namespace, diagnostics, and failpoints for submission transitions.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlSubmissionLedgerOptions<
   S extends Diagnostic,
   C extends Diagnostic,
@@ -337,7 +348,12 @@ export interface SqlSubmissionLedgerOptions<
   readonly sqlFailure: (operation: string) => (error: SqlError.SqlError) => LedgerError;
 }
 
-/** Durable submission transitions shared by relational adapters. */
+/**
+ * Durable submission transitions shared by relational adapters.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   S extends Diagnostic,
   C extends Diagnostic,
@@ -3734,6 +3750,12 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   return { ledger, publisher, publishWithState, markInputAppliedInTransaction };
 });
 
+/**
+ * Constructs the submission ledger facet over an initialized SQL journal.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlSubmissionLedger = <
   S extends Diagnostic,
   C extends Diagnostic,

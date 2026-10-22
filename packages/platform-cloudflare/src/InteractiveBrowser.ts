@@ -1,3 +1,8 @@
+/**
+ * Scoped interactive Cloudflare browsers with host-controlled handoff and recovery.
+ *
+ * @since 0.1.0
+ */
 /// <reference types="@cloudflare/workers-types" />
 
 import {
@@ -48,6 +53,7 @@ import {
   type Page,
 } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
+import type { BrowserRunLifecycleOptions } from "./BrowserSession.ts";
 import { BrowserRunBinding } from "./internal/browser-binding.ts";
 import {
   BrowserRunFailure,
@@ -55,17 +61,22 @@ import {
   reportedBrowserError,
 } from "./internal/browser-failure.ts";
 import { makeFileSelection } from "./internal/browser-file-selection.ts";
-import {
-  BrowserRunSessionLifecycle,
-  type BrowserRunLifecycleOptions,
-} from "./internal/browser-session-lifecycle.ts";
+import { BrowserRunSessionLifecycle } from "./internal/browser-session-lifecycle.ts";
 import { pageFunction } from "./internal/page-function.ts";
+
+export type { BrowserRunLifecycleOptions } from "./BrowserSession.ts";
 
 export {
   BrowserRunCleanupError,
   BrowserRunSessionLifecycle,
 } from "./internal/browser-session-lifecycle.ts";
 
+/**
+ * Sandbox identity and isolation declaration for browser run interactive.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const browserRunInteractiveImplementation = SandboxImplementation.make({
   isolation: "isolated",
   identity: "cloudflare-browser-run-interactive",
@@ -133,6 +144,12 @@ const ActionObservation = Schema.Struct({
   observationMillis: Schema.optionalKey(Schema.Finite),
 });
 
+/**
+ * JSON codec for bounded interactive page observations.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const BrowserRunPageObservation = Schema.fromJsonString(
   Schema.Struct({
     documentId: Schema.NonEmptyString,
@@ -222,6 +239,9 @@ const HandoffStateObservation = Schema.Union([
  * Host presentation state in CSS pixels. Dimensions are integers in 1..2048,
  * density is finite in 1..2 (default 1), and neither scaled dimension may exceed
  * 2048 pixels. Mobile, touch, and orientation emulation are not supported.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export class BrowserRunViewport extends Schema.Class<BrowserRunViewport>("BrowserRunViewport")(
   Schema.Struct({
@@ -250,7 +270,12 @@ const decodeViewport = (input: BrowserRunViewport) =>
     })),
   );
 
-/** Host-only request for a redacted Cloudflare Live View URL. */
+/**
+ * Host-only request for a redacted Cloudflare Live View URL.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserRunLiveViewRequest extends Schema.Class<BrowserRunLiveViewRequest>(
   "BrowserRunLiveViewRequest",
 )({
@@ -263,11 +288,22 @@ export class BrowserRunLiveViewRequest extends Schema.Class<BrowserRunLiveViewRe
   ),
 }) {}
 
+/**
+ * Redacted Live View capability and its expiration.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserRunLiveViewResult extends Schema.Class<BrowserRunLiveViewResult>(
   "BrowserRunLiveViewResult",
 )({ devtoolsFrontendUrl: Schema.Redacted(LiveViewUrl) }) {}
 
-/** Start one bounded handoff; controller ownership remains a consumer concern. */
+/**
+ * Start one bounded handoff; controller ownership remains a consumer concern.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserRunHandoffRequest extends Schema.Class<BrowserRunHandoffRequest>(
   "BrowserRunHandoffRequest",
 )({
@@ -275,10 +311,22 @@ export class BrowserRunHandoffRequest extends Schema.Class<BrowserRunHandoffRequ
   timeout: PositiveInt.check(Schema.isLessThanOrEqualTo(MAX_HANDOFF_TIMEOUT_MILLIS)),
 }) {}
 
+/**
+ * Acknowledged human handoff and its expiration.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserRunHandoffResult extends Schema.Class<BrowserRunHandoffResult>(
   "BrowserRunHandoffResult",
 )({ handoffId: Schema.Redacted(BoundedHostText) }) {}
 
+/**
+ * Current human handoff state reported by the browser provider.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserRunHandoffState extends Schema.Class<BrowserRunHandoffState>(
   "BrowserRunHandoffState",
 )({
@@ -297,27 +345,54 @@ interface InteractiveBrowserPolicySnapshot {
   readonly maxReturnedBytes: number;
 }
 
-/** One intercepted Puppeteer request, narrowed to the policy-relevant surface. */
+/**
+ * One intercepted Puppeteer request, narrowed to the policy-relevant surface.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserRunInteractiveRequest {
   readonly url: () => string;
   readonly abort: () => Promise<void>;
   readonly continue: () => Promise<void>;
 }
 
+/**
+ * Callback for a provider request awaiting policy evaluation.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type BrowserRunInteractiveRequestListener = (request: BrowserRunInteractiveRequest) => void;
 
+/**
+ * Cloudflare-specific commands supported by the CDP boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type BrowserRunCloudflareCommand =
   | "Cloudflare.getLiveView"
   | "Cloudflare.handoff"
   | "Cloudflare.getHandoffState";
 
-/** Narrow CDP boundary for Cloudflare commands absent from the pinned protocol types. */
+/**
+ * Narrow CDP boundary for Cloudflare commands absent from the pinned protocol types.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserRunInteractiveCdpSession {
   readonly send: (command: BrowserRunCloudflareCommand, parameters: unknown) => Promise<unknown>;
   readonly detach: () => Promise<void>;
 }
 
-/** Narrow page boundary used by deterministic tests; SDK values remain in this package. */
+/**
+ * Narrow page boundary used by deterministic tests; SDK values remain in this package.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserRunInteractivePage {
   readonly identity?: () => Promise<BrowserRunPageIdentity>;
   readonly close: () => Promise<void>;
@@ -355,11 +430,23 @@ export interface BrowserRunInteractivePage {
   readonly createCdpSession: () => Promise<BrowserRunInteractiveCdpSession>;
 }
 
+/**
+ * Page lifecycle operations for an isolated browser context.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserRunInteractiveContext {
   readonly newPage: () => Promise<BrowserRunInteractivePage>;
   readonly close: () => Promise<void>;
 }
 
+/**
+ * Context lifecycle operations for one attached browser.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserRunInteractiveBrowser {
   readonly detach?: () => Promise<void>;
   readonly reattach?: (
@@ -376,7 +463,12 @@ export interface BrowserRunInteractiveBrowser {
   readonly offDisconnected: (listener: () => void) => void;
 }
 
-/** Host-supplied Browser Run allocation and connection transport. */
+/**
+ * Host-supplied Browser Run allocation and connection transport.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class BrowserRunInteractiveBinding extends Context.Service<
   BrowserRunInteractiveBinding,
   {
@@ -426,7 +518,12 @@ export class BrowserRunInteractiveBinding extends Context.Service<
   }
 }
 
-/** Private target identity; never include this checkpoint in model-visible records. */
+/**
+ * Private target identity; never include this checkpoint in model-visible records.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserRunPageIdentity extends Schema.Class<BrowserRunPageIdentity>(
   "BrowserRunPageIdentity",
 )({
@@ -434,7 +531,12 @@ export class BrowserRunPageIdentity extends Schema.Class<BrowserRunPageIdentity>
   targetId: BrowserRunSessionId,
 }) {}
 
-/** Host-owned recovery data. Persist with the application's input receipts and ownership fence. */
+/**
+ * Host-owned recovery data. Persist with the application's input receipts and ownership fence.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserRunInteractiveCheckpoint extends Schema.Class<BrowserRunInteractiveCheckpoint>(
   "BrowserRunInteractiveCheckpoint",
 )({
@@ -446,8 +548,20 @@ export class BrowserRunInteractiveCheckpoint extends Schema.Class<BrowserRunInte
   inputState: Schema.Literals(["idle", "running", "unknown"]),
 }) {}
 
+/**
+ * Whether a browser input is idle, running, or indeterminate.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type BrowserRunInputState = "idle" | "running" | "unknown";
 
+/**
+ * A scoped browser session with bounded observation and authorized actions.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserRunInteractiveSession {
   readonly handle: BrowserHandle;
   readonly checkpoint: Effect.Effect<BrowserRunInteractiveCheckpoint, InteractiveBrowserError>;
@@ -478,14 +592,24 @@ export interface BrowserRunInteractiveSession {
   readonly close: Effect.Effect<void, InteractiveBrowserError>;
 }
 
-/** Persist the private cleanup identity before connecting or creating a page. */
+/**
+ * Persist the private cleanup identity before connecting or creating a page.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface BrowserRunInteractiveAcquisition {
   readonly sessionId: Redacted.Redacted<string>;
   /** Connect at most once, within the acquisition's original scope and elapsed deadline. */
   readonly connect: Effect.Effect<BrowserRunInteractiveSession, InteractiveBrowserError>;
 }
 
-/** Cloudflare host authority kept separate from the provider-neutral browser handle. */
+/**
+ * Cloudflare host authority kept separate from the provider-neutral browser handle.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class BrowserRunInteractiveHost extends Context.Service<
   BrowserRunInteractiveHost,
   {
@@ -1531,7 +1655,12 @@ const undispatchedActionError = (operation: BrowserOperation): InteractiveBrowse
     evidence: { stage: "preparation", dispatch: "not-dispatched", session: "attached" },
   });
 
-/** Recognizes a local pre-dispatch refusal without exposing selector or page content. */
+/**
+ * Recognizes a local pre-dispatch refusal without exposing selector or page content.
+ *
+ * @category guards
+ * @since 0.1.0
+ */
 export const isBrowserRunUndispatchedActionError = (error: unknown): boolean =>
   Schema.is(InteractiveBrowserActionError)(error) &&
   error.implementation.identity === browserRunInteractiveImplementation.identity &&
@@ -3244,7 +3373,12 @@ const makeHostService = (
   });
 };
 
-/** Cloudflare host controls and private session identity for one scoped Browser Run pass. */
+/**
+ * Cloudflare host controls and private session identity for one scoped Browser Run pass.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const browserRunInteractiveHostLayer = (): Layer.Layer<
   BrowserRunInteractiveHost,
   never,
@@ -3257,7 +3391,12 @@ export const browserRunInteractiveHostLayer = (): Layer.Layer<
     }),
   );
 
-/** Worker-only generic adapter; Cloudflare identity and controls remain host-only. */
+/**
+ * Worker-only generic adapter; Cloudflare identity and controls remain host-only.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const browserRunInteractiveLayer = (): Layer.Layer<
   InteractiveBrowser,
   never,
@@ -3275,7 +3414,12 @@ export const browserRunInteractiveLayer = (): Layer.Layer<
     }),
   );
 
-/** Resolved Worker binding, cleanup credentials, and optional initial viewport. */
+/**
+ * Resolved Worker binding, cleanup credentials, and optional initial viewport.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface CloudflareInteractiveBrowserOptions extends BrowserRunLifecycleOptions {
   readonly browser: Pick<BrowserRun, "fetch">;
   readonly viewport?: BrowserRunViewport;
@@ -3286,7 +3430,12 @@ const interactiveBindingLayer = (options: CloudflareInteractiveBrowserOptions) =
     Layer.provide(BrowserRunSessionLifecycle.layer(options)),
   );
 
-/** Worker-only assembly; importing ordinary capture never loads Puppeteer. */
+/**
+ * Worker-only assembly; importing ordinary capture never loads Puppeteer.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const CloudflareInteractiveBrowser = {
   /**
    * Assemble binding, confirmed-session cleanup, and the generic browser service.

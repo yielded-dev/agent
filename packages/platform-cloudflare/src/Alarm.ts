@@ -1,3 +1,8 @@
+/**
+ * Bounded Thread maintenance, publication, and recovery through Durable Object alarms.
+ *
+ * @since 0.1.0
+ */
 import { CurrentNativeSource } from "@yielded/agent-storage-cloudflare/port-routing";
 import { type DurableBindingFailure } from "@yielded/agent/agent-registration";
 import {
@@ -116,7 +121,12 @@ const makeStorageOperation = Effect.map(
       run(operation, Effect.tryPromise({ try: execute, catch: alarmFailure(operation) })),
 );
 
-/** One manual alarm for the entire consumer-owned maintenance queue. */
+/**
+ * One manual alarm for the entire consumer-owned maintenance queue.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadMaintenanceAlarm extends DurableObjectAlarm.Tag<ThreadMaintenanceAlarm>()(
   "@yielded/agent/thread-maintenance",
   { "@yielded/agent/thread-maintenance": { payload: Schema.Null, lifecycle: "manual" } },
@@ -130,7 +140,12 @@ const maintenanceAlarmInput = (deadline: number) => ({
   runAt: DateTime.makeUnsafe(deadline),
 });
 
-/** Named maintenance checkpoint; the library owns the shared native alarm slot. */
+/**
+ * Named maintenance checkpoint; the library owns the shared native alarm slot.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class DurableAlarmService extends Context.Service<
   DurableAlarmService,
   {
@@ -396,6 +411,12 @@ const makeAlarmOperation = Effect.gen(function* () {
   return { run, withTransaction };
 });
 
+/**
+ * Results and pending obligations from one bounded maintenance pass.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class MaintenancePassReport extends Schema.Class<MaintenancePassReport>(
   "@effect-agent/platform-cloudflare/MaintenancePassReport",
 )({
@@ -411,7 +432,12 @@ export class MaintenancePassReport extends Schema.Class<MaintenancePassReport>(
   alarm: Schema.Literals(["rearmed", "cleared"]),
 }) {}
 
-/** Fault boundaries around every maintenance-owned durable mutation. */
+/**
+ * Fault boundaries around every maintenance-owned durable mutation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadMaintenanceFailpointLocation =
   | "maintenance:dirty:before"
   | "maintenance:dirty:after"
@@ -434,11 +460,22 @@ export type ThreadMaintenanceFailpointLocation =
   | "maintenance:finish:before"
   | "maintenance:finish:after";
 
+/**
+ * Effectful callback invoked at a Thread maintenance fault boundary.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type ThreadMaintenanceFailpointHandler = (
   location: ThreadMaintenanceFailpointLocation,
 ) => Effect.Effect<void>;
 
-/** Test-only fault authority; production uses the inert layer. */
+/**
+ * Test-only fault authority; production uses the inert layer.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadMaintenanceFailpoint extends Context.Service<
   ThreadMaintenanceFailpoint,
   {
@@ -464,6 +501,9 @@ export class ThreadMaintenanceFailpoint extends Context.Service<
  * Unexpected hook failures leave the prearmed generation for retry. Hooks acquire per-call
  * resources with Effect.scoped; Layer construction owns incarnation resources (eviction need
  * not run finalizers). Do not hold a local hook behind network I/O or call back into producers.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ThreadPublicationService {
   readonly invalidate: Effect.Effect<void, DurableAlarmError>;
@@ -477,7 +517,12 @@ const emptyPublication: ThreadPublicationService = {
   drain: Effect.succeed(Option.none()),
 };
 
-/** Opt in with `ThreadObject.layer(registrations, { publication: Layer.effect(ThreadPublication)(...) })`. */
+/**
+ * Opt in with `ThreadObject.layer(registrations, { publication: Layer.effect(ThreadPublication)(...) })`.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadPublication extends Context.Service<
   ThreadPublication,
   ThreadPublicationService
@@ -497,6 +542,9 @@ const requiresPublication = Effect.map(
  * driver bounds each actual Claim and persists its timeout/retry before `run` returns.
  * The alarm must not add a timer starting at selection: Claim setup and retry commits belong
  * to the driver. The prepared allowance decides only whether a wave fits this event.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const ThreadMessageDelivery = Context.Reference<{
   readonly prepare: Effect.Effect<
@@ -524,6 +572,9 @@ export const ThreadMessageDelivery = Context.Reference<{
  * Failed waves retain independent backoff and are not retried in the same event. Delivery
  * remains at least once: persist exact envelopes and deduplicate by domain receipt identity.
  * Hooks never write the alarm slot. Required execution gates belong to ThreadPublication.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ThreadHostMaintenanceLane {
   readonly id: string;
@@ -538,7 +589,12 @@ export interface ThreadHostMaintenanceLane {
   readonly run: Effect.Effect<Option.Option<number>, DurableAlarmError, Scope.Scope>;
 }
 
-/** Independent lanes share the existing alarm; compose hosts by concatenating their lanes. */
+/**
+ * Independent lanes share the existing alarm; compose hosts by concatenating their lanes.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const ThreadHostMaintenance = Context.Reference<{
   readonly lanes: ReadonlyArray<ThreadHostMaintenanceLane>;
 }>("@effect-agent/platform-cloudflare/ThreadHostMaintenance", {
@@ -572,7 +628,12 @@ const MaintenanceGeneration = Schema.BigIntFromString.check(
   Schema.isGreaterThanOrEqualToBigInt(0n),
 );
 
-/** A committed recovery transition for one affected Submission; never a Settlement. */
+/**
+ * A committed recovery transition for one affected Submission; never a Settlement.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ThreadRecoveryFaultEvent extends Schema.Class<ThreadRecoveryFaultEvent>(
   "@effect-agent/platform-cloudflare/ThreadRecoveryFaultEvent",
 )({
@@ -600,6 +661,9 @@ const decodeRecoveryEvent = Schema.decodeUnknownSync(ThreadRecoveryFaultEvent);
  * Capture services in the Layer. Do not call producers or write the raw alarm slot.
  * Without this service, maintenance acknowledges and discards transitions. Install the
  * handler before the first maintenance pass if the application needs that event stream.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ThreadRecoveryEvents extends Context.Service<
   ThreadRecoveryEvents,
@@ -885,6 +949,12 @@ const CurrentMutationLanes = Context.Reference<ReadonlyArray<string>>(
 
 // Source changes made by this pass are certified after its Attempts join. External
 // producers still advance the dirty generation and fence that certification.
+/**
+ * Serialize native Thread mutations and application writes under the same owner gate.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadMutationGate extends Context.Service<
   ThreadMutationGate,
   {
@@ -1242,6 +1312,12 @@ export class ThreadMutationGate extends Context.Service<
   );
 }
 
+/**
+ * Typed failures that can prevent a Thread maintenance pass from completing.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type MaintenancePassFailure =
   | DurableWorkerFailure
   | DurableBindingFailure
@@ -1268,6 +1344,9 @@ export type MaintenancePassFailure =
  *    Auxiliary failures are reported after the current native opportunity.
  * 5. Close every event resource before the final gated deadline snapshot and alarm decision.
  *    The whole event retains one fourteen-minute cooperative timeout.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ThreadMaintenance extends Context.Service<
   ThreadMaintenance,

@@ -1,3 +1,10 @@
+/**
+ * Adapter-neutral contracts for canonical storage, atomic batches, observation, ownership, and
+ * lossless Thread transfer.
+ *
+ * @since 0.1.0
+ */
+
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -60,7 +67,12 @@ import {
   type ThreadExportRejected,
 } from "./ThreadStore.ts";
 
-/** A ThreadStore contract invariant that an adapter under test violated. */
+/**
+ * A ThreadStore contract invariant that an adapter under test violated.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadStoreConformanceViolation extends Schema.TaggedError<ThreadStoreConformanceViolation>()(
   "ThreadStoreConformanceViolation",
   {
@@ -69,6 +81,12 @@ export class ThreadStoreConformanceViolation extends Schema.TaggedError<ThreadSt
   },
 ) {}
 
+/**
+ * Thread storage, transfer rejection, or shared adapter contract assertion failures.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadStoreConformanceFailure =
   | ThreadStoreFailure
   | ThreadExportRejected
@@ -78,14 +96,22 @@ export type ThreadStoreConformanceFailure =
  * One adapter-neutral ThreadStore contract case. Each case owns disjoint
  * Thread identities, so a suite may run every case against one shared store
  * instance or against a fresh store per case.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ThreadStoreConformanceCase {
   readonly name: string;
   readonly run: Effect.Effect<void, ThreadStoreConformanceFailure, ThreadStore>;
 }
 
-/** Inspect a small test fixture through its captured tail, up to 16,384 records and 32 MiB.
- * Transfer tests use streamExport so every wire page and independent fact section is exercised. */
+/**
+ * Inspect a small test fixture through its captured tail, up to 16,384 records and 32 MiB.
+ * Transfer tests use streamExport so every wire page and independent fact section is exercised.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const readTestThread = Effect.fnUntraced(function* (
   store: Pick<ThreadStore["Service"], "read" | "inspectTail">,
   request: Pick<ThreadExportRequest, "threadId">,
@@ -871,6 +897,9 @@ const nativeWorkerAccounting = conformanceCase(
 /**
  * The shared, adapter-parameterized ThreadStore contract suite (STORE-010). Every
  * durable adapter test suite must execute each case against its own store provisioning.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const threadStoreConformanceCases: ReadonlyArray<ThreadStoreConformanceCase> = [
   nativeAmbiguousOwnership,

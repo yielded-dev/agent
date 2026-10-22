@@ -5,6 +5,7 @@ import { utf8ByteLength } from "../Digest.ts";
  * Keep the conservative object/property/string charges without probing arbitrary object brands.
  * ThreadStore reads own their canonical JSON subgraphs; Schema encoding alone does not establish
  * that ownership for Unknown/Json leaves. Never use this guard on arbitrary provider values.
+ * @internal
  */
 export const promptJsonFootprint = (json: unknown, allowance: number): number | undefined => {
   let bytes = 0;

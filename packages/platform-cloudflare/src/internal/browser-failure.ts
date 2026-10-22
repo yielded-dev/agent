@@ -6,7 +6,9 @@ import * as ErrorReporter from "effect/ErrorReporter";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
-/** Translate typed failures without dropping cleanup reasons during actual cancellation. */
+/** Translate typed failures without dropping cleanup reasons during actual cancellation.
+ * @internal
+ */
 export const mapBrowserError =
   <E, E2>(map: (error: E) => E2) =>
   <A, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E2, R> =>
@@ -14,7 +16,9 @@ export const mapBrowserError =
       restore(effect).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, map)))),
     );
 
-/** Browser stage and classification. Original causes stay private and out of public JSON. */
+/** Browser stage and classification. Original causes stay private and out of public JSON.
+ * @internal
+ */
 export class BrowserRunFailure extends Data.TaggedError("BrowserRunFailure")<{
   readonly operation: string;
   readonly reason:
@@ -31,10 +35,13 @@ export class BrowserRunFailure extends Data.TaggedError("BrowserRunFailure")<{
   readonly [ErrorReporter.severity] = "Error" as const;
 }
 
-/** A public projection of an already reported private failure must not produce another issue. */
+/** A public projection of an already reported private failure must not produce another issue.
+ * @internal
+ */
 export const reportedBrowserError = <A extends object>(error: A): A =>
   Object.assign(error, { [ErrorReporter.ignore]: true });
 
+/** @internal */
 export const inheritBrowserReport = <A extends object>(original: unknown, error: A): A =>
   ErrorReporter.isIgnored(original) ? reportedBrowserError(error) : error;
 
@@ -87,6 +94,7 @@ const projectBrowserFailure = (operation: string, cause?: unknown): BrowserRunFa
   });
 };
 
+/** @internal */
 export const browserFailure = (operation: string, cause?: unknown): BrowserRunFailure => {
   if (cause instanceof BrowserRunFailure) return cause;
 
@@ -95,7 +103,9 @@ export const browserFailure = (operation: string, cause?: unknown): BrowserRunFa
   return cause === undefined ? failure : FailureDiagnostic.withPrivateCause(failure, cause);
 };
 
-/** Keep mixed defects and interruptions distinct while discarding all foreign diagnostic content. */
+/** Keep mixed defects and interruptions distinct while discarding all foreign diagnostic content.
+ * @internal
+ */
 export const reportBrowserCause = <E>(
   operation: string,
   cause: Cause.Cause<E>,

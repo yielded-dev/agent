@@ -35,6 +35,7 @@ const storageError =
       message: error.message,
     });
 
+/** @internal */
 export const sqliteErrors = {
   storage: (fields: StorageErrorFields) => SqliteStorageError.make(fields),
   corruption: (fields: CorruptionErrorFields) => SqliteStorageCorruptionError.make(fields),
@@ -52,7 +53,11 @@ const DatabaseHeader = Schema.Tuple([
 
 const connectionModes = new WeakMap<SqlConnection.Connection, "FULL" | "NORMAL">();
 
-/** Select once per actual connection, including aliases with different SQL transformations. */
+/**
+ * Select once per actual connection, including aliases with different SQL transformations.
+ *
+ * @internal
+ */
 export const configureSqliteSynchronous = Effect.fnUntraced(function* () {
   const sql = yield* SqlClient.SqlClient;
   const { synchronous } = yield* SqliteStorageConfig;
@@ -98,6 +103,7 @@ export const configureSqliteSynchronous = Effect.fnUntraced(function* () {
   ).pipe(Effect.catchTag("SqlError", (cause) => storageError(operation)(cause)));
 });
 
+/** @internal */
 export const initializeSqliteStorage = Effect.fnUntraced(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const { busyTimeout } = yield* SqliteStorageConfig;
@@ -162,6 +168,7 @@ export const initializeSqliteStorage = Effect.fnUntraced(function* () {
   yield* ensureSqliteStorageLayout();
 });
 
+/** @internal */
 export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const { hit: failpoint } = yield* SqliteStorageFailpoint;
@@ -204,7 +211,9 @@ export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
   });
 });
 
+/** @internal */
 export const initializeSqliteJournal = () =>
   Effect.map(initializeSqliteJournalKernel(), (kernel) => kernel.journal);
 
+/** @internal */
 export type SqliteJournal = Effect.Success<ReturnType<typeof initializeSqliteJournal>>;

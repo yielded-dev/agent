@@ -27,6 +27,7 @@ function restorePart(part: Prompt.PartEncoded): Prompt.Part {
 }
 
 // The encoded-message Schema has validated this value; constructors restore brands/defaults.
+/** @internal */
 export const restoreHistoryMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
   switch (message.role) {
     case "system":
@@ -58,9 +59,11 @@ export const restoreHistoryMessage = (message: Prompt.MessageEncoded): Prompt.Me
 /**
  * Share the upstream encoded-message boundary between canonical history and checkpoint reads.
  * The canonical codec remains authoritative at append, import, recovery and explicit verification.
+ * @internal
  */
 export const HistoryMessage = Schema.toEncoded(Prompt.Message);
 
+/** @internal */
 export const HistoryPrompt = Schema.Struct({
   content: Schema.Array(HistoryMessage),
 }).pipe(

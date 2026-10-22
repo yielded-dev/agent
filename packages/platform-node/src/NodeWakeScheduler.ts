@@ -1,3 +1,8 @@
+/**
+ * In-process wake notifications backed by durable work discovery.
+ *
+ * @since 0.1.0
+ */
 import { type ThreadId } from "@yielded/agent/identifiers";
 import type { ThreadStore, ThreadStoreError } from "@yielded/agent/thread-store";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
@@ -17,7 +22,12 @@ import * as Stream from "effect/Stream";
  */
 const WAKE_BUFFER_CAPACITY = 1_024;
 
-/** Cadence authority for the Node wake scheduler's native inventory fallback. */
+/**
+ * Cadence authority for the Node wake scheduler's native inventory fallback.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class NodeWakeSchedulerConfig extends Context.Service<
   NodeWakeSchedulerConfig,
   {
@@ -25,6 +35,12 @@ export class NodeWakeSchedulerConfig extends Context.Service<
     readonly scanInterval: Duration.Duration;
   }
 >()("@effect-agent/platform-node/NodeWakeSchedulerConfig") {
+  /**
+   * Configure the interval between durable work inventory scans.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static layer(options: {
     readonly scanInterval: Duration.Duration;
   }): Layer.Layer<NodeWakeSchedulerConfig> {
@@ -86,6 +102,9 @@ const makeWakeScheduler = Effect.gen(function* () {
  * periodically so a dropped, coalesced, or never-sent notification cannot strand accepted work
  * or a terminal side obligation. Delivery may duplicate; consumers already
  * treat wakes as pure liveness hints.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const nodeWakeSchedulerLayer: Layer.Layer<
   WakeScheduler,

@@ -1,3 +1,10 @@
+/**
+ * Authoritative memory documents with conditional writes, durable idempotency receipts, and
+ * terminal withdrawal. Reader and writer capabilities remain separate.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -9,8 +16,19 @@ import { MemoryContent, MemorySourceReference } from "./MemoryReference.ts";
 const Identity = Schema.NonEmptyString.check(Schema.isMaxLength(1_024));
 const Timestamp = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
 
-/** Host-defined recall visibility label. A scope identifies access policy; it does not grant it. */
+/**
+ * Host-defined recall visibility label. A scope identifies access policy; it does not grant it.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryScope = Identity.pipe(Schema.brand("@effect-agent/core/MemoryScope"));
+/**
+ * Decoded value of {@link MemoryScope}.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export type MemoryScope = typeof MemoryScope.Type;
 
 /** A host-selected namespace prevents accidental cross-tenant document lookup. */
@@ -19,11 +37,33 @@ class MemoryKeyWire extends Schema.Class<MemoryKeyWire>("@effect-agent/core/Memo
   id: MemorySourceReference.fields.id,
 }) {}
 
+export type {
+  /**
+   * Portable memory key decoded by {@link MemoryKey.Wire} before namespace restoration.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  MemoryKeyWire,
+};
+
+/**
+ * Type produced by {@link MemoryKey}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type MemoryKey<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> = Omit<
   MemoryKeyWire,
   "namespace"
 > & { readonly namespace: Namespace };
 
+/**
+ * Schema and constructor pairing a typed namespace with an authoritative source identifier.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryKey = {
   Wire: MemoryKeyWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -72,9 +112,39 @@ class WithdrawnMemoryDocumentWire extends Schema.TaggedClass<WithdrawnMemoryDocu
   },
 ) {}
 
+export type {
+  /**
+   * Active document decoded by {@link ActiveMemoryDocument.Wire} before namespace restoration.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  ActiveMemoryDocumentWire,
+  /**
+   * Withdrawal decoded by {@link WithdrawnMemoryDocument.Wire} before namespace restoration.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  WithdrawnMemoryDocumentWire,
+};
+
+/**
+ * Type produced by {@link ActiveMemoryDocument}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type ActiveMemoryDocument<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> =
   Omit<ActiveMemoryDocumentWire, "key"> & { readonly key: MemoryKey<Namespace> };
 
+/**
+ * Schema and constructor for current authoritative content, revision lineage, and explicit recall
+ * access scopes.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ActiveMemoryDocument = {
   Wire: ActiveMemoryDocumentWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -91,9 +161,22 @@ export const ActiveMemoryDocument = {
     ),
 };
 
+/**
+ * Type produced by {@link WithdrawnMemoryDocument}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WithdrawnMemoryDocument<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> =
   Omit<WithdrawnMemoryDocumentWire, "key"> & { readonly key: MemoryKey<Namespace> };
 
+/**
+ * Schema and constructor for a terminal source tombstone. Delayed writes cannot restore a withdrawn
+ * source.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WithdrawnMemoryDocument = {
   Wire: WithdrawnMemoryDocumentWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -110,10 +193,23 @@ export const WithdrawnMemoryDocument = {
     ),
 };
 
+/**
+ * Type produced by {@link MemoryDocument}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type MemoryDocument<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> =
   | ActiveMemoryDocument<Namespace>
   | WithdrawnMemoryDocument<Namespace>;
 
+/**
+ * Schemas for active and withdrawn documents, with restoration that validates the caller’s
+ * namespace before typed use.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryDocument = {
   Wire: Schema.Union([ActiveMemoryDocument.Wire, WithdrawnMemoryDocument.Wire]),
   restore: Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
@@ -160,11 +256,24 @@ const MemoryWriteWire = Schema.Union([
   }),
 ]);
 
+/**
+ * Decoded value of {@link MemoryWrite}.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export type MemoryWrite<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> = (
   | Omit<(typeof MemoryWriteWire.members)[0]["Type"], "key">
   | Omit<(typeof MemoryWriteWire.members)[1]["Type"], "key">
 ) & { readonly key: MemoryKey<Namespace> };
 
+/**
+ * Schema and constructor for conditional Put or Withdraw commands. Reusing an operation ID requires
+ * the exact same encoded command.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryWrite = {
   Wire: MemoryWriteWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -175,17 +284,35 @@ export const MemoryWrite = {
     }),
 };
 
+/**
+ * A conditional write’s expected revision differs from the current source revision.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryConflict extends Schema.TaggedError<MemoryConflict>()("MemoryConflict", {
   key: MemoryKey.Wire,
   expectedRevision: Schema.NullOr(Identity),
   actualRevision: Schema.NullOr(Identity),
 }) {}
 
+/**
+ * The source is permanently withdrawn and cannot accept another write.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryWithdrawn extends Schema.TaggedError<MemoryWithdrawn>()("MemoryWithdrawn", {
   key: MemoryKey.Wire,
   revision: Identity,
 }) {}
 
+/**
+ * An operation ID was reused for a different encoded memory command.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryOperationConflict extends Schema.TaggedError<MemoryOperationConflict>()(
   "MemoryOperationConflict",
   {
@@ -194,6 +321,13 @@ export class MemoryOperationConflict extends Schema.TaggedError<MemoryOperationC
   },
 ) {}
 
+/**
+ * An authoritative memory operation failed validation, storage availability, integrity checks, or
+ * format compatibility.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryStorageError extends Schema.TaggedError<MemoryStorageError>()(
   "MemoryStorageError",
   {
@@ -202,6 +336,12 @@ export class MemoryStorageError extends Schema.TaggedError<MemoryStorageError>()
   },
 ) {}
 
+/**
+ * Schema for fault-injection boundaries during memory-store initialization and mutation.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryMutationPoint = Schema.Literals([
   "memory:initialize:before",
   "memory:initialize:before-accounting",
@@ -213,8 +353,20 @@ export const MemoryMutationPoint = Schema.Literals([
   "memory:change:after",
 ]);
 
+/**
+ * Decoded value of {@link MemoryMutationPoint}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MemoryMutationPoint = typeof MemoryMutationPoint.Type;
 
+/**
+ * A configured memory fault-injection boundary interrupted an operation.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryMutationFailure extends Schema.TaggedError<MemoryMutationFailure>()(
   "MemoryMutationFailure",
   {
@@ -222,7 +374,12 @@ export class MemoryMutationFailure extends Schema.TaggedError<MemoryMutationFail
   },
 ) {}
 
-/** Explicit fault-injection seam; production adapters install the no-op Layer. */
+/**
+ * Explicit fault-injection seam; production adapters install the no-op Layer.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class MemoryMutationFailpoint extends Context.Service<
   MemoryMutationFailpoint,
   {
@@ -232,6 +389,13 @@ export class MemoryMutationFailpoint extends Context.Service<
   static readonly layer = Layer.succeed(this, { hit: () => Effect.void });
 }
 
+/**
+ * Expected storage, conditional-write, withdrawn-source, idempotency, and fault-injection failures
+ * from a memory write.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MemoryWriteError =
   | MemoryStorageError
   | MemoryConflict
@@ -243,6 +407,9 @@ export type MemoryWriteError =
  * Read capability independent of editing. A get begun after a committed write must observe
  * that write or a later revision. An adapter unable to provide that view must fail typed.
  * Host code binds namespace and access scope; cached candidates do not implement this port.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class MemoryReader extends Context.Service<
   MemoryReader,
@@ -277,6 +444,9 @@ export class MemoryReader extends Context.Service<
  * A failed acknowledgement can hide a committed change: retain and retry the exact command.
  * Successful withdrawal excludes checks begun afterward; already captured views may finish.
  * Receipts and original Thread history are separate retention concerns.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class MemoryWriter extends Context.Service<
   MemoryWriter,
@@ -305,6 +475,9 @@ export class MemoryWriter extends Context.Service<
  * Transition mechanics for an authoritative document store. Revisions identify this readable
  * source, not the original activity from which a consumer extracted it. The adapter reconciles
  * receipts first and owns atomicity and the clock. Original evidence belongs in provenance.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const applyMemoryWrite = Effect.fnUntraced(function* <Namespace extends MemoryNamespace.Any>(
   current: MemoryDocument<NoInfer<Namespace>> | null,

@@ -1,3 +1,10 @@
+/**
+ * Discover currently authorized Tools through bounded catalogue search and complete schema
+ * documentation. Successful selections update exposure without granting authority.
+ *
+ * @since 0.1.0
+ */
+
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Effect from "effect/Effect";
@@ -14,13 +21,23 @@ const Description = Schema.String.check(Schema.isMaxLength(2_048));
 const NamespaceDescription = Schema.String.check(Schema.isMaxLength(512));
 const EntryId = Schema.NonEmptyString.check(Schema.isMaxLength(1_024));
 
-/** Search text is bounded and literal; namespace selects one exact host-declared group. */
+/**
+ * Search text is bounded and literal; namespace selects one exact host-declared group.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const Parameters = Schema.Struct({
   query: Schema.NonEmptyString.check(Schema.isMaxLength(512), Schema.isPattern(/\S/)),
   namespace: Schema.optionalKey(Namespace),
 });
 
-/** Metadata exposed only after host visibility and inherited grants are applied. */
+/**
+ * Metadata exposed only after host visibility and inherited grants are applied.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class Descriptor extends Schema.Class<Descriptor>(
   "@effect-agent/capabilities/ToolDiscovery/Descriptor",
 )({
@@ -37,6 +54,9 @@ export class Descriptor extends Schema.Class<Descriptor>(
 /**
  * Selected metadata and canonical encoded Tool Schemas. Provider-specific model schema
  * transformations do not change the wire values documented for application handlers.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class Match extends Schema.Class<Match>("@effect-agent/capabilities/ToolDiscovery/Match")({
   ...Descriptor.fields,
@@ -55,6 +75,9 @@ export class Match extends Schema.Class<Match>("@effect-agent/capabilities/ToolD
  * Only documented nativeToolName values activate schemas; Code Mode aliases activate their
  * owning Tool. A byte-limited result is successful, including when no matches fit: an empty
  * toolNames array clears the non-pinned selection under the engine's replacement contract.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const Result = Schema.Struct({
   toolNames: Schema.Array(Name).check(Schema.isMaxLength(64), Schema.isUnique()),
@@ -63,7 +86,12 @@ export const Result = Schema.Struct({
   notice: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(192))),
 });
 
-/** Invalid catalogue metadata and unsupported documentation remain typed failures. */
+/**
+ * Invalid catalogue metadata and unsupported documentation remain typed failures.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ToolDiscoveryError extends Schema.TaggedError<ToolDiscoveryError>()(
   "ToolDiscoveryError",
   {
@@ -91,6 +119,12 @@ const resultByteLength = Effect.fnUntraced(function* (result: typeof Result.Type
   return utf8ByteLength(encoded);
 });
 
+/**
+ * Options for literal catalogue search and bounded documentation of currently visible Tools.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface Options {
   /** Optional generic instructions. Namespace names and hints are never appended here. */
   readonly description?: string | undefined;
@@ -118,8 +152,11 @@ const compare = (left: string, right: string): number => (left < right ? -1 : le
  * Build one native discover_tools Tool and its singleton Toolkit/handler Layer. Include the
  * Tool beside the application's existing native Tools. The engine owns catalogue authority
  * and applies successful native selections after a complete Tool batch; the handler mutates
- * no exposure state. Default search matches all case-insensitive whitespace-separated terms
+ * no exposure state. Search matches all case-insensitive whitespace-separated terms
  * against names, descriptions, methods and namespace hints, ordered by catalogue id.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const make = (options: Options = {}) => {
   const bounds = Schema.decodeSync(Bounds)({

@@ -1,4 +1,8 @@
-/** Closed expression vocabulary for the frozen Postgres layout. */
+/**
+ * Closed expression vocabulary for the frozen Postgres layout.
+ *
+ * @internal
+ */
 export type LayoutExpression =
   | readonly ["column" | "text" | "json" | "length", string]
   | readonly ["integer", number]
@@ -197,6 +201,7 @@ const readExpressions = (input: string): ReadonlyArray<LayoutExpression> | undef
   return position === tokens.length ? expressions : undefined;
 };
 
+/** @internal */
 export const matchesLayoutExpressions = (
   actual: string | null,
   expected: ReadonlyArray<LayoutExpression>,

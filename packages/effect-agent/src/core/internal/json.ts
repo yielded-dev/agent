@@ -1,6 +1,9 @@
 import type * as Schema from "effect/Schema";
 
-/** Own a validated JSON value before exposing a separate copy to application callbacks. */
+/**
+ * Own a validated JSON value before exposing a separate copy to application callbacks.
+ * @internal
+ */
 export const copyJson = (value: Schema.Json): Schema.Json => {
   if (value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) {

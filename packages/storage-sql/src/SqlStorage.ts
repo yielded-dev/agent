@@ -1,3 +1,8 @@
+/**
+ * SQL codecs, diagnostics, and transaction contracts shared by relational storage adapters.
+ *
+ * @since 0.1.0
+ */
 import type * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -10,7 +15,12 @@ import type * as Statement from "effect/sql/Statement";
 
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
 
-/** Decode finite SQL numbers and safe native bigints without rounding integer values. */
+/**
+ * Decode finite SQL numbers and safe native bigints without rounding integer values.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SqlNumber = Schema.Union([
   Schema.Finite,
   Schema.BigInt.check(
@@ -29,7 +39,12 @@ export const SqlNumber = Schema.Union([
   ),
 );
 
-/** Apply persisted integer constraints after native numeric decoding. */
+/**
+ * Apply persisted integer constraints after native numeric decoding.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SqlInteger = SqlNumber.pipe(Schema.decodeTo(Schema.Int));
 
 // The Unicode flag matches code points, so valid surrogate pairs are accepted.
@@ -44,6 +59,9 @@ const decodePostgresText = Schema.decodeEffect(PostgresText);
 /**
  * Qualify storage relations and execute native statements without application name transforms.
  * PostgreSQL validates text parameters after compilation; escaped canonical JSON stays intact.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSqlQuery = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
@@ -83,30 +101,58 @@ export const makeSqlQuery = Effect.fnUntraced(function* (namespace?: string) {
   };
 });
 
-/** Adapter-owned Schema errors remain concrete in shared operation error channels. */
+/**
+ * Adapter-owned Schema errors remain concrete in shared operation error channels.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export interface Diagnostic extends Cause.YieldableError {
   readonly _tag: string;
 }
 
+/**
+ * Operation details supplied when constructing an adapter storage failure.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export interface StorageErrorFields {
   readonly operation: string;
   readonly message: string;
   readonly cause?: unknown;
 }
 
+/**
+ * Persisted row identity and validation failure supplied to an adapter diagnostic.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export interface CorruptionErrorFields {
   readonly table: string;
   readonly rowKey: string;
   readonly message: string;
 }
 
+/**
+ * Adapter constructors and a guard that preserve concrete storage and corruption failures.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export interface SqlStorageErrors<S extends Diagnostic, C extends Diagnostic> {
   readonly storage: (fields: StorageErrorFields) => S;
   readonly corruption: (fields: CorruptionErrorFields) => C;
   readonly isCorruption: (error: unknown) => error is C;
 }
 
-/** The adapter owns connection reservation, isolation, locking and commit/rollback. */
+/**
+ * The adapter owns connection reservation, isolation, locking and commit/rollback.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlTransactions<S extends Diagnostic, W extends Diagnostic> {
   readonly withWriteTransaction: (
     operation: string,
@@ -117,17 +163,31 @@ export interface SqlTransactions<S extends Diagnostic, W extends Diagnostic> {
   readonly isTransactionFailure: (error: unknown) => error is S | W;
 }
 
+/**
+ * Adapter callback for injecting a typed failure at a named persistence boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SqlStorageFailpoint<F extends Diagnostic> = (
   location: SqlStorageFailpointLocation,
 ) => Effect.Effect<void, F>;
 
-/** Native transaction shape used by stores whose errors already belong to their ports. */
+/**
+ * Native transaction shape used by stores whose errors already belong to their ports.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SqlWriteTransaction = SqlClient.SqlClient["withTransaction"];
 
 /**
  * Decode database rows once, preserving the adapter's corruption error class.
  * Bind an array schema with decodeRows(schema) or decodeSingleRow(schema), then reuse the
  * returned (table, rowKey, rows) decoder across reads.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeRowDecoder = <C extends Diagnostic>(
   corruption: (fields: CorruptionErrorFields) => C,
@@ -166,6 +226,9 @@ export const makeRowDecoder = <C extends Diagnostic>(
 /**
  * A top-level transaction on one reserved connection. The caller selects the native locking
  * and snapshot semantics. An ambient SQL transaction fails before reserving another connection.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSqlTransaction =
   (

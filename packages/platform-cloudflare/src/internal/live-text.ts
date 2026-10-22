@@ -48,7 +48,12 @@ interface Observer {
   readonly close: (error?: HostProtocolError) => void;
 }
 
-/** One Object incarnation; owns drafts and subscriptions independently of RPC event scopes. */
+/**
+ * One Object incarnation; owns drafts and subscriptions independently of RPC event scopes.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class LiveTextHub extends Context.Service<
   LiveTextHub,
   {

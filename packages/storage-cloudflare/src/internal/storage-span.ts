@@ -6,10 +6,13 @@ import * as Tracer from "effect/Tracer";
 
 type Tagged = { readonly _tag: string; readonly reason?: unknown };
 
+/** @internal */
 export const isAppendContention = (error: Tagged): boolean =>
   (error._tag === "DoAppendConflict" || error._tag === "AppendConflict") && error.reason === "tail";
 
-/** Expected refusals remain typed at the port, but are outcomes of the storage operation. */
+/** Expected refusals remain typed at the port, but are outcomes of the storage operation.
+ * @internal
+ */
 export const storageResult = <A, E extends Tagged, R>(
   effect: Effect.Effect<A, E, R>,
   expected: (error: E) => boolean,
@@ -19,7 +22,9 @@ export const storageResult = <A, E extends Tagged, R>(
     Effect.catchIf(expected, (error) => Effect.succeed(Result.fail(error))),
   );
 
-/** Only error discriminants enter telemetry; messages, SQL, identities and payloads do not. */
+/** Only error discriminants enter telemetry; messages, SQL, identities and payloads do not.
+ * @internal
+ */
 export const annotateStorageError = (error: Tagged) =>
   Effect.annotateCurrentSpan({
     "error.type": error._tag,
@@ -30,6 +35,7 @@ export const annotateStorageError = (error: Tagged) =>
       : {}),
   });
 
+/** @internal */
 export const withStorageSpan = (
   name: string,
   expected: (error: Tagged) => boolean = () => false,

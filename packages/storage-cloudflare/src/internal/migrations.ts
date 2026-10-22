@@ -22,6 +22,12 @@ import {
   DoStorageError,
 } from "../DoStorageError.ts";
 
+/**
+ * Current Durable Object layout version; canonical records are versioned independently.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const CurrentDoStorageVersion = 30;
 
 /** Exact released layout, retained for predecessor validation. */
@@ -116,6 +122,7 @@ const Legacy = Schema.Tuple([
   }),
 ]);
 
+/** @internal */
 export interface DoStorageHeader {
   readonly layoutVersion: number;
   readonly recordFormat: string;
@@ -241,7 +248,9 @@ const inspectStorage = Effect.fnUntraced(function* (
   return yield* readHeader(objects, version);
 });
 
-/** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */
+/** Read-only inspection. The caller owns a snapshot covering this check and its export reads.
+ * @internal
+ */
 export const readDoStorageHeader = Effect.fnUntraced(function* () {
   const header = yield* inspectStorage();
 
@@ -347,7 +356,9 @@ const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(functi
 
 const initializedLayouts = new WeakMap<object, DoStorageHeader>();
 
-/** Share committed inspection within one live Object owner; maintenance invalidates it. */
+/** Share committed inspection within one live Object owner; maintenance invalidates it.
+ * @internal
+ */
 export const ensureDoStorageLayout = Effect.fnUntraced(function* () {
   const sql = yield* SqlClient.SqlClient;
   const owner = yield* SqlStorageOwner;

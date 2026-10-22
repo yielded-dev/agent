@@ -1,3 +1,10 @@
+/**
+ * Stateless projection of canonical transcript evidence and context-window boundaries for recall
+ * indexes. Private instructions, reasoning, attachments, and diagnostics are excluded.
+ *
+ * @since 0.1.0
+ */
+
 import * as Prompt from "effect/ai/Prompt";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -8,7 +15,12 @@ import { ContextHistoryError, ContextHistorySearch } from "../engine/ContextHist
 import type { CanonicalRecordEnvelope } from "./Records.ts";
 import { CanonicalSequence, PersistedJson, RecordId } from "./Records.ts";
 
-/** Full retained recall text from one canonical record; never raw discarded Tool output. */
+/**
+ * Full retained recall text from one canonical record; never raw discarded Tool output.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ContextHistoryEvidence extends Schema.Class<ContextHistoryEvidence>(
   "@effect-agent/thread/ContextHistoryEvidence",
 )({
@@ -18,7 +30,12 @@ export class ContextHistoryEvidence extends Schema.Class<ContextHistoryEvidence>
   text: Schema.NonEmptyString,
 }) {}
 
-/** The committing position and covered position are distinct; membership uses coversThrough. */
+/**
+ * The committing position and covered position are distinct; membership uses coversThrough.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ContextHistoryBoundary extends Schema.Class<ContextHistoryBoundary>(
   "@effect-agent/thread/ContextHistoryBoundary",
 )({
@@ -27,7 +44,12 @@ export class ContextHistoryBoundary extends Schema.Class<ContextHistoryBoundary>
   windowId: Schema.NonEmptyString,
 }) {}
 
-/** An empty projection still consumes its canonical position in an index watermark. */
+/**
+ * An empty projection still consumes its canonical position in an index watermark.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ContextHistoryProjection extends Schema.Class<ContextHistoryProjection>(
   "@effect-agent/thread/ContextHistoryProjection",
 )({
@@ -135,6 +157,9 @@ const retainedEvidence = Effect.fnUntraced(function* (
  * below that anchor, in descending sequence order. The anchor need not match the new query.
  * Do not restrict rollover boundaries to the anchor: later commits may assign older evidence
  * to a window. An ID or an index row alone does not establish existence, eligibility, or access.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const project = Effect.fnUntraced(function* (
   envelope: CanonicalRecordEnvelope,
@@ -158,9 +183,14 @@ export const project = Effect.fnUntraced(function* (
 });
 
 /** JavaScript case folding for literal substring lookup; do not substitute SQL lower or FTS. */
-export const normalizeText = (text: string): string => text.toLowerCase();
+const normalizeText = (text: string): string => text.toLowerCase();
 
-/** Validate, trim, and case-fold a search query using the native history contract. */
+/**
+ * Validate, trim, and case-fold a search query using the native history contract.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const normalizeQuery = Effect.fnUntraced(function* (
   query: string,
 ): Effect.fn.Return<string, ContextHistoryError> {
@@ -184,7 +214,12 @@ export const normalizeQuery = Effect.fnUntraced(function* (
   return normalized;
 });
 
-/** Match a normalized query and retain the native 200-character lead and 2,000-character page. */
+/**
+ * Match a normalized query and retain the native 200-character lead and 2,000-character page.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const matchText = (text: string, normalizedQuery: string): string | undefined => {
   const index = normalizeText(text).indexOf(normalizedQuery);
 
@@ -199,6 +234,9 @@ export const matchText = (text: string, normalizedQuery: string): string | undef
  * same captured Thread tail as the evidence. An index may supply only its last boundary whose
  * coversThrough is strictly less than evidence.sequence. Later Runs inherit that window;
  * evidence before the first rollover keeps its own Run's initial identity.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const windowIdFor = (
   evidence: ContextHistoryEvidence,

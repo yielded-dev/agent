@@ -1,3 +1,8 @@
+/**
+ * Shared submission row fields with adapter-supplied text and sequence codecs.
+ *
+ * @since 0.1.0
+ */
 import {
   ApprovalDecision,
   Digest,
@@ -14,13 +19,28 @@ import {
 } from "@yielded/agent/submission-ledger";
 import * as Schema from "effect/Schema";
 
+/**
+ * Nonempty persisted identifier with a maximum length of 1,024 UTF-16 code units.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
+/**
+ * Nonempty persisted timestamp with a maximum length of 128 UTF-16 code units.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const BoundedTimestamp = Schema.NonEmptyString.check(Schema.isMaxLength(128));
 
 /**
  * Shared ledger row fields with adapter-owned text bounds and native sequence codecs.
  * Keep row classes and decoders in each adapter so cached row identities and diagnostics
  * remain local. This does not normalize native values before their schema validates them.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSubmissionRowFields = <
   Text extends Schema.Codec<string>,

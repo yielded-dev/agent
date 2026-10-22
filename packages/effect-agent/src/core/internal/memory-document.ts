@@ -14,6 +14,7 @@ const decodeDocument = Schema.decodeUnknownEffect(Schema.NullOr(MemoryDocument.W
  * Read the current source through the host's authorized reader, then validate its schema and
  * exact namespace/key identity. Callers own visibility and stale-candidate policy; no source
  * snapshot is cached across invocations.
+ * @internal
  */
 export const readMemoryDocument = Effect.fnUntraced(function* (key: MemoryKey) {
   const reader = yield* MemoryReader;

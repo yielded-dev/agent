@@ -1,3 +1,8 @@
+/**
+ * Observation offset encoding shared by SQL Thread store adapters.
+ *
+ * @since 0.1.0
+ */
 import { CanonicalSequence, type ObservationOffset } from "@yielded/agent/records";
 import { ThreadStoreError, type ThreadMaterialization } from "@yielded/agent/thread-store";
 import * as Effect from "effect/Effect";
@@ -6,14 +11,24 @@ import * as Schema from "effect/Schema";
 const OffsetText = Schema.String.check(Schema.isMaxLength(4 * 1024));
 const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
 
-/** Encode the shared wire syntax; callers retain their native offset validation. */
+/**
+ * Encode the shared wire syntax; callers retain their native offset validation.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const formatObservationOffset = (
   offsetPrefix: string,
   threadId: ThreadMaterialization["threadId"],
   sequence: CanonicalSequence,
 ): string => `${offsetPrefix}${encodeURIComponent(threadId)}:${sequence}`;
 
-/** Decode the existing offset format while preserving the adapter's schema diagnostics. */
+/**
+ * Decode the existing offset format while preserving the adapter's schema diagnostics.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeObservationOffsetParser = (
   offsetPrefix: string,
   schemaStoreError: (operation: string, error: Schema.SchemaError) => ThreadStoreError,

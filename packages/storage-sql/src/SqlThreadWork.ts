@@ -1,3 +1,8 @@
+/**
+ * Rebuildable SQL indexes for bounded discovery of pending Thread work.
+ *
+ * @since 0.1.0
+ */
 import { ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey } from "@yielded/agent/receipt";
 import { decodeExportRecordJson } from "@yielded/agent/record-format";
@@ -53,7 +58,12 @@ const failure = (operation: string, cause?: unknown) =>
     ...(cause === undefined ? {} : { cause }),
   });
 
-/** The caller supplies the native snapshot/writer boundary; hooks never open transactions. */
+/**
+ * The caller supplies the native snapshot/writer boundary; hooks never open transactions.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlThreadWorkOptions {
   readonly namespace?: string;
   readonly read?: <A, E, R>(
@@ -64,7 +74,12 @@ export interface SqlThreadWorkOptions {
   ) => Effect.Effect<A, E | ThreadStoreError, R>;
 }
 
-/** Disposable objects are separate from the authoritative layout compatibility contract. */
+/**
+ * Disposable objects are separate from the authoritative layout compatibility contract.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const createSqlThreadWorkTables = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
@@ -156,6 +171,12 @@ const DeliveryRow = Schema.Struct({
 const FreshAdmissionRows = Schema.Array(Schema.Struct({ verified: SqlInteger }));
 const WorkThreadRows = Schema.Array(Schema.Struct({ thread_id: ThreadId }));
 
+/**
+ * Constructs bounded work discovery and index maintenance over adapter-owned tables.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThreadWorkOptions = {}) {
   const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;

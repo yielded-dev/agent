@@ -12,6 +12,9 @@ import * as Context from "effect/Context";
  *   recovery may re-execute without reconciliation proof.
  * - `"uncertain"`: no external contract is declared. Prepared/settled records
  *   are written and recovery must reconcile or record an Unknown Outcome.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type ToolExecutionClassValue = "readonly" | "idempotent" | "uncertain";
 
@@ -22,12 +25,20 @@ export type ToolExecutionClassValue = "readonly" | "idempotent" | "uncertain";
  * Unannotated Tools default to `"uncertain"`: security and durability
  * decisions are fail-closed, so the framework never infers a safer class
  * from a Tool's shape.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const ToolExecutionClass = Context.Reference<ToolExecutionClassValue>(
   "@effect-agent/engine/ToolExecutionClass",
   { defaultValue: () => "uncertain" },
 );
 
-/** Read a Tool's declared execution class, falling back to the fail-closed `"uncertain"` default. */
+/**
+ * Read a Tool's declared execution class, falling back to the fail-closed `"uncertain"` default.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const getToolExecutionClass = (tool: Tool.Any): ToolExecutionClassValue =>
   Context.get(tool.annotations, ToolExecutionClass);

@@ -1,3 +1,10 @@
+/**
+ * Scoped test control for replacing and clearing the durable coordinator's active failpoint
+ * handler.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -10,7 +17,12 @@ import {
 
 const noFailpoint: DurableRuntimeFailpointHandler = () => Effect.void;
 
-/** Test-only control for replacing the active coordinator failpoint handler. */
+/**
+ * Test-only control for replacing the active coordinator failpoint handler.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class DurableRuntimeFailpointTestControl extends Context.Service<
   DurableRuntimeFailpointTestControl,
   {

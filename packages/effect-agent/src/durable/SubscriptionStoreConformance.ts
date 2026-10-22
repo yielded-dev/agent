@@ -1,3 +1,10 @@
+/**
+ * Shared subscription-storage contracts for event selection, revisions, replay, bounded retention,
+ * and capacity.
+ *
+ * @since 0.1.0
+ */
+
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
@@ -18,11 +25,23 @@ import {
   type SubscriptionStoreFailure,
 } from "./Subscription.ts";
 
+/**
+ * A subscription adapter violated a named shared storage contract assertion.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubscriptionStoreConformanceViolation extends Schema.TaggedError<SubscriptionStoreConformanceViolation>()(
   "SubscriptionStoreConformanceViolation",
   { caseName: Schema.String, message: Schema.String },
 ) {}
 
+/**
+ * One named subscription storage contract executed against a supplied partition-owned store.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubscriptionStoreConformanceCase {
   readonly name: string;
   readonly run: Effect.Effect<
@@ -32,6 +51,12 @@ export interface SubscriptionStoreConformanceCase {
   >;
 }
 
+/**
+ * Fixed source-partition identity used by shared subscription adapter fixtures.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionConformancePartition: SourcePartition = {
   tenantId: "subscription-conformance",
   address: "source-address",
@@ -1245,6 +1270,13 @@ const retentionFairness = conformanceCase(
     }),
 );
 
+/**
+ * Shared adapter contracts covering selection, lifecycle, revisions, retry fencing, retention, and
+ * capacity.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subscriptionStoreConformanceCases: ReadonlyArray<SubscriptionStoreConformanceCase> = [
   historicalOccurrenceReplay,
   recoveryRevisionFence,

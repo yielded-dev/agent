@@ -1,3 +1,10 @@
+/**
+ * Read-only recovery explanations, integrity reports, and age-based accepted-work visibility, plus
+ * audited retry commands. Hosts choose thresholds and invoke scans.
+ *
+ * @since 0.1.0
+ */
+
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -48,11 +55,25 @@ const AgeSeconds = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 /**
  * The disposition family of `RecoveryReport`, reused verbatim so an explanation predicts exactly
  * what `runRecovery`/`retry` would report for the same decision.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const RecoveryDisposition = Schema.Literals(["repaired", "deferred", "none", "unknown"]);
+/**
+ * Decoded value of {@link RecoveryDisposition}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RecoveryDisposition = typeof RecoveryDisposition.Type;
 
-/** Submission identity, lane position, and Clock-derived ages (DUR-017 obligation visibility). */
+/**
+ * Submission identity, lane position, and Clock-derived ages (DUR-017 obligation visibility).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ExplainedSubmission extends Schema.Class<ExplainedSubmission>(
   "@effect-agent/thread/ExplainedSubmission",
 )({
@@ -69,7 +90,12 @@ export class ExplainedSubmission extends Schema.Class<ExplainedSubmission>(
   parentLinkage: Schema.optionalKey(ParentLinkage),
 }) {}
 
-/** One durable Unknown Outcome and whether its result is canonical (DUR-017). */
+/**
+ * One durable Unknown Outcome and whether its result is canonical (DUR-017).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ExplainedUnknownCall extends Schema.Class<ExplainedUnknownCall>(
   "@effect-agent/thread/ExplainedUnknownCall",
 )({
@@ -85,6 +111,9 @@ export class ExplainedUnknownCall extends Schema.Class<ExplainedUnknownCall>(
  * The evidence summary of one explanation: the classifier's canonical-history inputs plus the
  * durable intents and subagent attachments the ledger snapshot carries. Everything is read-only
  * observation — assembling this value performs zero writes.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ExplainedEvidence extends Schema.Class<ExplainedEvidence>(
   "@effect-agent/thread/ExplainedEvidence",
@@ -124,6 +153,9 @@ export class ExplainedEvidence extends Schema.Class<ExplainedEvidence>(
  * recovery state without editing storage"): the submission summary, the evidence the pure
  * classifier consumed, the exact `RecoveryDecision` it selected, that decision's operator
  * meaning, and the disposition the recovery pass would report for it.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RecoveryExplanation extends Schema.Class<RecoveryExplanation>(
   "@effect-agent/thread/RecoveryExplanation",
@@ -148,6 +180,9 @@ export class RecoveryExplanation extends Schema.Class<RecoveryExplanation>(
  * `recovery.ts` (the classifier remains the semantic authority; this table is its operator
  * rendering). Exhaustive over `RecoveryDecision` — adding a decision without a meaning is a
  * compile error here.
+ *
+ * @category constants
+ * @since 0.1.0
  */
 export const RECOVERY_DECISION_MEANINGS: Readonly<Record<RecoveryDecision["_tag"], string>> = {
   CompleteMaterialization:
@@ -207,7 +242,12 @@ export const RECOVERY_DECISION_MEANINGS: Readonly<Record<RecoveryDecision["_tag"
   NoAction: "The Submission is settled; nothing is owed.",
 };
 
-/** The operator meaning of one recovery decision tag. */
+/**
+ * The operator meaning of one recovery decision tag.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const recoveryDecisionMeaning = (tag: RecoveryDecision["_tag"]): string =>
   RECOVERY_DECISION_MEANINGS[tag];
 
@@ -217,6 +257,9 @@ export const recoveryDecisionMeaning = (tag: RecoveryDecision["_tag"]): string =
  * execution authority — a lane concurrently claimed by a worker can always defer instead).
  * `AwaitApprovalDecision` depends on the snapshot: an already-suspended lane waits (`deferred`),
  * while a claimable lane with a lost suspend transition is repaired.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const predictRecoveryDisposition = (
   decision: RecoveryDecision,
@@ -245,7 +288,12 @@ export const predictRecoveryDisposition = (
 
 const formatUtc = (value: DateTime.Utc): string => DateTime.formatIso(value);
 
-/** Pure operator text for one explanation (the CLI's `explain` output body). */
+/**
+ * Pure operator text for one explanation (the CLI's `explain` output body).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const renderRecoveryExplanation = (explanation: RecoveryExplanation): string => {
   const submission = explanation.submission;
   const evidence = explanation.evidence;
@@ -339,7 +387,12 @@ export const renderRecoveryExplanation = (explanation: RecoveryExplanation): str
 // verify — IntegrityReport
 // ---------------------------------------------------------------------------
 
-/** The named integrity checks `verifyThreadInvariants` performs. */
+/**
+ * The named integrity checks `verifyThreadInvariants` performs.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const IntegrityCheckName = Schema.Literals([
   /** Every exported envelope round-trips its canonical Schema. */
   "schema-round-trip",
@@ -347,13 +400,15 @@ export const IntegrityCheckName = Schema.Literals([
   "record-identity",
   /** Canonical sequences are gap-free from 1 through the exported tail. */
   "sequence-contiguity",
-  /** Every retained Run fact is addressable independently of the disposable Run directory.
+  /**
+   * Every retained Run fact is addressable independently of the disposable Run directory.
    * Current execution references and original context must agree with retained history;
    * discarded checkpoint revisions and their historical counters are not reconstructed. */
   "continuation-evidence",
   /** Canonical `input:{sid}` records follow the admitted FIFO order (DUR-004). */
   "fifo-input-order",
-  /** Canonical settlement records follow the admitted FIFO order (DUR-004); aborted
+  /**
+   * Canonical settlement records follow the admitted FIFO order (DUR-004); aborted
    * settlements of never-run work are exempt by design (P7 §7(c)). */
   "input-before-settlement",
   /** At most one canonical terminal record per Submission; exactly one per settled row (DUR-002). */
@@ -364,12 +419,35 @@ export const IntegrityCheckName = Schema.Literals([
   "all-settled",
 ]);
 
+/**
+ * Decoded value of {@link IntegrityCheckName}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type IntegrityCheckName = typeof IntegrityCheckName.Type;
 
+/**
+ * Whether one integrity check passed, failed, or was outside the verification scope.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const IntegrityCheckStatus = Schema.Literals(["passed", "failed", "skipped"]);
+/**
+ * Decoded value of {@link IntegrityCheckStatus}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type IntegrityCheckStatus = typeof IntegrityCheckStatus.Type;
 
-/** One typed check result; `detail` explains a failure or the honest reason for a skip. */
+/**
+ * One typed check result; `detail` explains a failure or the honest reason for a skip.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class IntegrityCheck extends Schema.Class<IntegrityCheck>(
   "@effect-agent/thread/IntegrityCheck",
 )({
@@ -382,6 +460,9 @@ export class IntegrityCheck extends Schema.Class<IntegrityCheck>(
  * The read-only integrity verdict for one Thread (plan §3 `verify`): typed per-check
  * results, never a repair. `ok` is true exactly when no check failed — skipped checks are
  * honest scope statements, not silent passes.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class IntegrityReport extends Schema.Class<IntegrityReport>(
   "@effect-agent/thread/IntegrityReport",
@@ -402,6 +483,9 @@ export class IntegrityReport extends Schema.Class<IntegrityReport>(
  * What one nonterminal Submission is visibly blocked on (DUR-017 operator surface; OPS-001).
  * `ready-aged`/`running-aged` are not blocks — they are accepted work whose settlement age is
  * measurable and alertable.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ObligationBlockedOn = Schema.Literals([
   "unknown",
@@ -411,12 +495,35 @@ export const ObligationBlockedOn = Schema.Literals([
   "running-aged",
 ]);
 
+/**
+ * Decoded value of {@link ObligationBlockedOn}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ObligationBlockedOn = typeof ObligationBlockedOn.Type;
 
+/**
+ * Age classification of unsettled accepted work under host-supplied thresholds.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ObligationSeverity = Schema.Literals(["ok", "aging", "overdue"]);
+/**
+ * Decoded value of {@link ObligationSeverity}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ObligationSeverity = typeof ObligationSeverity.Type;
 
-/** Host-supplied age thresholds; the framework deliberately does not own the alert loop. */
+/**
+ * Host-supplied age thresholds; the framework deliberately does not own the alert loop.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ObligationThresholds extends Schema.Class<ObligationThresholds>(
   "@effect-agent/thread/ObligationThresholds",
 )({
@@ -426,7 +533,12 @@ export class ObligationThresholds extends Schema.Class<ObligationThresholds>(
   overdueSeconds: AgeSeconds,
 }) {}
 
-/** One nonterminal accepted-work obligation with its age and severity. */
+/**
+ * One nonterminal accepted-work obligation with its age and severity.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ObligationEntry extends Schema.Class<ObligationEntry>(
   "@effect-agent/thread/ObligationEntry",
 )({
@@ -444,6 +556,9 @@ export class ObligationEntry extends Schema.Class<ObligationEntry>(
  * periodically and export logs/metrics; ages need no storage-version bump because every source
  * timestamp already exists (`createdAt`/`readyAt`, `suspendedAt`, the canonical
  * `ToolCallUnknown` record's `createdAt`).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ObligationReport extends Schema.Class<ObligationReport>(
   "@effect-agent/thread/ObligationReport",
@@ -453,7 +568,12 @@ export class ObligationReport extends Schema.Class<ObligationReport>(
   generatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
-/** Severity of one obligation age under the supplied thresholds. */
+/**
+ * Severity of one obligation age under the supplied thresholds.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const obligationSeverityOf = (
   ageSeconds: number,
   thresholds: ObligationThresholds,
@@ -473,6 +593,9 @@ export const obligationSeverityOf = (
  * canonical abort command so every mutating administrative operation stays attributable. The
  * operator and decision are logged. A repair with a claim also appends a best-effort
  * `RepairAnnotated` attempt using that claim's epoch; state-only repairs do not append audits.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RetryCommand extends Schema.Class<RetryCommand>("@effect-agent/thread/RetryCommand")({
   submissionId: SubmissionId,
@@ -480,7 +603,12 @@ export class RetryCommand extends Schema.Class<RetryCommand>("@effect-agent/thre
   reason: AbortCommand.fields.reason,
 }) {}
 
-/** Why a retry was refused without executing anything. */
+/**
+ * Why a retry was refused without executing anything.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RetryRefusalReason = Schema.Literals([
   /** The Submission is settled; terminal outcomes are never revisited (DUR-002). */
   "settled",
@@ -490,12 +618,21 @@ export const RetryRefusalReason = Schema.Literals([
   "await-approval-decision",
 ]);
 
+/**
+ * Decoded value of {@link RetryRefusalReason}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RetryRefusalReason = typeof RetryRefusalReason.Type;
 
 /**
  * Typed refusal of `retry` (plan §3): Submissions waiting on `AwaitUnknownResolution` or
  * `AwaitApprovalDecision` have their own authorized operations, and settled work is never
  * re-driven. The refusal names the classifier decision so the operator sees WHY.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class RetryRefused extends Schema.TaggedError<RetryRefused>()("RetryRefused", {
   submissionId: SubmissionId,

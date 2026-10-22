@@ -1,4 +1,5 @@
 /** Keep only the lowest distinct metadata keys after a cursor while scanning resident indexes. */
+/** @internal */
 export const boundedWorkSelection = <A>(
   limit: number,
   key: (value: A) => string,

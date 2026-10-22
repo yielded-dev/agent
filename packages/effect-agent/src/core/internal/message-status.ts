@@ -3,8 +3,19 @@ import * as Schema from "effect/Schema";
 import { SettlementId, ThreadId } from "../Identifiers.ts";
 import { IdempotencyKey, Receipt } from "../Receipt.ts";
 
-/** A retained outbound delivery identity, not a destination Receipt or access grant. */
+/**
+ * A retained outbound delivery identity, not a destination Receipt or access grant.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageRef = Schema.Struct({ ownerThreadId: ThreadId, messageId: IdempotencyKey });
+/**
+ * Decoded value of {@link MessageRef}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageRef = typeof MessageRef.Type;
 
 const Reason = Schema.NonEmptyString.check(Schema.isMaxLength(256));
@@ -15,6 +26,9 @@ const identity = { message: MessageRef };
  * destination Receipt, and processed supplies its canonical settlement. Neither retention nor
  * acceptance proves execution. Refused is a definite rejection; parked stops automatic retry
  * while retaining the same identity and any acceptance evidence. Inspect instead of resending.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const MessageStatus = Schema.Union([
   Schema.Struct({
@@ -57,4 +71,10 @@ export const MessageStatus = Schema.Union([
   }),
 ]);
 
+/**
+ * Decoded value of {@link MessageStatus}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageStatus = typeof MessageStatus.Type;

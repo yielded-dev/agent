@@ -1,3 +1,10 @@
+/**
+ * Typed, versioned memory namespaces with canonical portable addresses. Namespace identity is
+ * separate from access authorization.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -47,6 +54,13 @@ const Envelope = Schema.Tuple([
 
 const EnvelopeJson = Schema.fromJsonString(Envelope);
 
+/**
+ * A namespace identity or serialized address is invalid, uses an unsupported format, or belongs to
+ * another definition.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryNamespaceError extends Schema.TaggedError<MemoryNamespaceError>()(
   "MemoryNamespaceError",
   {
@@ -67,6 +81,13 @@ const BoundedAddress = Schema.String.check(
   }),
 );
 
+/**
+ * Schema for a canonical versioned namespace address bounded to 4,096 UTF-8 bytes. An address
+ * identifies a namespace without granting access.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryNamespaceAddress = BoundedAddress.check(
   Schema.makeFilter(
     (address) => {
@@ -80,13 +101,31 @@ export const MemoryNamespaceAddress = BoundedAddress.check(
 
 /** Application-defined identity. No membership or authorization policy is implied. */
 
-/** Heterogeneous adapter representation. Restore through a definition before typed use. */
+/**
+ * Heterogeneous adapter representation. Restore through a definition before typed use.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const Any = Schema.Struct({
   address: MemoryNamespaceAddress,
 });
 
+/**
+ * Decoded value of {@link Any}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type Any = typeof Any.Type;
 
+/**
+ * A typed namespace identity paired with its canonical portable address. The definition fixes its
+ * name, version, and identity type.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface Value<Name extends string, Version extends number, Identity> extends Any {
   readonly name: Name;
   readonly version: Version;
@@ -94,8 +133,21 @@ export interface Value<Name extends string, Version extends number, Identity> ex
   readonly _type: (value: readonly [Name, Version, Identity]) => readonly [Name, Version, Identity];
 }
 
+/**
+ * Compare namespace identities by their canonical addresses.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const equals = (left: Any, right: Any): boolean => left.address === right.address;
 
+/**
+ * Define a versioned namespace with constructors and address restoration through a stable JSON
+ * identity codec. Namespace identity does not confer authorization.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const define = <
   const Name extends string,
   const Version extends number,

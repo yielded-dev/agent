@@ -1,3 +1,8 @@
+/**
+ * Structured language-model output adapted to native Effect decisions.
+ *
+ * @since 0.1.0
+ */
 import type * as Decision from "effect/ai/Decision";
 import * as DecisionModel from "effect/ai/DecisionModel";
 import * as LanguageModel from "effect/ai/LanguageModel";
@@ -40,6 +45,9 @@ const answerSchema = (decision: Decision.Any) =>
  * Rating probability keys use criterion labels; structured descriptions remain in the prompt.
  * Probabilities are LLM estimates, not calibrated confidence scores. Provider errors,
  * defects, and interruption propagate; callers own retry, timeout, and fallback policies.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = Layer.effect(
   DecisionModel.DecisionModel,

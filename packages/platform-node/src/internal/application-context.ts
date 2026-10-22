@@ -4,7 +4,11 @@ import * as References from "effect/References";
 import * as Scope from "effect/Scope";
 import * as Tracer from "effect/Tracer";
 
-/** Live lifetime and diagnostics may cross the managed host's private storage boundary. */
+/**
+ * Live lifetime and diagnostics may cross the managed host's private storage boundary.
+ *
+ * @internal
+ */
 export const applicationInvocationContext = Context.pick(
   Scope.Scope,
   Clock.Clock,

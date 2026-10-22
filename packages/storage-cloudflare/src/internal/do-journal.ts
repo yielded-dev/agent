@@ -218,6 +218,7 @@ const initializedLifecycleSources = new WeakSet<OwnedState>();
 
 export type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
 
+/** @internal */
 export class RawReadRequest extends Schema.Class<RawReadRequest>(
   "@effect-agent/storage-cloudflare/RawReadRequest",
 )({
@@ -254,7 +255,9 @@ const storageError =
       }),
     });
 
-/** Decode raw Durable Object SQLite rows against a Schema, reporting failures as typed corruption. */
+/** Decode raw Durable Object SQLite rows against a Schema, reporting failures as typed corruption.
+ * @internal
+ */
 export const decodeRows = <A, I>(
   schema: Schema.Codec<ReadonlyArray<A>, ReadonlyArray<I>>,
   table: string,
@@ -286,7 +289,9 @@ export const decodeRows = <A, I>(
     ),
   );
 
-/** Decode exactly one raw row against a Schema, reporting failures as typed corruption. */
+/** Decode exactly one raw row against a Schema, reporting failures as typed corruption.
+ * @internal
+ */
 export const decodeSingleRow = <A, I>(
   schema: Schema.Codec<ReadonlyArray<A>, ReadonlyArray<I>>,
   table: string,
@@ -1438,6 +1443,7 @@ const makeJournal = Effect.fnUntraced(function* (
   } as const;
 });
 
+/** @internal */
 export type DoJournal = Effect.Success<ReturnType<typeof makeJournal>>;
 
 const InitializedDoJournal = Context.Reference<DoJournal | undefined>(
@@ -1445,7 +1451,12 @@ const InitializedDoJournal = Context.Reference<DoJournal | undefined>(
   { defaultValue: () => undefined },
 );
 
-/** Build once in the common owner, SQL, configuration, failpoint and lifecycle context. */
+/**
+ * Build once in the common owner, SQL, configuration, failpoint and lifecycle context.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const initializedDoJournalLayer = Layer.effect(InitializedDoJournal)(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -1456,6 +1467,7 @@ export const initializedDoJournalLayer = Layer.effect(InitializedDoJournal)(
   }),
 );
 
+/** @internal */
 export const initializeDoJournal = (
   sql: SqlClient.SqlClient,
   failpoint: DoJournalFailpoint,

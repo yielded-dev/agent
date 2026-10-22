@@ -1,3 +1,11 @@
+/**
+ * Durable admission, FIFO readiness, accepted-work obligations, control intents, and settlement
+ * state. Scoped local owners fence execution while canonical history establishes applied input and
+ * terminal outcomes.
+ *
+ * @since 0.1.0
+ */
+
 import * as Brand from "effect/Brand";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -42,7 +50,36 @@ import {
 } from "./Records.ts";
 import type { AppendRequest, AppendResult, ThreadStoreFailure } from "./ThreadStore.ts";
 
-export { IdempotencyKey, JoinedToHost, QueueSequence, Principal } from "../core/Receipt.ts";
+export {
+  /**
+   * Caller-supplied deduplication key, scoped to one Thread and authenticated principal.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
+  IdempotencyKey,
+  /**
+   * The input joined this host Submission; cancelling it must never silently cancel the host.
+   *
+   * @category errors
+   * @since 0.1.0
+   */
+  JoinedToHost,
+  /**
+   * Thread-local FIFO position allocated once at admission.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
+  QueueSequence,
+  /**
+   * Stable host-authenticated admission principal; the established durable brand is preserved.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
+  Principal,
+} from "../core/Receipt.ts";
 
 /**
  * Ledger lifecycle states for one Submission. `settled` is the only terminal state; every other
@@ -62,6 +99,9 @@ export { IdempotencyKey, JoinedToHost, QueueSequence, Principal } from "../core/
  *
  * `claim` never grants or bypasses a `joining`, `joined`, or `suspended` head. It skips unknown
  * work without an abort intent. Any live ownership in the Thread prevents another claim.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const SubmissionState = Schema.Literals([
   "admitted",
@@ -74,6 +114,12 @@ export const SubmissionState = Schema.Literals([
   "settled",
 ]);
 
+/**
+ * Decoded value of {@link SubmissionState}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubmissionState = typeof SubmissionState.Type;
 
 /**
@@ -83,6 +129,9 @@ export type SubmissionState = typeof SubmissionState.Type;
  * Approval waits, child waits and incomplete Tool batches are not handoff boundaries. Hosts
  * retaining independent replies must also leave those inputs unclaimed by `claimJoining`.
  * In-flight model requests and Tool batches run to their existing safe boundary.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const SubmissionScheduling = Context.Reference<{
   readonly yieldTo?: (request: {
@@ -98,6 +147,9 @@ export const SubmissionScheduling = Context.Reference<{
  * `non-durable` marks reference adapters whose state does not survive the process (in-memory
  * conformance/test adapters). The label is an honest self-description for reports and
  * evidence — no runtime behavior branches on it.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class LedgerCapabilities extends Schema.Class<LedgerCapabilities>(
   "@effect-agent/thread/LedgerCapabilities",
@@ -110,6 +162,9 @@ export class LedgerCapabilities extends Schema.Class<LedgerCapabilities>(
  * (spec §12 step 5, SUB-004). Recorded once at admission and never rewritten; it is an
  * identifier, not an authorization capability (D10) — the join path verifies the canonical
  * Parent Link records, never this marker alone.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ParentLinkage extends Schema.Class<ParentLinkage>(
   "@effect-agent/thread/ParentLinkage",
@@ -118,17 +173,39 @@ export class ParentLinkage extends Schema.Class<ParentLinkage>(
   parentToolCallId: ToolCallId,
 }) {}
 
-/** Host-owned policy coordinates, interpreted only by the destination transaction owner. */
+/**
+ * Host-owned policy coordinates, interpreted only by the destination transaction owner.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const AdmissionFence = Schema.Struct({
   policyId: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
   key: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
   revision: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
 });
 
+/**
+ * Decoded value of {@link AdmissionFence}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type AdmissionFence = typeof AdmissionFence.Type;
+/**
+ * Host-defined admission serialization group, bounded to 256 characters.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const AdmissionGroup = Schema.NonEmptyString.check(Schema.isMaxLength(256));
 
-/** Fresh admission alone may be refused; unavailability never proves non-admission. */
+/**
+ * Fresh admission alone may be refused; unavailability never proves non-admission.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class AdmissionPolicyError extends Schema.TaggedError<AdmissionPolicyError>()(
   "AdmissionPolicyError",
   {
@@ -146,6 +223,9 @@ export class AdmissionPolicyError extends Schema.TaggedError<AdmissionPolicyErro
  * materialization without the submitting client. `parentLinkage` is present exactly when the
  * Submission is a durable attached child (spec §12); an admission replay must repeat the same
  * linkage (or its absence) or fail with `AdmissionConflict`.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class AdmissionRequest extends Schema.Class<AdmissionRequest>(
   "@effect-agent/thread/AdmissionRequest",
@@ -169,6 +249,9 @@ export class AdmissionRequest extends Schema.Class<AdmissionRequest>(
  * The committed admission row. `replayed` is true when an identical (thread, principal,
  * idempotencyKey, inputDigest) admission already existed; the original identities are returned
  * unchanged so a client retry resumes rather than duplicates (DUR-001).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class AdmissionResult extends Schema.Class<AdmissionResult>(
   "@effect-agent/thread/AdmissionResult",
@@ -180,18 +263,36 @@ export class AdmissionResult extends Schema.Class<AdmissionResult>(
   replayed: Schema.Boolean,
 }) {}
 
+/**
+ * Identifies the admitted Submission whose materialization is complete and can become ready.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class MarkReadyRequest extends Schema.Class<MarkReadyRequest>(
   "@effect-agent/thread/MarkReadyRequest",
 )({
   submissionId: SubmissionId,
 }) {}
 
+/**
+ * Selects a retained Submission by its durable identity.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubmissionLookupById extends Schema.TaggedClass<SubmissionLookupById>(
   "@effect-agent/thread/SubmissionLookupById",
 )("SubmissionLookupById", {
   submissionId: SubmissionId,
 }) {}
 
+/**
+ * Selects a Submission using the original Thread, principal, and client idempotency key.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubmissionLookupByKey extends Schema.TaggedClass<SubmissionLookupByKey>(
   "@effect-agent/thread/SubmissionLookupByKey",
 )("SubmissionLookupByKey", {
@@ -200,15 +301,29 @@ export class SubmissionLookupByKey extends Schema.TaggedClass<SubmissionLookupBy
   idempotencyKey: IdempotencyKey,
 }) {}
 
-/** Lookup by Submission identity or by the scoped client idempotency key. */
+/**
+ * Lookup by Submission identity or by the scoped client idempotency key.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubmissionLookup = Schema.Union([SubmissionLookupById, SubmissionLookupByKey]);
 
+/**
+ * Decoded value of {@link SubmissionLookup}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubmissionLookup = typeof SubmissionLookup.Type;
 
 /**
  * Control-only worklist entry. Discovery validates identities, ordering and state without
  * decoding retained execution payloads. Hydrate only the selected Thread through `lookup`
  * or `loadRecoverySnapshot`, inside its recovery failure boundary.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubmissionWorkItem extends Schema.Class<SubmissionWorkItem>(
   "@effect-agent/thread/SubmissionWorkItem",
@@ -223,7 +338,12 @@ export class SubmissionWorkItem extends Schema.Class<SubmissionWorkItem>(
   state: SubmissionState,
 }) {}
 
-/** The full durable ledger view of one Submission. */
+/**
+ * The full durable ledger view of one Submission.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubmissionSnapshot extends Schema.Class<SubmissionSnapshot>(
   "@effect-agent/thread/SubmissionSnapshot",
 )({
@@ -246,22 +366,50 @@ export class SubmissionSnapshot extends Schema.Class<SubmissionSnapshot>(
   messageAdmission: Schema.optionalKey(InputMessage),
 }) {}
 
-/** Resolve the exact selected input to its immutable host Run without enumerating joins. */
+/**
+ * Resolve the exact selected input to its immutable host Run without enumerating joins.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const FundingOwnerRequest = Schema.Struct({
   threadId: ThreadId,
   submissionId: SubmissionId,
 });
 
+/**
+ * Decoded value of {@link FundingOwnerRequest}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type FundingOwnerRequest = typeof FundingOwnerRequest.Type;
 
+/**
+ * The selected input and the immutable host-Run input whose budget funds its work.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const FundingOwner = Schema.Struct({
   selected: SubmissionSnapshot,
   owner: SubmissionSnapshot,
 });
 
+/**
+ * Decoded value of {@link FundingOwner}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type FundingOwner = typeof FundingOwner.Type;
 
-/** Bounded native control facts. Canonical input/Run records remain ThreadStore-owned. */
+/**
+ * Bounded native control facts. Canonical input/Run records remain ThreadStore-owned.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerLedgerState = Schema.Struct({
   latest: Schema.NullOr(SubmissionSnapshot),
   active: Schema.NullOr(SubmissionSnapshot),
@@ -269,14 +417,30 @@ export const WorkerLedgerState = Schema.Struct({
   terminal: Schema.optionalKey(AssignmentTerminal),
 }).check(Schema.makeFilter((state) => state.terminal === undefined || state.stopped));
 
+/**
+ * Decoded value of {@link WorkerLedgerState}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerLedgerState = typeof WorkerLedgerState.Type;
 
-/** The authoritative store proves the scoped idempotency key was never admitted (SUB-031). */
+/**
+ * The authoritative store proves the scoped idempotency key was never admitted (SUB-031).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AdmissionNotAdmitted extends Schema.TaggedClass<AdmissionNotAdmitted>(
   "@effect-agent/thread/AdmissionNotAdmitted",
 )("NotAdmitted", {}) {}
 
-/** The scoped idempotency key was admitted; the full Submission snapshot is authoritative. */
+/**
+ * The scoped idempotency key was admitted; the full Submission snapshot is authoritative.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AdmissionAdmitted extends Schema.TaggedClass<AdmissionAdmitted>(
   "@effect-agent/thread/AdmissionAdmitted",
 )("Admitted", {
@@ -287,6 +451,9 @@ export class AdmissionAdmitted extends Schema.TaggedClass<AdmissionAdmitted>(
  * The adapter cannot currently prove admission or its absence (e.g. the authoritative child
  * owner is unreachable on a partitioned platform). Callers wait and retry; an indeterminate
  * answer NEVER permits a second admission attempt (SUB-031).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class AdmissionIndeterminate extends Schema.TaggedClass<AdmissionIndeterminate>(
   "@effect-agent/thread/AdmissionIndeterminate",
@@ -299,6 +466,9 @@ export class AdmissionIndeterminate extends Schema.TaggedClass<AdmissionIndeterm
  * projection is never proof"). Single strongly consistent stores derive `NotAdmitted`/`Admitted`
  * from a direct lookup; only adapters that can genuinely fail to reach the authoritative owner
  * answer `Indeterminate`.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const AdmissionResolution = Schema.Union([
   AdmissionNotAdmitted,
@@ -306,18 +476,33 @@ export const AdmissionResolution = Schema.Union([
   AdmissionIndeterminate,
 ]);
 
+/**
+ * Decoded value of {@link AdmissionResolution}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type AdmissionResolution = typeof AdmissionResolution.Type;
 
 /**
  * A trusted runtime's advisory handoff after committing a complete Turn and closing its
  * Attempt. The owner rechecks the entire deferred prefix and target under its mutation gate.
  * Deferred Runs retain their identities and obligations; losing this hint resumes FIFO.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ClaimHandoff extends Schema.Class<ClaimHandoff>("@effect-agent/thread/ClaimHandoff")({
   deferredSubmissionIds: Schema.NonEmptyArray(SubmissionId),
   submissionId: SubmissionId,
 }) {}
 
+/**
+ * Selects ready work in one Thread, optionally honoring a verified cooperative handoff.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ClaimRequest extends Schema.Class<ClaimRequest>("@effect-agent/thread/ClaimRequest")({
   threadId: ThreadId,
   handoff: Schema.optionalKey(ClaimHandoff),
@@ -326,6 +511,9 @@ export class ClaimRequest extends Schema.Class<ClaimRequest>("@effect-agent/thre
 /**
  * Selected accepted work. Attempt identity is diagnostic; only the bound scoped session
  * grants execution authority. No field is a portable ownership capability.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class Claim extends Schema.Class<Claim>("@effect-agent/thread/Claim")({
   submissionId: SubmissionId,
@@ -335,6 +523,9 @@ export class Claim extends Schema.Class<Claim>("@effect-agent/thread/Claim")({
 
 /**
  * The canonical position of the applied `UserInputRecorded` record for one Submission.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class MarkInputAppliedRequest extends Schema.Class<MarkInputAppliedRequest>(
   "@effect-agent/thread/MarkInputAppliedRequest",
@@ -344,6 +535,12 @@ export class MarkInputAppliedRequest extends Schema.Class<MarkInputAppliedReques
   sequence: CanonicalSequence,
 }) {}
 
+/**
+ * Canonical record identity and sequence proving where a Submission's input was applied.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class InputAppliedMarker extends Schema.Class<InputAppliedMarker>(
   "@effect-agent/thread/InputAppliedMarker",
 )({
@@ -351,6 +548,12 @@ export class InputAppliedMarker extends Schema.Class<InputAppliedMarker>(
   sequence: CanonicalSequence,
 }) {}
 
+/**
+ * Identifies the Submission and reserved settlement to finalize after canonical publication.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SettlementFinalization extends Schema.Class<SettlementFinalization>(
   "@effect-agent/thread/SettlementFinalization",
 )({
@@ -377,7 +580,12 @@ const SettlementFields = Schema.Struct({
   ),
 );
 
-/** The single durable terminal outcome recorded for one accepted Submission (DUR-002). */
+/**
+ * The single durable terminal outcome recorded for one accepted Submission (DUR-002).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class Settlement extends Schema.Class<Settlement>("@effect-agent/thread/Settlement")(
   SettlementFields,
 ) {}
@@ -386,6 +594,9 @@ export class Settlement extends Schema.Class<Settlement>("@effect-agent/thread/S
  * Project the bounded failed-settlement diagnostic from an already Schema-validated exact
  * canonical record. Storage adapters use this when materializing their operational Settlement value;
  * the canonical record remains the authority.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const settlementFailureFromRecord = (
   record: RecordEnvelope,
@@ -402,6 +613,9 @@ export const settlementFailureFromRecord = (
  * Joined receipts and cancellation before a Run starts do not finish an assignment.
  * Adapters suppress completed intent when newer accepted input remains unapplied, then
  * install the first seal and outstanding abort intents atomically before releasing the lane.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const workerTerminalFromRecord = (
   submission: SubmissionSnapshot,
@@ -421,17 +635,31 @@ export const workerTerminalFromRecord = (
   return payload.runDisposition === "completed" ? "completed" : undefined;
 };
 
-/** Destination-owned permanent inbox seal; recorded atomically with all outstanding abort intents. */
+/**
+ * Destination-owned permanent inbox seal; recorded atomically with all outstanding abort intents.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerStopCommand = Schema.Struct({
   threadId: ThreadId,
   author: Principal,
 });
 
+/**
+ * Decoded value of {@link WorkerStopCommand}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerStopCommand = typeof WorkerStopCommand.Type;
 
 /**
  * A durable abort command (durability §13). Field bounds are exactly those of the canonical
  * `AbortRequested` payload so the intent can become canonical without re-validation.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class AbortCommand extends Schema.Class<AbortCommand>("@effect-agent/thread/AbortCommand")({
   submissionId: SubmissionId,
@@ -443,6 +671,9 @@ export class AbortCommand extends Schema.Class<AbortCommand>("@effect-agent/thre
  * The recorded abort intent. `canonicalRecordId` is present once the corresponding canonical
  * `AbortRequested` record has been appended (its identity is deterministic; see
  * `submissionAbortRecordId`).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class AbortIntent extends Schema.Class<AbortIntent>("@effect-agent/thread/AbortIntent")({
   submissionId: SubmissionId,
@@ -452,7 +683,12 @@ export class AbortIntent extends Schema.Class<AbortIntent>("@effect-agent/thread
   canonicalRecordId: Schema.optionalKey(RecordId),
 }) {}
 
-/** Address one lane-local abort intent without loading unrelated recovery state. */
+/**
+ * Address one lane-local abort intent without loading unrelated recovery state.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AbortIntentRequest extends Schema.Class<AbortIntentRequest>(
   "@effect-agent/thread/AbortIntentRequest",
 )({ submissionId: SubmissionId }) {}
@@ -461,6 +697,9 @@ export class AbortIntentRequest extends Schema.Class<AbortIntentRequest>(
  * Atomic claim of the contiguous ready prefix of strictly-later queued Submissions for joining
  * into the active host Run (plan §2.5). The bound host session owns the lane. An `admitted`-but-not-`ready` row breaks the prefix;
  * an aborted-settled row is a closed obligation and is skipped as a non-gap (P7 §7(c)).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ClaimJoiningRequest extends Schema.Class<ClaimJoiningRequest>(
   "@effect-agent/thread/ClaimJoiningRequest",
@@ -470,7 +709,12 @@ export class ClaimJoiningRequest extends Schema.Class<ClaimJoiningRequest>(
   maxCount: Schema.Int.check(Schema.isGreaterThan(0)),
 }) {}
 
-/** One queued Submission transitioned to `joining` under the host's ownership. */
+/**
+ * One queued Submission transitioned to `joining` under the host's ownership.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class JoiningClaim extends Schema.Class<JoiningClaim>("@effect-agent/thread/JoiningClaim")({
   submissionId: SubmissionId,
   queueSequence: QueueSequence,
@@ -480,6 +724,9 @@ export class JoiningClaim extends Schema.Class<JoiningClaim>("@effect-agent/thre
 /**
  * The canonical position of one joined Submission's `UserInputRecorded` record (`input:{sid}`).
  * Marking transitions `joining → joined` and records the host linkage established at claim time.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class MarkJoinedRequest extends Schema.Class<MarkJoinedRequest>(
   "@effect-agent/thread/MarkJoinedRequest",
@@ -495,6 +742,9 @@ export class MarkJoinedRequest extends Schema.Class<MarkJoinedRequest>(
  * A guard limits the revert to the exact linked host: the root gate serializes it with the linked host. A changed host link is a no-op.
  * Adapters validate the guard atomically with the transition. Unguarded requests retain the
  * caller-owned recovery contract.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RevertJoiningRequest extends Schema.Class<RevertJoiningRequest>(
   "@effect-agent/thread/RevertJoiningRequest",
@@ -511,6 +761,9 @@ export class RevertJoiningRequest extends Schema.Class<RevertJoiningRequest>(
  * Why one Submission is durably suspended. Approval was the only Phase 5 reason; S2 adds
  * `WaitingForChild` (spec §12 step 10) and the union keeps later suspension families (e.g.
  * operator quarantine) additive.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ApprovalPendingSuspension extends Schema.TaggedClass<ApprovalPendingSuspension>(
   "@effect-agent/thread/ApprovalPendingSuspension",
@@ -518,7 +771,12 @@ export class ApprovalPendingSuspension extends Schema.TaggedClass<ApprovalPendin
   toolCallIds: Schema.NonEmptyArray(ToolCallId),
 }) {}
 
-/** A denial ends the batch; otherwise every retained approval must be decided to wake it. */
+/**
+ * A denial ends the batch; otherwise every retained approval must be decided to wake it.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const approvalDecisionsCover = (
   toolCallIds: ReadonlyArray<ToolCallId>,
   decisionFor: (toolCallId: ToolCallId) => ApprovalDecision | undefined,
@@ -535,7 +793,12 @@ export const approvalDecisionsCover = (
   return allDecided;
 };
 
-/** One attached child a `waitingForChild` parent is durably waiting on (spec §12 step 10). */
+/**
+ * One attached child a `waitingForChild` parent is durably waiting on (spec §12 step 10).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WaitingChild extends Schema.Class<WaitingChild>("@effect-agent/thread/WaitingChild")({
   toolCallId: ToolCallId,
   childSubmissionId: SubmissionId,
@@ -546,6 +809,9 @@ export class WaitingChild extends Schema.Class<WaitingChild>("@effect-agent/thre
  * join first (spec §12 step 10, SUB-030). The suspended lane holds no worker permit; each listed
  * child settles on its own Thread lane and `recordChildSettled` wakes the parent once
  * every listed child is settled.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class WaitingForChildSuspension extends Schema.TaggedClass<WaitingForChildSuspension>(
   "@effect-agent/thread/WaitingForChildSuspension",
@@ -553,17 +819,32 @@ export class WaitingForChildSuspension extends Schema.TaggedClass<WaitingForChil
   children: Schema.NonEmptyArray(WaitingChild),
 }) {}
 
+/**
+ * Durable waiting conditions for undecided tool approval or attached-child settlement.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SuspensionReason = Schema.Union([
   ApprovalPendingSuspension,
   WaitingForChildSuspension,
 ]);
 
+/**
+ * Decoded value of {@link SuspensionReason}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SuspensionReason = typeof SuspensionReason.Type;
 
 /**
  * Durable suspension of owned work (plan §2.6): `input-applied`/`ready` → `suspended`, the
  * ownership period ends, NO settlement occurs — the accepted-work obligation stays owed while
  * the lane consumes no worker permit.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SuspendRequest extends Schema.Class<SuspendRequest>(
   "@effect-agent/thread/SuspendRequest",
@@ -576,15 +857,27 @@ export class SuspendRequest extends Schema.Class<SuspendRequest>(
  * `suspended` when the lane is now durably waiting; `resume-immediately` when the suspension
  * reason is already fully covered (a covering decision or child settlement raced ahead of the
  * suspend transaction), so the caller resumes without releasing the lane.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const SuspensionOutcome = Schema.Literals(["suspended", "resume-immediately"]);
 
+/**
+ * Decoded value of {@link SuspensionOutcome}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SuspensionOutcome = typeof SuspensionOutcome.Type;
 
 /**
  * A durable child-settlement notification for one waitingForChild parent (spec §12 step 10).
  * The child's canonical Settlement is the authority; this command only drives the parent lane's
  * wake transition.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ChildSettledNotification extends Schema.Class<ChildSettledNotification>(
   "@effect-agent/thread/ChildSettledNotification",
@@ -598,32 +891,64 @@ export class ChildSettledNotification extends Schema.Class<ChildSettledNotificat
  * `suspended(WaitingForChild) → input-applied`; `still-waiting` while other listed children are
  * unsettled; `not-waiting` when the parent is not (or no longer) suspended waiting on this
  * child — including replays after a wake, so the operation is idempotent.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ChildSettledOutcome = Schema.Literals(["woken", "still-waiting", "not-waiting"]);
 
+/**
+ * Decoded value of {@link ChildSettledOutcome}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ChildSettledOutcome = typeof ChildSettledOutcome.Type;
 
-/** Parent-owned child budget reservation identity, deterministically derived by the
- * coordinator from the parent Run and Tool Call identity (spec §12 step 2). */
+/**
+ * Parent-owned child budget reservation identity, deterministically derived by the
+ * coordinator from the parent Run and Tool Call identity (spec §12 step 2).
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ChildReservationId = Schema.NonEmptyString.check(Schema.isMaxLength(256)).pipe(
   Schema.brand("@effect-agent/thread/ChildReservationId"),
 );
 
+/**
+ * Decoded value of {@link ChildReservationId}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ChildReservationId = typeof ChildReservationId.Type;
 
 /**
  * The reservation state machine (spec §12 steps 2 and 6): `reserved` while the child may still
  * consume the allocation, `releasePending` once the final accounting decision is frozen, and
  * `released` after the unused allocation returned exactly once.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ChildReservationStatus = Schema.Literals(["reserved", "releasePending", "released"]);
 
+/**
+ * Decoded value of {@link ChildReservationStatus}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ChildReservationStatus = typeof ChildReservationStatus.Type;
 
 /**
  * Creation input for one parent-owned child budget reservation. The allocation is an opaque
  * Schema-encoded budget document (D8: adapters implement transitions only and never interpret
  * budget dimensions); `allocationDigest` must be the digest of its canonical JSON encoding.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ChildBudgetReservationRequest extends Schema.Class<ChildBudgetReservationRequest>(
   "@effect-agent/thread/ChildBudgetReservationRequest",
@@ -635,7 +960,12 @@ export class ChildBudgetReservationRequest extends Schema.Class<ChildBudgetReser
   allocationDigest: Digest,
 }) {}
 
-/** One child budget reservation row as the port exposes it. */
+/**
+ * One child budget reservation row as the port exposes it.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ChildBudgetReservationSnapshot extends Schema.Class<ChildBudgetReservationSnapshot>(
   "@effect-agent/thread/ChildBudgetReservationSnapshot",
 )({
@@ -656,6 +986,9 @@ export class ChildBudgetReservationSnapshot extends Schema.Class<ChildBudgetRese
  * The committed reservation. `replayed` is true when an identical reservation already existed;
  * the stored row is returned unchanged so a recovering caller resumes rather than duplicates
  * (SUB-016).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ReservedChildBudget extends Schema.Class<ReservedChildBudget>(
   "@effect-agent/thread/ReservedChildBudget",
@@ -664,7 +997,12 @@ export class ReservedChildBudget extends Schema.Class<ReservedChildBudget>(
   replayed: Schema.Boolean,
 }) {}
 
-/** Records the admitted child on its reservation row (repairable from `SubagentStarted`). */
+/**
+ * Records the admitted child on its reservation row (repairable from `SubagentStarted`).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AttachChildToReservationRequest extends Schema.Class<AttachChildToReservationRequest>(
   "@effect-agent/thread/AttachChildToReservationRequest",
 )({
@@ -677,6 +1015,9 @@ export class AttachChildToReservationRequest extends Schema.Class<AttachChildToR
  * accounting is an opaque Schema-encoded document replayed from the canonical `SubagentJoined`
  * record (or the deterministic zero-consumed decision for an orphaned reservation), so the
  * decision itself authorizes the transition — no execution owner is required (DUR-015).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class BeginChildBudgetReleaseRequest extends Schema.Class<BeginChildBudgetReleaseRequest>(
   "@effect-agent/thread/BeginChildBudgetReleaseRequest",
@@ -685,7 +1026,12 @@ export class BeginChildBudgetReleaseRequest extends Schema.Class<BeginChildBudge
   accounting: PersistedJson,
 }) {}
 
-/** Applies the frozen accounting decision: `releasePending → released`, exactly once. */
+/**
+ * Applies the frozen accounting decision: `releasePending → released`, exactly once.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReleaseChildBudgetRequest extends Schema.Class<ReleaseChildBudgetRequest>(
   "@effect-agent/thread/ReleaseChildBudgetRequest",
 )({
@@ -696,6 +1042,9 @@ export class ReleaseChildBudgetRequest extends Schema.Class<ReleaseChildBudgetRe
  * A durable approval decision command (plan §2.6, `abort`-shaped). Field bounds are exactly those
  * of the canonical `ToolApprovalDecided` payload so the intent can become canonical without
  * re-validation.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ApprovalDecisionCommand extends Schema.Class<ApprovalDecisionCommand>(
   "@effect-agent/thread/ApprovalDecisionCommand",
@@ -711,6 +1060,9 @@ export class ApprovalDecisionCommand extends Schema.Class<ApprovalDecisionComman
  * The recorded approval-decision intent, idempotent per `(submissionId, toolCallId)`.
  * `canonicalRecordId` is present once the corresponding canonical `ToolApprovalDecided` record
  * has been appended (see `toolApprovalDecisionRecordId`).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ApprovalDecisionIntent extends Schema.Class<ApprovalDecisionIntent>(
   "@effect-agent/thread/ApprovalDecisionIntent",
@@ -727,6 +1079,9 @@ export class ApprovalDecisionIntent extends Schema.Class<ApprovalDecisionIntent>
 /**
  * Durable Unknown marking for one Submission's open ordinary Tool Calls (DUR-009): state →
  * `unknown`, parking that Submission without changing its local owner generation. Idempotent.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class MarkUnknownRequest extends Schema.Class<MarkUnknownRequest>(
   "@effect-agent/thread/MarkUnknownRequest",
@@ -736,7 +1091,12 @@ export class MarkUnknownRequest extends Schema.Class<MarkUnknownRequest>(
   reason: ToolCallUnknown.fields.reason,
 }) {}
 
-/** The recovered supplier truth: the external effect completed with this exact result. */
+/**
+ * The recovered supplier truth: the external effect completed with this exact result.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ResolutionCompletedWithResult extends Schema.TaggedClass<ResolutionCompletedWithResult>(
   "@effect-agent/thread/ResolutionCompletedWithResult",
 )("CompletedWithResult", {
@@ -744,23 +1104,43 @@ export class ResolutionCompletedWithResult extends Schema.TaggedClass<Resolution
   isFailure: Schema.Boolean,
 }) {}
 
-/** The external effect provably never happened; the call may re-execute on resume. */
+/**
+ * The external effect provably never happened; the call may re-execute on resume.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ResolutionNeverHappened extends Schema.TaggedClass<ResolutionNeverHappened>(
   "@effect-agent/thread/ResolutionNeverHappened",
 )("NeverHappened", {}) {}
 
-/** The call is safe to repeat under the external system's idempotency contract. */
+/**
+ * The call is safe to repeat under the external system's idempotency contract.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ResolutionSafeToRetry extends Schema.TaggedClass<ResolutionSafeToRetry>(
   "@effect-agent/thread/ResolutionSafeToRetry",
 )("SafeToRetry", {}) {}
 
-/** Give up on the Submission: route into the abort path (unknown calls stay recorded; abort
- * never claims external rollback, durability §13). */
+/**
+ * Give up on the Submission: route into the abort path (unknown calls stay recorded; abort
+ * never claims external rollback, durability §13).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ResolutionAbortSubmission extends Schema.TaggedClass<ResolutionAbortSubmission>(
   "@effect-agent/thread/ResolutionAbortSubmission",
 )("AbortSubmission", {}) {}
 
-/** An authorized execution decision or factual closure for one Unknown Outcome (DUR-017). */
+/**
+ * An authorized execution decision or factual closure for one Unknown Outcome (DUR-017).
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const UnknownResolution = Schema.Union([
   ResolutionCompletedWithResult,
   ResolutionNeverHappened,
@@ -768,19 +1148,47 @@ export const UnknownResolution = Schema.Union([
   ResolutionAbortSubmission,
 ]);
 
+/**
+ * Decoded value of {@link UnknownResolution}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type UnknownResolution = typeof UnknownResolution.Type;
 
-/** Execution permission never establishes whether the original external effect happened. */
+/**
+ * Execution permission never establishes whether the original external effect happened.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const UnknownResolutionKind = Schema.Literals(["execution", "factual"]);
 
+/**
+ * Decoded value of {@link UnknownResolutionKind}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type UnknownResolutionKind = typeof UnknownResolutionKind.Type;
 
+/**
+ * Distinguishes factual closure of an uncertain effect from permission to retry or abort execution.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const unknownResolutionKind = (resolution: UnknownResolution): UnknownResolutionKind =>
   resolution._tag === "CompletedWithResult" || resolution._tag === "NeverHappened"
     ? "factual"
     : "execution";
 
-/** A new factual intent cannot replace an already committed Tool result. */
+/**
+ * A new factual intent cannot replace an already committed Tool result.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const unknownResolutionMatchesResult = (
   resolution: UnknownResolution,
   result: ToolCallSettled,
@@ -794,6 +1202,9 @@ export const unknownResolutionMatchesResult = (
  * runtime service plus the mandatory `author`/`reason` audit fields is the Phase 5 authorization
  * boundary — identical to `abort`; the authenticated operator surface is a P7 deliverable.
  * Field bounds are exactly those of the canonical `ToolCallResolved` payload.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class UnknownResolutionCommand extends Schema.Class<UnknownResolutionCommand>(
   "@effect-agent/thread/UnknownResolutionCommand",
@@ -812,6 +1223,9 @@ export class UnknownResolutionCommand extends Schema.Class<UnknownResolutionComm
  * New factual outcomes also have to agree with any already committed Tool result.
  * The canonical `ToolCallResolved` (+ `ToolCallSettled` for `CompletedWithResult`) is appended
  * by the recovery pass or the next owning Attempt; `canonicalRecordId` is present once it is.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class UnknownResolutionIntent extends Schema.Class<UnknownResolutionIntent>(
   "@effect-agent/thread/UnknownResolutionIntent",
@@ -825,20 +1239,36 @@ export class UnknownResolutionIntent extends Schema.Class<UnknownResolutionInten
   canonicalRecordId: Schema.optionalKey(RecordId),
 }) {}
 
+/**
+ * Selects one Submission's strongly consistent recovery state.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RecoverySnapshotRequest extends Schema.Class<RecoverySnapshotRequest>(
   "@effect-agent/thread/RecoverySnapshotRequest",
 )({
   submissionId: SubmissionId,
 }) {}
 
-/** One joined/joining Submission of a host Run, as the host's recovery sees it. */
+/**
+ * One joined/joining Submission of a host Run, as the host's recovery sees it.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class JoinSnapshot extends Schema.Class<JoinSnapshot>("@effect-agent/thread/JoinSnapshot")({
   submissionId: SubmissionId,
   state: SubmissionState,
   hostSubmissionId: SubmissionId,
 }) {}
 
-/** A durable suspension as recovery sees it. */
+/**
+ * A durable suspension as recovery sees it.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SuspensionSnapshot extends Schema.Class<SuspensionSnapshot>(
   "@effect-agent/thread/SuspensionSnapshot",
 )({
@@ -851,6 +1281,9 @@ export class SuspensionSnapshot extends Schema.Class<SuspensionSnapshot>(
  * plus that child's current lane state. A disposable derived view — the canonical
  * `SubagentRequested`/`SubagentStarted` records and the child's own canonical Settlement remain
  * the recovery truth (DUR-015).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ChildAttachmentSnapshot extends Schema.Class<ChildAttachmentSnapshot>(
   "@effect-agent/thread/ChildAttachmentSnapshot",
@@ -873,6 +1306,9 @@ export class ChildAttachmentSnapshot extends Schema.Class<ChildAttachmentSnapsho
  * S2 fields: `childReservations`/`childAttachments` are the parent-side subagent view (ordered
  * by parent Tool Call id) and `parentLinkage` is the child-side view. They default to
  * empty/absent at construction so pre-S2 call sites stay valid; adapters always populate them.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RecoverySnapshot extends Schema.Class<RecoverySnapshot>(
   "@effect-agent/thread/RecoverySnapshot",
@@ -895,7 +1331,12 @@ export class RecoverySnapshot extends Schema.Class<RecoverySnapshot>(
   parentLinkage: Schema.optionalKey(ParentLinkage),
 }) {}
 
-/** The same idempotency key was admitted with different canonical input content. */
+/**
+ * The same idempotency key was admitted with different canonical input content.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class AdmissionConflict extends Schema.TaggedError<AdmissionConflict>()(
   "AdmissionConflict",
   {
@@ -910,12 +1351,20 @@ export class AdmissionConflict extends Schema.TaggedError<AdmissionConflict>()(
 /**
  * The captured local session has closed or was replaced. Reading current state cannot
  * grant that session authority again.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class OwnershipLost extends Schema.TaggedError<OwnershipLost>()("OwnershipLost", {
   submissionId: SubmissionId,
 }) {}
 
-/** A conflicting terminal outcome was already reserved or finalized (DUR-002, DUR-012). */
+/**
+ * A conflicting terminal outcome was already reserved or finalized (DUR-002, DUR-012).
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SettlementConflict extends Schema.TaggedError<SettlementConflict>()(
   "SettlementConflict",
   {
@@ -927,6 +1376,9 @@ export class SettlementConflict extends Schema.TaggedError<SettlementConflict>()
 /**
  * A divergent approval re-decision for an already-decided `(submissionId, toolCallId)` pair.
  * Repeating the SAME decision replays the recorded intent instead (idempotency).
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class ApprovalConflict extends Schema.TaggedError<ApprovalConflict>()("ApprovalConflict", {
   submissionId: SubmissionId,
@@ -937,6 +1389,9 @@ export class ApprovalConflict extends Schema.TaggedError<ApprovalConflict>()("Ap
 /**
  * A resolution contradicts an accepted intent of the same kind or an already committed Tool
  * result (DUR-017). Repeating the SAME accepted resolution replays the recorded intent instead.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class UnknownResolutionConflict extends Schema.TaggedError<UnknownResolutionConflict>()(
   "UnknownResolutionConflict",
@@ -951,6 +1406,9 @@ export class UnknownResolutionConflict extends Schema.TaggedError<UnknownResolut
  * allocation for the same reservation id, a second reservation id for the same parent Tool
  * Call, a divergent child attachment, a divergent accounting freeze, or an out-of-order state
  * transition. `status` reports the existing row's status. Identical replays never conflict.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class ChildReservationConflict extends Schema.TaggedError<ChildReservationConflict>()(
   "ChildReservationConflict",
@@ -961,13 +1419,25 @@ export class ChildReservationConflict extends Schema.TaggedError<ChildReservatio
   },
 ) {}
 
-/** Adapter-level ledger failure (storage unavailable, unknown submission, corrupt row, ...). */
+/**
+ * Adapter-level ledger failure (storage unavailable, unknown submission, corrupt row, ...).
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class LedgerError extends Schema.TaggedError<LedgerError>()("LedgerError", {
   operation: Schema.String,
   message: Schema.String,
   cause: Schema.optionalKey(FailureDiagnostic.Value),
 }) {}
 
+/**
+ * Expected admission, ownership, terminal-conflict, approval, reconciliation, child-reservation, or
+ * storage failures.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubmissionLedgerFailure =
   | AdmissionConflict
   | OwnershipLost
@@ -1095,6 +1565,9 @@ export type SubmissionLedgerFailure =
  *
  * No operation claims exactly-once external side effects; the ledger records decisions
  * exactly once (DUR-003).
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SubmissionLedger extends Context.Service<
   SubmissionLedger,
@@ -1118,7 +1591,8 @@ export class SubmissionLedger extends Context.Service<
     readonly selectHead: (
       request: ClaimRequest,
     ) => Effect.Effect<Option.Option<Claim>, LedgerError>;
-    /** Atomically publish a captured original input, active context and applied marker.
+    /**
+     * Atomically publish a captured original input, active context and applied marker.
      * Optional adapters retain the ordinary append-then-repair protocol. The captured input
      * must be this owner's deterministic admission; a moved context boundary is refused. */
     readonly appendInput?: (
@@ -1204,35 +1678,69 @@ const makeSettlementId = Brand.nominal<SettlementId>();
  * carrying one Submission's canonical `UserInputRecorded` record is `submission-input:{sid}` and
  * the record is `input:{sid}`, so batch idempotency (DUR-007) makes the input append
  * exactly-once-canonical across Attempts.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const submissionInputBatchId = (submissionId: SubmissionId): BatchId =>
   makeBatchId(`submission-input:${submissionId}`);
 
-/** Deterministic canonical record identity of one Submission's `UserInputRecorded` record. */
+/**
+ * Deterministic canonical record identity of one Submission's `UserInputRecorded` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const submissionInputRecordId = (submissionId: SubmissionId): RecordId =>
   makeRecordId(`input:${submissionId}`);
 
-/** Deterministic `SettlementId` for one Submission: `settlement:{sid}`. */
+/**
+ * Deterministic `SettlementId` for one Submission: `settlement:{sid}`.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const submissionSettlementId = (submissionId: SubmissionId): SettlementId =>
   makeSettlementId(`settlement:${submissionId}`);
 
-/** Deterministic batch identity of one Submission's canonical `SubmissionSettled` append. */
+/**
+ * Deterministic batch identity of one Submission's canonical `SubmissionSettled` append.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const submissionSettlementBatchId = (submissionId: SubmissionId): BatchId =>
   makeBatchId(`submission-settlement:${submissionId}`);
 
-/** Deterministic canonical record identity of one Submission's `SubmissionSettled` record. */
+/**
+ * Deterministic canonical record identity of one Submission's `SubmissionSettled` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const submissionSettlementRecordId = (submissionId: SubmissionId): RecordId =>
   makeRecordId(`settlement:${submissionId}`);
 
-/** Deterministic batch identity of one Submission's canonical `AbortRequested` append. */
+/**
+ * Deterministic batch identity of one Submission's canonical `AbortRequested` append.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const submissionAbortBatchId = (submissionId: SubmissionId): BatchId =>
   makeBatchId(`submission-abort:${submissionId}`);
 
-/** Deterministic canonical record identity of one Submission's `AbortRequested` record. */
+/**
+ * Deterministic canonical record identity of one Submission's `AbortRequested` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const submissionAbortRecordId = (submissionId: SubmissionId): RecordId =>
   makeRecordId(`abort:${submissionId}`);
 
-/** Destination policy, captured when the ledger is acquired. It runs inside fresh admission's
+/**
+ * Destination policy, captured when the ledger is acquired. It runs inside fresh admission's
  * serialization after replay lookup. The host must keep it bounded and must not reenter admit.
  * The callback must read authoritative policy in this SAME local transaction, through the
  * acquired SqlClient. Memory evaluates the callback synchronously inside its atomic mutation;
@@ -1240,7 +1748,11 @@ export const submissionAbortRecordId = (submissionId: SubmissionId): RecordId =>
  * All policy writers must use that transaction owner. Do not fork, reenter admission, or retain
  * transaction resources. Failure/defect/interruption commits no fresh admission.
  * Current policy never invalidates an exact retained receipt. A supplied fence fails closed
- * unless the destination installed an interpreter for it. */
+ * unless the destination installed an interpreter for it.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const SubmissionAdmissionFence = Context.Reference<{
   readonly check: (request: AdmissionRequest) => Effect.Effect<void, AdmissionPolicyError>;
 }>("@effect-agent/thread/SubmissionAdmissionFence", {

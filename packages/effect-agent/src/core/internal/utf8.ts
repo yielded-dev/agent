@@ -1,4 +1,7 @@
-/** UTF-8 width, including the replacement encoding used for lone UTF-16 surrogates. */
+/**
+ * UTF-8 width, including the replacement encoding used for lone UTF-16 surrogates.
+ * @internal
+ */
 export const codePointUtf8Length = (codePoint: number): number => {
   if (codePoint < 0x80) return 1;
   if (codePoint < 0x800) return 2;
@@ -10,7 +13,12 @@ export const codePointUtf8Length = (codePoint: number): number => {
 // No Unicode flag: astral characters and lone surrogates both require the exact path.
 const nonAscii = /[\u0080-\uFFFF]/;
 
-/** Count encoded bytes without allocating an encoded copy of the text. */
+/**
+ * Count encoded bytes without allocating an encoded copy of the text.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const utf8ByteLength = (value: string): number => {
   if (!nonAscii.test(value)) return value.length;
   let bytes = 0;
@@ -28,5 +36,8 @@ export const utf8ByteLength = (value: string): number => {
 
 const encoder = new TextEncoder();
 
-/** Encode text directly, including replacement bytes for lone UTF-16 surrogates. */
+/**
+ * Encode text directly, including replacement bytes for lone UTF-16 surrogates.
+ * @internal
+ */
 export const utf8Bytes = (value: string): Uint8Array => encoder.encode(value);

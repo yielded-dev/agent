@@ -34,6 +34,7 @@ const decodeRows = Schema.decodeUnknownEffect(
 const decodeWrite = Schema.decodeEffect(PromptCheckpoint);
 const decodeRead = Schema.decodeEffect(PromptCheckpointRead);
 
+/** @internal */
 export const promptCheckpointPrefix = (threadId: string) =>
   `prompt-checkpoint/${JSON.stringify(threadId)}/`;
 
@@ -44,6 +45,7 @@ const keyFor = (prefix: string, chunk: number) => prefix + String(chunk).padStar
  * export are unchanged. Chunking keeps SQL values below the DO limit; loading is one bounded
  * query followed by one parse of the native prompt. Retain unchanged chunks when replacing
  * the checkpoint, so append-only growth writes at most the old tail and new chunks.
+ * @internal
  */
 export const makePromptCheckpoints = (
   sql: SqlClient.SqlClient,

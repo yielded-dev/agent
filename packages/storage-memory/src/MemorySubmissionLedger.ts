@@ -1,3 +1,8 @@
+/**
+ * Process-local admission and submission transitions paired with a memory Thread store.
+ *
+ * @since 0.1.0
+ */
 import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import {
   type ToolCallId,
@@ -136,8 +141,8 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
-import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
 import { boundedWorkSelection } from "./internal/WorkSelection.ts";
+import { MemoryThreadStoreKernel } from "./MemoryThreadStore.ts";
 
 /**
  * Lifecycle ordering used to advance-but-never-regress the operational state marker: a reclaimed
@@ -3521,7 +3526,12 @@ const makeSubmissionLedger = Effect.fnUntraced(
   },
 );
 
-/** Construction options for the in-memory reference SubmissionLedger. */
+/**
+ * Construction options for the in-memory reference SubmissionLedger.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface MemorySubmissionLedgerOptions {
   /**
    * Test-only fault seam for `resolveAdmission` (SUB-031): when the effect yields a reason,
@@ -3536,6 +3546,9 @@ export interface MemorySubmissionLedgerOptions {
  * In-memory reference SubmissionLedger Layer (durability `non-durable`). All state lives in one
  * `Ref` owned by the Layer's Scope. Fresh identities use the supplied `Crypto` service;
  * imported identities remain unchanged. No daemon fibers are spawned and no wall clock is consulted.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const memorySubmissionLedgerLayer = (
   options: MemorySubmissionLedgerOptions = {},
@@ -3545,6 +3558,12 @@ export const memorySubmissionLedgerLayer = (
   MemoryThreadStoreKernel | Crypto.Crypto
 > => Layer.effectContext(makeSubmissionLedger(options));
 
+/**
+ * Default memory ledger Layer; provide Crypto and the paired MemoryThreadStoreKernel.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const MemorySubmissionLedgerLive: Layer.Layer<
   SubmissionLedger | SettlementPublisher,
   never,

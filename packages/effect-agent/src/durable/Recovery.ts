@@ -1,3 +1,11 @@
+/**
+ * Pure classification of retained Submission state and canonical evidence into the next recovery
+ * decision. Uncertain ordinary tool effects require evidence or authorized resolution before
+ * replay.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -12,7 +20,12 @@ import {
   type RecoverySnapshot,
 } from "./SubmissionLedger.ts";
 
-/** One declared operation that may have executed without a canonical outcome (DUR-009). */
+/**
+ * One declared operation that may have executed without a canonical outcome (DUR-009).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class OpenToolCallEvidence extends Schema.Class<OpenToolCallEvidence>(
   "@effect-agent/thread/OpenToolCallEvidence",
 )({
@@ -25,6 +38,9 @@ export class OpenToolCallEvidence extends Schema.Class<OpenToolCallEvidence>(
  * A committed response with unfinished calls. Uncertain effects are reconciled before this
  * scheduling decision; approval blockers and readonly calls can resume without assuming
  * that an absent preparation proves nonexecution.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class DeclaredPendingBatchEvidence extends Schema.Class<DeclaredPendingBatchEvidence>(
   "@effect-agent/thread/DeclaredPendingBatchEvidence",
@@ -40,7 +56,12 @@ export class DeclaredPendingBatchEvidence extends Schema.Class<DeclaredPendingBa
   ),
 }) {}
 
-/** One canonical `ToolApprovalRequested` without a canonical `ToolApprovalDecided`. */
+/**
+ * One canonical `ToolApprovalRequested` without a canonical `ToolApprovalDecided`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PendingApprovalEvidence extends Schema.Class<PendingApprovalEvidence>(
   "@effect-agent/thread/PendingApprovalEvidence",
 )({
@@ -54,6 +75,9 @@ export class PendingApprovalEvidence extends Schema.Class<PendingApprovalEvidenc
  * a requested-but-unstarted delegation call and records the result here. Absence of this field
  * means the lookup was not performed — the classifier treats that exactly like `indeterminate`
  * (fail-closed: only a proven `not-admitted` ever permits an admission attempt).
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const DelegationAdmissionEvidence = Schema.Literals([
   "not-admitted",
@@ -61,6 +85,12 @@ export const DelegationAdmissionEvidence = Schema.Literals([
   "indeterminate",
 ]);
 
+/**
+ * Decoded value of {@link DelegationAdmissionEvidence}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DelegationAdmissionEvidence = typeof DelegationAdmissionEvidence.Type;
 
 /**
@@ -73,6 +103,9 @@ export type DelegationAdmissionEvidence = typeof DelegationAdmissionEvidence.Typ
  * `requested`/`started`/`joined` flags come from the parent-log canonical records; the child
  * identity fields are present exactly when those records (or the reservation attachment) carry
  * them.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class OpenDelegationCallEvidence extends Schema.Class<OpenDelegationCallEvidence>(
   "@effect-agent/thread/OpenDelegationCallEvidence",
@@ -108,6 +141,9 @@ export class OpenDelegationCallEvidence extends Schema.Class<OpenDelegationCallE
  * iff a later `ModelResponseRecorded` of the host Run exists after the `input:{sid}` record.
  * `hostSettlementOutcome` is the joined-side view of the host's canonical `SubmissionSettled`
  * record, present exactly when that record exists.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RecoveryEvidence extends Schema.Class<RecoveryEvidence>(
   "@effect-agent/thread/RecoveryEvidence",
@@ -156,37 +192,67 @@ export class RecoveryEvidence extends Schema.Class<RecoveryEvidence>(
   ),
 }) {}
 
-/** Ledger admission committed but the Thread is not durable: finish materialization,
- * append `ThreadCreated`, and mark readiness (crash between admit and materialize). */
+/**
+ * Ledger admission committed but the Thread is not durable: finish materialization,
+ * append `ThreadCreated`, and mark readiness (crash between admit and materialize).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CompleteMaterialization extends Schema.TaggedClass<CompleteMaterialization>(
   "@effect-agent/thread/CompleteMaterialization",
 )("CompleteMaterialization", { submissionId: SubmissionId }) {}
 
-/** Thread durable but the readiness marker is missing: idempotent `markReady`. */
+/**
+ * Thread durable but the readiness marker is missing: idempotent `markReady`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RepairReadiness extends Schema.TaggedClass<RepairReadiness>(
   "@effect-agent/thread/RepairReadiness",
 )("RepairReadiness", { submissionId: SubmissionId }) {}
 
-/** No canonical input yet: append the deterministic `UserInputRecorded` record and mark it. */
+/**
+ * No canonical input yet: append the deterministic `UserInputRecorded` record and mark it.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ApplyInput extends Schema.TaggedClass<ApplyInput>("@effect-agent/thread/ApplyInput")(
   "ApplyInput",
   { submissionId: SubmissionId },
 ) {}
 
-/** Canonical input exists but the ledger marker was lost: repair the marker only (DUR-015). */
+/**
+ * Canonical input exists but the ledger marker was lost: repair the marker only (DUR-015).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RepairInputMarker extends Schema.TaggedClass<RepairInputMarker>(
   "@effect-agent/thread/RepairInputMarker",
 )("RepairInputMarker", { submissionId: SubmissionId }) {}
 
-/** Input applied and no canonical terminal outcome: a worker resumes the Run from the last committed
+/**
+ * Input applied and no canonical terminal outcome: a worker resumes the Run from the last committed
  * Turn boundary (D6; the model may be re-invoked, duplicate cost is observable — the resuming
- * worker appends `ModelResponseInterrupted` when superseding a prior owner, durability §9). */
+ * worker appends `ModelResponseInterrupted` when superseding a prior owner, durability §9).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ResumeFromTurnBoundary extends Schema.TaggedClass<ResumeFromTurnBoundary>(
   "@effect-agent/thread/ResumeFromTurnBoundary",
 )("ResumeFromTurnBoundary", { submissionId: SubmissionId }) {}
 
-/** The canonical settlement record exists: rebuild/finalize the ledger from history and never
- * rewrite history from the cached ledger status (DUR-011, DUR-015). */
+/**
+ * The canonical settlement record exists: rebuild/finalize the ledger from history and never
+ * rewrite history from the cached ledger status (DUR-011, DUR-015).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class FinalizeLedgerFromHistory extends Schema.TaggedClass<FinalizeLedgerFromHistory>(
   "@effect-agent/thread/FinalizeLedgerFromHistory",
 )("FinalizeLedgerFromHistory", {
@@ -195,18 +261,28 @@ export class FinalizeLedgerFromHistory extends Schema.TaggedClass<FinalizeLedger
   outcome: SettlementOutcome,
 }) {}
 
-/** A durable abort intent exists, no terminal outcome is canonical, and no attached-child
+/**
+ * A durable abort intent exists, no terminal outcome is canonical, and no attached-child
  * obligation remains open: settle aborted (DUR-012). The executor first appends
  * `ToolCallUnknown` audit records for any open ordinary calls — abort settles the obligation but
- * never asserts external rollback (durability §13). */
+ * never asserts external rollback (durability §13).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SettleAborted extends Schema.TaggedClass<SettleAborted>(
   "@effect-agent/thread/SettleAborted",
 )("SettleAborted", { submissionId: SubmissionId }) {}
 
-/** Declared ordinary Tool Calls have no canonical outcome: the executor reconciles each open
+/**
+ * Declared ordinary Tool Calls have no canonical outcome: the executor reconciles each open
  * call (recovered result / never-started / safe-retry) and marks the remainder Unknown — never
  * an automatic replay (DUR-009/DUR-017). Delegation calls are excluded: their establishment is
- * idempotent by construction and routes through the Subagent rows instead (plan §4.3). */
+ * idempotent by construction and routes through the Subagent rows instead (plan §4.3).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class MarkUnknown extends Schema.TaggedClass<MarkUnknown>(
   "@effect-agent/thread/MarkUnknown",
 )("MarkUnknown", {
@@ -215,10 +291,15 @@ export class MarkUnknown extends Schema.TaggedClass<MarkUnknown>(
   openToolCallIds: Schema.Array(ToolCallId),
 }) {}
 
-/** A committed response has unfinished calls: after reconciling uncertain effects, a worker
+/**
+ * A committed response has unfinished calls: after reconciling uncertain effects, a worker
  * checks their original contracts and resumes without model re-invocation. This also
  * routes an open delegation call WITHOUT establishment evidence here (spec §13 row 1): the
- * declared batch re-executes and the idempotent establishment converges on one child. */
+ * declared batch re-executes and the idempotent establishment converges on one child.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ResumePendingToolBatch extends Schema.TaggedClass<ResumePendingToolBatch>(
   "@effect-agent/thread/ResumePendingToolBatch",
 )("ResumePendingToolBatch", {
@@ -226,44 +307,79 @@ export class ResumePendingToolBatch extends Schema.TaggedClass<ResumePendingTool
   turn: DeclaredPendingBatchEvidence.fields.turn,
 }) {}
 
-/** Canonically requested approvals lack decisions: the lane waits durably (the executor repairs
- * the ledger suspension from history when the suspend transition itself was lost). */
+/**
+ * Canonically requested approvals lack decisions: the lane waits durably (the executor repairs
+ * the ledger suspension from history when the suspend transition itself was lost).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AwaitApprovalDecision extends Schema.TaggedClass<AwaitApprovalDecision>(
   "@effect-agent/thread/AwaitApprovalDecision",
 )("AwaitApprovalDecision", { submissionId: SubmissionId }) {}
 
-/** Every pending approval has a durable decision: a worker resumes the declared batch via the
- * batch-resume seam, appending the canonical `ToolApprovalDecided` records first. */
+/**
+ * Every pending approval has a durable decision: a worker resumes the declared batch via the
+ * batch-resume seam, appending the canonical `ToolApprovalDecided` records first.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ResumeSuspended extends Schema.TaggedClass<ResumeSuspended>(
   "@effect-agent/thread/ResumeSuspended",
 )("ResumeSuspended", { submissionId: SubmissionId }) {}
 
-/** Unknown Outcomes lack covering resolutions: this Submission stays parked awaiting the authorized
- * DUR-017 resolution path; the obligation stays visible, nothing replays. */
+/**
+ * Unknown Outcomes lack covering resolutions: this Submission stays parked awaiting the authorized
+ * DUR-017 resolution path; the obligation stays visible, nothing replays.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AwaitUnknownResolution extends Schema.TaggedClass<AwaitUnknownResolution>(
   "@effect-agent/thread/AwaitUnknownResolution",
 )("AwaitUnknownResolution", { submissionId: SubmissionId }) {}
 
-/** Durable resolution intents cover every open call: wake the original Submission when its
- * required retry contract is supported. Canonical outcomes are applied by the next claim. */
+/**
+ * Durable resolution intents cover every open call: wake the original Submission when its
+ * required retry contract is supported. Canonical outcomes are applied by the next claim.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ApplyUnknownResolutions extends Schema.TaggedClass<ApplyUnknownResolutions>(
   "@effect-agent/thread/ApplyUnknownResolutions",
 )("ApplyUnknownResolutions", { submissionId: SubmissionId }) {}
 
-/** `joining` without a canonical `input:{sid}` record: revert to `ready` — the input was never
- * consumed and will be delivered exactly once later (DUR-016). */
+/**
+ * `joining` without a canonical `input:{sid}` record: revert to `ready` — the input was never
+ * consumed and will be delivered exactly once later (DUR-016).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RevertJoining extends Schema.TaggedClass<RevertJoining>(
   "@effect-agent/thread/RevertJoining",
 )("RevertJoining", { submissionId: SubmissionId }) {}
 
-/** The canonical input exists but the `joined` marker was lost: repair the marker only, exactly
- * like `RepairInputMarker` (DUR-015/DUR-016); the input reattaches, never duplicates. */
+/**
+ * The canonical input exists but the `joined` marker was lost: repair the marker only, exactly
+ * like `RepairInputMarker` (DUR-015/DUR-016); the input reattaches, never duplicates.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RepairJoinMarker extends Schema.TaggedClass<RepairJoinMarker>(
   "@effect-agent/thread/RepairJoinMarker",
 )("RepairJoinMarker", { submissionId: SubmissionId }) {}
 
-/** The host Run settled canonically: settle this joined Submission with the host outcome
- * (each joined Submission is owed its own settlement, DUR-002). */
+/**
+ * The host Run settled canonically: settle this joined Submission with the host outcome
+ * (each joined Submission is owed its own settlement, DUR-002).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SettleJoinedWithHost extends Schema.TaggedClass<SettleJoinedWithHost>(
   "@effect-agent/thread/SettleJoinedWithHost",
 )("SettleJoinedWithHost", {
@@ -271,8 +387,13 @@ export class SettleJoinedWithHost extends Schema.TaggedClass<SettleJoinedWithHos
   outcome: SettlementOutcome,
 }) {}
 
-/** The Submission is `joined` and its host Run is still live: nothing to repair — the input
- * reattaches through the host's resume and the Submission settles with the host. */
+/**
+ * The Submission is `joined` and its host Run is still live: nothing to repair — the input
+ * reattaches through the host's resume and the Submission settles with the host.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AwaitHostSettlement extends Schema.TaggedClass<AwaitHostSettlement>(
   "@effect-agent/thread/AwaitHostSettlement",
 )("AwaitHostSettlement", {
@@ -280,11 +401,16 @@ export class AwaitHostSettlement extends Schema.TaggedClass<AwaitHostSettlement>
   hostSubmissionId: Schema.optionalKey(SubmissionId),
 }) {}
 
-/** A canonical `SubagentRequested` exists and the authoritative admission lookup proved
+/**
+ * A canonical `SubagentRequested` exists and the authoritative admission lookup proved
  * `notAdmitted`: idempotently admit the intended child from the canonical request payload — it
  * carries the encoded child input (D3), the intended child identity, and every digest — then
  * materialize the child Thread, append its immutable lineage, and mark it ready. No live
- * delegation handler is required (spec §13, SUB-016/SUB-031). */
+ * delegation handler is required (spec §13, SUB-016/SUB-031).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CompleteChildAdmission extends Schema.TaggedClass<CompleteChildAdmission>(
   "@effect-agent/thread/CompleteChildAdmission",
 )("CompleteChildAdmission", {
@@ -292,10 +418,15 @@ export class CompleteChildAdmission extends Schema.TaggedClass<CompleteChildAdmi
   toolCallId: ToolCallId,
 }) {}
 
-/** A canonical `SubagentRequested` exists but the authoritative admission lookup answered
+/**
+ * A canonical `SubagentRequested` exists but the authoritative admission lookup answered
  * `indeterminate` — or was not (yet) performed: wait and retry the authoritative owner directly.
  * Absence from a projection is never proof of absence and a second admission NEVER occurs
- * (spec §12, SUB-031). */
+ * (spec §12, SUB-031).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AwaitChildAdmissionResolution extends Schema.TaggedClass<AwaitChildAdmissionResolution>(
   "@effect-agent/thread/AwaitChildAdmissionResolution",
 )("AwaitChildAdmissionResolution", {
@@ -303,10 +434,15 @@ export class AwaitChildAdmissionResolution extends Schema.TaggedClass<AwaitChild
   toolCallId: ToolCallId,
 }) {}
 
-/** The child Submission is admitted but the parent's `SubagentStarted` link is missing (or its
+/**
+ * The child Submission is admitted but the parent's `SubagentStarted` link is missing (or its
  * reservation attachment was lost): resolve the SAME child by its deterministic idempotency key
  * and append the exact deterministic start record, then attach the child to its reservation —
- * the same Receipt on every replay (spec §13, SUB-016/SUB-017). */
+ * the same Receipt on every replay (spec §13, SUB-016/SUB-017).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RepairSubagentStartLink extends Schema.TaggedClass<RepairSubagentStartLink>(
   "@effect-agent/thread/RepairSubagentStartLink",
 )("RepairSubagentStartLink", {
@@ -314,10 +450,15 @@ export class RepairSubagentStartLink extends Schema.TaggedClass<RepairSubagentSt
   toolCallId: ToolCallId,
 }) {}
 
-/** Children are established and at least one is nonterminal while the parent lane is NOT
+/**
+ * Children are established and at least one is nonterminal while the parent lane is NOT
  * durably suspended: restore the `waitingForChild` suspension so the lane holds no worker
  * permit while each child runs on its own lane. Recovery reattaches the one existing child and
- * NEVER spawns a replacement (spec §13, SUB-018/SUB-030). */
+ * NEVER spawns a replacement (spec §13, SUB-018/SUB-030).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class EnsureWaitingForChild extends Schema.TaggedClass<EnsureWaitingForChild>(
   "@effect-agent/thread/EnsureWaitingForChild",
 )("EnsureWaitingForChild", {
@@ -325,18 +466,28 @@ export class EnsureWaitingForChild extends Schema.TaggedClass<EnsureWaitingForCh
   children: Schema.NonEmptyArray(WaitingChild),
 }) {}
 
-/** The parent is durably suspended `WaitingForChild` and at least one listed child is not yet
+/**
+ * The parent is durably suspended `WaitingForChild` and at least one listed child is not yet
  * provably settled: the lane stays dormant and consumes no permit; the child's Settlement wakes
  * it durably (spec §12 step 10). An unresolved ordinary Tool inside a child keeps the parent
- * here honestly — the obligation stays visible and aged, nothing is fabricated (SUB-021). */
+ * here honestly — the obligation stays visible and aged, nothing is fabricated (SUB-021).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AwaitChildSettlement extends Schema.TaggedClass<AwaitChildSettlement>(
   "@effect-agent/thread/AwaitChildSettlement",
 )("AwaitChildSettlement", { submissionId: SubmissionId }) {}
 
-/** Every relevant child is provably settled but the parent has not joined (legacy data, or a
+/**
+ * Every relevant child is provably settled but the parent has not joined (legacy data, or a
  * canonical settlement whose idempotent wake still needs replay): record/replay the durable wake
  * so a claiming worker resumes the declared batch and joins each child's canonical Settlement —
- * the join itself needs the parent Binding and is deferred to that worker (spec §13). */
+ * the join itself needs the parent Binding and is deferred to that worker (spec §13).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ResumeWaitingParent extends Schema.TaggedClass<ResumeWaitingParent>(
   "@effect-agent/thread/ResumeWaitingParent",
 )("ResumeWaitingParent", {
@@ -344,10 +495,15 @@ export class ResumeWaitingParent extends Schema.TaggedClass<ResumeWaitingParent>
   children: Schema.NonEmptyArray(WaitingChild),
 }) {}
 
-/** The canonical `SubagentJoined` record exists but the reservation release is incomplete:
+/**
+ * The canonical `SubagentJoined` record exists but the reservation release is incomplete:
  * replay `beginChildBudgetRelease` with the accounting decision FROM the canonical record, then
  * apply `releaseChildBudget` — budget stays unavailable until repair, never available twice
- * (spec §12 join step 6, DUR-015). */
+ * (spec §12 join step 6, DUR-015).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ApplyJoinAccounting extends Schema.TaggedClass<ApplyJoinAccounting>(
   "@effect-agent/thread/ApplyJoinAccounting",
 )("ApplyJoinAccounting", {
@@ -356,11 +512,16 @@ export class ApplyJoinAccounting extends Schema.TaggedClass<ApplyJoinAccounting>
   reservationId: ChildReservationId,
 }) {}
 
-/** Parent abort is canonical while attached children are nonterminal: idempotently issue each
+/**
+ * Parent abort is canonical while attached children are nonterminal: idempotently issue each
  * child's durable abort command and keep the parent waiting for the joins —
  * request-abort-and-join is the ONLY close behavior; the replayed command returns the recorded
  * child intent unchanged, so the intent row IS the propagation marker (spec §13.1, SUB-022,
- * DUR-012). */
+ * DUR-012).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PropagateChildAbort extends Schema.TaggedClass<PropagateChildAbort>(
   "@effect-agent/thread/PropagateChildAbort",
 )("PropagateChildAbort", {
@@ -368,10 +529,15 @@ export class PropagateChildAbort extends Schema.TaggedClass<PropagateChildAbort>
   children: Schema.NonEmptyArray(WaitingChild),
 }) {}
 
-/** A child budget reservation can no longer bind a child — its request is absent with no
+/**
+ * A child budget reservation can no longer bind a child — its request is absent with no
  * resumable batch, or the parent is aborting and the child provably never admitted: freeze the
  * deterministic zero-consumed accounting decision and release the unused allocation exactly
- * once (spec §13/§14: "releases the reservation exactly once"). */
+ * once (spec §13/§14: "releases the reservation exactly once").
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReleaseOrphanChildReservation extends Schema.TaggedClass<ReleaseOrphanChildReservation>(
   "@effect-agent/thread/ReleaseOrphanChildReservation",
 )("ReleaseOrphanChildReservation", {
@@ -386,6 +552,9 @@ export class ReleaseOrphanChildReservation extends Schema.TaggedClass<ReleaseOrp
  * completes it, so a child never runs a Turn before its lineage record is canonical.
  * This preserves the child establishment ordering. It is ordering/liveness hygiene, not a
  * safety repair — the join already fails closed without lineage (SUB-019).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class AwaitParentEstablishment extends Schema.TaggedClass<AwaitParentEstablishment>(
   "@effect-agent/thread/AwaitParentEstablishment",
@@ -395,13 +564,23 @@ export class AwaitParentEstablishment extends Schema.TaggedClass<AwaitParentEsta
   parentToolCallId: ToolCallId,
 }) {}
 
-/** The Submission is settled; nothing is owed. */
+/**
+ * The Submission is settled; nothing is owed.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class NoAction extends Schema.TaggedClass<NoAction>("@effect-agent/thread/NoAction")(
   "NoAction",
   { submissionId: SubmissionId },
 ) {}
 
-/** The executable recovery decision table's output alphabet (plan §Recovery classifier). */
+/**
+ * The executable recovery decision table's output alphabet (plan §Recovery classifier).
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RecoveryDecision = Schema.Union([
   CompleteMaterialization,
   RepairReadiness,
@@ -433,6 +612,12 @@ export const RecoveryDecision = Schema.Union([
   NoAction,
 ]);
 
+/**
+ * Decoded value of {@link RecoveryDecision}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RecoveryDecision = typeof RecoveryDecision.Type;
 
 /**
@@ -797,7 +982,12 @@ const classifyDelegationAbort = (
   return undefined;
 };
 
-/** The first undecided request the engine can reach before a declaration-ordered denial. */
+/**
+ * The first undecided request the engine can reach before a declaration-ordered denial.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const pendingApprovalForRecovery = (
   snapshot: RecoverySnapshot,
   evidence: RecoveryEvidence,
@@ -879,6 +1069,9 @@ export const pendingApprovalForRecovery = (
  *
  * Ownership leases are deliberately ignored here: the executor's fenced claim is the only
  * authority over liveness, and a stale Attempt is fenced by producer epoch regardless (DUR-006).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const classifyRecovery = (
   snapshot: RecoverySnapshot,

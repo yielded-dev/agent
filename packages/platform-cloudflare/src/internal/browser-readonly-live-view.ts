@@ -8,9 +8,9 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import type { BrowserRunLifecycleOptions } from "../BrowserSession.ts";
 import { BrowserRunLiveViewRequest, BrowserRunLiveViewResult } from "../InteractiveBrowser.ts";
 import { browserFailure, BrowserRunFailure } from "./browser-failure.ts";
-import type { BrowserRunLifecycleOptions } from "./browser-session-lifecycle.ts";
 
 const Identity = Schema.Struct({
   sessionId: Schema.String.check(Schema.isUUID()),
@@ -30,7 +30,9 @@ const Reply = Schema.fromJsonString(
 
 const operation = "session.readonlyLiveView";
 
-/** Only the REST endpoint can mint provider-enforced read-only connections. */
+/** Only the REST endpoint can mint provider-enforced read-only connections.
+ * @internal
+ */
 export class BrowserRunReadonlyLiveView extends Context.Service<
   BrowserRunReadonlyLiveView,
   {

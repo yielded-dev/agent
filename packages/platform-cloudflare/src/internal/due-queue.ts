@@ -1,20 +1,28 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+/** @internal */
 export const LaneId = Schema.NonEmptyString.check(Schema.isMaxLength(256));
 
+/** @internal */
 export const HostLaneId = LaneId.check(
   Schema.isPattern(/^(?!effect-agent:)/, {
     message: "The effect-agent: namespace is reserved for framework maintenance lanes",
   }),
 );
 
+/** @internal */
 export const Deadline = Schema.NullOr(Schema.Finite);
+/** @internal */
 export const MinimumRetryMillis = 1_000;
+/** @internal */
 export const MaximumNoProgressRearms = 8;
+/** @internal */
 export const ParkedRetryMillis = 60 * 60_000;
 
-/** Scheduling metadata only. Domain outboxes, claims and receipts remain authoritative. */
+/** Scheduling metadata only. Domain outboxes, claims and receipts remain authoritative.
+ * @internal
+ */
 export class DueLane extends Schema.Class<DueLane>("CloudflareDueLane")({
   id: LaneId,
   revision: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
@@ -26,11 +34,17 @@ export class DueLane extends Schema.Class<DueLane>("CloudflareDueLane")({
   reported: Schema.Literals([0, 1]),
 }) {}
 
+/** @internal */
 export const Native = "effect-agent:native";
+/** @internal */
 export const Publication = "effect-agent:publication";
+/** @internal */
 export const Projection = "effect-agent:projection";
+/** @internal */
 export const Messages = "effect-agent:messages";
+/** @internal */
 export const RecoveryEvents = "effect-agent:recovery-events";
+/** @internal */
 export const Lifecycle = "effect-agent:lifecycle";
 
 const decode = Schema.decodeUnknownSync(Schema.Array(DueLane));
@@ -54,13 +68,17 @@ type View = {
 };
 const views = new WeakMap<DurableObjectStorage, View>();
 
-/** Only the explicit source boundary may retain speculative rows across operations. */
+/** Only the explicit source boundary may retain speculative rows across operations.
+ * @internal
+ */
 export const buffering = (storage: DurableObjectStorage): boolean =>
   views.get(storage)?.frame !== undefined;
 
+/** @internal */
 export const ownsTransaction = (storage: DurableObjectStorage, depth: number): boolean =>
   views.get(storage)?.frame?.sqlDepth === depth;
 
+/** @internal */
 export const invalidate = (storage: DurableObjectStorage): void => {
   const view = views.get(storage);
 
@@ -69,7 +87,9 @@ export const invalidate = (storage: DurableObjectStorage): void => {
 
 /** Callers reserve the shared SQL connection through commit. Keep the complete view
  * during a transaction, then retain at most 128 lanes between transactions. Intent
- * flushes before source commit; claims and prearming commit before fallible work. */
+ * flushes before source commit; claims and prearming commit before fallible work.
+ * @internal
+ */
 export const make = (storage: DurableObjectStorage) => {
   // Instrumentation may return a fresh SQL wrapper on every access.
   const sql = storage.sql;
@@ -445,5 +465,6 @@ export const make = (storage: DurableObjectStorage) => {
   };
 };
 
+/** @internal */
 export const next = (rows: ReadonlyArray<DueLane>) =>
   rows.reduce((next, row) => Math.min(next, row.dueAt ?? Infinity), Infinity);

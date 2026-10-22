@@ -40,6 +40,7 @@ function setFileSelection(element: object, encoded: string, name: string, type: 
   Reflect.apply(dispatch, element, [new Event("change", { bubbles: true })]);
 }
 
+/** @internal */
 export const makeFileSelection =
   (page: Page) => async (request: BrowserSelectFileRequest, signal: AbortSignal) => {
     const encoded = Base64.encode(request.bytes);

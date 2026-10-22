@@ -1,3 +1,8 @@
+/**
+ * Bounded, disposable semantic memory indexing for process-local use.
+ *
+ * @since 0.1.0
+ */
 import { MemoryKey } from "@yielded/agent/memory-store";
 import {
   MemoryIndexCandidate,
@@ -24,6 +29,9 @@ const MaxStoredVectorComponents = 16_777_216;
  * Hard per-Layer bounds for disposable semantic index state. maxChunks times profile dimensions
  * must not exceed 16,777,216 vector components. maxSourceBytes bounds the aggregate UTF-8 JSON
  * of retained source identities and defaults to 16 MiB; it is not a general heap limit.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export class InMemorySemanticIndexCapacity extends Schema.Class<InMemorySemanticIndexCapacity>(
   "@effect-agent/storage-memory/InMemorySemanticIndexCapacity",
@@ -353,7 +361,12 @@ const makeIndex = Effect.fnUntraced(function* (
   return SemanticMemoryIndex.fromAdapter({ profile, replace, withdraw, search });
 });
 
-/** Scoped disposable semantic index. No persistent build or recovery state is retained. */
+/**
+ * Scoped disposable semantic index. No persistent build or recovery state is retained.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const inMemorySemanticIndexLayer = (
   profile: SemanticMemoryProfile,
   capacity: InMemorySemanticIndexCapacity,

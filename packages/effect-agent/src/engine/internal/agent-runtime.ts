@@ -38,7 +38,6 @@ import * as Tracer from "effect/Tracer";
 import type * as Agent from "../../core/Agent.ts";
 import {
   type CompletionToolDeclaration,
-  type Definition,
   type InputPromptSource,
   type InstructionSource,
   type RunDispositionDeclaration,
@@ -62,9 +61,7 @@ import { type AgentPolicy } from "../../core/AgentPolicy.ts";
 import { Emitter, Update, UpdateError } from "../../core/AgentUpdates.ts";
 import * as FailureDiagnostic from "../../core/FailureDiagnostic.ts";
 import {
-  type AgentId,
   ThreadId,
-  type DelegationId,
   ReceiptId,
   SubmissionId,
   RunId,
@@ -150,9 +147,27 @@ import {
   FrameworkMessage,
   type WorkerBudgetScope,
 } from "../../core/Worker.ts";
+import type {
+  RunTurnToolResult,
+  RuntimeProgram,
+  RuntimeBinding,
+  InstructionErrorOf,
+  InstructionRequirementsOf,
+  AgentResult,
+  AgentRuntimeFailure,
+  AgentCompletionProjectionRequirements,
+  AgentRuntimeRequirements,
+  DetachedRun,
+  ExecutableAgent,
+  AgentSpawnerParent,
+  SubagentDurabilityService,
+  SpawnDelegation,
+  SpawnRunOptions,
+  SpawnedChildRun,
+  AgentSpawnerService,
+} from "../AgentRuntime.ts";
 import { MessagingHost } from "../MessagingHost.ts";
 import {
-  type RunOptions as ApplicationRunOptions,
   RunSchedulingOverride,
   CurrentToolFailureObserver,
   type ProgrammaticToolFailure,
@@ -179,19 +194,14 @@ import { boundedValueFootprint } from "./bounded-value.ts";
 import {
   AgentUpdateAcceptance,
   ModelUsageAccounting,
-  type ChildEstablishStatus,
   type RunResumeUsage,
   type RunDurabilityHook,
   RunResumeUsageSchema,
-  type RunSubagentChildIdentity,
-  type RunSubagentEstablishRequest,
   type RunSubagentHook,
-  type RunSubagentJoinRequest,
   type RunCompactionCommit,
   type RunTurnCommit,
   type RunTurnCompletion,
   type RunTurnResponse,
-  type RunTurnToolResult,
   RunTurnResumeSettledCallSchema,
   type RunTurnResume,
   type InterpreterOptions as RunOptions,
@@ -223,99 +233,6 @@ import {
   ToolSpanTelemetry,
   type ToolSpanTelemetryService,
 } from "./tool-telemetry.ts";
-
-type RuntimeProgram<
-  InputSchema extends Schema.Top,
-  OutputSchema extends Schema.Top,
-  Instructions,
-  Tools extends Record<string, Tool.Any>,
-  InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
-  InstructionRequirements = InstructionRequirementsOf<Instructions, InputSchema["Type"]>,
-  RunDispositionValue extends
-    | RunDispositionDeclaration<OutputSchema["Type"], Schema.Top>
-    | undefined = undefined,
-  InputPromptValue extends InputPromptSource<InputSchema["Type"], unknown, unknown> | undefined =
-    undefined,
-  UpdatesSchema extends Schema.Top | undefined = undefined,
-> = {
-  readonly definition: Definition<
-    InputSchema,
-    OutputSchema,
-    Instructions,
-    Toolkit.Toolkit<Tools>,
-    RunDispositionValue,
-    InputPromptValue,
-    UpdatesSchema
-  > & {
-    readonly instructions: InstructionSource<
-      InputSchema["Type"],
-      NoInfer<InstructionError>,
-      NoInfer<InstructionRequirements>
-    >;
-    readonly inputPrompt?: InputPromptValue | undefined;
-  };
-};
-
-/**
- * Structural shape of an Agent Binding accepted by the interpreter and by
- * `AgentSpawner.spawn`: a model-agnostic Definition paired with an explicit
- * native model Layer whose requirements stay visible. The Layer must provide
- * LanguageModel, ProviderName, and ModelName, including after requirement capture.
- */
-export type RuntimeBinding<
-  InputSchema extends Schema.Top,
-  OutputSchema extends Schema.Top,
-  Instructions,
-  Tools extends Record<string, Tool.Any>,
-  ModelProvides,
-  ModelRequires,
-  InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
-  InstructionRequirements = InstructionRequirementsOf<Instructions, InputSchema["Type"]>,
-  RunDispositionValue extends
-    | RunDispositionDeclaration<OutputSchema["Type"], Schema.Top>
-    | undefined = undefined,
-  InputPromptValue extends InputPromptSource<InputSchema["Type"], unknown, unknown> | undefined =
-    undefined,
-  UpdatesSchema extends Schema.Top | undefined = undefined,
-> = RuntimeProgram<
-  InputSchema,
-  OutputSchema,
-  Instructions,
-  Tools,
-  InstructionError,
-  InstructionRequirements,
-  RunDispositionValue,
-  InputPromptValue,
-  UpdatesSchema
-> & {
-  readonly model: Layer.Layer<
-    LanguageModel.LanguageModel | Model.ProviderName | Model.ModelName | ModelProvides,
-    never,
-    ModelRequires
-  >;
-};
-
-type InstructionResultOf<Instructions, Input> = Instructions extends (input: Input) => infer Result
-  ? Result
-  : Instructions;
-
-type InstructionErrorOf<Instructions, Input> =
-  InstructionResultOf<Instructions, Input> extends Effect.Effect<
-    infer _Success,
-    infer Error,
-    infer _Requirements
-  >
-    ? Error
-    : never;
-
-type InstructionRequirementsOf<Instructions, Input> =
-  InstructionResultOf<Instructions, Input> extends Effect.Effect<
-    infer _Success,
-    infer _Error,
-    infer Requirements
-  >
-    ? Requirements
-    : never;
 
 type InputPromptErrorOf<InputPromptValue, Input> = InputPromptValue extends (
   input: Input,
@@ -391,7 +308,12 @@ const AgentResultMetadata = Schema.Struct({
   runDisposition: Schema.optionalKey(Schema.Json),
 }).check(completionMetadataCheck, completionDispositionCheck);
 
-/** Schema factory for the terminal value produced by reducing a completed agent event stream. */
+/**
+ * Schema factory for the terminal value produced by reducing a completed agent event stream.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const AgentResultSchema = <Output extends Schema.Top>(output: Output) =>
   AgentResultMetadata.mapFields(
     (fields) => ({
@@ -449,87 +371,6 @@ const noteIncompleteUsage = Effect.fnUntraced(function* (context: RunContext, tu
     context.pricingStatus === "unknown" || context.modelCalls === 0 ? "unknown" : "partial";
   yield* accounting.noteIncompleteUsage(turn);
 });
-
-/** Decoded terminal value produced by reducing a completed agent event stream. */
-export type AgentResult<Output> = ReturnType<
-  typeof AgentResultSchema<Schema.Schema<Output>>
->["Type"];
-
-/** Expected agent, policy, and model-protocol failures exposed by the runtime. */
-export type AgentRuntimeFailure<
-  AgentValue extends Agent.AnyDefinition | Agent.Any,
-  HookError = never,
-  InstructionError = never,
-> =
-  | Agent.Failure<AgentValue>
-  | ([Agent.UpdatesSchema<AgentValue>] extends [never] ? never : UpdateError)
-  | AgentPolicyError
-  | ContextBudgetError
-  | ContextOverflowError
-  | CompactionError
-  | RunContextPreparationError
-  | AgentToolAuthorizationCheckError
-  | ModelProtocolError
-  | AgentPersistenceCapacityError
-  | AgentApprovalDenied
-  | AgentToolAuthorizationDenied
-  | AgentApprovalPending
-  | AgentChildPending
-  | ThreadHistoryError
-  | HookError
-  | InstructionError;
-
-/**
- * Services the engine itself provides locally to every Run: `AgentSpawner`
- * bound to the Run's immutable identity and delegation depth, `RunEventSink`
- * and `SubagentDurability` bound to the active Tool batch, `DurableStep`
- * bound to the active Tool Call, and `ToolSpanTelemetry` bound at the Run
- * composition edge. They are excluded from the runtime's public
- * requirements and MUST NOT be satisfied from an application Layer.
- */
-export type EngineProvidedToolServices =
-  | Emitter
-  | AgentSpawner
-  | RunEventSink
-  | DurableStep
-  | SubagentDurability
-  | SubagentHost
-  | MessagingHost
-  | ToolBroker
-  | ToolSpanTelemetry
-  | ContextWindow
-  | CurrentToolCatalog;
-
-/** Schema services needed to reconstruct a completion Tool's canonical Agent output. */
-export type AgentCompletionProjectionRequirements<
-  AgentValue extends Agent.AnyDefinition | Agent.Any,
-> =
-  | Agent.OutputSchema<AgentValue>["DecodingServices"]
-  | Agent.OutputSchema<AgentValue>["EncodingServices"]
-  | Tool.ParametersSchema<Agent.ToolUnion<AgentValue>>["DecodingServices"]
-  | Tool.SuccessSchema<Agent.ToolUnion<AgentValue>>["DecodingServices"];
-
-/**
- * Inferred agent services plus the runtime's identity and Thread history authorities.
- * Engine-provided Tool handler services are excluded because the interpreter
- * supplies them itself, bound to the current Run's identity. Tool parameter
- * encoding, output decoding, and completion-projection Schema services stay
- * listed unexcluded: the interpreter records canonical parameters before the
- * handler boundary, `run`/`start` re-decode terminal output, and durable recovery
- * re-decodes canonical completion Tool parameters/results.
- */
-export type AgentRuntimeRequirements<
-  AgentValue extends Agent.AnyDefinition | Agent.Any,
-  HookRequirements = never,
-  InstructionRequirements = never,
-> =
-  | Exclude<Agent.Requirements<AgentValue>, EngineProvidedToolServices>
-  | Tool.ParametersSchema<Agent.ToolUnion<AgentValue>>["EncodingServices"]
-  | AgentCompletionProjectionRequirements<AgentValue>
-  | Agent.OutputSchema<AgentValue>["DecodingServices"]
-  | ThreadHistory
-  | HookRequirements
-  | InstructionRequirements;
 
 /**
  * Interpreter-internal requirements before the Run boundary in `stream`
@@ -3305,7 +3146,7 @@ const durableResultBounds = <E, R>(
   });
 
 /** Deterministic inputs of one run-status message (RUN-024). */
-export interface RunStatusView {
+interface RunStatusView {
   readonly turn: number;
   readonly maxTurns: number;
   readonly toolCallsUsed: number;
@@ -3328,7 +3169,7 @@ const nearingLimit = (consumed: number, limit: number): boolean => consumed * 5 
  * RUN-024: render the derived run-status message appended to each outgoing
  * model request. The format is pinned here — tests target this function.
  */
-export const formatRunStatus = (view: RunStatusView): string => {
+const formatRunStatus = (view: RunStatusView): string => {
   const researchBudget =
     view.tokenBudget === undefined
       ? undefined
@@ -4654,7 +4495,12 @@ const renderInputPromptEffect = <Input, Error, Services>(
         return Effect.isEffect(result) ? result : Effect.succeed(result);
       });
 
-/** Render decoded Agent input for model visibility, preserving the legacy JSON default. */
+/**
+ * Render decoded Agent input for model visibility, preserving the legacy JSON default.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export function renderInputPrompt<
   Input,
   InputPromptValue extends InputPromptSource<NoInfer<Input>, unknown, unknown> | undefined,
@@ -4668,6 +4514,12 @@ export function renderInputPrompt<
   InputPromptRequirementsOf<InputPromptValue, Input>
 >;
 
+/**
+ * Render decoded Agent input for model visibility, preserving the legacy JSON default.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export function renderInputPrompt<Input, Error, Requirements>(
   inputPrompt: InputPromptSource<Input, Error, Requirements> | undefined,
   decodedInput: Input,
@@ -9318,7 +9170,10 @@ function executeWithCompletion<
   );
 }
 
-/** The sole public progress adapter: one bounded queue and one scoped producer. */
+/**
+ * The sole public progress adapter: one bounded queue and one scoped producer.
+ * @internal
+ */
 const streamWithCompletion = <A extends ExecutableAgent, H = never, R = never>(
   agent: A,
   input: unknown,
@@ -9458,27 +9313,6 @@ const runProgram = Effect.fn("AgentRuntime.run")(function* <A extends Agent.Any,
   return yield* completeRun(agent, events);
 });
 
-/**
- * Scoped detached execution whose observers cannot backpressure Run
- * completion.
- *
- * `observe` is a live multicast subscription: each subscription replays every
- * event the Run has already emitted, follows subsequent events as they occur,
- * and ends once the Run settles. The finite Run event ceiling sizes the replay
- * buffer so events are never dropped for a slow subscriber and publishing
- * never blocks the Run. `events` remains the complete bounded replay,
- * available after settlement. Both belong to the `start` Scope; observing
- * after that Scope closes interrupts the observer.
- */
-export interface DetachedRun<Output, Error> {
-  readonly await: Effect.Effect<AgentResult<Output>, Error>;
-  readonly events: Effect.Effect<ReadonlyArray<RunEvent>>;
-  readonly observe: Stream.Stream<RunEvent>;
-  /** Snapshot of observed usage, also available after failure, defect, or interruption. Read after
-   * await settles (or the owning Scope closes) for a final report. In-flight work may be unpriced. */
-  readonly usageReport: Effect.Effect<RunUsageReport>;
-}
-
 const startProgram = Effect.fn("AgentRuntime.start")(function* <A extends Agent.Any, E, R, H, HR>(
   agent: A,
   events: (
@@ -9567,23 +9401,10 @@ const startProgram = Effect.fn("AgentRuntime.start")(function* <A extends Agent.
   };
 });
 
-/** Executable definitions or explicit per-agent model Layers for registration and delegation. */
-type ExecutableDefinition = Agent.AnyDefinition & {
-  readonly instructions: InstructionSource<never, unknown, unknown>;
-};
-
-export type ExecutableAgent =
-  | ExecutableDefinition
-  | {
-      readonly definition: ExecutableDefinition;
-      readonly model: Layer.Layer<
-        LanguageModel.LanguageModel | Model.ProviderName | Model.ModelName,
-        never,
-        unknown
-      >;
-    };
-
-/** Decode external input before instructions or model execution. */
+/**
+ * Decode external input before instructions or model execution.
+ * @internal
+ */
 const streamUnknown = <A extends ExecutableAgent, H = never, R = never>(
   agent: A,
   input: unknown,
@@ -9595,7 +9416,10 @@ const streamUnknown = <A extends ExecutableAgent, H = never, R = never>(
     ),
   );
 
-/** Same interpreter without a progress publisher or public Stream adapter. */
+/**
+ * Same interpreter without a progress publisher or public Stream adapter.
+ * @internal
+ */
 const executeWithUsageAccountingUnknown = <A extends ExecutableAgent, H = never, R = never>(
   agent: A,
   input: unknown,
@@ -9606,7 +9430,10 @@ const executeWithUsageAccountingUnknown = <A extends ExecutableAgent, H = never,
   AgentRuntimeRequirements<A, R> | ModelUsageAccounting | AgentUpdateAcceptance
 > => executeWithCompletion(agent, input, options).pipe(Effect.asVoid);
 
-/** Accept schema-encoded input, retaining runtime validation. Use streamUnknown for external data. */
+/**
+ * Accept schema-encoded input, retaining runtime validation. Use streamUnknown for external data.
+ * @internal
+ */
 const stream = <A extends ExecutableAgent, H = never, R = never>(
   agent: A,
   input: NoInfer<Agent.EncodedInput<A>>,
@@ -9614,7 +9441,10 @@ const stream = <A extends ExecutableAgent, H = never, R = never>(
 ): Stream.Stream<RunEvent, AgentRuntimeFailure<A, H>, AgentRuntimeRequirements<A, R>> =>
   streamUnknown(agent, input, options);
 
-/** Decode external input before instructions or model execution. */
+/**
+ * Decode external input before instructions or model execution.
+ * @internal
+ */
 function runUnknown<A extends ExecutableAgent, H = never, R = never>(
   agent: A,
   input: unknown,
@@ -9624,6 +9454,7 @@ function runUnknown<A extends ExecutableAgent, H = never, R = never>(
   AgentRuntimeFailure<A, H>,
   AgentRuntimeRequirements<A, R>
 >;
+/** @internal */
 function runUnknown<H = never, R = never>(
   agent: ExecutableAgent,
   input: unknown,
@@ -9642,7 +9473,10 @@ function runUnknown<H = never, R = never>(
   );
 }
 
-/** Accept schema-encoded input, retaining runtime validation. Use runUnknown for external data. */
+/**
+ * Accept schema-encoded input, retaining runtime validation. Use runUnknown for external data.
+ * @internal
+ */
 const run = <A extends ExecutableAgent, H = never, R = never>(
   agent: A,
   input: NoInfer<Agent.EncodedInput<A>>,
@@ -9653,7 +9487,10 @@ const run = <A extends ExecutableAgent, H = never, R = never>(
   AgentRuntimeRequirements<A, R>
 > => runUnknown(agent, input, options);
 
-/** Decode external input before instructions or model execution. */
+/**
+ * Decode external input before instructions or model execution.
+ * @internal
+ */
 function startUnknown<A extends ExecutableAgent, H = never, R = never>(
   agent: A,
   input: unknown,
@@ -9663,6 +9500,7 @@ function startUnknown<A extends ExecutableAgent, H = never, R = never>(
   never,
   AgentRuntimeRequirements<A, R> | Scope.Scope
 >;
+/** @internal */
 function startUnknown<H = never, R = never>(
   agent: ExecutableAgent,
   input: unknown,
@@ -9684,7 +9522,10 @@ function startUnknown<H = never, R = never>(
   );
 }
 
-/** Accept schema-encoded input, retaining runtime validation. Use startUnknown for external data. */
+/**
+ * Accept schema-encoded input, retaining runtime validation. Use startUnknown for external data.
+ * @internal
+ */
 const start = <A extends ExecutableAgent, H = never, R = never>(
   agent: A,
   input: NoInfer<Agent.EncodedInput<A>>,
@@ -9694,16 +9535,6 @@ const start = <A extends ExecutableAgent, H = never, R = never>(
   never,
   AgentRuntimeRequirements<A, R> | Scope.Scope
 > => startUnknown(agent, input, options);
-
-/**
- * Immutable parent Run identity carried by the locally provided
- * `AgentSpawner`. It exposes no mutable engine state and no Layer Context.
- */
-export interface AgentSpawnerParent {
-  readonly agentId: AgentId;
-  readonly threadId: ThreadId;
-  readonly runId: RunId;
-}
 
 /**
  * Fail-closed Run-level `RunEventSink` default. Each Tool batch shadows it
@@ -10719,6 +10550,9 @@ const makeDurableStepService = <HookError, HookRequirements>(
  * result, no `ToolCallFailed`, no batch failure policy, no sibling
  * interruption — and terminates the Run with `AgentChildPending` after every
  * non-waiting sibling handler settled.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class ToolCallWaiting extends Schema.TaggedError<ToolCallWaiting>()("ToolCallWaiting", {
   toolCallId: ToolCallId,
@@ -10736,6 +10570,9 @@ export class ToolCallWaiting extends Schema.TaggedError<ToolCallWaiting>()("Tool
  * `RunSuspended` and then fails the Run stream with this error; the durable
  * coordinator catches it and ends the Attempt's ownership period without
  * settling. `children` is listed in declaration order, deterministically.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class AgentChildPending extends Schema.TaggedError<AgentChildPending>()(
   "AgentChildPending",
@@ -10758,6 +10595,9 @@ export class AgentChildPending extends Schema.TaggedError<AgentChildPending>()(
  * error type into handler signatures (the `DurableStepError` precedent);
  * `no-active-tool-batch` is the fail-closed Run-level default — establishment
  * outside an active Tool batch never silently degrades to ephemeral spawning.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class SubagentDurabilityError extends Schema.TaggedError<SubagentDurabilityError>()(
   "SubagentDurabilityError",
@@ -10772,47 +10612,6 @@ export class SubagentDurabilityError extends Schema.TaggedError<SubagentDurabili
 ) {}
 
 /**
- * Explicit ephemeral mode: no durable coordinator supplied
- * `InterpreterOptions.subagent`, so no durable claim is being made and the delegation
- * handler keeps the S1 in-process spawn semantics honestly.
- */
-export interface SubagentDurabilityEphemeral {
-  readonly mode: "ephemeral";
-}
-
-/**
- * Durable mode: establishment and join run through the coordinator's
- * `RunSubagentHook` under the parent's ownership fence, and `waiting` raises
- * the engine-owned suspension signal for a still-running child.
- */
-export interface SubagentDurabilityDurable {
-  readonly mode: "durable";
-  /** Idempotent durable child establishment under the parent ownership fence. */
-  readonly establish: (
-    request: RunSubagentEstablishRequest,
-  ) => Effect.Effect<ChildEstablishStatus, SubagentDurabilityError>;
-  /** Atomic settlement join: `SubagentJoined` + parent `ToolCallSettled` in one canonical batch (SUB-019). */
-  readonly join: (request: RunSubagentJoinRequest) => Effect.Effect<void, SubagentDurabilityError>;
-  /**
-   * Raise the waiting suspension signal for one delegation call whose
-   * established child has not settled. Never returns: the handler ends here,
-   * siblings run to completion, the Run suspends, and the resumed batch
-   * re-executes the handler idempotently.
-   */
-  readonly waiting: (
-    toolCallId: ToolCallId,
-    child: RunSubagentChildIdentity,
-  ) => Effect.Effect<never, ToolCallWaiting | SubagentDurabilityError>;
-}
-
-/**
- * Mode-dispatched service value seen by delegation Tool handlers: an explicit
- * ephemeral default when the Run carries no durable coordinator, the durable
- * establish/join/waiting surface otherwise.
- */
-export type SubagentDurabilityService = SubagentDurabilityEphemeral | SubagentDurabilityDurable;
-
-/**
  * Engine-owned durable-Subagent seam provided locally to every Tool batch,
  * constructed from `InterpreterOptions.subagent` when present and the explicit
  * ephemeral-mode default when absent. Like the other engine-provided Tool
@@ -10820,6 +10619,9 @@ export type SubagentDurabilityService = SubagentDurabilityEphemeral | SubagentDu
  * be satisfied from an application Layer; handlers resolve it per call (the
  * S1 innermost re-provide pattern) so a Layer built inside another Run's
  * batch never captures a stale mode.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SubagentDurability extends Context.Service<
   SubagentDurability,
@@ -10921,22 +10723,10 @@ const waitingFromCause = (cause: Cause.Cause<unknown>): ToolCallWaiting | undefi
   return squashed instanceof ToolCallWaiting ? squashed : undefined;
 };
 
-/** Stable delegation identity supplied by the invoking delegation Tool handler. */
-export interface SpawnDelegation {
-  readonly delegationId: DelegationId;
-  readonly parentToolCallId: ToolCallId;
-}
-
 /**
- * Child Run options accepted by `AgentSpawner.spawn`. Child Thread/Run
- * identity and the Parent Link are spawner-owned and cannot be overridden.
+ * Delegation-owned execution facts, unavailable through application child options.
+ * @internal
  */
-export interface SpawnRunOptions<HookError = never, HookRequirements = never> extends Omit<
-  ApplicationRunOptions<HookError, HookRequirements>,
-  "threadId" | "runId"
-> {}
-
-/** Delegation-owned execution facts, unavailable through application child options. */
 export interface SpawnInterpreterOptions<HookError = never, HookRequirements = never>
   extends
     SpawnRunOptions<HookError, HookRequirements>,
@@ -10944,17 +10734,6 @@ export interface SpawnInterpreterOptions<HookError = never, HookRequirements = n
       RunOptions<HookError, HookRequirements>,
       "subagentGrant" | "delegationDepth" | "subagentBudget" | "subagentBudgetScope"
     > {}
-
-/**
- * Handle to one spawned Attached Child: its preallocated child identity, its
- * immutable Parent Link, and the same observation surface as `DetachedRun`.
- * The child fiber belongs to the Scope the caller provided to `spawn`.
- */
-export interface SpawnedChildRun<Output, Error> extends DetachedRun<Output, Error> {
-  readonly threadId: ThreadId;
-  readonly runId: RunId;
-  readonly parentLink: SubagentParentLink;
-}
 
 /**
  * Run one child Agent Binding through the same interpreter as a top-level
@@ -11060,104 +10839,6 @@ const spawnWithParent = (
   });
 
 /**
- * Narrow parent execution value visible to Tool handlers. `depth` is the
- * current Run's root-relative delegation depth: `0` for a root Run and
- * `parentLink.depth` for a child, which the delegation preflight uses to
- * enforce inherited nesting ceilings and conserved subtree allocations.
- */
-export interface AgentSpawnerService {
-  /** Owns parent-wide resources until all Tool handlers and attached children have closed. */
-  readonly scope: Scope.Scope;
-  /** Resolved defaults for this parent Run; never includes its tools or handlers. */
-  readonly policy: AgentPolicy;
-  /** Effective deadline of this active parent execution, including RunOptions.durationDeadline. */
-  readonly durationDeadline: DateTime.Utc;
-  readonly depth: number;
-  readonly grant?: SubagentGrant;
-  readonly budget?: SubagentBudgetReservation;
-  readonly budgetScope?: WorkerBudgetScope;
-  readonly parent: AgentSpawnerParent;
-  readonly spawn: <
-    InputSchema extends Schema.Top,
-    OutputSchema extends Schema.Top,
-    Instructions,
-    Tools extends Record<string, Tool.Any>,
-    ModelProvides,
-    ModelRequires,
-    HookError = never,
-    HookRequirements = never,
-    InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
-    InstructionRequirements = InstructionRequirementsOf<Instructions, InputSchema["Type"]>,
-    RunDispositionValue extends
-      | RunDispositionDeclaration<OutputSchema["Type"], Schema.Top>
-      | undefined = undefined,
-    InputPromptValue extends InputPromptSource<InputSchema["Type"], unknown, unknown> | undefined =
-      undefined,
-    UpdatesSchema extends Schema.Top | undefined = undefined,
-  >(
-    binding: RuntimeBinding<
-      InputSchema,
-      OutputSchema,
-      Instructions,
-      Tools,
-      ModelProvides,
-      ModelRequires,
-      InstructionError,
-      InstructionRequirements,
-      RunDispositionValue,
-      InputPromptValue,
-      UpdatesSchema
-    >,
-    input: unknown,
-    delegation: SpawnDelegation,
-    options?: SpawnInterpreterOptions<HookError, HookRequirements>,
-  ) => Effect.Effect<
-    SpawnedChildRun<
-      OutputSchema["Type"],
-      AgentRuntimeFailure<
-        RuntimeBinding<
-          InputSchema,
-          OutputSchema,
-          Instructions,
-          Tools,
-          ModelProvides,
-          ModelRequires,
-          InstructionError,
-          InstructionRequirements,
-          RunDispositionValue,
-          InputPromptValue,
-          UpdatesSchema
-        >,
-        HookError,
-        InstructionError
-      >
-    >,
-    never,
-    | Scope.Scope
-    | Exclude<
-        AgentRuntimeRequirements<
-          RuntimeBinding<
-            InputSchema,
-            OutputSchema,
-            Instructions,
-            Tools,
-            ModelProvides,
-            ModelRequires,
-            InstructionError,
-            InstructionRequirements,
-            RunDispositionValue,
-            InputPromptValue,
-            UpdatesSchema
-          >,
-          HookRequirements,
-          InstructionRequirements
-        >,
-        ThreadHistory | RunContextPreparation
-      >
-  >;
-}
-
-/**
  * Engine-owned service contract through which a declared delegation Tool
  * runs an Attached Child on the same interpreter.
  *
@@ -11165,6 +10846,9 @@ export interface AgentSpawnerService {
  * immutable identity and delegation depth; it is never satisfied from an
  * application Layer, is excluded from the runtime's public requirements, and
  * exposes neither the engine's mutable Run state nor any root Layer Context.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class AgentSpawner extends Context.Service<AgentSpawner, AgentSpawnerService>()(
   "@effect-agent/engine/AgentSpawner",
@@ -11205,6 +10889,7 @@ const makeAgentSpawner = Effect.fnUntraced(function* (
  * provide their model Layer locally; all remaining requirements stay visible
  * in the returned Effect or Stream. The interpreter owns no shared service or
  * Layer state. Recovery and accounting entry points stay inside the interpreter boundary.
+ * @internal
  */
 export {
   run,

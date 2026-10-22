@@ -32,55 +32,23 @@ import {
   WorkerSummary,
 } from "../../core/Worker.ts";
 import { SubagentHost } from "../../engine/SubagentHost.ts";
-import type { SubagentDefineOptions, SubagentPrepareContext } from "../Subagent.ts";
+import type {
+  BackgroundDeclaration,
+  WorkerDeclaration,
+  SubagentPrepareContext,
+} from "../Subagent.ts";
 import {
   SubagentExecutionFailure,
   SubagentPrestartDenied,
   SubagentProjectionFailure,
 } from "./subagent-contract.ts";
 
-export type Declaration<
-  Name extends string,
-  Input extends Schema.Top,
-  Output extends Schema.Top,
-  Parameters extends Schema.Top,
-  Success extends Schema.Top,
-  Failure extends Schema.Top,
-  Prepare,
-  Project,
-> = Pick<
-  SubagentDefineOptions<
-    Input,
-    Output,
-    unknown,
-    Record<string, Tool.Any>,
-    Parameters,
-    Success,
-    Failure,
-    Prepare,
-    Project
-  >,
-  | "parameters"
-  | "success"
-  | "failure"
-  | "prepareInput"
-  | "projectResult"
-  | "policy"
-  | "needsApproval"
-> & {
-  readonly name: Name;
-  readonly delegationId: WorkerRef["delegationId"];
-  readonly target: AnyDefinition & { readonly input: Input; readonly output: Output };
-  readonly grant: SubagentGrant;
-};
-
-type WorkerDeclaration<Name extends string> = {
-  readonly name: Name;
-  readonly delegationId: WorkerRef["delegationId"];
-  readonly target: Pick<AnyDefinition, "id">;
-};
-
-/** Portable identity checked against this declaration; possession grants no authority. */
+/**
+ * Portable identity checked against this declaration; possession grants no authority.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const Worker = <const Name extends string>(declaration: WorkerDeclaration<Name>) =>
   WorkerRef.pipe(
     Schema.refine(
@@ -90,6 +58,12 @@ export const Worker = <const Name extends string>(declaration: WorkerDeclaration
     ),
   );
 
+/**
+ * Decoded value of {@link Worker}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Worker<Name extends string> = ReturnType<typeof Worker<Name>>["Type"];
 
 /** Model-facing projection deliberately excludes operator-private diagnostics. */
@@ -114,7 +88,12 @@ const toolObservation = <Success extends Schema.Top>(success: Success) =>
     }),
   ]);
 
-/** One exact Receipt, including private canonical failure evidence for programmatic callers. */
+/**
+ * One exact Receipt, including private canonical failure evidence for programmatic callers.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const WorkerObservation = <Success extends Schema.Top>(success: Success) => {
   const projected = toolObservation(success);
 
@@ -128,6 +107,12 @@ export const WorkerObservation = <Success extends Schema.Top>(success: Success) 
   ]);
 };
 
+/**
+ * Decoded value of {@link WorkerObservation}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type WorkerObservation<Success extends Schema.Top> = ReturnType<
   typeof WorkerObservation<Success>
 >["Type"];
@@ -158,7 +143,16 @@ const operations = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
 ) => {
   const workerSchema = Worker(declaration);
 
@@ -548,7 +542,12 @@ const operations = <
   return { start, followUp, inspectMessage, observe, list, cancel };
 };
 
-/** Retain a first worker input. The same explicit key reuses its durable delivery identity. */
+/**
+ * Retain a first worker input. The same explicit key reuses its durable delivery identity.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const start = <
   const Name extends string,
   Input extends Schema.Top,
@@ -559,7 +558,16 @@ export const start = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   parameters: Parameters["Type"],
   options: {
     readonly idempotencyKey: IdempotencyKey;
@@ -568,7 +576,12 @@ export const start = <
   },
 ) => operations(declaration).start(parameters, options);
 
-/** Retain typed follow-up parameters for the same worker Thread; inspect its MessageRef for delivery. */
+/**
+ * Retain typed follow-up parameters for the same worker Thread; inspect its MessageRef for delivery.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const followUp = <
   const Name extends string,
   Input extends Schema.Top,
@@ -579,14 +592,26 @@ export const followUp = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   worker: Worker<Name>,
   parameters: Parameters["Type"],
   options: { readonly idempotencyKey: IdempotencyKey },
 ) => operations(declaration).followUp(worker, parameters, options);
 
-/** Inspect a continuing worker with the same summary contract returned by list. */
-export const summary = Effect.fnUntraced(function* <const Name extends string>(
+/**
+ * Inspect a continuing worker with the same summary contract returned by list.
+ * @internal
+ */
+const summary = Effect.fnUntraced(function* <const Name extends string>(
   declaration: WorkerDeclaration<Name> & { readonly target: AnyDefinition },
   worker: Worker<Name>,
 ) {
@@ -613,7 +638,12 @@ export const summary = Effect.fnUntraced(function* <const Name extends string>(
   return { ...value, worker: validated };
 });
 
-/** Inspect a worker summary, retained MessageRef, or the result of one exact accepted Receipt. */
+/**
+ * Inspect a worker summary, retained MessageRef, or the result of one exact accepted Receipt.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export function inspect<
   const Name extends string,
   Input extends Schema.Top,
@@ -624,29 +654,29 @@ export function inspect<
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   worker: Worker<Name>,
-): ReturnType<typeof summary<Name>>;
-
-export function inspect<
-  const Name extends string,
-  Input extends Schema.Top,
-  Output extends Schema.Top,
-  Parameters extends Schema.Top,
-  Success extends Schema.Top,
-  Failure extends Schema.Top,
-  Prepare,
-  Project,
->(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
-  worker: Worker<Name>,
-  receipt: Receipt,
-): ReturnType<
-  ReturnType<
-    typeof operations<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>
-  >["observe"]
+): Effect.Effect<
+  Omit<WorkerSummary, "worker"> & { readonly worker: Worker<Name> },
+  WorkerError,
+  SubagentHost
 >;
 
+/**
+ * Inspect a worker summary, retained MessageRef, or the result of one exact accepted Receipt.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export function inspect<
   const Name extends string,
   Input extends Schema.Top,
@@ -657,11 +687,64 @@ export function inspect<
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
+  worker: Worker<Name>,
+  receipt: Receipt,
+): Effect.Effect<
+  WorkerObservation<Success>,
+  WorkerError | SubagentProjectionFailure | Failure["Type"],
+  | SubagentHost
+  | Parameters["DecodingServices"]
+  | Output["DecodingServices"]
+  | Success["EncodingServices"]
+  | Project
+>;
+
+/**
+ * Inspect a worker summary, retained MessageRef, or the result of one exact accepted Receipt.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
+export function inspect<
+  const Name extends string,
+  Input extends Schema.Top,
+  Output extends Schema.Top,
+  Parameters extends Schema.Top,
+  Success extends Schema.Top,
+  Failure extends Schema.Top,
+  Prepare,
+  Project,
+>(
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   worker: Worker<Name>,
   message: MessageRef,
 ): Effect.Effect<MessageStatus, WorkerError, SubagentHost>;
 
+/**
+ * Inspect a worker summary, retained MessageRef, or the result of one exact accepted Receipt.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export function inspect<
   const Name extends string,
   Input extends Schema.Top,
@@ -672,7 +755,16 @@ export function inspect<
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   worker: Worker<Name>,
   reference?: Receipt | MessageRef,
 ) {
@@ -683,7 +775,12 @@ export function inspect<
       : operations(declaration).observe("inspect", worker, reference);
 }
 
-/** Read an authorized finite history snapshot; pass the last emitted sequence to resume. */
+/**
+ * Read an authorized finite history snapshot; pass the last emitted sequence to resume.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const observe = <const Name extends string>(
   declaration: WorkerDeclaration<Name> & { readonly target: AnyDefinition },
   worker: Worker<Name>,
@@ -714,7 +811,12 @@ export const observe = <const Name extends string>(
     }),
   );
 
-/** Seal a continuing worker, retaining a stable command identity across retries and Runs. */
+/**
+ * Seal a continuing worker, retaining a stable command identity across retries and Runs.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const stop = Effect.fnUntraced(function* <const Name extends string>(
   declaration: WorkerDeclaration<Name> & { readonly target: AnyDefinition },
   worker: Worker<Name>,
@@ -742,7 +844,12 @@ export const stop = Effect.fnUntraced(function* <const Name extends string>(
   );
 });
 
-/** Wait for the exact Receipt. Interrupting this Effect never cancels accepted work. */
+/**
+ * Wait for the exact Receipt. Interrupting this Effect never cancels accepted work.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const awaitWorker = <
   const Name extends string,
   Input extends Schema.Top,
@@ -753,12 +860,26 @@ export const awaitWorker = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   worker: Worker<Name>,
   receipt: Receipt,
 ) => operations(declaration).observe("await", worker, receipt);
 
-/** List only workers visible through the caller-bound host facet. */
+/**
+ * List only workers visible through the caller-bound host facet.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const list = <
   const Name extends string,
   Input extends Schema.Top,
@@ -769,11 +890,25 @@ export const list = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   options: { readonly limit?: number; readonly after?: ThreadId } = {},
 ) => operations(declaration).list(options);
 
-/** Request cancellation of exactly one Receipt; JoinedToHost remains a typed conflict. */
+/**
+ * Request cancellation of exactly one Receipt; JoinedToHost remains a typed conflict.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const cancel = <
   const Name extends string,
   Input extends Schema.Top,
@@ -784,12 +919,26 @@ export const cancel = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   worker: Worker<Name>,
   receipt: Receipt,
 ) => operations(declaration).cancel(worker, receipt);
 
-/** Opt in to each model-facing operation. Waiting remains programmatic only. */
+/**
+ * Opt in to each model-facing operation. Waiting remains programmatic only.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface StartToolOptions {
   /** Author-owned funding request; every native admission separately authorizes it. */
   readonly budgetScope?: WorkerBudgetScope;
@@ -908,7 +1057,12 @@ const action = <T extends Tool.Any, R>(
   return Object.freeze({ tool, layer });
 };
 
-/** Retain new worker input under the current Tool Call's stable identity. */
+/**
+ * Retain new worker input under the current Tool Call's stable identity.
+ *
+ * @category tools
+ * @since 0.1.0
+ */
 export const startTool = <
   const Name extends string,
   Input extends Schema.Top,
@@ -919,7 +1073,16 @@ export const startTool = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   options: StartToolOptions = {},
 ) => {
   const tool = Tool.make(`${declaration.name}_start` as const, {
@@ -952,7 +1115,12 @@ export const startTool = <
   );
 };
 
-/** Retain follow-up input for an existing worker under the current Tool Call's identity. */
+/**
+ * Retain follow-up input for an existing worker under the current Tool Call's identity.
+ *
+ * @category tools
+ * @since 0.1.0
+ */
 export const followUpTool = <
   const Name extends string,
   Input extends Schema.Top,
@@ -963,7 +1131,16 @@ export const followUpTool = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
 ) => {
   const tool = Tool.make(`${declaration.name}_follow_up` as const, {
     description: `Retain typed follow-up input for an existing ${declaration.name} worker. Pending is retained, not executed: inspect the same message instead of sending the command again.`,
@@ -995,7 +1172,12 @@ export const followUpTool = <
   );
 };
 
-/** Inspect one delivery or accepted Receipt without resending input. */
+/**
+ * Inspect one delivery or accepted Receipt without resending input.
+ *
+ * @category tools
+ * @since 0.1.0
+ */
 export const inspectTool = <
   const Name extends string,
   Input extends Schema.Top,
@@ -1006,7 +1188,16 @@ export const inspectTool = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
 ) => {
   const tool = Tool.make(`${declaration.name}_inspect` as const, {
     description: `Inspect one ${declaration.name} delivery by message reference, or its execution result by accepted receipt. Provide exactly one reference; inspection never resends input.`,
@@ -1060,7 +1251,12 @@ export const inspectTool = <
   );
 };
 
-/** Inspect a continuing worker's state and latest accepted input. */
+/**
+ * Inspect a continuing worker's state and latest accepted input.
+ *
+ * @category tools
+ * @since 0.1.0
+ */
 export const summaryTool = <
   const Name extends string,
   Input extends Schema.Top,
@@ -1071,7 +1267,16 @@ export const summaryTool = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
 ) => {
   const tool = Tool.make(`${declaration.name}_summary` as const, {
     description: `Inspect ${declaration.name}'s continuing worker state and latest accepted input.`,
@@ -1090,7 +1295,12 @@ export const summaryTool = <
   );
 };
 
-/** List workers visible through the current caller's host facet. */
+/**
+ * List workers visible through the current caller's host facet.
+ *
+ * @category tools
+ * @since 0.1.0
+ */
 export const listTool = <
   const Name extends string,
   Input extends Schema.Top,
@@ -1101,7 +1311,16 @@ export const listTool = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
 ) => {
   const tool = Tool.make(`${declaration.name}_list` as const, {
     description: `List visible ${declaration.name} workers.`,
@@ -1120,7 +1339,12 @@ export const listTool = <
   );
 };
 
-/** Request cancellation of one exact worker Receipt. */
+/**
+ * Request cancellation of one exact worker Receipt.
+ *
+ * @category tools
+ * @since 0.1.0
+ */
 export const cancelTool = <
   const Name extends string,
   Input extends Schema.Top,
@@ -1131,7 +1355,16 @@ export const cancelTool = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
 ) => {
   const tool = Tool.make(`${declaration.name}_cancel` as const, {
     description: `Request cancellation of one exact ${declaration.name} Receipt.`,

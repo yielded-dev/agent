@@ -3,7 +3,10 @@ import * as Schema from "effect/Schema";
 import { MessageStatus } from "../../core/Messaging.ts";
 import type { MessageDeliveryRecord } from "../MessageDelivery.ts";
 
-/** Share the bounded projection across peer and worker delivery; diagnostics stay in storage. */
+/**
+ * Share the bounded projection across peer and worker delivery; diagnostics stay in storage.
+ * @internal
+ */
 export const messageStatus = (row: MessageDeliveryRecord) =>
   Schema.decodeUnknownEffect(MessageStatus)({
     message: row.key,

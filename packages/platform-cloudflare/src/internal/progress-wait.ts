@@ -16,6 +16,9 @@ type Registrations = ReadonlyMap<string, Registration>;
  * Per-incarnation cancellation registry for long-lived progress and settlement RPCs. The runtime owns
  * the actual wake registration; this host-only registry lets an interrupted Worker Effect ask
  * the Object to interrupt its scoped wait before the Worker execution context itself ends.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ProgressWaitRegistry extends Context.Service<
   ProgressWaitRegistry,

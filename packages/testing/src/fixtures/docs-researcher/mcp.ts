@@ -1,3 +1,8 @@
+/**
+ * Scripted MCP discovery responses for validating the document summarizer toolkit.
+ *
+ * @since 0.1.0
+ */
 import {
   McpConnectionRequest,
   McpConnector,
@@ -31,7 +36,12 @@ import {
 // connectors below exercise those fail-closed paths.
 // ---------------------------------------------------------------------------
 
-/** Framework-side hard bounds one docs-researcher assembly requests. */
+/**
+ * Framework-side hard bounds one docs-researcher assembly requests.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const docsMcpRequest = McpConnectionRequest.make({
   serverId: "docs-content-mcp",
   maxToolCount: 4,
@@ -40,6 +50,12 @@ export const docsMcpRequest = McpConnectionRequest.make({
   connectTimeoutMillis: 1_000,
 });
 
+/**
+ * The scripted MCP server identity bound to the content discovery response.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const docsMcpIdentity = McpServerIdentity.make({
   serverId: docsMcpRequest.serverId,
   implementation: McpSchema.Implementation.make({
@@ -132,12 +148,22 @@ const scriptedConnector = (tools: ReadonlyArray<McpSchema.Tool>): Layer.Layer<Mc
       ),
   });
 
-/** The well-behaved scripted content server. */
+/**
+ * The well-behaved scripted content server.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const docsMcpConnectorLayer: Layer.Layer<McpConnector> = scriptedConnector([
   discoveredFetchDocument,
 ]);
 
-/** Serves a tool description exceeding `maxToolDescriptionBytes` (SEC-013 bound). */
+/**
+ * Serves a tool description exceeding `maxToolDescriptionBytes` (SEC-013 bound).
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const docsMcpOversizedConnectorLayer: Layer.Layer<McpConnector> = scriptedConnector([
   McpSchema.Tool.make({
     name: discoveredFetchDocument.name,
@@ -146,7 +172,12 @@ export const docsMcpOversizedConnectorLayer: Layer.Layer<McpConnector> = scripte
   }),
 ]);
 
-/** Serves a discovery schema that disagrees with the authored toolkit (drift fails closed). */
+/**
+ * Serves a discovery schema that disagrees with the authored toolkit (drift fails closed).
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const docsMcpMismatchedConnectorLayer: Layer.Layer<McpConnector> = scriptedConnector([
   McpSchema.Tool.make({
     name: discoveredFetchDocument.name,
@@ -162,6 +193,9 @@ const isJsonEqual = (left: unknown, right: unknown): boolean =>
  * Bind discovered schemas to the separately authored doc-summarizer contract
  * before worker registration. The connection's dynamic Toolkit is derived from
  * discovery, so checking it against discovery would not establish this pin.
+ *
+ * @category utils
+ * @since 0.1.0
  */
 export const assertDiscoveryMatchesAuthoredToolkit = Effect.fn(
   "DocsResearcher.assertDiscoveryMatchesAuthoredToolkit",
@@ -200,7 +234,12 @@ export const assertDiscoveryMatchesAuthoredToolkit = Effect.fn(
   }
 });
 
-/** Round-trip guard for encoded discovery values persisted as fixture evidence. */
+/**
+ * Round-trip guard for encoded discovery values persisted as fixture evidence.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const DocsMcpDiscoveryEvidence = Schema.Struct({
   serverId: Schema.NonEmptyString,
   toolCount: Schema.Natural,

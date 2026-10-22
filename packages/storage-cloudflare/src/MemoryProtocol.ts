@@ -1,3 +1,8 @@
+/**
+ * Bounded, schema-validated memory RPC with owner identity and authorization.
+ *
+ * @since 0.1.0
+ */
 import * as MemoryNamespace from "@yielded/agent/memory-namespace";
 import {
   MemoryLookup,
@@ -34,10 +39,22 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+/**
+ * A memory request was denied or exceeded the bounded protocol.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryRpcError extends Schema.TaggedError<MemoryRpcError>()("MemoryRpcError", {
   reason: Schema.Literals(["denied", "protocol", "budget", "timeout", "unavailable"]),
 }) {}
 
+/**
+ * Validated request, response, source-size, source-count, and timeout bounds for memory RPC.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class MemoryRpcLimits extends Schema.Class<MemoryRpcLimits>(
   "@effect-agent/storage-cloudflare/MemoryRpcLimits",
 )({
@@ -48,6 +65,12 @@ export class MemoryRpcLimits extends Schema.Class<MemoryRpcLimits>(
   timeoutMillis: MemoryRecallLimits.fields.timeoutMillis,
 }) {}
 
+/**
+ * Memory RPC defaults: 1 MiB requests, 4 MiB responses, 16 MiB source data, 16 sources, and a ten-second timeout.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const defaultMemoryRpcLimits = MemoryRpcLimits.make({
   maxRequestBytes: 1_048_576,
   maxResponseBytes: 4_194_304,
@@ -88,12 +111,30 @@ const SemanticRequest: Schema.TaggedStruct<
   limits: SemanticCandidateLimits,
 });
 
+/**
+ * Supported operations accepted by a memory owner.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryOwnerRequest: Schema.Union<
   [typeof RevalidateRequest, typeof ChangeRequest, typeof SemanticRequest, typeof GetRequest]
 > = Schema.Union([RevalidateRequest, ChangeRequest, SemanticRequest, GetRequest]);
 
+/**
+ * Decoded value of the MemoryOwnerRequest schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MemoryOwnerRequest = typeof MemoryOwnerRequest.Type;
 
+/**
+ * Typed storage, authorization, and protocol failures returned by a memory owner.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryOwnerFailure = Schema.Union([
   MemoryRpcError,
   MemoryStorageError,
@@ -106,6 +147,12 @@ export const MemoryOwnerFailure = Schema.Union([
   SemanticMemoryError,
 ]);
 
+/**
+ * Typed storage, authorization, and protocol failures returned by a memory owner.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type MemoryOwnerFailure = typeof MemoryOwnerFailure.Type;
 
 const LookupResponse = Schema.TaggedStruct("Lookup", {
@@ -131,6 +178,12 @@ const DocumentResponse = Schema.TaggedStruct("Document", {
 
 const FailedResponse = Schema.TaggedStruct("Failed", { failure: MemoryOwnerFailure });
 
+/**
+ * Successful memory operation results and typed failures.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryOwnerResponse: Schema.Union<
   [
     typeof LookupResponse,
@@ -147,12 +200,21 @@ export const MemoryOwnerResponse: Schema.Union<
   FailedResponse,
 ]);
 
+/**
+ * Decoded value of the MemoryOwnerResponse schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MemoryOwnerResponse = typeof MemoryOwnerResponse.Type;
 
 /**
  * Fail-closed application policy. Authorize the namespace, principal, scope, and full command.
  * Get requires exact-key authority, including application source/provenance checks where needed.
  * Possession of a key or scope is not authorization, including for absent or withdrawn documents.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class MemoryOwnerAuthorizer extends Context.Service<
   MemoryOwnerAuthorizer,
@@ -161,7 +223,12 @@ export class MemoryOwnerAuthorizer extends Context.Service<
   }
 >()("@effect-agent/storage-cloudflare/MemoryOwnerAuthorizer") {}
 
-/** Canonical namespace derived from this object's idFromName identity, never its request. */
+/**
+ * Canonical namespace derived from this object's idFromName identity, never its request.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class MemoryOwnerIdentity extends Context.Service<
   MemoryOwnerIdentity,
   {
@@ -169,8 +236,20 @@ export class MemoryOwnerIdentity extends Context.Service<
   }
 >()("@effect-agent/storage-cloudflare/MemoryOwnerIdentity") {}
 
+/**
+ * Measure the UTF-8 size of a memory RPC envelope.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const memoryWireBytes = (text: string): number => new TextEncoder().encode(text).byteLength;
 
+/**
+ * Decode and validate an envelope within its UTF-8 byte bound.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeMemoryWire = Effect.fnUntraced(function* <A, I>(
   schema: Schema.Codec<A, I, never>,
   raw: unknown,
@@ -188,6 +267,12 @@ export const decodeMemoryWire = Effect.fnUntraced(function* <A, I>(
   );
 });
 
+/**
+ * Encode an envelope and refuse output beyond its UTF-8 byte bound.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeMemoryWire = Effect.fnUntraced(function* <A, I>(
   schema: Schema.Codec<A, I, never, never>,
   value: A,
@@ -203,7 +288,12 @@ export const encodeMemoryWire = Effect.fnUntraced(function* <A, I>(
   return encoded;
 });
 
-/** One local read for Get, or per distinct candidate source. No discovery or background work. */
+/**
+ * One local read for Get, or per distinct candidate source. No discovery or background work.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const handleMemoryOwnerRequest = Effect.fnUntraced(function* (
   raw: unknown,
   limits: MemoryRpcLimits = defaultMemoryRpcLimits,

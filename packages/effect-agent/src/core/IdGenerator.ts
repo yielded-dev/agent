@@ -1,3 +1,9 @@
+/**
+ * Replaceable runtime identity generation backed by Effect AI’s generator by default.
+ *
+ * @since 0.1.0
+ */
+
 import * as EffectAiIdGenerator from "effect/ai/IdGenerator";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -6,7 +12,12 @@ import * as Schema from "effect/Schema";
 
 import { ThreadId, RunId, TurnId } from "./Identifiers.ts";
 
-/** Replaceable authority for creating runtime identities, including deterministic test IDs. */
+/**
+ * Replaceable authority for creating runtime identities, including deterministic test IDs.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface Service {
   /** Create the identity for a new thread. */
   readonly nextThreadId: Effect.Effect<ThreadId>;
@@ -33,10 +44,18 @@ const defaultGenerator: Service = {
  * Randomness is fiber-local and can be seeded in tests. Override this reference
  * with Layer.succeed/Layer.effect or Effect.provideService for custom identities.
  * The default holds only Effects: it allocates no mutable state or resources.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const IdGenerator = Context.Reference<Service>("@effect-agent/core/IdGenerator", {
   defaultValue: () => defaultGenerator,
 });
 
-/** Explicitly select the default generator, replacing any enclosing override. */
+/**
+ * Explicitly select the default generator, replacing any enclosing override.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const layer: Layer.Layer<never> = Layer.succeed(IdGenerator, defaultGenerator);

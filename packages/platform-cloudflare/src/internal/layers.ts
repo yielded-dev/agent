@@ -152,6 +152,9 @@ import { threadPortTransportLayer } from "./transport.ts";
  * `NodeDurableAgentRuntimeOptions`. Optional fields default to the documented production values
  * (`CLOUDFLARE_RUNTIME_DEFAULTS`); everything is schema-decoded into
  * `CloudflareDurableRuntimeConfigValue` before any resource opens (deployment §5 gate 1).
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export interface CloudflareDurableRuntimeOptions {
   readonly deploymentId: string;
@@ -209,7 +212,12 @@ export interface CloudflareDurableRuntimeOptions {
   readonly toolReconciler?: Layer.Layer<ToolReconciler> | undefined;
 }
 
-/** Services supplied before the application graph is built, including its dependencies. */
+/**
+ * Services supplied before the application graph is built, including its dependencies.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type CloudflareBootstrapServices =
   | CloudflareDurableRuntimeConfig
   | ThreadObjectIdentity
@@ -224,7 +232,12 @@ export type CloudflareBootstrapServices =
   | ToolReconciler
   | LiveTextHub;
 
-/** Every construction failure of the assembled Cloudflare durable runtime stack. */
+/**
+ * Every construction failure of the assembled Cloudflare durable runtime stack.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type CloudflareDurableRuntimeInitializationError =
   | CloudflarePlatformConfigError
   | DigestError
@@ -235,6 +248,9 @@ export type CloudflareDurableRuntimeInitializationError =
  * The services `ThreadObject.layer` provides, including its single owner SQL client.
  * Its Context also supplies the defaulted ThreadMessageDelivery and ThreadHostMaintenance
  * references so rebuilt maintenance retains message recovery and lifecycle publication lanes.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type CloudflareDurableRuntimeServices =
   | DurableAgentRuntime
@@ -260,6 +276,9 @@ export type CloudflareDurableRuntimeServices =
  * It executes against THIS Object's LOCAL port facets — never the routed decorators, so a
  * request cannot bounce between Objects — and returns the typed response for the endpoint to
  * encode.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ThreadObjectPorts extends Context.Service<
   ThreadObjectPorts,
@@ -406,7 +425,12 @@ const producerIdentity = (prefix: string, owner: string) =>
     ),
   );
 
-/** Native one-Thread configuration; retains its existing producer and logical identities. */
+/**
+ * Native one-Thread configuration; retains its existing producer and logical identities.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const layerConfig = (
   options: CloudflareDurableRuntimeOptions,
 ): Layer.Layer<CloudflareBootstrapServices, CloudflarePlatformConfigError, DurableObjectContext> =>
@@ -431,6 +455,9 @@ export const layerConfig = (
  * Configuration for an application Object owning several logical Threads. The producer is
  * the stable physical Object. No logical identity is installed globally: handleRpc binds and
  * validates it per request using the placement guard and this actual runtime producer.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layerHostConfig = (
   options: CloudflareDurableRuntimeOptions,
@@ -452,12 +479,23 @@ export const layerHostConfig = (
     }),
   );
 
-/** Native source mutations which can create independently retained application obligations. */
+/**
+ * Native source mutations which can create independently retained application obligations.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadHostMutation =
   | { readonly _tag: "Admission"; readonly request: AdmissionRequest }
   | { readonly _tag: "Settlement"; readonly request: SettlementFinalization }
   | { readonly _tag: "WorkerStop"; readonly request: WorkerStopCommand };
 
+/**
+ * Optional host publication, projection, recovery, and maintenance integrations.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface ThreadPublicationOptions<E = never, R = never, P = never> {
   /** Pure, bounded selection of affected host lane IDs. The native owner prearms and guards
    * these lanes through the source mutation, including replay and recovery-only finalization.
@@ -512,7 +550,12 @@ const registeredLayer = <
     Effect.map(compileRegistrations(registrations), (bindings) => boundLayer(bindings, options)),
   );
 
-/** Preserve additional index services only when a projection Layer is actually supplied. */
+/**
+ * Preserve additional index services only when a projection Layer is actually supplied.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layer<
   const Entries extends ReadonlyArray<AgentRegistration>,
   E = never,
@@ -531,11 +574,23 @@ export function layer<
   Layer.Services<ReturnType<typeof registeredLayer<Entries, E | PE, R | PR>>>
 >;
 
+/**
+ * Provide  with explicit host dependencies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layer<const Entries extends ReadonlyArray<AgentRegistration>, E = never, R = never>(
   registrations: Entries,
   options?: ThreadPublicationOptions<E, R>,
 ): ReturnType<typeof registeredLayer<Entries, E, R>>;
 
+/**
+ * Provide  with explicit host dependencies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layer<const Entries extends ReadonlyArray<AgentRegistration>, E = never, R = never>(
   registrations: Entries,
   options: ThreadPublicationOptions<E, R> = {},
@@ -543,6 +598,12 @@ export function layer<const Entries extends ReadonlyArray<AgentRegistration>, E 
   return registeredLayer(registrations, options);
 }
 
+/**
+ * Provide layer from bindings with explicit host dependencies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layerFromBindings<E = never, R = never, P = never, PE = never, PR = never>(
   bindings: ReadonlyArray<ResolvedBinding>,
   options: Omit<ThreadPublicationOptions<E, R>, "projection"> & {
@@ -554,15 +615,33 @@ export function layerFromBindings<E = never, R = never, P = never, PE = never, P
   Layer.Services<ReturnType<typeof boundLayer<E | PE, R | PR>>>
 >;
 
+/**
+ * Provide layer from bindings with explicit host dependencies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layerFromBindings<E = never, R = never>(
   bindings: ReadonlyArray<ResolvedBinding>,
   options?: ThreadPublicationOptions<E, R>,
 ): ReturnType<typeof boundLayer<E, R>>;
 
+/**
+ * Provide layer from bindings with explicit host dependencies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layerFromBindings(
   bindings: ReadonlyArray<ResolvedBinding>,
 ): ReturnType<typeof boundLayer<never, never>>;
 
+/**
+ * Provide layer from bindings with explicit host dependencies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layerFromBindings<E = never, R = never>(
   bindings: ReadonlyArray<ResolvedBinding>,
   options: ThreadPublicationOptions<E, R> = {},
@@ -594,6 +673,9 @@ const boundLayer = <E = never, R = never>(
  * those ports and expose extra services, including ThreadHostMaintenance. It must not acquire
  * another runtime stack or require ThreadMaintenance while constructing this Layer.
  * Supply layerHostConfig and deterministic placement; dispatch addressed ingress with handleRpc.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export function layerInHost<A, E, R, P = never, PE = never, PR = never>(
   application: Layer.Layer<DurableAgentRuntime | A, E, R>,
@@ -606,11 +688,23 @@ export function layerInHost<A, E, R, P = never, PE = never, PR = never>(
   Layer.Services<ReturnType<typeof sharedLayer<A, E, Exclude<R, P>, PE, PR>>>
 >;
 
+/**
+ * Provide layer in host with explicit host dependencies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layerInHost<A, E, R, PE = never, PR = never>(
   application: Layer.Layer<DurableAgentRuntime | A, E, R>,
   options?: ThreadPublicationOptions<PE, PR>,
 ): ReturnType<typeof sharedLayer<A, E, R, PE, PR>>;
 
+/**
+ * Provide layer in host with explicit host dependencies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export function layerInHost<A, E, R, PE = never, PR = never>(
   application: Layer.Layer<DurableAgentRuntime | A, E, R>,
   options: ThreadPublicationOptions<PE, PR> = {},

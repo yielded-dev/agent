@@ -23,7 +23,10 @@ const ownStringDiagnostic = (
   }
 };
 
-/** Total, bounded projection for opaque failures. It never invokes arbitrary coercion hooks. */
+/**
+ * Total, bounded projection for opaque failures. It never invokes arbitrary coercion hooks.
+ * @internal
+ */
 export const errorMessage = (error: unknown): string => {
   const message = ownStringDiagnostic(error, "message", DIAGNOSTIC_MESSAGE_LIMIT);
 
@@ -34,6 +37,9 @@ export const errorMessage = (error: unknown): string => {
     : "Unknown error";
 };
 
-/** Total, bounded tag projection for opaque failures. */
+/**
+ * Total, bounded tag projection for opaque failures.
+ * @internal
+ */
 export const errorTag = (error: unknown): string =>
   ownStringDiagnostic(error, "_tag", DIAGNOSTIC_TAG_LIMIT) ?? "UnknownError";

@@ -1,3 +1,10 @@
+/**
+ * Adapter-neutral contract cases for schedule replay, atomic transitions, revisions, and owner
+ * capacity.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -15,15 +22,33 @@ import {
 } from "./Schedule.ts";
 import { IdempotencyKey, Principal, QueueSequence } from "./SubmissionLedger.ts";
 
+/**
+ * A schedule adapter violated a named shared storage contract case.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ScheduleStoreConformanceViolation extends Schema.TaggedError<ScheduleStoreConformanceViolation>()(
   "ScheduleStoreConformanceViolation",
   { caseName: Schema.String, message: Schema.String },
 ) {}
 
+/**
+ * Schedule storage failures or shared conformance assertion failures.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScheduleStoreConformanceFailure =
   | ScheduleStoreFailure
   | ScheduleStoreConformanceViolation;
 
+/**
+ * One named, adapter-neutral schedule storage contract exercised against a supplied ScheduleStore.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ScheduleStoreConformanceCase {
   readonly name: string;
   readonly run: Effect.Effect<void, ScheduleStoreConformanceFailure, ScheduleStore>;
@@ -628,7 +653,12 @@ const transitionFencing = conformanceCase(
     }),
 );
 
-/** Adapter-neutral contract cases. Each case uses disjoint owner and Schedule identities. */
+/**
+ * Adapter-neutral contract cases. Each case uses disjoint owner and Schedule identities.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const scheduleStoreConformanceCases: ReadonlyArray<ScheduleStoreConformanceCase> = [
   creationReplay,
   staleCompletion,

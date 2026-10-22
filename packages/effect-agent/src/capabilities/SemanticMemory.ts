@@ -1,3 +1,10 @@
+/**
+ * Bounded semantic indexing and recall through Effect’s embedding model. Ranked candidates are
+ * checked against current authoritative content and access before being returned.
+ *
+ * @since 0.1.0
+ */
+
 import * as EmbeddingModel from "effect/ai/EmbeddingModel";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
@@ -28,6 +35,13 @@ import {
 const Timestamp = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
 const InputTokens = Schema.NullOr(Schema.Natural);
 
+/**
+ * Schema for source-byte, chunk-count, and millisecond timeout limits when rebuilding one source’s
+ * semantic index.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SemanticIndexLimits extends Schema.Class<SemanticIndexLimits>(
   "@effect-agent/capabilities/SemanticIndexLimits",
 )({
@@ -36,6 +50,13 @@ export class SemanticIndexLimits extends Schema.Class<SemanticIndexLimits>(
   timeoutMillis: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 300_000 })),
 }) {}
 
+/**
+ * Schema for query, scan, source, output, and millisecond timeout bounds during semantic recall.
+ * Source and output byte budgets each default to 16 MiB.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SemanticQueryLimits extends Schema.Class<SemanticQueryLimits>(
   "@effect-agent/capabilities/SemanticQueryLimits",
 )({
@@ -64,11 +85,24 @@ class SemanticIndexResultWire extends Schema.Class<SemanticIndexResultWire>(
   finishedAt: Timestamp,
 }) {}
 
+/**
+ * Type produced by {@link SemanticIndexResult}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type SemanticIndexResult<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> = Omit<
   SemanticIndexResultWire,
   "key"
 > & { readonly key: MemoryKey<Namespace> };
 
+/**
+ * Schema and constructor for one source rebuild’s status, embedding usage, byte counts, and
+ * start/end timestamps.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SemanticIndexResult = {
   Wire: SemanticIndexResultWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -79,7 +113,12 @@ export const SemanticIndexResult = {
     }),
 };
 
-/** Candidates have already passed current-source checks; compose lookup with Memory.recall. */
+/**
+ * Candidates have already passed current-source checks; compose lookup with Memory.recall.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SemanticQueryResult extends Schema.Class<SemanticQueryResult>(
   "@effect-agent/capabilities/SemanticQueryResult",
 )({
@@ -208,6 +247,9 @@ const chunkText = Effect.fnUntraced(function* (
  * An independent source can still change between that read and replacement;
  * querySemanticMemory always revalidates and excludes such stale candidates.
  * No model or source text is attached to telemetry. Errors retain native provider/index types.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const indexMemorySource = Effect.fnUntraced(function* <
   Namespace extends MemoryNamespace.Any,
@@ -327,6 +369,9 @@ export const indexMemorySource = Effect.fnUntraced(function* <
  * budget and overall deadline. An empty result says nothing about undiscovered sources.
  * Checks begun before an acknowledged correction/withdrawal may finish with their already
  * captured source view.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const querySemanticMemory = Effect.fnUntraced(function* (
   query: string,
