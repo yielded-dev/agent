@@ -40,13 +40,14 @@ task context to `resolve`. Bind its returned native model to the Agent before ru
 import { Agent, AgentRuntime, Identifiers } from "@yielded/agent";
 import { Effect, Schema } from "effect";
 
-import { Assistant, ThreadModels } from "./auto-model.ts";
+import { Assistant, ThreadAuthorization, ThreadModels } from "./auto-model.ts";
 declare const threadId: Identifiers.ThreadId;
 declare const rawInput: unknown;
-declare const authorizeThread: (threadId: Identifiers.ThreadId) => Effect.Effect<void>;
 // ---cut---
 const run = Effect.gen(function* () {
-  yield* authorizeThread(threadId);
+  const authorization = yield* ThreadAuthorization;
+
+  yield* authorization.authorize(threadId);
   const input = yield* Schema.decodeUnknownEffect(Assistant.input)(rawInput);
   const model = yield* ThreadModels.resolve({ threadId, state: { task: input } });
 
@@ -54,9 +55,9 @@ const run = Effect.gen(function* () {
 }).pipe(Effect.timeout("30 seconds"), Effect.scoped);
 ```
 
-Supply a `DecisionModel`, native provider clients, and a shared `SelectionStore`
-around this workflow. Keep selection and execution in the caller's Scope and
-deadline; the Agent's generation budget starts after selection. Resolving the
+Supply the host's `ThreadAuthorization`, a `DecisionModel`, native provider clients,
+and a shared `SelectionStore` around this workflow. Keep selection and execution in
+the caller's Scope and deadline; the Agent's generation budget starts after selection. Resolving the
 same Thread reuses its committed choice. Child agents use their configured
 native model; a separate per-child choice requires explicit host resolution.
 The [complete example](https://github.com/yielded-dev/agent/blob/main/docs/snippets/travel-planner/auto-model.ts)
