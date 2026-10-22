@@ -1,5 +1,4 @@
 ---
-"@yielded/agent-workflow": minor
 "@yielded/agent-platform-node": minor
 "@yielded/agent": minor
 ---

@@ -74,8 +74,6 @@ for recovery, use a durable host. See [storage](/storage/).
 | <a id="effect-agent-storage-sqlite"></a>`@yielded/agent-storage-sqlite`           | [Node SQLite persistence](/storage/sqlite/)                                                 |
 | <a id="effect-agent-storage-postgres"></a>`@yielded/agent-storage-postgres`       | [PostgreSQL persistence](/storage/postgres/) through your SQL client                        |
 | <a id="effect-agent-storage-cloudflare"></a>`@yielded/agent-storage-cloudflare`   | [Object-local SQLite persistence](/storage/cloudflare/)                                     |
-| <a id="effect-agent-workflow"></a>`@yielded/agent-workflow`                       | [Effect Workflow integration](/guide/workflows/) with an injected engine                    |
-| <a id="effect-agent-sandbox-local"></a>`@yielded/agent-sandbox-local`             | [Trusted local child processes](/guide/sandbox/); reports unisolated execution              |
 | <a id="effect-agent-testing"></a>`@yielded/agent-testing`                         | [Scripted models and conformance helpers](/guide/testing/)                                  |
 | <a id="effect-agent-pr-review"></a>`@yielded/agent-pr-review`                     | Provider-neutral review over supplied patches and immutable source                          |
 
@@ -88,8 +86,8 @@ Upstream `@effect/ai-typesafe` provides Jev decisions. See its
 
 ### Limits and unsupported features
 
-Storage supplies persistence, never distributed Thread ownership. Local sandbox
-execution is not an isolation boundary. Memory extraction, sharing policy, and
+Storage supplies persistence, never distributed Thread ownership. Execution adapters
+declare their own [isolation boundaries](/guide/sandbox/). Memory extraction, sharing policy, and
 application domain state remain host responsibilities. Read each guide's constraints
 before choosing an adapter.
 

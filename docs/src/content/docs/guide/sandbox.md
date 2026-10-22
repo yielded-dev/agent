@@ -5,62 +5,31 @@ description: Choose a scoped execution capability and understand what its adapte
 
 <a id="sandbox-execution"></a>
 
-A sandbox capability describes an operation and its resource limits. The adapter determines which
-isolation guarantees it can enforce. Choose `Sandbox` for known processes, [Code Mode](/guide/code-mode/)
-for generated JavaScript over allowlisted tools, and [browser services](/guide/browser/) for web interaction.
+Execution capabilities describe the work and its limits. Their adapters determine which
+isolation guarantees they can enforce. Use [Code Mode](/guide/code-mode/) for generated
+JavaScript over allowlisted tools and [browser services](/guide/browser/) for web interaction.
 
-## Run a trusted local process
+## Choose the execution boundary
 
-```ts twoslash
-// @types: node
-import { LocalSandbox } from "@yielded/agent-sandbox-local";
-import { NetworkDisabled, Sandbox, SandboxRequest } from "@yielded/agent/sandbox";
-import { Duration, Effect, Stream } from "effect";
+`CodeExecutor` gives one generated program a narrow host-call capability; it does not grant
+a shell. The Cloudflare adapter runs each pass in a fresh Dynamic Worker with ambient network
+access disabled. Calls into application tools still require the host's current authorization.
 
-const program = Effect.gen(function* () {
-  const sandbox = yield* Sandbox;
-  return yield* sandbox
-    .execute(
-      SandboxRequest.make({
-        runtime: { kind: "unisolated-process", identity: "local-process" },
-        command: process.execPath,
-        args: ["-e", "console.log('ready')"],
-        cwd: process.cwd(),
-        environment: { allow: [] },
-        mounts: [],
-        network: NetworkDisabled.make({}),
-        limits: { maxOutputBytes: 16_384, maxWallTime: Duration.seconds(10) },
-        secretHandles: [],
-        artifactRules: [],
-      }),
-    )
-    .pipe(Stream.runCollect);
-}).pipe(Effect.provide(LocalSandbox.layer), Effect.scoped);
-```
+Browser adapters own network access and page lifetimes separately. Their configuration controls
+which destinations and browser capabilities a session can use. Keep credentials and resource
+authorization in the host.
 
-Install `@yielded/agent-sandbox-local` and run `program` from your Effect entry point. The event
-stream identifies process start, stdout/stderr output, and exit. A nonzero exit emits its exit
-event before failing with `SandboxExitError`.
+For trusted local commands, compose Effect's `ChildProcess` and `ChildProcessSpawner` in your
+application. A child process is not an isolation boundary. Run untrusted commands only through
+an adapter that enforces the required filesystem, network, credential, and resource restrictions.
 
-## Limits and local adapter boundaries
+## Understand limits and cleanup
 
-The local adapter is **unisolated**. `NetworkDisabled` is only a request marker here: it does not
-prevent the child from opening network connections. Use this adapter only for trusted commands,
-never model-generated commands or sensitive credentials.
+The shared `SandboxImplementation` schema identifies an adapter's isolation posture. Network
+policy values describe requested restrictions; the selected adapter must enforce or reject them.
+A policy value alone does not isolate execution.
 
-It passes only allowlisted environment names and bounds combined output bytes and elapsed time.
-It rejects requested mounts, CPU/memory limits, secret handles, and artifact collection because it
-cannot enforce them. Unsupported requests fail before process startup.
-
-Stream finalization owns process cleanup. A crash after a process changes an external system
-can leave an uncertain outcome; restarting the process is not recovery.
-
-## Use the other services deliberately
-
-`CodeExecutor` exposes a narrow host-call capability to one generated program; it does not grant
-a shell. Browser services own network and page lifetimes separately. Neither turns local process
-execution into an isolated sandbox.
-
-The [local adapter example](https://github.com/yielded-dev/agent/tree/main/packages/sandbox-local)
-contains setup and executable contract cases. Keep authentication and resource authorization in
-your host regardless of the adapter selected.
+Keep execution within its owning Effect Scope so interruption releases local resources.
+External effects can outlive that Scope: a crash after a write can leave an uncertain outcome.
+Use the tool's reconciliation contract before retrying; restarting a process or program is not
+recovery. See [Code Mode partial outcomes](/guide/code-mode/#partial-outcomes).

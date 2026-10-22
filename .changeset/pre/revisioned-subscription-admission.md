@@ -4,7 +4,6 @@
 "@yielded/agent-storage-cloudflare": patch
 "@yielded/agent-platform-node": patch
 "@yielded/agent-platform-cloudflare": patch
-"@yielded/agent-workflow": patch
 "@yielded/agent": patch
 ---
 

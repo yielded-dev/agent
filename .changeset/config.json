@@ -14,14 +14,12 @@
       "@yielded/agent-platform-cloudflare",
       "@yielded/agent-platform-node",
       "@yielded/agent-pr-review",
-      "@yielded/agent-sandbox-local",
       "@yielded/agent-storage-cloudflare",
       "@yielded/agent-storage-memory",
       "@yielded/agent-storage-postgres",
       "@yielded/agent-storage-sql",
       "@yielded/agent-storage-sqlite",
       "@yielded/agent-testing",
-      "@yielded/agent-workflow",
       "@yielded/agent"
     ]
   ],

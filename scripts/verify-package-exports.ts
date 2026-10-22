@@ -76,7 +76,6 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "DoSubmissionLedger.publishSettlement",
     "DoSubmissionLedger.finalizeSettlement",
   ],
-  "packages/sandbox-local/src/LocalSandbox.ts": ["LocalSandbox.execute"],
   "packages/platform-cloudflare/src/CloudflareThreadClient.ts": ["CloudflareThreadClient.call"],
   "packages/platform-cloudflare/src/internal/transport.ts": ["CloudflarePortTransport.call"],
   "packages/storage-cloudflare/src/DoThreadStore.ts": [

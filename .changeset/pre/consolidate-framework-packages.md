@@ -2,12 +2,10 @@
 "@yielded/agent-platform-cloudflare": minor
 "@yielded/agent-platform-node": minor
 "@yielded/agent-pr-review": minor
-"@yielded/agent-sandbox-local": minor
 "@yielded/agent-storage-cloudflare": minor
 "@yielded/agent-storage-memory": minor
 "@yielded/agent-storage-sqlite": minor
 "@yielded/agent-testing": minor
-"@yielded/agent-workflow": minor
 "@yielded/agent": minor
 ---
 

@@ -6,7 +6,7 @@ import {
 } from "@yielded/agent-testing/code-executor-substitute";
 
 // The wall-clock conformance case needs the live Clock, so the suite opts out
-// of the injected test services the same way the sandbox-local suite does.
+// of the injected test services.
 layer(inProcessCodeExecutorLayer, { excludeTestServices: true })(
   "CAP-015 in-process CodeExecutor substitute",
   (it) => {

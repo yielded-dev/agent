@@ -17,6 +17,6 @@ runs an agent without setting up a durable host.
 | Where does accepted work run?           | [Platforms](/platforms/)                         |
 | What must the host operate?             | [Operations](/guide/operations/)                 |
 
-Add [subagents](/guide/subagents/), [messaging](/guide/messaging/), or [workflows](/guide/workflows/)
+Add [subagents](/guide/subagents/) or [messaging](/guide/messaging/)
 when work needs separate lifetimes. [Testing](/guide/testing/) explains deterministic model
 fixtures and storage adapter certification.

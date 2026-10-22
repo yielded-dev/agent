@@ -79,11 +79,8 @@ closes storage. A replacement host opens the file and recovers retained work wit
 fresh local owner generations. There are no distributed leases or takeover protocol.
 Use `host.explain`, `host.verify`, and `host.scanObligations` for inspection.
 
-<a id="workflow"></a>
-
 ## Custom runtime composition
 
 `NodeDurableAgentRuntime.layerRegistered` acquires a registered runtime without
-starting workers. Use it when your application supplies dispatch, including the
-[Effect Workflow assembly](/guide/workflows/#node). For PostgreSQL, compose a
+starting workers. Use it when your application supplies dispatch. For PostgreSQL, compose a
 [custom durable host](/storage/postgres/) around its storage ports.

@@ -25,13 +25,11 @@
         "@yielded/agent-ai-decision": "workspace:*",
         "@yielded/agent-platform-cloudflare": "workspace:*",
         "@yielded/agent-platform-node": "workspace:*",
-        "@yielded/agent-sandbox-local": "workspace:*",
         "@yielded/agent-storage-memory": "workspace:*",
         "@yielded/agent-storage-postgres": "workspace:*",
         "@yielded/agent-storage-sql": "workspace:*",
         "@yielded/agent-storage-sqlite": "workspace:*",
         "@yielded/agent-testing": "workspace:*",
-        "@yielded/agent-workflow": "workspace:*",
         "alchemy": "catalog:",
         "effect": "catalog:",
         "effect-cf": "catalog:",
@@ -297,7 +295,6 @@
         "@effect/sql-sqlite-node": "catalog:",
         "@yielded/agent": "workspace:*",
         "@yielded/agent-storage-sqlite": "workspace:*",
-        "@yielded/agent-workflow": "workspace:*",
       },
       "devDependencies": {
         "@effect/vitest": "catalog:",
@@ -346,26 +343,6 @@
         "vite": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
-      },
-    },
-    "packages/sandbox-local": {
-      "name": "@yielded/agent-sandbox-local",
-      "version": "0.1.0-beta.188",
-      "dependencies": {
-        "@effect/platform-node": "catalog:",
-        "@yielded/agent": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/vitest": "catalog:",
-        "@types/node": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0",
       },
     },
     "packages/storage-cloudflare": {
@@ -523,26 +500,6 @@
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "tailwindcss": "^4.0.0",
-      },
-    },
-    "packages/workflow": {
-      "name": "@yielded/agent-workflow",
-      "version": "0.1.0-beta.188",
-      "dependencies": {
-        "@yielded/agent": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/platform-node": "catalog:",
-        "@effect/vitest": "catalog:",
-        "@yielded/agent-storage-memory": "workspace:*",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0",
       },
     },
     "tooling/browser-run-worker-proof": {
@@ -1958,8 +1915,6 @@
 
     "@yielded/agent-pr-review-action": ["@yielded/agent-pr-review-action@workspace:packages/pr-review-action"],
 
-    "@yielded/agent-sandbox-local": ["@yielded/agent-sandbox-local@workspace:packages/sandbox-local"],
-
     "@yielded/agent-storage-cloudflare": ["@yielded/agent-storage-cloudflare@workspace:packages/storage-cloudflare"],
 
     "@yielded/agent-storage-memory": ["@yielded/agent-storage-memory@workspace:packages/storage-memory"],
@@ -1971,8 +1926,6 @@
     "@yielded/agent-storage-sqlite": ["@yielded/agent-storage-sqlite@workspace:packages/storage-sqlite"],
 
     "@yielded/agent-testing": ["@yielded/agent-testing@workspace:packages/testing"],
-
-    "@yielded/agent-workflow": ["@yielded/agent-workflow@workspace:packages/workflow"],
 
     "@yielded/auth": ["@yielded/auth@0.1.0-beta.43", "", { "dependencies": { "@yielded/crypto": "0.1.0-beta.43", "@yielded/jose": "0.1.0-beta.43", "@yielded/oauth": "0.1.0-beta.43" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-I56KPe3dwIMykL0qjK7Vj6vxntRR2iuE+0yY2M53qqsQ4yKI3SojAQ7nxoT/lIsShPAhLDfkgVpVTYR5hYGToQ=="],
 
