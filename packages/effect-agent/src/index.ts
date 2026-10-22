@@ -31,7 +31,6 @@ export * as MemoryRevalidation from "./core/MemoryRevalidation.ts";
 export * as MemoryStore from "./core/MemoryStore.ts";
 export * as Messaging from "./capabilities/Messaging.ts";
 export * as MessagingHost from "./engine/MessagingHost.ts";
-export * as ModelContext from "./capabilities/ModelContext.ts";
 export * as Output from "./engine/Output.ts";
 export * as PageCapture from "./sandbox/PageCapture.ts";
 export * as PageCrawl from "./sandbox/PageCrawl.ts";

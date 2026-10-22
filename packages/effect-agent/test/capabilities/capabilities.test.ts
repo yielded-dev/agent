@@ -1,25 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
 import { ThreadId, RunId } from "@yielded/agent/identifiers";
 import {
-  type ContextTransformError,
-  type ContextTransform,
-  prepareModelContext,
-} from "@yielded/agent/model-context";
-import {
   ThreadAppend,
-  Thread as ThreadSnapshot,
   Store as ConversationStore,
   layerMemory,
   toPrompt,
 } from "@yielded/agent/thread";
 import * as Prompt from "effect/ai/Prompt";
 import * as Clock from "effect/Clock";
-import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
-import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 const threadId = Schema.decodeSync(ThreadId)("trip-1");
 const runId = Schema.decodeSync(RunId)("run-1");
@@ -85,38 +77,3 @@ describe("capability contracts", () => {
     }).pipe(Effect.provide(layerMemory)),
   );
 });
-
-export const verifyRetainsContextTransformRequirementsInTuplesAndArrays = () => {
-  class Prefix extends Context.Service<Prefix, string>()("test/ContextPrefix") {}
-  class Suffix extends Context.Service<Suffix, string>()("test/ContextSuffix") {}
-
-  const snapshot = ThreadSnapshot.make({
-    version: 1,
-    threadId,
-    nextSequence: 0,
-    contentBytes: 0,
-    messages: [],
-  });
-
-  const prefix: ContextTransform<Prefix> = {
-    id: "prefix",
-    version: "1",
-    apply: (messages) => Effect.as(Prefix, messages),
-  };
-
-  const suffix: ContextTransform<Suffix> = {
-    id: "suffix",
-    version: "1",
-    apply: (messages) => Effect.as(Suffix, messages),
-  };
-
-  const fromTuple = prepareModelContext(snapshot, [prefix, suffix]);
-  const transforms = [prefix, suffix];
-  const fromArray = prepareModelContext(snapshot, transforms);
-
-  expectTypeOf<Effect.Services<typeof fromTuple>>().toEqualTypeOf<Prefix | Suffix>();
-  expectTypeOf<Effect.Services<typeof fromArray>>().toEqualTypeOf<Prefix | Suffix>();
-  expectTypeOf<Effect.Error<typeof fromTuple>>().toEqualTypeOf<ContextTransformError>();
-};
-
-declare const expectTypeOf: typeof ExpectTypeOf;
