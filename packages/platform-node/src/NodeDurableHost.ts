@@ -1,12 +1,5 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
-  type IntegrityReport,
-  type ObligationReport,
-  type ObligationThresholds,
-  type RecoveryExplanation,
-  type RetryCommand,
-} from "@yielded/agent/admin";
-import {
   type AgentRegistration,
   type ResolvedBinding,
   type DurableBindingFailure,
@@ -15,20 +8,15 @@ import {
   DurableAgentRuntime,
   type DurableAbortFailure,
   type DurableAwaitFailure,
-  type DurableExplainFailure,
   type DurableObserveOptions,
-  type DurableObligationFailure,
-  type DurableRetryFailure,
   type DurableSubmitAgent,
   type DurableSubmitFailure,
   type DurableSubmitOptions,
-  type DurableVerifyFailure,
   type DurableWorkerFailure,
   type Receipt,
   type RecoveryBlocked,
   type RecoveryReport,
 } from "@yielded/agent/durable-agent-runtime";
-import { type ThreadId, type SubmissionId } from "@yielded/agent/identifiers";
 import {
   MessageDeliveryStore,
   MessageDeliveryDriver,
@@ -78,7 +66,6 @@ export class AdmissionClosed extends Schema.TaggedError<AdmissionClosed>()("Admi
 }) {}
 
 const makeHost = Effect.fnUntraced(function* (
-  startWorkers: boolean,
   managedWorkers?: Effect.Effect<void, DurableWorkerFailure | DurableBindingFailure>,
 ) {
   const runtime = yield* DurableAgentRuntime;
@@ -179,14 +166,15 @@ const makeHost = Effect.fnUntraced(function* (
       ? runWorkers(runtime.runResolvedWorker)
       : withDeliveries(managedWorkers);
 
-  const run = startWorkers
-    ? Fiber.join(
-        yield* runResolvedWorkers.pipe(
-          Effect.onExit(() => Ref.set(admission, false)),
-          Effect.forkScoped,
-        ),
-      )
-    : runResolvedWorkers;
+  const run =
+    managedWorkers !== undefined
+      ? Fiber.join(
+          yield* runResolvedWorkers.pipe(
+            Effect.onExit(() => Ref.set(admission, false)),
+            Effect.forkScoped,
+          ),
+        )
+      : runResolvedWorkers;
 
   // Register after the worker fiber: close admission, interrupt/join workers, close
   // local owner generations, then close storage and captured application services.
@@ -200,17 +188,6 @@ const makeHost = Effect.fnUntraced(function* (
     submissionStatus: runtime.submissionStatus,
     observe: runtime.observe,
     abort: runtime.abort,
-    explain: runtime.explain,
-    explainThread: runtime.explainThread,
-    verify: runtime.verify,
-    retry: runtime.retry,
-    wake: runtime.wake,
-    scanObligations: runtime.scanObligations,
-    discoverWork: runtime.discoverWork,
-    discoverWorkThreads: runtime.discoverWorkThreads,
-    rebuildWorkIndex: runtime.rebuildWorkIndex,
-    recoverWork: runtime.recoverWork,
-    runRecovery: runtime.runRecovery,
     runWorkers,
     run,
     runResolvedWorkers: run,
@@ -220,6 +197,7 @@ const makeHost = Effect.fnUntraced(function* (
 /**
  * Operational host service. Prefer the module's `layer` and `run` for managed workers.
  * The static constructors on this class retain explicit, manual worker ownership.
+ * Use the accompanying `DurableAgentRuntime` service for inspection and recovery operations.
  *
  * Startup gates run during Layer construction, so the service existing implies readiness:
  * configuration was schema-decoded, the SQLite file passed the exact-version compatibility check,
@@ -241,11 +219,6 @@ export class NodeDurableHost extends Context.Service<
      * or abort advances the parked Submission.
      */
     readonly startupRecovery: ReadonlyArray<RecoveryReport>;
-    readonly discoverWork: DurableAgentRuntime["Service"]["discoverWork"];
-    readonly discoverWorkThreads: DurableAgentRuntime["Service"]["discoverWorkThreads"];
-    readonly rebuildWorkIndex: DurableAgentRuntime["Service"]["rebuildWorkIndex"];
-    readonly recoverWork: DurableAgentRuntime["Service"]["recoverWork"];
-    readonly runRecovery: DurableAgentRuntime["Service"]["runRecovery"];
     /** Admission-role readiness (deployment §7): true until shutdown begins. */
     readonly admissionOpen: Effect.Effect<boolean>;
     /** Observe the managed worker pool, preserving its failure. Manual hosts start their pool here. */
@@ -270,24 +243,6 @@ export class NodeDurableHost extends Context.Service<
       ThreadStoreError | ThreadNotMaterialized | OperationDenied
     >;
     readonly abort: (command: AbortCommand) => Effect.Effect<AbortIntent, DurableAbortFailure>;
-    /** `DurableAgentRuntime.explain` — read-only recovery explanation of one Submission (P7). */
-    readonly explain: (
-      submissionId: SubmissionId,
-    ) => Effect.Effect<RecoveryExplanation, DurableExplainFailure>;
-    /** `DurableAgentRuntime.explainThread` — explain every nonterminal lane member. */
-    readonly explainThread: (
-      threadId: ThreadId,
-    ) => Effect.Effect<ReadonlyArray<RecoveryExplanation>, DurableExplainFailure>;
-    /** `DurableAgentRuntime.verify` — read-only integrity checks, never a repair (P7). */
-    readonly verify: (threadId: ThreadId) => Effect.Effect<IntegrityReport, DurableVerifyFailure>;
-    /** `DurableAgentRuntime.retry` — audited single-Submission re-drive with typed refusals. */
-    readonly retry: (command: RetryCommand) => Effect.Effect<RecoveryReport, DurableRetryFailure>;
-    /** `DurableAgentRuntime.wake` — the documented operator liveness nudge for one lane. */
-    readonly wake: (threadId: ThreadId) => Effect.Effect<void, OperationDenied>;
-    /** `DurableAgentRuntime.scanObligations` — the scan-based DUR-017/OPS-001 report. */
-    readonly scanObligations: (
-      thresholds: ObligationThresholds,
-    ) => Effect.Effect<ObligationReport, DurableObligationFailure>;
     /**
      * Run `workerConcurrency` copies of the given worker effect (typically
      * `DurableAgentRuntime.runResolvedWorker`) until the caller's Scope interrupts them. The
@@ -343,7 +298,7 @@ export class NodeDurableHost extends Context.Service<
     NodeDurableHost,
     DurableWorkerFailure | RecoveryBlocked | MessageDeliveryError,
     DurableAgentRuntime | NodeDurableAgentRuntimeConfig | MessageDeliveryStore
-  > = Layer.effect(NodeDurableHost)(makeHost(false));
+  > = Layer.effect(NodeDurableHost)(makeHost());
 
   /** The complete DN host: `NodeDurableAgentRuntime.layer(options)` plus the host lifecycle gates. */
   static layerStack<
@@ -419,7 +374,6 @@ export const layer = <
       );
 
       const host = yield* makeHost(
-        true,
         Effect.contextWith((live: Context.Context<never>) =>
           runNodeWorkerDispatch(config.workerConcurrency).pipe(
             Effect.setContext(Context.merge(applicationInvocationContext(live), workerServices)),
