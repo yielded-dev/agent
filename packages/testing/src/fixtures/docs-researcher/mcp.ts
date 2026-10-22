@@ -3,6 +3,8 @@ import {
   McpConnector,
   McpServerIdentity,
   McpToolkitMismatch,
+  McpToolCallFailed,
+  McpToolResult,
   type McpConnection,
 } from "@yielded/agent/mcp";
 import * as McpSchema from "effect/ai/McpSchema";
@@ -13,15 +15,20 @@ import type * as JsonSchema from "effect/JsonSchema";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import { DocContentToolkit, FetchDocument } from "./definition.ts";
+import {
+  DocContentToolkit,
+  DocumentQuery,
+  FetchDocument,
+  ResearchDocument,
+  researchDocumentLookup,
+} from "./definition.ts";
 
 // ---------------------------------------------------------------------------
 // Scripted MCP fixture: a deterministic `McpConnector` adapter that serves the
 // doc-summarizer's content tool. Discovery entries are DERIVED from the
-// authored Tool (`Tool.getJsonSchema`), so `validateMcpDiscovery` digesting
-// both sides is a real check, not a tautology; the mismatch and over-limit
-// connectors below serve deliberately wrong contracts so tests can pin the
-// fail-closed paths (CAP-009, SEC-013).
+// authored Tool (`Tool.getJsonSchema`). The assembly checks discovery against
+// its authored contract before registering a worker; the mismatch and over-limit
+// connectors below exercise those fail-closed paths.
 // ---------------------------------------------------------------------------
 
 /** Framework-side hard bounds one docs-researcher assembly requests. */
@@ -82,8 +89,6 @@ const discoveredFetchDocument = McpSchema.Tool.make({
   name: FetchDocument.name,
   description: "Fetch one bounded research document by its identifier.",
   inputSchema: flattenTopLevelRef(Tool.getJsonSchema(FetchDocument)),
-  // `validateMcpDiscovery` only compares an `outputSchema` derived down to an
-  // object type; mirror that so this fixture stays a real round-trip check.
   ...(fetchDocumentOutputSchema.type === "object"
     ? { outputSchema: fetchDocumentOutputSchema }
     : {}),
@@ -97,7 +102,31 @@ const scriptedConnector = (tools: ReadonlyArray<McpSchema.Tool>): Layer.Layer<Mc
           identity: docsMcpIdentity,
           capabilities: McpSchema.ServerCapabilities.make({}),
           tools,
-          toolkit: DocContentToolkit,
+          callTool: Effect.fnUntraced(function* (name, parameters) {
+            const failure = (message: string) =>
+              McpToolCallFailed.make({
+                serverId: docsMcpIdentity.serverId,
+                tool: name,
+                reason: "tool-error",
+                message,
+              });
+
+            if (name !== FetchDocument.name) return yield* failure("Unknown document tool");
+
+            const query = yield* Schema.decodeUnknownEffect(DocumentQuery)(parameters).pipe(
+              Effect.mapError((error) => failure(error.message)),
+            );
+
+            const document = yield* researchDocumentLookup(query).pipe(
+              Effect.mapError((error) => failure(error.message)),
+            );
+
+            const structuredContent = yield* Schema.encodeEffect(ResearchDocument)(document).pipe(
+              Effect.mapError((error) => failure(error.message)),
+            );
+
+            return McpToolResult.make({ content: [], structuredContent });
+          }),
         }),
         () => Effect.void,
       ),
@@ -130,23 +159,27 @@ const isJsonEqual = (left: unknown, right: unknown): boolean =>
   JSON.stringify(left) === JSON.stringify(right);
 
 /**
- * Bind DISCOVERY to AUTHORING: `validateMcpDiscovery` (inside `connectMcp`)
- * already proved the served discovery matches the connection's own Toolkit;
- * this check additionally proves that Toolkit is the exact toolkit the
- * doc-summarizer was AUTHORED against — same tool names, same derived JSON
- * schemas — so a connector cannot substitute a look-alike toolkit. The
- * docs-researcher harness runs it before any worker Binding registration and
- * fails closed on any drift.
+ * Bind discovered schemas to the separately authored doc-summarizer contract
+ * before worker registration. The connection's dynamic Toolkit is derived from
+ * discovery, so checking it against discovery would not establish this pin.
  */
 export const assertDiscoveryMatchesAuthoredToolkit = Effect.fn(
   "DocsResearcher.assertDiscoveryMatchesAuthoredToolkit",
 )(function* (connection: McpConnection): Effect.fn.Return<void, McpToolkitMismatch> {
   const authored = Object.values(DocContentToolkit.tools)
-    .map((tool) => ({ name: tool.name, inputSchema: Tool.getJsonSchema(tool) }))
+    .map((tool) => ({
+      name: tool.name,
+      inputSchema: flattenTopLevelRef(Tool.getJsonSchema(tool)),
+      outputSchema: flattenTopLevelRef(Tool.getJsonSchemaFromSchema(tool.successSchema)),
+    }))
     .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
 
-  const discovered = Object.values(connection.toolkit.tools)
-    .map((tool) => ({ name: tool.name, inputSchema: Tool.getJsonSchema(tool) }))
+  const discovered = connection.discovery.tools
+    .map((tool) => ({
+      name: tool.name,
+      inputSchema: tool.inputSchema,
+      outputSchema: tool.outputSchema,
+    }))
     .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
 
   const matches =
@@ -154,7 +187,8 @@ export const assertDiscoveryMatchesAuthoredToolkit = Effect.fn(
     authored.every(
       (tool, index) =>
         tool.name === discovered[index]?.name &&
-        isJsonEqual(tool.inputSchema, discovered[index]?.inputSchema),
+        isJsonEqual(tool.inputSchema, discovered[index]?.inputSchema) &&
+        isJsonEqual(tool.outputSchema, discovered[index]?.outputSchema),
     );
 
   if (!matches) {

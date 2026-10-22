@@ -754,34 +754,15 @@ const mcpCase = Effect.fn("diagnostic.mcp")(function* (workload: DiagnosticCase)
           });
         }
 
-        // The general connection port erases dynamic tool types. Check the exact public
-        // transport schemas before reconstructing a typed Toolkit from the same Tool objects.
-        const remoteTools = Object.values(connection?.toolkit.tools ?? {}).filter(
-          (tool): tool is McpClient.McpTool =>
-            tool.parametersSchema === Schema.Unknown &&
-            tool.successSchema === McpClient.McpToolResult &&
-            tool.failureSchema === McpClient.McpToolCallFailed &&
-            tool.failureMode === "return",
-        );
+        const tools = connection?.toolkit ?? localToolkit;
 
-        if (enabled) yield* check(remoteTools.length === 8, "MCP transport tool contracts changed");
+        const handlers = connection?.handlers ?? localHandlers;
 
-        const executableTools: Array<McpClient.McpTool | typeof localTool> =
-          connection === undefined ? [localTool] : remoteTools;
+        if (enabled)
+          yield* check(Object.keys(tools.tools).length === 8, "MCP discovery tool count changed");
 
-        const tools = Toolkit.make(...executableTools);
-
-        const handlers: Layer.Layer<Tool.Handler<string>> | undefined =
-          connection?.handlers ?? (enabled ? undefined : localHandlers);
-
-        if (handlers === undefined)
-          return yield* BenchmarkError.make({
-            message: "MCP connection did not provide executable handlers",
-          });
         if (session === 1) {
           yield* Effect.gen(function* () {
-            const ready = yield* tools;
-
             for (let index = 0; index < 2; index++) {
               yield* progress.mark({
                 name: `mcp.call.begin.${index}`,
@@ -789,9 +770,16 @@ const mcpCase = Effect.fn("diagnostic.mcp")(function* (workload: DiagnosticCase)
               });
               const callStart = yield* Clock.monotonicTimeNanos;
 
-              const results = yield* Stream.runCollect(
-                yield* ready.handle("echo", { message: `reuse-${index}` }),
-              );
+              const results =
+                connection === undefined
+                  ? yield* Stream.runCollect(
+                      yield* (yield* localToolkit).handle("echo", { message: `reuse-${index}` }),
+                    )
+                  : yield* Stream.runCollect(
+                      yield* (yield* connection.toolkit).handle("echo", {
+                        message: `reuse-${index}`,
+                      }),
+                    );
 
               metrics.push({ name: `reusedCall.${index}`, value: yield* elapsed(callStart) });
               const last = results.at(-1);

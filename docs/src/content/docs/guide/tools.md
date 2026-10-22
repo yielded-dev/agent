@@ -72,7 +72,10 @@ Never infer approval from model prose.
 `ToolExposure` limits declarations sent to a model, and `ToolDiscovery` lets it search an eligible
 catalogue. Host visibility and inherited subagent grants constrain both discovery and execution.
 Selection changes what the model sees; it grants no additional authority. Use this when a large
-toolkit would crowd out task context.
+toolkit would crowd out task context. `ToolDiscovery.make` provides bounded literal search.
+For custom ranking, define a native Tool with `DiscoveryTool` and
+`ToolExecutionClass: "readonly"`, read `CurrentToolCatalog`, and use
+`Schema.Struct({ toolNames: ToolNames })` as its success schema.
 
 ## Handle uncertain external effects
 
@@ -89,7 +92,10 @@ See [durability](/concepts/durability/).
 
 `McpClient` discovers tools through an application-configured transport. These remain ordinary
 tools with the same authorization, approval, and uncertainty rules. Server hints are untrusted
-by default; opt into `trustToolAnnotations` only for a trusted server.
+by default; opt into `trustToolAnnotations` only for a trusted server. `connectMcp` validates
+discovery and returns its native `toolkit` and `handlers` together. Retain
+`discovery.toolkitSchemaDigest` and pass it as `expectedToolkitSchemaDigest` when reconnecting
+to reject changed tool contracts before execution.
 
 Use [subagents](/guide/subagents/) for delegation, [browser tools](/guide/browser/) for web
 interaction, or [Code Mode](/guide/code-mode/) for a bounded program over several tools.

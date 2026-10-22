@@ -139,7 +139,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("native Tool exposure", 
           const documentation = "東京".repeat(64);
 
           const ReadDocument = Tool.make("read", {
-            description: "Read café 東京 😀",
+            description: "Document action: read café 東京 😀",
             parameters: Schema.Struct({
               key: Schema.String.annotate({ description: documentation }),
             }),
@@ -147,6 +147,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("native Tool exposure", 
           });
 
           const WriteDocument = Tool.make("write", {
+            description: "Document action: write",
             parameters: ReadDocument.parametersSchema,
             success: Schema.String,
           });
@@ -154,26 +155,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("native Tool exposure", 
           const HostHidden = Tool.make("host_hidden", { success: Schema.String });
           const GrantHidden = Tool.make("grant_hidden", { success: Schema.String });
           const maxResultBytes = 1_024;
-          let finalized = 0;
-
-          const discovery = ToolDiscovery.make({
-            maxResultBytes,
-            search: Effect.fnUntraced(function* (_request, catalogue) {
-              expect(catalogue.map((entry) => entry.name)).toEqual([
-                "discover_tools",
-                "read",
-                "status",
-                "write",
-              ]);
-              yield* Effect.addFinalizer(() =>
-                Effect.sync(() => {
-                  finalized++;
-                }),
-              );
-
-              return ["native:read", "native:write"];
-            }),
-          });
+          const discovery = ToolDiscovery.make({ maxResultBytes });
 
           const actions = Toolkit.make(
             ReadDocument,
@@ -204,7 +186,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("native Tool exposure", 
                 streamText: (options) => {
                   if (turn++ === 0)
                     return Stream.fromIterable([
-                      call("find", "discover_tools", { query: "read" }),
+                      call("find", "discover_tools", { query: "document action" }),
                       finish,
                     ]);
                   if (turn === 2) {
@@ -284,7 +266,6 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("native Tool exposure", 
           expect(result.output).toBe("done");
           expect(turn).toBe(3);
           expect(invoked).toEqual(["read"]);
-          expect(finalized).toBe(1);
         }),
     );
   }
