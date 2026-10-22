@@ -17,7 +17,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./certification": "./src/Certification.ts",
-    "./chaos": "./src/Chaos.ts",
     "./code-executor-conformance": "./src/CodeExecutorConformance.ts",
     "./code-executor-substitute": "./src/CodeExecutorSubstitute.ts",
     "./docs-researcher": "./src/DocsResearcher.ts",

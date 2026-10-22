@@ -18,7 +18,6 @@ import * as Stream from "effect/Stream";
 
 import type { ScriptedTurnInput } from "../../ScriptedModel.ts";
 import { AirportCode } from "./definition.ts";
-import { CatalogLifecycle } from "./deterministic-layers.ts";
 
 // ---------------------------------------------------------------------------
 // Destination Researcher: the S1 specialist child Agent.
@@ -159,15 +158,9 @@ export const destinationReportFor = (destination: string): DestinationReport => 
 export const encodedDestinationReport = (destination: string): string =>
   JSON.stringify(Schema.encodeSync(DestinationReport)(destinationReportFor(destination)));
 
-export const DestinationGuideLayer = Layer.effect(
+export const DestinationGuideLayer = Layer.succeed(
   DestinationGuide,
-  Effect.gen(function* () {
-    const lifecycle = yield* CatalogLifecycle;
-
-    yield* Effect.acquireRelease(lifecycle.markAcquired, () => lifecycle.markFinalized);
-
-    return DestinationGuide.of({ lookup: destinationLookup });
-  }),
+  DestinationGuide.of({ lookup: destinationLookup }),
 );
 
 /** Child-side construction requirements of the delegation handler Layer. */
@@ -429,8 +422,7 @@ export const researcherHappyPathTurns = (
 
 /**
  * Deterministic controls for parallel researcher children whose completions
- * are released in a caller-selected order (ReverseCompletionToolkitLayer
- * pattern). This is intentionally a test fixture: it uses no clock or sleep.
+ * are released in a caller-selected order without clocks or sleeps.
  */
 export interface DestinationResearcherControls {
   /** Await the first model request of the child researching this destination. */
@@ -469,14 +461,11 @@ const researcherReportParts = (destination: string): ReadonlyArray<Response.Stre
  * the destination named in the child's own prompt: Turn one records the
  * prompt, signals `started`, and calls the guide Tool; Turn two waits for the
  * caller's `release` before writing the report. Each child Run builds the
- * Model Layer inside its own scope, so one `CatalogLifecycle` acquisition and
- * finalization is observed per child — the same acquire/release counting the
- * catalog Layers use to prove interruption reaches every finalizer.
+ * Model Layer inside its own scope.
  */
 export const makeDestinationResearcherModel = Effect.fnUntraced(function* (
   destinations: ReadonlyArray<string>,
 ) {
-  const lifecycle = yield* CatalogLifecycle;
   const prompts = yield* Ref.make<ReadonlyArray<string>>([]);
   const gates = new Map<string, ResearcherGates>();
 
@@ -514,7 +503,6 @@ export const makeDestinationResearcherModel = Effect.fnUntraced(function* (
     Layer.effect(
       LanguageModel.LanguageModel,
       Effect.gen(function* () {
-        yield* Effect.acquireRelease(lifecycle.markAcquired, () => lifecycle.markFinalized);
         const turn = yield* Ref.make(0);
 
         return yield* LanguageModel.make({
