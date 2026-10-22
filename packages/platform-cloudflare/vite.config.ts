@@ -40,7 +40,6 @@ export default defineConfig({
       "src/index.ts",
       "src/Alarm.ts",
       "src/BrowserRestCapture.ts",
-      "src/BrowserRestCrawl.ts",
       "src/CloudflareBindings.ts",
       "src/CloudflareAiGateway.ts",
       "src/CloudflareBrowser.ts",

@@ -6,7 +6,20 @@ import {
   browserQuickActionScreenshotLayer,
 } from "@yielded/agent-platform-cloudflare/cloudflare-browser";
 import { DurableStep, ToolExecutionClass } from "@yielded/agent/durable-step";
-import { PageCaptureTargetUrl, PageUrlTarget, PageViewport } from "@yielded/agent/page-capture";
+import {
+  CapturePageContent,
+  CapturePageLinks,
+  CapturePageMarkdown,
+  CapturePageScrape,
+  PageCapture,
+  PageCaptureLimits,
+  PageCaptureRequest,
+  PageCaptureTargetUrl,
+  PageResourcePolicy,
+  PageUrlTarget,
+  PageViewport,
+  type PageCaptureError,
+} from "@yielded/agent/page-capture";
 import {
   PageScreenshot,
   PageScreenshotLimits,
@@ -28,20 +41,39 @@ const ScreenshotMetadata = Schema.fromJsonString(
   }),
 );
 
-const readPage = WebCapture.make("read_web_page", {
-  description:
-    "Read a web page as rendered Markdown or HTML, or discover its links. Use this to gather primary-source evidence before building.",
-  urls: "*",
-  // Kitesurf can leave Markdown response bodies pending long after headers arrive.
-  engine: "chromium",
-});
+const captureLimits = PageCaptureLimits.make({ maxOutputBytes: 5 * 1024 * 1024 });
+const resourcePolicy = PageResourcePolicy.make({ allowRequestPatterns: ["^https://"] });
 
-const scrapePage = WebCapture.makeScrape("scrape_web_page", {
-  description:
-    "Extract rendered elements and their attributes with CSS selectors. Useful for page sections, image sources, captions and specifications.",
-  urls: "*",
-  engine: "kitesurf",
-});
+const captureActions = {
+  markdown: CapturePageMarkdown.make({}),
+  content: CapturePageContent.make({}),
+  links: CapturePageLinks.make({}),
+};
+
+const decodeUrl = Schema.decodeOption(Schema.URLFromString);
+
+const pageTools = Toolkit.make(
+  Tool.make("read_web_page", {
+    description:
+      "Read a web page as rendered Markdown or HTML, or discover its links. Use this to gather primary-source evidence before building.\n\nAllowed actions: markdown, content, links. Any HTTPS page is allowed. Responses are bounded to 5242880 bytes; a larger page fails with a typed result you can react to.",
+    parameters: WebCapture.WebCaptureParameters,
+    success: WebCapture.WebCaptureSuccess,
+    failure: WebCapture.WebCaptureFailure,
+    failureMode: "return",
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(ToolExecutionClass, "readonly"),
+  Tool.make("scrape_web_page", {
+    description:
+      "Extract rendered elements and their attributes with CSS selectors. Useful for page sections, image sources, captions and specifications.\n\nScrapes rendered elements for 1 to 64 CSS selectors. Allowed actions: selector scrape. Any HTTPS page is allowed. Responses are bounded to 5242880 bytes; a larger page fails with a typed result you can react to.",
+    parameters: WebCapture.WebCaptureScrapeParameters,
+    success: WebCapture.WebCaptureScrapeSuccess,
+    failure: WebCapture.WebCaptureFailure,
+    failureMode: "return",
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(ToolExecutionClass, "readonly"),
+);
 
 const screenshots = Toolkit.make(
   Tool.make("screenshot_web_page", {
@@ -60,13 +92,56 @@ const screenshots = Toolkit.make(
 );
 
 // This host permits public research reads to be retried after interruption.
-export const webTools = Toolkit.merge(
-  Toolkit.make(
-    readPage.tool.annotate(Tool.Readonly, true).annotate(ToolExecutionClass, "readonly"),
-    scrapePage.tool.annotate(Tool.Readonly, true).annotate(ToolExecutionClass, "readonly"),
-  ),
-  screenshots,
-);
+export const webTools = Toolkit.merge(pageTools, screenshots);
+
+const captureFailure = (errorTag: string, message: string, retryAfterMillis?: number) =>
+  WebCapture.WebCaptureFailure.make({
+    errorTag,
+    message: message.slice(0, 4 * 1024),
+    ...(retryAfterMillis === undefined ? {} : { retryAfterMillis }),
+  });
+
+const target = Effect.fnUntraced(function* (url: string) {
+  const parsed = decodeUrl(url);
+
+  if (Option.isNone(parsed)) {
+    return yield* captureFailure(
+      "WebCaptureInvalidUrl",
+      `${url.slice(0, 256)} is not an absolute URL`,
+    );
+  }
+  if (parsed.value.protocol !== "https:") {
+    return yield* captureFailure("WebCaptureUrlDenied", "Only https:// targets are allowed");
+  }
+  if (parsed.value.username !== "" || parsed.value.password !== "") {
+    return yield* captureFailure(
+      "WebCaptureUrlDenied",
+      "URLs carrying credentials are not allowed",
+    );
+  }
+
+  return PageUrlTarget.make({ url });
+});
+
+const portFailure = (error: PageCaptureError) => {
+  switch (error._tag) {
+    case "PageCaptureRateLimitedError":
+      return captureFailure(
+        error._tag,
+        error.message === "" ? "The platform rate-limited the capture" : error.message,
+        error.retryAfterMillis,
+      );
+    case "PageCaptureOutputLimitError":
+      return captureFailure(
+        error._tag,
+        `The page response of ${error.observed} bytes exceeds the ${error.limit}-byte budget; capture a smaller page or a narrower action`,
+      );
+    case "PageCaptureNavigationError":
+    case "PageCaptureProtocolError":
+    case "PageCaptureUnsupportedError":
+      return captureFailure(error._tag, error.message);
+  }
+};
 
 const failure = (message: string, cause: unknown) => {
   const error = WebCapture.WebCaptureFailure.make({ errorTag: "ScreenshotUnavailable", message });
@@ -80,6 +155,68 @@ export const webLive = Layer.unwrap(
   Effect.gen(function* () {
     const env = yield* WorkerEnvironment;
     const { threadId } = yield* ThreadObjectIdentity;
+
+    const pageHandlers = pageTools.toLayer(
+      Effect.gen(function* () {
+        const capture = yield* PageCapture;
+
+        return {
+          read_web_page: Effect.fnUntraced(function* ({ url, action }) {
+            const result = yield* capture
+              .capture(
+                PageCaptureRequest.make({
+                  target: yield* target(url),
+                  action: captureActions[action],
+                  // Kitesurf can leave Markdown response bodies pending long after headers arrive.
+                  engine: "chromium",
+                  limits: captureLimits,
+                  resourcePolicy,
+                }),
+              )
+              .pipe(Effect.mapError(portFailure));
+
+            const output = result.output;
+
+            if (action === "markdown" && output._tag === "PageMarkdownCaptured") {
+              return WebCapture.WebCaptureSuccess.make({ url, action, markdown: output.markdown });
+            }
+            if (action === "content" && output._tag === "PageContentCaptured") {
+              return WebCapture.WebCaptureSuccess.make({ url, action, html: output.html });
+            }
+            if (action === "links" && output._tag === "PageLinksCaptured") {
+              return WebCapture.WebCaptureSuccess.make({ url, action, links: output.links });
+            }
+
+            return yield* captureFailure(
+              "WebCaptureProtocolMismatch",
+              `The capture adapter answered a ${action} request with ${output._tag}`,
+            );
+          }),
+          scrape_web_page: Effect.fnUntraced(function* ({ url, selectors }) {
+            const result = yield* capture
+              .capture(
+                PageCaptureRequest.make({
+                  target: yield* target(url),
+                  action: CapturePageScrape.make({ selectors }),
+                  engine: "kitesurf",
+                  limits: captureLimits,
+                  resourcePolicy,
+                }),
+              )
+              .pipe(Effect.mapError(portFailure));
+
+            if (result.output._tag !== "PageScrapeCaptured") {
+              return yield* captureFailure(
+                "WebCaptureProtocolMismatch",
+                `The capture adapter answered a selector scrape request with ${result.output._tag}`,
+              );
+            }
+
+            return WebCapture.WebCaptureScrapeSuccess.make({ url, groups: result.output.groups });
+          }),
+        };
+      }),
+    );
 
     const screenshotHandlers = screenshots.toLayer(
       Effect.gen(function* () {
@@ -224,7 +361,7 @@ export const webLive = Layer.unwrap(
       },
     });
 
-    return Layer.mergeAll(readPage.handlers, scrapePage.handlers, screenshotHandlers, context).pipe(
+    return Layer.mergeAll(pageHandlers, screenshotHandlers, context).pipe(
       Layer.provide(
         Layer.merge(browserQuickActionCaptureLayer(), browserQuickActionScreenshotLayer()),
       ),

@@ -35,7 +35,6 @@ const capture = (
     markdown: () => Effect.succeed(response),
     links: () => Effect.succeed(response),
     scrape: () => Effect.succeed(response),
-    json: () => Effect.succeed(response),
     screenshot: () => Effect.succeed(response),
   };
 

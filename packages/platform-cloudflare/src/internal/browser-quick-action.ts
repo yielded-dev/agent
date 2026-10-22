@@ -2,20 +2,16 @@
 
 import {
   PageCapture,
-  PageCaptureInferenceUse,
-  PageCaptureInferencePolicyError,
   PageCaptureNavigationError,
   PageCaptureOutputLimitError,
   PageCaptureProtocolError,
   PageCaptureRateLimitedError,
   PageCaptureResourceUse,
   PageCaptureResult,
-  PageCaptureUnsupportedError,
   PageContentCaptured,
   PageLinksCaptured,
   PageMarkdownCaptured,
   PageScrapeCaptured,
-  PageStructuredCaptured,
   type PageCaptureAction,
   type PageCaptureCapture,
   type PageCaptureError,
@@ -75,16 +71,13 @@ export interface BrowserQuickActionClient {
   readonly scrape: (
     options: BrowserRunScrapeOptions & BrowserRunAlternateBackendOptions,
   ) => Effect.Effect<Response, BrowserQuickActionRpcError>;
-  readonly json: (
-    options: BrowserRunJsonOptions,
-  ) => Effect.Effect<Response, BrowserQuickActionRpcError>;
 }
 
 /** A native binding RPC rejected before it returned an HTTP response. */
 export class BrowserQuickActionRpcError extends Schema.TaggedError<BrowserQuickActionRpcError>()(
   "BrowserQuickActionRpcError",
   {
-    action: Schema.Literals(["screenshot", "content", "markdown", "links", "scrape", "json"]),
+    action: Schema.Literals(["screenshot", "content", "markdown", "links", "scrape"]),
     cause: Schema.Defect(),
   },
 ) {}
@@ -105,7 +98,7 @@ export class BrowserQuickActionBrowserBinding extends Context.Service<
     const browser = options.browser;
 
     const invoke = (
-      action: "screenshot" | "content" | "markdown" | "links" | "scrape" | "json",
+      action: "screenshot" | "content" | "markdown" | "links" | "scrape",
       evaluate: () => Promise<Response>,
     ): Effect.Effect<Response, BrowserQuickActionRpcError> =>
       Effect.tryPromise({
@@ -120,37 +113,7 @@ export class BrowserQuickActionBrowserBinding extends Context.Service<
       markdown: (request) => invoke("markdown", () => browser.quickAction("markdown", request)),
       links: (request) => invoke("links", () => browser.quickAction("links", request)),
       scrape: (request) => invoke("scrape", () => browser.quickAction("scrape", request)),
-      json: (request) => invoke("json", () => browser.quickAction("json", request)),
     });
-  }
-}
-
-/** Host-owned authorization and accounting for one Workers AI extraction. */
-export interface BrowserQuickActionWorkersAiPolicy {
-  readonly authorizeAndAccount: (
-    request: PageCaptureRequest,
-  ) => Effect.Effect<void, BrowserQuickActionWorkersAiPolicyError>;
-}
-
-/** Host-only diagnostic for a denied or unaccounted Workers AI extraction. */
-export class BrowserQuickActionWorkersAiPolicyError extends Schema.TaggedError<BrowserQuickActionWorkersAiPolicyError>()(
-  "BrowserQuickActionWorkersAiPolicyError",
-  {
-    reason: Schema.Literals(["authorization", "accounting"]),
-    message: Schema.String.check(Schema.isMaxLength(8_000)),
-    cause: Schema.optionalKey(Schema.Defect()),
-  },
-) {}
-
-/** Explicit host-owned authority and accounting for separately billed Workers AI extraction. */
-export class BrowserQuickActionWorkersAi extends Context.Service<
-  BrowserQuickActionWorkersAi,
-  BrowserQuickActionWorkersAiPolicy
->()("@effect-agent/platform-cloudflare/BrowserQuickActionWorkersAi") {
-  static layer(
-    policy: BrowserQuickActionWorkersAiPolicy,
-  ): Layer.Layer<BrowserQuickActionWorkersAi> {
-    return Layer.succeed(BrowserQuickActionWorkersAi)(policy);
   }
 }
 
@@ -172,7 +135,6 @@ const QuickActionErrorEnvelope = Schema.Struct({
       path: Schema.optionalKey(Schema.String),
     }),
   ),
-  rawAiResponse: Schema.optionalKey(Schema.String),
 });
 
 const QuickActionEnvelope = Schema.Union([QuickActionSuccessEnvelope, QuickActionErrorEnvelope]);
@@ -202,7 +164,7 @@ const navigationFailureMessage = (bodyText: string, response: Response): string 
 
 /** Project the schema-validated request onto Cloudflare's native common options. */
 const quickActionCommonOptions = (
-  request: PageCaptureRequest,
+  request: PageCaptureRequest | PageScreenshotRequest,
 ): BrowserRunCommonOptions & BrowserRunAlternateBackendOptions => {
   const options: BrowserRunBaseOptions & BrowserRunAlternateBackendOptions = {};
   const navigation = request.navigation;
@@ -266,16 +228,6 @@ const executeQuickAction = (
       return browser.scrape({
         ...options,
         elements: request.action.selectors.map((selector) => ({ selector })),
-      });
-    }
-    case "CapturePageStructured": {
-      return browser.json({
-        ...options,
-        response_format: {
-          type: "json_schema",
-          json_schema: request.action.responseFormat,
-        },
-        ...(request.action.prompt === undefined ? {} : { prompt: request.action.prompt }),
       });
     }
   }
@@ -489,48 +441,15 @@ const parseOutput = (
 
       return decoded.value;
     }
-    case "CapturePageStructured": {
-      return PageStructuredCaptured.make({ value: envelope.value.result });
-    }
   }
 };
 
 const isQuotaMessage = (text: string): boolean => /time limit|daily|quota/i.test(text);
 
-const makeCapture = (
-  browser: BrowserQuickActionClient,
-  workersAi?: BrowserQuickActionWorkersAiPolicy,
-): PageCaptureCapture =>
+const makeCapture = (browser: BrowserQuickActionClient): PageCaptureCapture =>
   Effect.fnUntraced(function* (
     request: PageCaptureRequest,
   ): Effect.fn.Return<PageCaptureResult, PageCaptureError> {
-    const usesWorkersAi = request.action._tag === "CapturePageStructured";
-
-    if (usesWorkersAi) {
-      if (workersAi === undefined) {
-        return yield* PageCaptureUnsupportedError.make({
-          implementation: browserQuickActionImplementation,
-          feature: "action",
-          message:
-            "Structured capture invokes separately billed Workers AI and requires an explicit authorization and accounting policy",
-        });
-      }
-      yield* workersAi.authorizeAndAccount(request).pipe(
-        Effect.mapError((cause) =>
-          PageCaptureInferencePolicyError.make({
-            implementation: browserQuickActionImplementation,
-            provider: "cloudflare-workers-ai",
-            reason: cause.reason,
-            message:
-              cause.reason === "authorization"
-                ? "Workers AI extraction was not authorized"
-                : "Workers AI extraction could not be accounted for",
-            cause,
-          }),
-        ),
-      );
-    }
-
     const response = yield* executeQuickAction(browser, request).pipe(
       Effect.mapError((error) =>
         protocolError("The browser binding rejected the Quick Action", error.cause),
@@ -578,24 +497,13 @@ const makeCapture = (
     return PageCaptureResult.make({
       implementation: browserQuickActionImplementation,
       output,
-      resourceUse: PageCaptureResourceUse.make({
-        ...(millis === undefined ? {} : { browserMillis: millis }),
-        ...(usesWorkersAi
-          ? {
-              inference: PageCaptureInferenceUse.make({
-                provider: "cloudflare-workers-ai",
-                modelCalls: 1,
-              }),
-            }
-          : {}),
-      }),
+      resourceUse: PageCaptureResourceUse.make(
+        millis === undefined ? {} : { browserMillis: millis },
+      ),
     });
   });
 
-/**
- * Ordinary Quick Actions require host-owned browser binding authority. Workers
- * AI stays unavailable unless the host deliberately selects its separate Layer.
- */
+/** Stateless captures require explicit host-owned browser binding authority. */
 export const browserQuickActionCaptureLayer = (): Layer.Layer<
   PageCapture,
   never,
@@ -608,96 +516,10 @@ export const browserQuickActionCaptureLayer = (): Layer.Layer<
     ),
   );
 
-/** Structured Quick Actions require host-owned browser and Workers AI authority. */
-export const browserQuickActionWorkersAiCaptureLayer = (): Layer.Layer<
-  PageCapture,
-  never,
-  BrowserQuickActionBrowserBinding | BrowserQuickActionWorkersAi
-> =>
-  Layer.effect(
-    PageCapture,
-    Effect.gen(function* () {
-      const browser = yield* BrowserQuickActionBrowserBinding;
-      const workersAi = yield* BrowserQuickActionWorkersAi;
-
-      return PageCapture.of({ capture: makeCapture(browser, workersAi) });
-    }),
-  );
-
-/** Host-owned Quick Action binding and optional, separately billed extraction authority. */
-export interface CloudflareBrowserOptions extends BrowserQuickActionCaptureOptions {
-  readonly workersAi?: BrowserQuickActionWorkersAiPolicy;
-}
-
-/** Compose WebCapture handlers with the Cloudflare Quick Action adapter. */
-export const CloudflareBrowser = {
-  /**
-   * Supply a WebCapture definition and the resolved Worker browser binding.
-   * Supports capture, scrape, and extraction definitions without importing capabilities.
-   * Only PageCapture is provided; other handler requirements and errors stay visible.
-   * Extraction fails closed unless workersAi explicitly authorizes and accounts for it.
-   * Capture limits, typed failures, tracing, and scoped response cleanup are unchanged.
-   */
-  layer: <A, E, R>(
-    definition: { readonly handlers: Layer.Layer<A, E, R> },
-    options: CloudflareBrowserOptions,
-  ): Layer.Layer<A, E, Exclude<R, PageCapture>> => {
-    const capture =
-      options.workersAi === undefined
-        ? browserQuickActionCaptureLayer()
-        : browserQuickActionWorkersAiCaptureLayer().pipe(
-            Layer.provide(BrowserQuickActionWorkersAi.layer(options.workersAi)),
-          );
-
-    return definition.handlers.pipe(
-      Layer.provide(capture.pipe(Layer.provide(BrowserQuickActionBrowserBinding.layer(options)))),
-    );
-  },
-};
-
-const screenshotOptions = (request: PageScreenshotRequest): BrowserRunScreenshotOptions => {
-  const options: BrowserRunBaseOptions & BrowserRunAlternateBackendOptions = {};
-
-  if (request.engine === "kitesurf") options.browser = "kitesurf";
-  if (
-    request.navigation?.waitUntil !== undefined ||
-    request.navigation?.timeoutMillis !== undefined
-  ) {
-    options.gotoOptions = {
-      ...(request.navigation.waitUntil === undefined
-        ? {}
-        : { waitUntil: request.navigation.waitUntil }),
-      ...(request.navigation.timeoutMillis === undefined
-        ? {}
-        : { timeout: request.navigation.timeoutMillis }),
-    };
-  }
-  if (request.navigation?.waitForSelector !== undefined) {
-    options.waitForSelector = {
-      selector: request.navigation.waitForSelector.selector,
-      ...(request.navigation.waitForSelector.timeoutMillis === undefined
-        ? {}
-        : { timeout: request.navigation.waitForSelector.timeoutMillis }),
-    };
-  }
-  if (request.viewport !== undefined) {
-    options.viewport = { width: request.viewport.width, height: request.viewport.height };
-  }
-  if (request.resourcePolicy?.rejectResourceTypes !== undefined) {
-    options.rejectResourceTypes = [...request.resourcePolicy.rejectResourceTypes];
-  }
-  if (request.resourcePolicy?.allowRequestPatterns !== undefined) {
-    options.allowRequestPattern = [...request.resourcePolicy.allowRequestPatterns];
-  }
-
-  return {
-    ...options,
-    ...(request.target._tag === "PageUrlTarget"
-      ? { url: request.target.url }
-      : { html: request.target.html }),
-    screenshotOptions: { type: "png", encoding: "binary", fullPage: request.fullPage },
-  };
-};
+const screenshotOptions = (request: PageScreenshotRequest): BrowserRunScreenshotOptions => ({
+  ...quickActionCommonOptions(request),
+  screenshotOptions: { type: "png", encoding: "binary", fullPage: request.fullPage },
+});
 
 const cancelBody = (body: ReadableStream<Uint8Array>): Effect.Effect<void> =>
   cancelResponse(() => body.cancel(), "Canceling the screenshot response failed");

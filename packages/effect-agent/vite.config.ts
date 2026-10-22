@@ -41,7 +41,6 @@ export default defineConfig({
       "src/engine/MessagingHost.ts",
       "src/engine/Output.ts",
       "src/sandbox/PageCapture.ts",
-      "src/sandbox/PageCrawl.ts",
       "src/sandbox/PageScreenshot.ts",
       "src/core/ProvisionalText.ts",
       "src/core/Receipt.ts",

@@ -30,7 +30,7 @@ runtime-specific helpers. A static root import can load modules you intended to
 defer; a root namespace is not a lazy loader. Both import forms address the same API.
 
 Cloudflare's root includes Workers-specific modules. Use its dedicated
-`/cloudflare-ai-gateway`, `/browser-rest-capture`, or `/browser-rest-crawl` subpaths
+`/cloudflare-ai-gateway` or `/browser-rest-capture` subpaths
 from Node. Unlisted source files are private implementation details.
 
 ### Model requirements
