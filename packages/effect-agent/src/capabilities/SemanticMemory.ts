@@ -5,20 +5,15 @@ import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
 import * as Schema from "effect/Schema";
 
-import { utf8ByteLength } from "../core/internal/utf8.ts";
+import { readMemoryDocument } from "../core/internal/memory-document.ts";
+import { utf8ByteLength, utf8Bytes } from "../core/internal/utf8.ts";
 import type * as MemoryNamespace from "../core/MemoryNamespace.ts";
 import { MemoryLookup } from "../core/MemoryReference.ts";
 import { MemoryAccess } from "../core/MemoryRevalidation.ts";
+import type { MemoryDocument } from "../core/MemoryStore.ts";
+import { MemoryKey } from "../core/MemoryStore.ts";
 import {
-  MemoryDocument,
-  MemoryKey,
-  MemoryReader,
-  MemoryStorageError,
-} from "../core/MemoryStore.ts";
-import {
-  MemoryIndexError,
   MemoryIndexQuery,
-  MemoryIndexSearch,
   MemoryIndexSource,
   SemanticMemoryChunk,
   SemanticMemoryIndex,
@@ -98,14 +93,6 @@ export class SemanticQueryResult extends Schema.Class<SemanticQueryResult>(
   finishedAt: Timestamp,
 }) {}
 
-const utf8 = (text: string): Uint8Array => {
-  const hex = Hex.encode(text);
-
-  return Uint8Array.from({ length: hex.length / 2 }, (_, index) =>
-    Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16),
-  );
-};
-
 const invalid = (operation: string) =>
   SemanticMemoryError.make({ operation, reason: "invalid-input" });
 
@@ -123,33 +110,6 @@ const sameSource = (left: MemoryDocument, right: MemoryDocument): boolean =>
   left.source.revision === right.source.revision &&
   left.source.locator === right.source.locator &&
   left._tag === right._tag;
-
-const readDocument = Effect.fnUntraced(function* (key: MemoryKey) {
-  const reader = yield* MemoryReader;
-
-  const document = yield* reader.get(key).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(MemoryDocument.Wire))),
-    Effect.catchTag("SchemaError", () =>
-      Effect.fail(
-        MemoryStorageError.make({ operation: "validate semantic source", reason: "corrupt" }),
-      ),
-    ),
-  );
-
-  if (
-    document !== null &&
-    (document.key.namespace.address !== key.namespace.address ||
-      document.key.id !== key.id ||
-      document.source.id !== key.id)
-  ) {
-    return yield* MemoryStorageError.make({
-      operation: "validate semantic source identity",
-      reason: "corrupt",
-    });
-  }
-
-  return document;
-});
 
 const embeddings = Effect.fnUntraced(function* (
   inputs: ReadonlyArray<string>,
@@ -269,7 +229,7 @@ export const indexMemorySource = Effect.fnUntraced(function* <
       Effect.mapError(() => invalid("index profile")),
     );
 
-    const document = yield* readDocument(checkedKey);
+    const document = yield* readMemoryDocument(checkedKey);
 
     if (document === null || document._tag === "WithdrawnMemoryDocument") {
       if (document !== null) yield* index.withdraw(asSource(document));
@@ -292,7 +252,7 @@ export const indexMemorySource = Effect.fnUntraced(function* <
 
     const crypto = yield* Crypto.Crypto;
 
-    const fingerprint = yield* crypto.digest("SHA-256", utf8(encodedProfile)).pipe(
+    const fingerprint = yield* crypto.digest("SHA-256", utf8Bytes(encodedProfile)).pipe(
       Effect.map(Hex.encode),
       Effect.mapError(() =>
         SemanticMemoryError.make({ operation: "fingerprint profile", reason: "unavailable" }),
@@ -322,7 +282,7 @@ export const indexMemorySource = Effect.fnUntraced(function* <
         }),
       );
     }
-    const latest = yield* readDocument(checkedKey);
+    const latest = yield* readMemoryDocument(checkedKey);
 
     if (latest === null || !sameSource(document, latest)) {
       if (latest?._tag === "WithdrawnMemoryDocument") yield* index.withdraw(asSource(latest));
@@ -407,24 +367,15 @@ export const querySemanticMemory = Effect.fnUntraced(function* (
         reason: "invalid-embedding",
       });
 
-    const found = yield* index
-      .search(
-        MemoryIndexQuery.make({
-          namespace: checkedAccess.namespace,
-          vector,
-          limit: checkedLimits.maxCandidates,
-          minScore: checkedLimits.minScore,
-          maxScannedChunks: checkedLimits.maxScannedChunks,
-        }),
-      )
-      .pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(MemoryIndexSearch.Wire)),
-        Effect.catchTag("SchemaError", () =>
-          Effect.fail(
-            MemoryIndexError.make({ operation: "validate candidates", reason: "corrupt" }),
-          ),
-        ),
-      );
+    const found = yield* index.search(
+      MemoryIndexQuery.make({
+        namespace: checkedAccess.namespace,
+        vector,
+        limit: checkedLimits.maxCandidates,
+        minScore: checkedLimits.minScore,
+        maxScannedChunks: checkedLimits.maxScannedChunks,
+      }),
+    );
 
     const validated = yield* revalidateSemanticMemoryCandidates(
       found,

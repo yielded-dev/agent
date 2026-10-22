@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import { readMemoryDocument } from "./internal/memory-document.ts";
 import { utf8ByteLength } from "./internal/utf8.ts";
 import type * as MemoryNamespace from "./MemoryNamespace.ts";
 import {
@@ -9,13 +10,7 @@ import {
   MemoryRecallError,
   MemoryRecallLimits,
 } from "./MemoryReference.ts";
-import {
-  MemoryDocument,
-  MemoryKey,
-  MemoryReader,
-  MemoryScope,
-  MemoryStorageError,
-} from "./MemoryStore.ts";
+import { MemoryKey, MemoryScope } from "./MemoryStore.ts";
 
 const RevalidationLimits = Schema.Struct({
   maxInputBytes: MemoryRecallLimits.fields.maxInputBytes,
@@ -82,7 +77,6 @@ export const revalidateMemoryLookup = Effect.fnUntraced(function* (
   );
 
   if (decoded._tag !== "Found") return decoded;
-  const reader = yield* MemoryReader;
 
   const groups = new Map<
     string,
@@ -104,29 +98,8 @@ export const revalidateMemoryLookup = Effect.fnUntraced(function* (
     yield* Effect.yieldNow;
     const key = MemoryKey.make({ namespace: decodedAccess.namespace, id: sourceId });
 
-    const document = yield* reader
-      .get(key)
-      .pipe(
-        Effect.flatMap((value) =>
-          Schema.decodeEffect(Schema.NullOr(MemoryDocument.Wire))(value).pipe(
-            Effect.mapError(() =>
-              MemoryStorageError.make({ operation: "validate source view", reason: "corrupt" }),
-            ),
-          ),
-        ),
-      );
+    const document = yield* readMemoryDocument(key);
 
-    if (
-      document !== null &&
-      (document.key.namespace.address !== key.namespace.address ||
-        document.key.id !== key.id ||
-        document.source.id !== key.id)
-    ) {
-      return yield* MemoryStorageError.make({
-        operation: "validate source identity",
-        reason: "corrupt",
-      });
-    }
     if (
       document === null ||
       document._tag === "WithdrawnMemoryDocument" ||

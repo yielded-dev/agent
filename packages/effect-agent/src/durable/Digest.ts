@@ -4,6 +4,7 @@ import * as Hex from "effect/encoding/Hex";
 import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 
+import { utf8Bytes } from "../core/internal/utf8.ts";
 import { canonicalJson as stringifyCanonicalJson } from "./internal/canonical-json.ts";
 import type { DefinitionDigestInput } from "./Records.ts";
 import { DefinitionDigests, Digest } from "./Records.ts";
@@ -16,7 +17,6 @@ export class DigestError extends Schema.TaggedError<DigestError>()("DigestError"
   cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
-const utf8 = new TextEncoder();
 const decodeDigest = Schema.decodeEffect(Digest);
 
 /** Serialize schema-encoded JSON with the canonical digest's locale-independent key order. */
@@ -27,7 +27,7 @@ const digestText = Effect.fnUntraced(function* (
 ): Effect.fn.Return<Digest, DigestError, Crypto.Crypto> {
   const crypto = yield* Crypto.Crypto;
 
-  const bytes = utf8.encode(value);
+  const bytes = utf8Bytes(value);
 
   const digest = yield* crypto
     .digest("SHA-256", bytes)

@@ -234,6 +234,24 @@ export const stageCheckout = Effect.fn("benchmark.stageCheckout")(function* (
       JSON.stringify({ ...manifest, exports: comparisonExports(manifest.exports) }),
     );
     yield* fs.copy(path.join(source, "dist"), path.join(destination, "dist"));
+
+    // Preserve package-local dependencies without exposing workspace source imports.
+    for (const dependency of Object.keys(manifest.dependencies ?? {})) {
+      if (
+        dependency.startsWith("@yielded/") ||
+        dependency.startsWith("@effect-agent/") ||
+        dependency === "effect-agent"
+      )
+        continue;
+      const installed = path.join(source, "node_modules", dependency);
+
+      if (!(yield* fs.exists(installed))) continue;
+      const target = path.join(destination, "node_modules", dependency);
+
+      yield* fs.makeDirectory(path.dirname(target), { recursive: true });
+      yield* fs.symlink(installed, target);
+    }
+
     for (const file of (yield* fs.readDirectory(path.join(destination, "dist"), {
       recursive: true,
     })).sort()) {

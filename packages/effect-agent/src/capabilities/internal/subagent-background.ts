@@ -11,7 +11,7 @@ import * as Stream from "effect/Stream";
 import type { AnyDefinition } from "../../core/Agent.ts";
 import * as FailureDiagnostic from "../../core/FailureDiagnostic.ts";
 import { RunId, SettlementId, ThreadId } from "../../core/Identifiers.ts";
-import { utf8ByteLength } from "../../core/internal/utf8.ts";
+import { utf8ByteLength, utf8Bytes } from "../../core/internal/utf8.ts";
 import { MessageRef, MessageStatus } from "../../core/Messaging.ts";
 import { IdempotencyKey, JoinedToHost, Receipt } from "../../core/Receipt.ts";
 import {
@@ -38,7 +38,6 @@ import {
   SubagentPrestartDenied,
   SubagentProjectionFailure,
 } from "./subagent-contract.ts";
-import { utf8Bytes } from "./utf8.ts";
 
 export type Declaration<
   Name extends string,

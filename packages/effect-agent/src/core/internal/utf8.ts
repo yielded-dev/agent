@@ -25,3 +25,8 @@ export const utf8ByteLength = (value: string): number => {
 
   return bytes;
 };
+
+const encoder = new TextEncoder();
+
+/** Encode text directly, including replacement bytes for lone UTF-16 surrogates. */
+export const utf8Bytes = (value: string): Uint8Array => encoder.encode(value);
