@@ -1,5 +1,13 @@
 # @yielded/agent-storage-cloudflare
 
+## 0.1.0-beta.190
+
+### Patch Changes
+
+- Updated dependencies [[`7a36ba2`](https://github.com/yielded-dev/agent/commit/7a36ba23d39fc0a17fc63dc816ab58f70a04136d), [`e7abd30`](https://github.com/yielded-dev/agent/commit/e7abd300d3c5b4bb3bc011e92468b54afc687e73), [`ac0a76a`](https://github.com/yielded-dev/agent/commit/ac0a76a8c20759d842121076238ebc992ea1e280), [`cc6c913`](https://github.com/yielded-dev/agent/commit/cc6c91312a2bd2f092095380b44212e57035be7d)]:
+  - @yielded/agent@0.1.0-beta.190
+  - @yielded/agent-storage-sql@0.1.0-beta.190
+
 ## 0.1.0-beta.189
 
 ### Patch Changes
