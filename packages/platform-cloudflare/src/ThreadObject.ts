@@ -568,9 +568,12 @@ const settlementEndpoint = <Success extends SettlementReached | SettlementRecord
     typeof hostOperations.awaitSettlement.failure.Type
   >,
   settle: (
-    runtime: DurableAgentRuntime["Service"],
     receipt: AwaitSettlementRequest,
-  ) => Effect.Effect<Success, typeof hostOperations.awaitSettlement.failure.Type>,
+  ) => Effect.Effect<
+    Success,
+    typeof hostOperations.awaitSettlement.failure.Type,
+    DurableAgentRuntime
+  >,
   includeRecord = false,
 ) =>
   endpoint(
@@ -594,9 +597,8 @@ const settlementEndpoint = <Success extends SettlementReached | SettlementRecord
         );
       yield* requireReceiptThread(receipt.threadId);
       yield* requireSubmissionThread(receipt.submissionId);
-      const runtime = yield* DurableAgentRuntime;
 
-      const wait = settle(runtime, receipt);
+      const wait = settle(receipt);
 
       if (receipt.waiterId === undefined) return yield* wait;
       const registry = yield* ProgressWaitRegistry;
@@ -615,18 +617,20 @@ const settlementEndpoint = <Success extends SettlementReached | SettlementRecord
 
 const awaitSettlementEndpoint = settlementEndpoint(
   hostOperations.awaitSettlement,
-  (runtime, receipt) =>
-    runtime
-      .awaitSettlement(receipt)
-      .pipe(Effect.map((settlement) => SettlementReached.make({ settlement }))),
+  Effect.fnUntraced(function* (receipt) {
+    const runtime = yield* DurableAgentRuntime;
+
+    return SettlementReached.make({ settlement: yield* runtime.awaitSettlement(receipt) });
+  }),
 );
 
 const awaitSettlementRecordEndpoint = settlementEndpoint(
   hostOperations.awaitSettlementRecord,
-  (runtime, receipt) =>
-    runtime
-      .awaitSettlementRecord(receipt)
-      .pipe(Effect.map((record) => SettlementRecordReached.make({ record }))),
+  Effect.fnUntraced(function* (receipt) {
+    const runtime = yield* DurableAgentRuntime;
+
+    return SettlementRecordReached.make({ record: yield* runtime.awaitSettlementRecord(receipt) });
+  }),
   true,
 );
 
