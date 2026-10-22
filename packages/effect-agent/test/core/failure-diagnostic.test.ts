@@ -16,6 +16,41 @@ class DependencyFailure extends Schema.TaggedError<DependencyFailure>()("Depende
 }) {}
 
 describe("causal failure diagnostics", () => {
+  // https://github.com/yielded-dev/agent/commit/992d062a09
+  it("retains validated HTTP diagnostics through capture and JSON recapture", () => {
+    const original = {
+      name: "ProviderFailure",
+      status: 429,
+      requestId: "0123456789abcdef-LHR",
+      retryAfter: "60",
+    };
+
+    const diagnostic = FailureDiagnostic.capture(original);
+
+    const decoded = Schema.decodeSync(Schema.toCodecJson(FailureDiagnostic.Diagnostic))(
+      JSON.parse(JSON.stringify(diagnostic)),
+    );
+
+    expect(decoded).toMatchObject(original);
+    expect(FailureDiagnostic.capture(decoded)).toEqual(decoded);
+    expect(
+      FailureDiagnostic.capture({
+        status: Infinity,
+        requestId: "Bearer private-token",
+        retryAfter: "private-header-value",
+      }),
+    ).not.toHaveProperty("status");
+    expect(
+      JSON.stringify(
+        FailureDiagnostic.capture({
+          status: 99,
+          requestId: "Bearer private-token",
+          retryAfter: "private-header-value",
+        }),
+      ),
+    ).not.toContain("private-");
+  });
+
   it("captures an original cause independently of its public Schema projection", () => {
     const error = FailureDiagnostic.withPrivateCause(
       { message: "safe", cause: "public" },

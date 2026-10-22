@@ -1,8 +1,12 @@
 /// <reference types="@cloudflare/workers-types" />
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import puppeteer, {
   type Browser,
@@ -15,6 +19,168 @@ import {
   reportBrowserCause,
   reportedBrowserError,
 } from "./browser-failure.ts";
+
+/** Headers establish a failure before optional diagnostic I/O; owners retain it during interruption. */
+export class BrowserRunRefusal {
+  constructor(
+    readonly error: BrowserRunFailure,
+    readonly collect: Effect.Effect<void>,
+  ) {}
+
+  get failure(): Effect.Effect<never, BrowserRunFailure> {
+    return Effect.fail(this.error).pipe(Effect.ensuring(this.collect));
+  }
+}
+
+const ProviderError = Schema.Struct({
+  code: Schema.optionalKey(
+    Schema.Union([Schema.Finite, Schema.String.check(Schema.isMaxLength(256))]),
+  ),
+  message: Schema.String.check(Schema.isMaxLength(4096)),
+});
+
+const ProviderResponse = Schema.fromJsonString(
+  Schema.Struct({
+    errors: Schema.optionalKey(Schema.Array(ProviderError).check(Schema.isMaxLength(64))),
+    error: Schema.optionalKey(
+      Schema.Union([ProviderError, Schema.String.check(Schema.isMaxLength(4096))]),
+    ),
+  }),
+);
+
+const acquisitionRefusal = (response: Response, operation: string) => {
+  const header = (name: string) => {
+    const value = response.headers.get(name);
+
+    return value !== null && value.length <= 256 ? value : undefined;
+  };
+
+  const detail = {
+    name: "BrowserProviderResponse",
+    status: response.status,
+    requestId: header("cf-ray") ?? header("x-request-id"),
+    retryAfter: header("retry-after"),
+    rawBody: Redacted.make(new Uint8Array()),
+    errors: [] as unknown[],
+  };
+
+  const error = FailureDiagnostic.withPrivateCause(
+    new BrowserRunFailure({ operation, reason: "provider", status: response.status }),
+    detail,
+  );
+
+  let collected = false;
+  const collectionFinished = Deferred.makeUnsafe<void>();
+
+  const collect = Effect.uninterruptible(
+    Effect.suspend(() => {
+      if (collected) return Deferred.await(collectionFinished);
+      collected = true;
+
+      return Effect.gen(function* () {
+        const limit = 16_384;
+        const chunks: Uint8Array[] = [];
+        let length = 0;
+        let accepting = true;
+
+        const opened = yield* Effect.try({
+          try: () => response.body?.getReader(),
+          catch: (cause) => browserFailure(`${operation}.response.open`, cause),
+        }).pipe(Effect.exit);
+
+        if (Exit.isFailure(opened)) {
+          detail.errors.push(opened.cause);
+
+          return;
+        }
+        const reader = opened.value;
+
+        if (reader === undefined) return;
+
+        // Optional diagnostic reads and cancellation each get one second; neither can hold a failed acquisition indefinitely.
+        const capture = <A>(work: Effect.Effect<A, BrowserRunFailure>, stage: string) =>
+          work.pipe(
+            Effect.interruptible,
+            Effect.timeoutOrElse({
+              duration: "1 second",
+              orElse: () =>
+                Effect.fail(
+                  new BrowserRunFailure({
+                    operation: `${operation}.response.${stage}`,
+                    reason: "timeout",
+                  }),
+                ),
+            }),
+            Effect.exit,
+            Effect.tap((exit) =>
+              Effect.sync(() => {
+                if (Exit.isFailure(exit)) detail.errors.push(exit.cause);
+              }),
+            ),
+            Effect.asVoid,
+          );
+
+        yield* capture(
+          Effect.tryPromise({
+            try: async () => {
+              while (accepting && length < limit) {
+                const part = await reader.read();
+
+                if (!accepting || part.done) break;
+                const bytes = part.value.subarray(0, limit - length);
+
+                chunks.push(bytes);
+                length += bytes.byteLength;
+              }
+            },
+            catch: (cause) => browserFailure(`${operation}.response.read`, cause),
+          }),
+          "read",
+        );
+        accepting = false;
+        yield* capture(
+          Effect.tryPromise({
+            try: () => reader.cancel(),
+            catch: (cause) => browserFailure(`${operation}.response.cancel`, cause),
+          }),
+          "cancel",
+        );
+        yield* capture(
+          Effect.try({
+            try: () => reader.releaseLock(),
+            catch: (cause) => browserFailure(`${operation}.response.release`, cause),
+          }),
+          "release",
+        );
+        if (length === limit)
+          detail.errors.push({
+            message: "Provider response diagnostic stopped at its 16384-byte limit",
+          });
+        const body = new Uint8Array(length);
+        let offset = 0;
+
+        for (const chunk of chunks) {
+          body.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        detail.rawBody = Redacted.make(body);
+        const decoded = Schema.decodeOption(ProviderResponse)(new TextDecoder().decode(body));
+
+        if (decoded._tag === "Some") {
+          detail.errors.unshift(...(decoded.value.errors ?? []));
+          if (decoded.value.error !== undefined)
+            detail.errors.unshift(
+              typeof decoded.value.error === "string"
+                ? { message: decoded.value.error }
+                : decoded.value.error,
+            );
+        }
+      }).pipe(Effect.onExit((exit) => Deferred.done(collectionFinished, exit)));
+    }),
+  );
+
+  return new BrowserRunRefusal(error, collect);
+};
 
 const Acquired = Schema.Struct({ sessionId: Schema.String.check(Schema.isUUID()) });
 
@@ -45,7 +211,7 @@ export class BrowserRunBinding extends Context.Service<
     readonly acquire: (
       keepAliveMillis: number,
       operation: "interactive.acquire" | "session.acquire",
-    ) => Promise<string>;
+    ) => Promise<string | BrowserRunRefusal>;
     readonly connect: (
       sessionId: string,
       operation: string,
@@ -92,21 +258,7 @@ export class BrowserRunBinding extends Context.Service<
           { method: "POST" },
         );
 
-        if (response.status !== 200) {
-          const failure = new BrowserRunFailure({
-            operation,
-            reason: "provider",
-            status: response.status,
-          });
-
-          try {
-            await response.body?.cancel();
-          } catch {
-            // Body cancellation cannot replace the acquisition refusal.
-          }
-          // oxlint-disable-next-line effect/no-untyped-throw -- Native BrowserRun acquisition Promise preserves the provider refusal after body cleanup.
-          throw failure;
-        }
+        if (response.status !== 200) return acquisitionRefusal(response, operation);
 
         return Schema.decodeUnknownSync(Acquired)(await response.json()).sessionId;
       },

@@ -16,7 +16,7 @@ import {
   BrowserSessionReference,
   BrowserSessions,
 } from "../src/BrowserSession.ts";
-import { BrowserRunBinding } from "../src/internal/browser-binding.ts";
+import { BrowserRunBinding, BrowserRunRefusal } from "../src/internal/browser-binding.ts";
 import { browserFailure } from "../src/internal/browser-failure.ts";
 import { BrowserRunReadonlyLiveView } from "../src/internal/browser-readonly-live-view.ts";
 import { BrowserRunSessionLifecycle } from "../src/internal/browser-session-lifecycle.ts";
@@ -138,6 +138,160 @@ const endpoint = Effect.fnUntraced(function* (mode: "success" | "pending" | "pen
     viewport,
   };
 });
+
+// https://github.com/yielded-dev/agent/commit/3b4e238f9c
+it.effect.each(["complete", "truncated", "read-failure"])(
+  "retains bounded acquisition evidence (%s)",
+  (mode) =>
+    Effect.gen(function* () {
+      const truncated = mode === "truncated";
+      const reports: Array<Cause.Cause<unknown>> = [];
+      let canceled = false;
+      let emitted = false;
+
+      const payload = JSON.stringify({
+        errors: [{ code: 1001, message: "Quota exhausted; authorization=private-token" }],
+        unrelated: "PRIVATE_BODY_FIELD",
+      });
+
+      const layer = BrowserSessions.layerNoDeps.pipe(
+        Layer.provide(
+          BrowserRunBinding.layer({
+            fetch: async () =>
+              new Response(
+                new ReadableStream({
+                  pull(controller) {
+                    if (emitted) {
+                      controller.error(new Error("response read failed"));
+
+                      return;
+                    }
+                    emitted = true;
+                    controller.enqueue(
+                      new TextEncoder().encode(truncated ? "x".repeat(32_768) : payload),
+                    );
+                    if (mode === "complete") controller.close();
+                  },
+                  cancel() {
+                    canceled = true;
+                    if (truncated) throw new Error("response cancellation failed");
+                  },
+                }),
+                {
+                  status: 429,
+                  headers: {
+                    "content-type": "application/json",
+                    "cf-ray": "0123456789abcdef-LHR",
+                    "retry-after": "60",
+                  },
+                },
+              ),
+          }),
+        ),
+        Layer.provide(
+          BrowserRunReadonlyLiveView.layer({
+            accountId: "1234567890abcdef1234567890abcdef",
+            apiToken: Redacted.make("fixture-token"),
+          }).pipe(Layer.provide(FetchHttpClient.layer)),
+        ),
+        Layer.provide(
+          Layer.succeed(BrowserRunSessionLifecycle, {
+            close: () => Effect.die("A refused allocation has no known session to close"),
+          }),
+        ),
+      );
+
+      const error = yield* Effect.flatMap(BrowserSessions, (sessions) =>
+        sessions.create(
+          {
+            maxElapsedMillis: 60_000,
+          },
+          () => Effect.void,
+        ),
+      ).pipe(
+        Effect.provide([
+          layer,
+          ErrorReporter.layer([ErrorReporter.make(({ cause }) => reports.push(cause))]),
+        ]),
+        Effect.flip,
+      );
+
+      const diagnostic = FailureDiagnostic.capture(error);
+      const encoded = JSON.stringify(diagnostic);
+
+      expect(encoded).toContain('"status":429');
+      expect(encoded).toContain('"requestId":"0123456789abcdef-LHR"');
+      expect(encoded).toContain('"retryAfter":"60"');
+      if (truncated) {
+        expect(canceled).toBe(true);
+        expect(encoded).toContain("response cancellation failed");
+        expect(encoded).not.toContain("x".repeat(256));
+      } else {
+        expect(encoded).toContain("Quota exhausted");
+        expect(encoded).toContain('"code":1001');
+        if (mode === "read-failure") expect(encoded).toContain("response read failed");
+        if (mode === "read-failure") expect(encoded).toContain("response read failed");
+      }
+      expect(encoded).not.toContain("PRIVATE_BODY_FIELD");
+      expect(encoded).not.toContain("private-token");
+      const publicJson = yield* Schema.encodeEffect(Schema.toCodecJson(BrowserSessionError))(error);
+
+      expect(publicJson).not.toContain("Quota exhausted");
+      expect(reports.map((cause) => Cause.pretty(cause)).join("\n")).not.toContain(
+        "Quota exhausted",
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect("shares completed acquisition diagnostics between response owners", () =>
+  Effect.gen(function* () {
+    const reading = yield* Deferred.make<void>();
+    const respond = yield* Deferred.make<void>();
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+    const binding = yield* BrowserRunBinding.pipe(
+      Effect.provide(
+        BrowserRunBinding.layer({
+          fetch: async () =>
+            new Response(
+              new ReadableStream(
+                {
+                  async pull(controller) {
+                    await runPromise(Deferred.succeed(reading, undefined));
+                    await runPromise(Deferred.await(respond));
+                    controller.enqueue(
+                      new TextEncoder().encode('{"error":"provider quota reached"}'),
+                    );
+                    controller.close();
+                  },
+                },
+                { highWaterMark: 0 },
+              ),
+              { status: 429 },
+            ),
+        }),
+      ),
+    );
+
+    const refusal = yield* Effect.promise(() => binding.acquire(1000, "session.acquire"));
+
+    expect(refusal).toBeInstanceOf(BrowserRunRefusal);
+    if (!(refusal instanceof BrowserRunRefusal)) return;
+    const first = yield* refusal.collect.pipe(Effect.forkChild);
+
+    yield* Deferred.await(reading);
+    const second = yield* refusal.collect.pipe(Effect.forkChild);
+
+    expect(second.pollUnsafe()).toBeUndefined();
+    yield* Deferred.succeed(respond, undefined);
+    yield* Fiber.join(first);
+    yield* Fiber.join(second);
+    yield* refusal.collect;
+    expect(JSON.stringify(FailureDiagnostic.capture(refusal.error))).toContain(
+      "provider quota reached",
+    );
+  }).pipe(Effect.scoped),
+);
 
 it.effect("retains connection causes privately before binding sanitization", () =>
   Effect.gen(function* () {
@@ -500,5 +654,58 @@ it.effect.each(["unacknowledged"] as const)(
       expect(JSON.stringify(reports)).toContain('"operation":"session.disconnect"');
       expect(fixture.methods).toEqual(["Target.getBrowserContexts"]);
       expect(fixture.socket.readyState).toBe(WebSocket.OPEN);
+    }).pipe(Effect.scoped),
+);
+
+// https://github.com/yielded-dev/agent/commit/3b4e238f9c
+it.effect.each(["deadline", "interruption"])(
+  "keeps a known provider refusal through %s while its body stalls",
+  (stop) =>
+    Effect.gen(function* () {
+      const reading = yield* Deferred.make<void>();
+      const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const layer = BrowserSessions.layerNoDeps.pipe(
+        Layer.provide(
+          BrowserRunBinding.layer({
+            fetch: async () =>
+              new Response(
+                new ReadableStream(
+                  {
+                    async pull() {
+                      await runPromise(Deferred.succeed(reading, undefined));
+                    },
+                  },
+                  { highWaterMark: 0 },
+                ),
+                { status: 429 },
+              ),
+          }),
+        ),
+        Layer.provide(
+          BrowserRunReadonlyLiveView.layer({
+            accountId: "1234567890abcdef1234567890abcdef",
+            apiToken: Redacted.make("fixture-token"),
+          }).pipe(Layer.provide(FetchHttpClient.layer)),
+        ),
+        Layer.provide(Layer.succeed(BrowserRunSessionLifecycle, { close: () => Effect.void })),
+      );
+
+      const fiber = yield* Effect.flatMap(BrowserSessions, (sessions) =>
+        sessions.create({ maxElapsedMillis: 60_000 }, () => Effect.void),
+      ).pipe(Effect.provide(layer), Effect.forkChild);
+
+      yield* Deferred.await(reading);
+      if (stop === "interruption") fiber.interruptUnsafe();
+      yield* TestClock.adjust(30_000);
+      const exit = yield* Fiber.await(fiber);
+
+      expect(exit._tag).toBe("Failure");
+      expect(JSON.stringify(FailureDiagnostic.capture(exit))).toContain('"status":429');
+      expect(JSON.stringify(FailureDiagnostic.capture(exit))).toContain(
+        "session.acquire.response.read",
+      );
+      if (stop === "interruption" && exit._tag === "Failure")
+        expect(Cause.hasInterrupts(exit.cause)).toBe(true);
     }).pipe(Effect.scoped),
 );
