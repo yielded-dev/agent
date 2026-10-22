@@ -31,6 +31,15 @@ export const resolveSubagentPolicy = (
     resolvedTarget ??
     AgentPolicy.resolve(delegation.target.policyOverrides ?? delegation.target.policy, parent);
 
+  // An unbounded Run cannot imply a finite reservation pool. Require the caller's
+  // explicit delegation policy instead of inventing another count ceiling.
+  if (
+    delegation.policy === undefined &&
+    (!Number.isFinite(parent.maxToolCalls) ||
+      !Number.isFinite(Math.min(inherited.maxTurns, parent.maxTurns)))
+  )
+    return undefined;
+
   const policy =
     delegation.policy ??
     SubagentPolicy.make({
@@ -111,7 +120,7 @@ export const resolveSubagentPolicy = (
       ? SubagentDelegationCaps.make({
           maxTotalChildInvocations: parent.maxToolCalls,
           maxConcurrentChildren: parent.toolConcurrency,
-          maxTurns: parent.maxTurns,
+          ...(Number.isFinite(parent.maxTurns) ? { maxTurns: parent.maxTurns } : {}),
           maxToolCalls: parent.maxToolCalls,
           maxDurationMillis: Math.ceil(Duration.toMillis(parent.maxDuration)),
           ...(parent.tokenBudget === undefined

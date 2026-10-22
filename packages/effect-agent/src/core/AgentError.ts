@@ -51,7 +51,10 @@ export type PolicyLimit = typeof PolicyLimit.Type;
 export class AgentPolicyError extends Schema.TaggedError<AgentPolicyError>()("AgentPolicyError", {
   limit: PolicyLimit,
   message: Schema.String,
-}) {}
+}) {
+  /** Prior failed completion when exhaustion prevents correction; private, excluded from JSON. */
+  declare readonly cause?: unknown;
+}
 
 /** A native Effect AI Tool approval was explicitly denied before its Handler started. */
 export class AgentApprovalDenied extends Schema.TaggedError<AgentApprovalDenied>()(

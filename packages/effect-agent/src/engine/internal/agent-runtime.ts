@@ -60,6 +60,7 @@ import {
 } from "../../core/AgentError.ts";
 import { type AgentPolicy } from "../../core/AgentPolicy.ts";
 import { Emitter, Update, UpdateError } from "../../core/AgentUpdates.ts";
+import * as FailureDiagnostic from "../../core/FailureDiagnostic.ts";
 import {
   type AgentId,
   ThreadId,
@@ -568,6 +569,8 @@ interface RunContext {
   readonly runId: RunId;
   /** Captured once at the Run boundary, never reconstructed from events or durable data. */
   readonly toolFailureObserver: RunToolFailureObserver | undefined;
+  /** Last failed completion, retained only until the next model call is admitted. */
+  failedCompletionCause?: Cause.Cause<unknown> | undefined;
   /** Agent-Schema encoded input identifying this logical Run's originating authority/wake. */
   input: unknown;
   readonly pendingFollowUps: Array<Prompt.RawInput>;
@@ -729,6 +732,7 @@ interface TurnTrace {
   readonly applicationToolCalls: Array<Response.ToolCallPart<string, Schema.Json>>;
   /** Fresh validation failures retained independently of executable parameters. */
   readonly toolParameterRejections: Map<string, ToolParameterRejection>;
+  readonly toolParameterCauses: Map<string, Cause.Cause<unknown>>;
   /** Durable-hook view of the application calls, in declaration order (encoded parameters). */
   readonly applicationCallDescriptors: Array<
     RunToolCallDescriptor & { readonly parameters: Schema.Json }
@@ -739,6 +743,7 @@ interface TurnTrace {
     readonly name: string;
     readonly encodedResult: unknown;
     readonly isFailure: boolean;
+    readonly cause?: Cause.Cause<unknown> | undefined;
     /** Settled synthetically by budget rejection: no handler ran, exempt from repeated-failure folding. */
     readonly budgetRejected?: boolean;
   }>;
@@ -1414,12 +1419,15 @@ const decodeToolCallParameters = <Tools extends Record<string, Tool.Any>>(
 
   return decodeParameters(encodedParams).pipe(
     Effect.mapError((cause) =>
-      ModelProtocolError.make({
-        message:
-          boundary === "model"
-            ? `Invalid parameters for Tool ${toolName}: ${cause.message}`
-            : `Recorded parameters for Tool ${toolName} failed validation${boundary === "resume" ? " on resume" : ""}: ${cause.message}`,
-      }),
+      FailureDiagnostic.withCause(
+        ModelProtocolError.make({
+          message:
+            boundary === "model"
+              ? `Invalid parameters for Tool ${toolName}: ${cause.message}`
+              : `Recorded parameters for Tool ${toolName} failed validation${boundary === "resume" ? " on resume" : ""}: ${cause.message}`,
+        }),
+        cause,
+      ),
     ),
   );
 };
@@ -2371,6 +2379,10 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
       ? undefined
       : yield* decodeEventJson(encodedResult, "Tool result");
 
+    const failureCause = result.isFailure
+      ? (trace.toolParameterCauses.get(call.id) ?? Cause.fail(result.result))
+      : undefined;
+
     trace.finalToolResultIds.add(call.id);
     trace.applicationToolResults[prepared.declarationIndex] = {
       ...(toolSelection === undefined ? {} : { toolSelection }),
@@ -2378,6 +2390,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
       name: call.name,
       encodedResult,
       isFailure: result.isFailure,
+      ...(failureCause === undefined ? {} : { cause: failureCause }),
     };
     terminalResultCommitted = true;
     yield* terminalTelemetry(
@@ -2385,17 +2398,12 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
       result.isFailure ? "returned-to-model" : undefined,
     );
     // Derivatives finish before optional publication, under the same call permit.
-    if (
-      observer !== undefined &&
-      result.isFailure &&
-      rejection === undefined &&
-      !ErrorReporter.isIgnored(result.result)
-    )
+    if (observer !== undefined && result.isFailure && !ErrorReporter.isIgnored(result.result))
       yield* prepareWithinDeadline(
         context,
         deliverToolFailure(observer, {
           _tag: "ModelToolFailure",
-          kind: "declared-failure",
+          kind: rejection === undefined ? "declared-failure" : "parameter-rejection",
           agentId: context.agentId,
           threadId: context.threadId,
           runId: context.runId,
@@ -2404,6 +2412,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
           toolName: call.name,
           executionClass,
           tag: errorTag(result.result),
+          cause: failureCause ?? Cause.fail(result.result),
         }),
       );
     yield* publishEvent(context, () =>
@@ -3070,11 +3079,22 @@ const applyRepeatedFailurePolicy = (
       context.consecutiveToolFailures = isFailure ? context.consecutiveToolFailures + 1 : 0;
     }
     if (repeatedFailureLimit > 0 && context.consecutiveToolFailures >= repeatedFailureLimit) {
+      const cause = Cause.fromReasons(
+        trace.applicationToolResults.flatMap((result) =>
+          result?.isFailure && result.budgetRejected !== true
+            ? (result.cause ?? Cause.fail(result.encodedResult)).reasons
+            : [],
+        ),
+      );
+
       return Effect.fail(
-        AgentPolicyError.make({
-          limit: "repeated-failures",
-          message: `Agent reached its ${repeatedFailureLimit} consecutive Tool Call failure limit`,
-        }),
+        FailureDiagnostic.withCause(
+          AgentPolicyError.make({
+            limit: "repeated-failures",
+            message: `Agent reached its ${repeatedFailureLimit} consecutive Tool Call failure limit`,
+          }),
+          cause,
+        ),
       );
     }
 
@@ -3330,7 +3350,7 @@ export const formatRunStatus = (view: RunStatusView): string => {
       ? ""
       : ` · research-remaining ${remainingResearch} · completion-reserve ${view.completionReserveTokens ?? 0}`;
 
-  return `<run-status>turn ${view.turn}/${view.maxTurns} · tool-calls ${view.toolCallsUsed}/${view.maxToolCalls} · tokens ${view.tokensConsumed}/${view.tokenBudget ?? "unbounded"}${reserveStatus} · last-context ${view.lastInputTokens} · elapsed ${view.elapsedSeconds}s/${view.maxDurationSeconds}s${warn ? RUN_STATUS_WARNING : ""}</run-status>`;
+  return `<run-status>turn ${view.turn}/${view.maxTurns === Infinity ? "unbounded" : view.maxTurns} · tool-calls ${view.toolCallsUsed}/${view.maxToolCalls === Infinity ? "unbounded" : view.maxToolCalls} · tokens ${view.tokensConsumed}/${view.tokenBudget ?? "unbounded"}${reserveStatus} · last-context ${view.lastInputTokens} · elapsed ${view.elapsedSeconds}s/${view.maxDurationSeconds}s${warn ? RUN_STATUS_WARNING : ""}</run-status>`;
 };
 
 /**
@@ -5053,6 +5073,7 @@ const processModelPart = Effect.fnUntracedEager(function* <Tools extends Record<
         );
 
         trace.toolParameterRejections.set(part.id, rejection);
+        trace.toolParameterCauses.set(part.id, Cause.fail(decoded.failure));
       } else {
         parameters = yield* encodeToolCallParameters<Tools>(tool, part.name, decoded.success).pipe(
           Effect.flatMap((encoded) => decodeEventJson(encoded, "Tool parameters")),
@@ -5589,15 +5610,22 @@ const makeTurn = <
       if (options.beforeTurn !== undefined) yield* options.beforeTurn();
       const now = yield* Clock.currentTimeMillis;
 
+      const failBeforeNextTurn = (error: AgentPolicyError) =>
+        failExecution(
+          context.failedCompletionCause === undefined
+            ? error
+            : FailureDiagnostic.withCause(error, context.failedCompletionCause),
+        );
+
       if (now >= context.durationDeadlineMillis) {
-        return failExecution(durationLimitError(agent.definition.policy));
+        return failBeforeNextTurn(durationLimitError(agent.definition.policy));
       }
       // Fail-mode work never starts beyond the Turn ceiling. Most Tool paths
       // reject at declaration admission; this preflight also covers a
       // final-Turn completion Tool whose canonical returned result is a
       // failure and therefore needs another model Turn.
       if (policy.onExhaustion === "fail" && turn > bounds.maxTurns) {
-        return failExecution(
+        return failBeforeNextTurn(
           AgentPolicyError.make({
             limit: "turns",
             message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
@@ -5605,7 +5633,7 @@ const makeTurn = <
         );
       }
       if (context.finalizationUsed && restartTurnId === undefined) {
-        return failExecution(
+        return failBeforeNextTurn(
           AgentPolicyError.make({
             limit:
               turn > bounds.maxTurns
@@ -5617,6 +5645,7 @@ const makeTurn = <
           }),
         );
       }
+      context.failedCompletionCause = undefined;
       const ids = yield* IdGenerator;
       const turnId = restartTurnId ?? (yield* ids.nextTurnId);
       // Model-visible final-output contract (RUN-028):
@@ -5810,6 +5839,7 @@ const makeTurn = <
         turnCompletion: undefined,
         applicationToolCalls: [],
         toolParameterRejections: new Map(),
+        toolParameterCauses: new Map(),
         applicationCallDescriptors: [],
         applicationToolResults: [],
         finished: false,
@@ -7650,6 +7680,18 @@ const toolBatchContinuation = <
         orderedResults.push(result);
       }
 
+      const failedCompletion =
+        orderedResults.length === 1 &&
+        orderedResults[0]?.isFailure &&
+        orderedResults[0].name === agent.definition.completion?.tool
+          ? orderedResults[0]
+          : undefined;
+
+      context.failedCompletionCause =
+        failedCompletion === undefined
+          ? undefined
+          : (failedCompletion.cause ?? Cause.fail(failedCompletion.encodedResult));
+
       for (const result of orderedResults) {
         if (!result.isFailure && result.toolSelection !== undefined)
           context.toolSelection = result.toolSelection;
@@ -7932,6 +7974,7 @@ const makeResumeTurn = <
         turnCompletion: undefined,
         applicationToolCalls: [],
         toolParameterRejections: new Map(),
+        toolParameterCauses: new Map(),
         applicationCallDescriptors: [],
         applicationToolResults: [],
         finished: true,
@@ -10252,6 +10295,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
                     readonly encodedResult: unknown;
                     readonly isFailure: boolean;
                     readonly ignored: boolean;
+                    readonly result: unknown;
                     readonly tag: string | undefined;
                   }
                 | undefined;
@@ -10276,6 +10320,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
                     if (!result.preliminary) {
                       terminal = {
                         encodedResult: toolResultForJson(tool, result),
+                        result: result.result,
                         isFailure: result.isFailure,
                         ignored:
                           observer !== undefined &&
@@ -10347,6 +10392,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
                     executionClass,
                     kind: "declared-failure",
                     tag: terminal.tag ?? "UnknownError",
+                    cause: Cause.fail(terminal.result),
                   };
                 }
 

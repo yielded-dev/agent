@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
+import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
 import type { CodeExecutionLimits } from "../sandbox/CodeExecutor.ts";
 import * as CodeMode from "./CodeMode.ts";
 
@@ -39,7 +40,14 @@ export class BrowserUseError extends Schema.TaggedError<BrowserUseError>()("Brow
   code: Schema.Literals(["invalid", "browser", "evaluation"]),
   message: Schema.String,
   dispatch: Schema.optionalKey(Schema.Literals(["not-dispatched", "possibly-dispatched"])),
-}) {}
+}) {
+  /** Original host-only cause. Excluded from the error Schema and JSON transport. */
+  declare readonly cause?: unknown;
+
+  static withCause(error: BrowserUseError, cause: unknown): BrowserUseError {
+    return FailureDiagnostic.withCause(error, cause);
+  }
+}
 
 /**
  * A host-confirmed policy refusal before dispatch. Hosts must establish that the

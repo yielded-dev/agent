@@ -1,13 +1,44 @@
 import { expect, it } from "@effect/vitest";
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
-import { BrowserRunSessionLifecycle } from "../src/internal/browser-session-lifecycle.ts";
+import {
+  BrowserRunCleanupError,
+  BrowserRunSessionLifecycle,
+} from "../src/internal/browser-session-lifecycle.ts";
 
 const sessionId = "c8b9c4b1-d1bf-4663-b4d8-a0b009cc8b99";
 const accountId = "1234567890abcdef1234567890abcdef";
+
+it.effect("keeps original cleanup transport causes private when encoding the public error", () =>
+  Effect.gen(function* () {
+    const error = yield* Effect.flatMap(BrowserRunSessionLifecycle, (lifecycle) =>
+      lifecycle.close(Redacted.make(sessionId)),
+    ).pipe(
+      Effect.provide(
+        BrowserRunSessionLifecycle.layer({
+          accountId,
+          apiToken: Redacted.make("fixture-token"),
+        }).pipe(Layer.provide(FetchHttpClient.layer)),
+      ),
+      Effect.provideService(FetchHttpClient.Fetch, async () => {
+        throw new Error("PRIVATE transport failure");
+      }),
+      Effect.flip,
+    );
+
+    const encoded = yield* Schema.encodeEffect(Schema.toCodecJson(BrowserRunCleanupError))(error);
+
+    expect(JSON.stringify(FailureDiagnostic.capture(error))).toContain("PRIVATE transport failure");
+    expect(JSON.stringify(encoded)).not.toContain("PRIVATE transport failure");
+  }),
+);
 
 it.effect(
   "confirms exact-session termination without treating pending or untrusted responses as absence",

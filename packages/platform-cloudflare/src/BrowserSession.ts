@@ -1,16 +1,23 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
-import type { Browser, Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
+import type {
+  Browser,
+  CDPSession,
+  Page,
+} from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import {
   CredentialFillError,
@@ -35,6 +42,7 @@ import {
 } from "./internal/browser-credentials.ts";
 import {
   inheritBrowserReport,
+  mapBrowserError,
   reportBrowserCause,
   reportedBrowserError,
 } from "./internal/browser-failure.ts";
@@ -97,7 +105,10 @@ export class BrowserSessionError extends Schema.TaggedError<BrowserSessionError>
     dispatch: Schema.Literals(["not-dispatched", "possibly-dispatched"]),
     cleanup: Schema.Literals(["not-requested", "confirmed", "unconfirmed"]),
   },
-) {}
+) {
+  /** Original host-only cause. Excluded from the error Schema and JSON transport. */
+  declare readonly cause?: unknown;
+}
 
 /**
  * One local attachment to an application-owned browser. Scope release disconnects; it never
@@ -163,12 +174,96 @@ const failure = (
   reason: BrowserSessionError["reason"],
   dispatch: BrowserSessionError["dispatch"] = "not-dispatched",
   cleanup: BrowserSessionError["cleanup"] = "not-requested",
-) => BrowserSessionError.make({ reason, dispatch, cleanup });
+  cause?: unknown,
+) => {
+  const error = BrowserSessionError.make({ reason, dispatch, cleanup });
+
+  return cause === undefined ? error : FailureDiagnostic.withCause(error, cause);
+};
 
 const decode = <A>(schema: Schema.Codec<A>, input: unknown) =>
   Schema.decodeUnknownEffect(schema, { onExcessProperty: "error" })(input).pipe(
-    Effect.mapError(() => failure("invalid")),
+    mapBrowserError((error) => failure("invalid", "not-dispatched", "not-requested", error)),
   );
+
+/** Scope finalizers require E=never. Preserve pure cancellation and wrap every other cause privately. */
+const cleanupFinalizer = <A, R>(effect: Effect.Effect<A, BrowserSessionError, R>) =>
+  effect.pipe(
+    Effect.asVoid,
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.failCause(Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)))
+        : Effect.die(failure("cleanup", "not-dispatched", "unconfirmed", cause)),
+    ),
+  );
+
+/** A deadline owns its work until stopped; cleanup failures join the timeout outcome. */
+const timeout =
+  <B, E2, R2>(options: {
+    readonly duration: Duration.Input;
+    readonly orElse: () => Effect.Effect<B, E2, R2>;
+  }) =>
+  <A, E, R>(self: Effect.Effect<A, E, R>): Effect.Effect<A | B, E | E2, R | R2> =>
+    Effect.suspend(() => {
+      let consumed = false;
+
+      const stop = (fiber: Fiber.Fiber<A, E>) =>
+        Effect.uninterruptible(
+          Effect.gen(function* () {
+            if (consumed) return;
+            yield* Fiber.interrupt(fiber);
+            const exit = yield* Fiber.await(fiber);
+
+            consumed = true;
+            if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+              return yield* Effect.failCause(exit.cause);
+          }),
+        );
+
+      return Effect.uninterruptibleMask((restore) =>
+        Effect.acquireUseRelease(
+          Effect.gen(function* () {
+            // Own the fiber separately without replacing the operation's resource Scope.
+            const scope = yield* Scope.make();
+            const fiber = yield* Effect.forkIn(self.pipe(Effect.interruptible), scope);
+
+            return { scope, fiber };
+          }),
+          ({ fiber }) =>
+            restore(
+              Fiber.await(fiber).pipe(
+                Effect.timeoutOrElse({
+                  duration: options.duration,
+                  orElse: () => Effect.succeed(undefined),
+                }),
+              ),
+            ).pipe(
+              Effect.flatMap((exit): Effect.Effect<A | B, E | E2, R2> => {
+                if (exit !== undefined) {
+                  consumed = true;
+
+                  return exit;
+                }
+
+                return Effect.uninterruptible(
+                  Effect.exit(stop(fiber)).pipe(
+                    Effect.flatMap((stopped) =>
+                      options
+                        .orElse()
+                        .pipe(
+                          Effect.onExit(() =>
+                            Exit.isFailure(stopped) ? Effect.failCause(stopped.cause) : Effect.void,
+                          ),
+                        ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ({ scope, fiber }) => stop(fiber).pipe(Effect.onExit((exit) => Scope.close(scope, exit))),
+        ),
+      );
+    });
 
 // Catch inside the Promise before workerd can report an unhandled foreign diagnostic.
 const native = Effect.fnUntraced(function* <A>(
@@ -185,30 +280,82 @@ const native = Effect.fnUntraced(function* <A>(
         if (!signal.aborted || cause !== signal.reason)
           await runReport(reportBrowserCause(operation, Cause.fail(cause)));
 
-        return { ok: false as const };
+        return { ok: false as const, cause };
       }
     },
-    catch: () => failure("provider"),
+    catch: (cause) => failure("provider", "not-dispatched", "not-requested", cause),
   }).pipe(
     Effect.flatMap((result) =>
       result.ok
         ? Effect.succeed(result.value)
-        : Effect.fail(reportedBrowserError(failure("provider"))),
+        : Effect.fail(
+            reportedBrowserError(
+              failure("provider", "not-dispatched", "not-requested", result.cause),
+            ),
+          ),
     ),
     Effect.withTracerEnabled(false),
   );
 });
 
-const targetId = (page: Page) =>
-  native("session.target", async () => {
-    const cdp = await page.createCDPSession();
+const withCdp = Effect.fnUntraced(function* <A, E, R>(
+  page: Page,
+  commandTimeoutMillis: number,
+  action: (cdp: CDPSession) => Effect.Effect<A, E, R>,
+) {
+  const runCleanup = Effect.runPromiseWith(yield* Effect.context<never>());
+  let acquired: CDPSession | undefined;
+  let released = false;
 
-    try {
-      return (await cdp.send("Target.getTargetInfo")).targetInfo.targetId;
-    } finally {
-      await cdp.detach();
-    }
-  });
+  const release = Effect.uninterruptible(
+    Effect.suspend(() => {
+      if (acquired === undefined || released) return Effect.void;
+      released = true;
+      const cdp = acquired;
+
+      return native("session.cdp.detach", () => cdp.detach()).pipe(
+        timeout({
+          duration: commandTimeoutMillis,
+          orElse: () =>
+            Effect.fail(failure("cleanup", "not-dispatched", "unconfirmed", failure("timeout"))),
+        }),
+      );
+    }),
+  );
+
+  return yield* Effect.uninterruptibleMask((restore) =>
+    Effect.acquireUseRelease(
+      restore(
+        native("session.cdp.attach", async (signal) => {
+          const cdp = await page.createCDPSession();
+
+          acquired = cdp;
+
+          // The SDK cannot cancel attachment; dispose a handle that arrives after cancellation.
+          if (signal.aborted) {
+            await runCleanup(release);
+            signal.throwIfAborted();
+          }
+
+          return cdp;
+        }),
+      ),
+      (cdp) => restore(action(cdp)),
+      () => release,
+    ).pipe(
+      // Cover cancellation after the Promise resolves but before acquisition resumes.
+      Effect.onExit(() => release),
+    ),
+  );
+});
+
+const targetId = (page: Page, commandTimeoutMillis: number) =>
+  withCdp(page, commandTimeoutMillis, (cdp) =>
+    native(
+      "session.target",
+      async () => (await cdp.send("Target.getTargetInfo")).targetInfo.targetId,
+    ),
+  );
 
 export interface BrowserSessionsOptions extends BrowserRunLifecycleOptions {
   readonly browser: Pick<BrowserRun, "fetch">;
@@ -263,16 +410,18 @@ export class BrowserSessions extends Context.Service<
           Effect.flatMap((id) =>
             lifecycle
               .close(id)
-              .pipe(Effect.mapError(() => failure("cleanup", "not-dispatched", "unconfirmed"))),
+              .pipe(
+                mapBrowserError((error) =>
+                  failure("cleanup", "not-dispatched", "unconfirmed", error),
+                ),
+              ),
           ),
         );
 
       const cleanup = (sessionId: Redacted.Redacted<string>) =>
         close(sessionId).pipe(
           Effect.as("confirmed" as const),
-          Effect.catchCause((cause) =>
-            reportBrowserCause("session.close", cause).pipe(Effect.as("unconfirmed" as const)),
-          ),
+          Effect.tapCause((cause) => reportBrowserCause("session.close", cause)),
         );
 
       const connect = Effect.fnUntraced(function* (sessionId: Redacted.Redacted<string>) {
@@ -284,19 +433,18 @@ export class BrowserSessions extends Context.Service<
             : attachment.retire.pipe(
                 // Dispatch is already fenced; give the socket close handshake the same
                 // bounded window as keepalive instead of failing a settled command after 1s.
-                Effect.timeoutOrElse({
+                timeout({
                   duration: "10 seconds",
                   orElse: () => Effect.fail(failure("cleanup")),
                 }),
-                Effect.catchCause((cause) =>
-                  reportBrowserCause("session.disconnect", cause).pipe(
-                    Effect.andThen(Effect.die(failure("cleanup", "not-dispatched", "unconfirmed"))),
-                  ),
+                Effect.tapCause((cause) => reportBrowserCause("session.disconnect", cause)),
+                mapBrowserError((error) =>
+                  failure("cleanup", "not-dispatched", "unconfirmed", error),
                 ),
               ),
         );
 
-        yield* Effect.addFinalizer(() => retire);
+        yield* Effect.addFinalizer(() => cleanupFinalizer(retire));
 
         const browser = yield* native("session.connect", (signal) => {
           attachment = binding.connect(Redacted.value(sessionId), "session.connect", signal);
@@ -323,11 +471,13 @@ export class BrowserSessions extends Context.Service<
         yield* Effect.addFinalizer(() =>
           sessionId === undefined || retained
             ? Effect.void
-            : cleanup(sessionId).pipe(
-                Effect.tap((result) =>
-                  Effect.sync(() => {
-                    cleanupState.result = result;
-                  }),
+            : cleanupFinalizer(
+                cleanup(sessionId).pipe(
+                  Effect.tap((result) =>
+                    Effect.sync(() => {
+                      cleanupState.result = result;
+                    }),
+                  ),
                 ),
               ),
         );
@@ -356,7 +506,7 @@ export class BrowserSessions extends Context.Service<
           version: 1,
           sessionId,
           contextId: Redacted.make(page.browserContext().id ?? ""),
-          targetId: Redacted.make(yield* targetId(page)),
+          targetId: Redacted.make(yield* targetId(page, options.commandTimeoutMillis ?? 30_000)),
           expiresAt,
           commandTimeoutMillis: options.commandTimeoutMillis ?? 30_000,
         });
@@ -385,22 +535,21 @@ export class BrowserSessions extends Context.Service<
 
         return yield* allocate(input, retain, cleanupState).pipe(
           Effect.map(({ reference }) => reference),
-          Effect.timeoutOrElse({
+          timeout({
             duration: "30 seconds",
             orElse: () => Effect.fail(failure("timeout")),
           }),
           Effect.scoped,
-          Effect.catchCause((cause) =>
-            Effect.failCause(
-              Cause.map(cause, (error) =>
-                error instanceof BrowserSessionError
-                  ? inheritBrowserReport(
-                      error,
-                      BrowserSessionError.make({ ...error, cleanup: cleanupState.result }),
-                    )
-                  : error,
-              ),
-            ),
+          mapBrowserError((error) =>
+            error instanceof BrowserSessionError
+              ? inheritBrowserReport(
+                  error,
+                  FailureDiagnostic.withCause(
+                    BrowserSessionError.make({ ...error, cleanup: cleanupState.result }),
+                    error,
+                  ),
+                )
+              : error,
           ),
           Effect.withTracerEnabled(false),
         );
@@ -410,20 +559,48 @@ export class BrowserSessions extends Context.Service<
         reference: BrowserSessionReference,
         browser: Browser,
         currentPage: Page,
-        retire: Effect.Effect<void>,
+        retire: Effect.Effect<void, BrowserSessionError>,
       ) {
         const scope = yield* Effect.scope;
         const lock = yield* Semaphore.make(1);
         let invalid = false;
+        let cleanupResult: BrowserSessionError["cleanup"] = "not-requested";
 
         const terminate = Effect.suspend(() => {
+          if (invalid) return Effect.void;
           invalid = true;
+          cleanupResult = "unconfirmed";
 
           return retire.pipe(
-            Effect.catchCause((cause) => reportBrowserCause("session.disconnect", cause)),
-            Effect.andThen(cleanup(reference.sessionId)),
+            Effect.onExit(() =>
+              cleanup(reference.sessionId).pipe(
+                Effect.tap((result) =>
+                  Effect.sync(() => {
+                    cleanupResult = result;
+                  }),
+                ),
+                Effect.asVoid,
+              ),
+            ),
           );
         });
+
+        const failAfterTermination = <E, E2>(
+          cause: Cause.Cause<E>,
+          annotate: (error: E, cleanup: BrowserSessionError["cleanup"]) => E2,
+        ) =>
+          Effect.uninterruptible(
+            terminate.pipe(
+              Effect.exit,
+              Effect.flatMap((exit) => {
+                const original = Cause.map(cause, (error) => annotate(error, cleanupResult));
+
+                return Effect.failCause(
+                  Exit.isFailure(exit) ? Cause.combine(original, exit.cause) : original,
+                );
+              }),
+            ),
+          );
 
         const runEffect = <A, E, R>(
           action: (commandTimeoutMillis: number) => Effect.Effect<A, E, R>,
@@ -436,19 +613,23 @@ export class BrowserSessions extends Context.Service<
                 const remaining = reference.expiresAt - (yield* Clock.currentTimeMillis);
 
                 if (remaining <= 0) {
-                  return yield* failure("expired", "not-dispatched", yield* terminate);
+                  return yield* failAfterTermination(
+                    Cause.fail(failure("expired")),
+                    (error, cleanup) => failure(error.reason, error.dispatch, cleanup, error),
+                  );
                 }
 
                 return yield* action(Math.min(remaining, reference.commandTimeoutMillis)).pipe(
-                  Effect.catchDefect((defect) =>
-                    reportBrowserCause("session.command", Cause.die(defect)).pipe(
-                      Effect.andThen(terminate),
-                      Effect.flatMap((closed) =>
-                        Effect.fail(failure("provider", "possibly-dispatched", closed)),
-                      ),
-                    ),
+                  Effect.onExit((exit) =>
+                    !invalid &&
+                    Exit.isFailure(exit) &&
+                    (Cause.hasDies(exit.cause) || Cause.hasInterrupts(exit.cause))
+                      ? (Cause.hasInterruptsOnly(exit.cause)
+                          ? Effect.void
+                          : reportBrowserCause("session.command", exit.cause)
+                        ).pipe(Effect.onExit(() => terminate))
+                      : Effect.void,
                   ),
-                  Effect.onInterrupt(() => terminate),
                 );
               }),
             )
@@ -457,37 +638,60 @@ export class BrowserSessions extends Context.Service<
               Effect.withTracerEnabled(false),
             );
 
-        const run = <A, E, R>(
+        const runAction = <A, E, R>(
           authorize: Effect.Effect<void, E, R>,
-          action: (page: Page) => Promise<A>,
+          action: (commandTimeoutMillis: number) => Effect.Effect<A, BrowserSessionError>,
           terminateOnError = false,
           timeoutMillis?: number,
         ) =>
           runEffect((commandTimeoutMillis) =>
             authorize.pipe(
               Effect.andThen(() =>
-                native("session.command", () => action(currentPage)).pipe(
-                  Effect.catch((error) =>
-                    Effect.gen(function* () {
-                      const closed = terminateOnError ? yield* terminate : "not-requested";
+                Effect.uninterruptibleMask((restore) =>
+                  restore(
+                    action(Math.min(commandTimeoutMillis, timeoutMillis ?? commandTimeoutMillis)),
+                  ).pipe(
+                    Effect.catchCause((cause) => {
+                      const annotate = (
+                        error: BrowserSessionError,
+                        cleanup: BrowserSessionError["cleanup"],
+                      ) =>
+                        inheritBrowserReport(
+                          error,
+                          failure(error.reason, "possibly-dispatched", cleanup, error),
+                        );
 
-                      return yield* reportedBrowserError(
-                        failure(error.reason, "possibly-dispatched", closed),
-                      );
+                      return terminateOnError && !invalid
+                        ? failAfterTermination(cause, annotate)
+                        : Effect.failCause(
+                            Cause.map(cause, (error) => annotate(error, error.cleanup)),
+                          );
                     }),
                   ),
                 ),
               ),
-              Effect.timeoutOrElse({
+              timeout({
                 duration: Math.min(commandTimeoutMillis, timeoutMillis ?? commandTimeoutMillis),
                 orElse: () =>
-                  terminate.pipe(
-                    Effect.flatMap((closed) =>
-                      Effect.fail(failure("timeout", "possibly-dispatched", closed)),
-                    ),
+                  failAfterTermination(
+                    Cause.fail(failure("timeout", "possibly-dispatched")),
+                    (error, cleanup) => failure(error.reason, error.dispatch, cleanup, error),
                   ),
               }),
             ),
+          );
+
+        const run = <A, E, R>(
+          authorize: Effect.Effect<void, E, R>,
+          action: (page: Page) => Promise<A>,
+          terminateOnError = false,
+          timeoutMillis?: number,
+        ) =>
+          runAction(
+            authorize,
+            () => native("session.command", () => action(currentPage)),
+            terminateOnError,
+            timeoutMillis,
           );
 
         const command = <A, E, R>(
@@ -496,19 +700,22 @@ export class BrowserSessions extends Context.Service<
           parameters: Record<string, string | number>,
           schema: Schema.Codec<A>,
         ) =>
-          run(
+          runAction(
             authorize,
-            async (page) => {
-              const cdp = await page.createCDPSession();
-
-              try {
-                const result: unknown = await Reflect.apply(cdp.send, cdp, [method, parameters]);
-
-                return Schema.decodeUnknownSync(schema)(result);
-              } finally {
-                await cdp.detach();
-              }
-            },
+            (commandTimeoutMillis) =>
+              withCdp(currentPage, commandTimeoutMillis, (cdp) =>
+                native("session.command", (): Promise<unknown> =>
+                  Reflect.apply(Reflect.get(cdp, "send"), cdp, [method, parameters]),
+                ).pipe(
+                  Effect.flatMap((result) =>
+                    Schema.decodeUnknownEffect(schema)(result).pipe(
+                      mapBrowserError((error) =>
+                        failure("provider", "not-dispatched", "not-requested", error),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             method === "Cloudflare.handoff",
           );
 
@@ -527,13 +734,11 @@ export class BrowserSessions extends Context.Service<
                   page: currentPage,
                   commandTimeoutMillis,
                 }),
-                Effect.timeoutOrElse({
+                timeout({
                   duration: commandTimeoutMillis,
                   orElse: () =>
-                    terminate.pipe(
-                      Effect.flatMap((closed) =>
-                        Effect.fail(failure("timeout", "not-dispatched", closed)),
-                      ),
+                    failAfterTermination(Cause.fail(failure("timeout")), (error, cleanup) =>
+                      failure(error.reason, error.dispatch, cleanup, error),
                     ),
                 }),
               ),
@@ -545,12 +750,19 @@ export class BrowserSessions extends Context.Service<
                   page: currentPage,
                   commandTimeoutMillis,
                 }),
-                Effect.catchIf(
-                  (error) => error.reason === "timeout" || error.dispatch === "possibly-dispatched",
-                  (error) =>
-                    terminate.pipe(
-                      Effect.flatMap((cleanup) =>
-                        Effect.fail(CredentialFillError.make({ ...error, cleanup })),
+                Effect.catchCauseIf(
+                  (cause) =>
+                    cause.reasons.some(
+                      (reason) =>
+                        Cause.isFailReason(reason) &&
+                        (reason.error.reason === "timeout" ||
+                          reason.error.dispatch === "possibly-dispatched"),
+                    ),
+                  (cause) =>
+                    failAfterTermination(cause, (error, cleanup) =>
+                      FailureDiagnostic.withCause(
+                        CredentialFillError.make({ ...error, cleanup }),
+                        error,
                       ),
                     ),
                 ),
@@ -598,10 +810,14 @@ export class BrowserSessions extends Context.Service<
                         Effect.tapCause((cause) =>
                           reportBrowserCause("session.readonlyLiveView", cause),
                         ),
-                        Effect.mapError(() => reportedBrowserError(failure("provider"))),
+                        mapBrowserError((error) =>
+                          reportedBrowserError(
+                            failure("provider", "not-dispatched", "not-requested", error),
+                          ),
+                        ),
                       ),
                     ),
-                    Effect.timeoutOrElse({
+                    timeout({
                       duration: commandTimeoutMillis,
                       orElse: () => Effect.fail(failure("timeout")),
                     }),
@@ -652,22 +868,21 @@ export class BrowserSessions extends Context.Service<
             makeSession(reference, browser, page, retire),
           ),
           Effect.provideService(Scope.Scope, scope),
-          Effect.timeoutOrElse({
+          timeout({
             duration: "30 seconds",
             orElse: () => Effect.fail(failure("timeout")),
           }),
           Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
-          Effect.catchCause((cause) =>
-            Effect.failCause(
-              Cause.map(cause, (error) =>
-                error instanceof BrowserSessionError
-                  ? inheritBrowserReport(
-                      error,
-                      BrowserSessionError.make({ ...error, cleanup: cleanupState.result }),
-                    )
-                  : error,
-              ),
-            ),
+          mapBrowserError((error) =>
+            error instanceof BrowserSessionError
+              ? inheritBrowserReport(
+                  error,
+                  FailureDiagnostic.withCause(
+                    BrowserSessionError.make({ ...error, cleanup: cleanupState.result }),
+                    error,
+                  ),
+                )
+              : error,
           ),
           Effect.withTracerEnabled(false),
         );
@@ -688,7 +903,10 @@ export class BrowserSessions extends Context.Service<
         if (context === undefined) return yield* failure("missing-page");
 
         for (const page of yield* native("session.pages", () => context.pages())) {
-          if ((yield* targetId(page)) === Redacted.value(reference.targetId))
+          if (
+            (yield* targetId(page, reference.commandTimeoutMillis)) ===
+            Redacted.value(reference.targetId)
+          )
             return yield* makeSession(reference, browser, page, retire);
         }
 
@@ -701,7 +919,7 @@ export class BrowserSessions extends Context.Service<
 
         return yield* attachPage(reference).pipe(
           Effect.provideService(Scope.Scope, scope),
-          Effect.timeoutOrElse({
+          timeout({
             duration: reference.commandTimeoutMillis,
             orElse: () =>
               reportBrowserCause("session.connect", Cause.fail(failure("timeout"))).pipe(
@@ -721,18 +939,18 @@ export class BrowserSessions extends Context.Service<
           decode(SessionId, sessionId).pipe(
             Effect.flatMap((id) =>
               binding.keepAlive(Redacted.value(id)).pipe(
-                Effect.timeoutOrElse({
+                timeout({
                   duration: "10 seconds",
                   orElse: () => Effect.fail(failure("timeout")),
                 }),
-                Effect.catch((error) =>
-                  reportBrowserCause("session.keepAlive", Cause.fail(error)).pipe(
-                    Effect.andThen(
-                      Effect.fail(
-                        reportedBrowserError(
-                          failure(error.reason === "timeout" ? "timeout" : "provider"),
-                        ),
-                      ),
+                Effect.tapCause((cause) => reportBrowserCause("session.keepAlive", cause)),
+                mapBrowserError((error) =>
+                  reportedBrowserError(
+                    failure(
+                      error.reason === "timeout" ? "timeout" : "provider",
+                      "not-dispatched",
+                      "not-requested",
+                      error,
                     ),
                   ),
                 ),

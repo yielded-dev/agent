@@ -37,15 +37,16 @@ interface ToolFailureIdentity {
   readonly tag: string;
 }
 
-/** A model-declared Handler returned a declared failure instead of failing the Run. */
+/** A model-declared call failed validation or returned a declared failure without failing the Run. */
 export interface ModelToolFailure extends ToolFailureIdentity {
   readonly _tag: "ModelToolFailure";
-  readonly kind: "declared-failure";
+  readonly kind: "declared-failure" | "parameter-rejection";
   /** Raw provider identity, without the telemetry ID filter. */
   readonly toolCallId: ToolCallId;
   readonly executionClass: ToolExecutionClassValue;
   readonly message?: never;
-  readonly cause?: never;
+  /** Original private failure; never automatically logged or included in RunEvents. */
+  readonly cause: Cause.Cause<unknown>;
 }
 
 interface ProgrammaticToolFailureIdentity extends ToolFailureIdentity {
@@ -61,7 +62,8 @@ interface ProgrammaticToolFailureIdentity extends ToolFailureIdentity {
 interface ProgrammaticDeclaredFailure extends ProgrammaticToolFailureIdentity {
   readonly kind: "declared-failure";
   readonly message?: never;
-  readonly cause?: never;
+  /** Original private failure; never automatically logged or included in RunEvents. */
+  readonly cause: Cause.Cause<unknown>;
 }
 
 interface ProgrammaticHandlerFailure extends ProgrammaticToolFailureIdentity {

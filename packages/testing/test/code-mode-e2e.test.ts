@@ -219,7 +219,8 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
             tag: "BrowserUsePolicyError",
             toolName: "browser_cdp_send",
           });
-          for (const field of ["cause", "message", "result", "encodedResult"])
+          expect(Cause.isCause(observations[0]?.cause)).toBe(true);
+          for (const field of ["message", "result", "encodedResult"])
             expect(observations[0]).not.toHaveProperty(field);
 
           const failure = requests[2]?.options.prompt.content
@@ -424,7 +425,8 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
           parentToolCallId: "search-1",
           toolCallId: "search-1#0",
         });
-        for (const field of ["cause", "message", "result", "encodedResult"])
+        expect(Cause.isCause(observations[0]?.cause)).toBe(true);
+        for (const field of ["message", "result", "encodedResult"])
           expect(observations[0]).not.toHaveProperty(field);
         expect(observations[1]).toMatchObject({
           _tag: "ProgrammaticToolFailure",
@@ -441,7 +443,7 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
           tag: "CodeModeFailure",
           toolCallId: "search-1",
         });
-        expect(observations[2]).not.toHaveProperty("cause");
+        expect(Cause.isCause(observations[2]?.cause)).toBe(true);
         expect(observations[2]).not.toHaveProperty("message");
         const store = yield* ThreadStore;
 

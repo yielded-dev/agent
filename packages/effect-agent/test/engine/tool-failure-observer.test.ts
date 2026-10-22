@@ -3,6 +3,7 @@ import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
@@ -208,6 +209,61 @@ const testLayer = Layer.mergeAll(
 );
 
 layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
+  it.effect("observes rejected parameters before turn exhaustion hides their cause", () =>
+    Effect.gen(function* () {
+      const observations: Array<ToolFailureObservation> = [];
+
+      const agent = Agent.withModel(
+        Agent.make("rejected-completion", {
+          input: Schema.String,
+          output: Schema.String,
+          instructions: "Complete the request.",
+          toolkit: returns,
+          completion: { tool: "returned", project: ({ result }) => result },
+          policy: { maxTurns: 1, maxToolCalls: 1, onExhaustion: "fail" },
+        }),
+        model([call("returned", "invalid-completion", { value: "wrong" })]),
+      );
+
+      const exit = yield* AgentRuntime.run(agent, "go").pipe(
+        Effect.provide([
+          returns.toLayer({ returned: () => Effect.die("must not start") }),
+          toolFailureObserverLayer(collect(observations)),
+        ]),
+        Effect.exit,
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit))
+        expect(Cause.findErrorOption(exit.cause)).toMatchObject({
+          value: { _tag: "AgentPolicyError", limit: "turns" },
+        });
+      expect(JSON.stringify(FailureDiagnostic.capture(exit))).toContain("SchemaError");
+      expect(observations).toHaveLength(1);
+      expect(observations[0]).toMatchObject({
+        _tag: "ModelToolFailure",
+        kind: "parameter-rejection",
+        toolCallId: "invalid-completion",
+      });
+      expect(Cause.pretty(observations[0]!.cause!)).toContain("value");
+      expect(Cause.pretty(observations[0]!.cause!)).toContain("number");
+    }),
+  );
+
+  it.effect("retains the tool cause when the repeated-failure policy stops the Run", () =>
+    Effect.gen(function* () {
+      const exit = yield* AgentRuntime.run(
+        binding(returns, [call("returned")], { repeatedFailureLimit: 1 }),
+        "go",
+      ).pipe(
+        Effect.provide(returns.toLayer({ returned: () => Effect.fail(failure) })),
+        Effect.exit,
+      );
+
+      expect(JSON.stringify(FailureDiagnostic.capture(exit))).toContain("Query rejected");
+    }),
+  );
+
   // Exercise the live direct and broker observer bridges before declared failures lose
   // their ErrorReporter annotation during encoding/tag projection.
   it.effect.each([false, true])("honors ignored=%s on direct declared failures", (ignored) =>
@@ -244,6 +300,7 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
                   toolName: "returned",
                   executionClass: "idempotent",
                   tag: "QueryFailure",
+                  cause: Cause.fail(declared),
                 },
               ],
         );
@@ -304,6 +361,7 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
                 toolName: "returned",
                 executionClass: "idempotent",
                 tag: "QueryFailure",
+                cause: Cause.fail(declared),
               },
             ],
       );
@@ -595,7 +653,7 @@ export const verifyNarrowsDiagnosticsByKindAndPreservesInferredRunStreamStartErr
     >;
     expectTypeOf<HandlerError["cause"]>().toEqualTypeOf<Cause.Cause<unknown>>();
     expectTypeOf<HandlerError["message"]>().toEqualTypeOf<undefined>();
-    expectTypeOf<DeclaredFailure["cause"]>().toEqualTypeOf<undefined>();
+    expectTypeOf<DeclaredFailure["cause"]>().toEqualTypeOf<Cause.Cause<unknown>>();
     expectTypeOf<DeclaredFailure["message"]>().toEqualTypeOf<undefined>();
     expectTypeOf<Diagnostic["message"]>().toEqualTypeOf<string>();
     const agent = binding(queries, [call("query")]);

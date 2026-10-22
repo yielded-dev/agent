@@ -26,9 +26,29 @@ const Baseline = Schema.Struct({
 const metadata = new Set(["title", "description", "examples", "$comment"]);
 const isObject = Schema.is(Schema.Record(Schema.String, Schema.Unknown));
 
-/** Only optional properties and new top-level record variants are additive wire changes. */
+/** Existing record meanings stay fixed; only explicitly additive wire shapes are accepted. */
 const changes = (before: unknown, after: unknown, path: string): ReadonlyArray<string> => {
   if (Object.is(before, after)) return [];
+  // Explicit unbounded policy counts add a null alternative without changing any existing
+  // numeric value. Keep this exception local: other field unions still require a format bump.
+  if (
+    (path === "AgentPolicyEncoded.properties.maxTurns" ||
+      path === "AgentPolicyEncoded.properties.maxToolCalls") &&
+    !(isObject(before) && Array.isArray(before.anyOf)) &&
+    isObject(after) &&
+    Array.isArray(after.anyOf) &&
+    after.anyOf.length === 2 &&
+    Object.keys(after).every((key) => key === "anyOf" || metadata.has(key))
+  ) {
+    const nullIndex = after.anyOf.findIndex(
+      (value) =>
+        isObject(value) &&
+        value.type === "null" &&
+        Object.keys(value).every((key) => key === "type" || metadata.has(key)),
+    );
+
+    if (nullIndex !== -1) return changes(before, after.anyOf[1 - nullIndex], path);
+  }
   if (Array.isArray(before) && Array.isArray(after)) {
     if (path === "record.properties.payload.anyOf") {
       // Union members use either a reference or an inline literal _tag. Order is not a contract.

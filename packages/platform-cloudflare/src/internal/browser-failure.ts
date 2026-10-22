@@ -1,11 +1,20 @@
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
 import * as ErrorReporter from "effect/ErrorReporter";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
-/** Source-authored stages and classifications only; never retain SDK text or session capabilities. */
+/** Translate typed failures without dropping cleanup reasons during actual cancellation. */
+export const mapBrowserError =
+  <E, E2>(map: (error: E) => E2) =>
+  <A, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E2, R> =>
+    Effect.uninterruptibleMask((restore) =>
+      restore(effect).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, map)))),
+    );
+
+/** Browser stage and classification. Original causes stay private and out of public JSON. */
 export class BrowserRunFailure extends Data.TaggedError("BrowserRunFailure")<{
   readonly operation: string;
   readonly reason:
@@ -52,48 +61,67 @@ const failureNames = new Set([
   "ConnectionClosedError",
 ]);
 
-export const browserFailure = (operation: string, cause?: unknown): BrowserRunFailure =>
-  cause instanceof BrowserRunFailure
-    ? cause
-    : new BrowserRunFailure({
-        operation,
-        reason:
-          Predicate.isObject(cause) && "reason" in cause && Schema.is(reasonSchema)(cause.reason)
-            ? cause.reason
-            : "provider",
-        ...(Predicate.isObject(cause) && "status" in cause && Schema.is(statusSchema)(cause.status)
-          ? { status: cause.status }
-          : {}),
-        ...(Predicate.isObject(cause) &&
-        "cause" in cause &&
-        cause.cause instanceof BrowserRunFailure
-          ? { cause: cause.cause }
-          : Predicate.isObject(cause) &&
-              "name" in cause &&
-              typeof cause.name === "string" &&
-              failureNames.has(cause.name)
-            ? { cause: { name: cause.name } }
-            : {}),
-      });
+/** Construct a reporter-safe copy, never the error carrying the private original cause. */
+const projectBrowserFailure = (operation: string, cause?: unknown): BrowserRunFailure => {
+  const source = cause instanceof BrowserRunFailure ? cause.cause : cause;
+
+  return new BrowserRunFailure({
+    operation: cause instanceof BrowserRunFailure ? cause.operation : operation,
+    reason:
+      cause instanceof BrowserRunFailure
+        ? cause.reason
+        : Predicate.isObject(cause) && "reason" in cause && Schema.is(reasonSchema)(cause.reason)
+          ? cause.reason
+          : "provider",
+    ...(Predicate.isObject(cause) && "status" in cause && Schema.is(statusSchema)(cause.status)
+      ? { status: cause.status }
+      : {}),
+    ...(source instanceof BrowserRunFailure
+      ? { cause: projectBrowserFailure(operation, source) }
+      : Predicate.isObject(source) &&
+          "name" in source &&
+          typeof source.name === "string" &&
+          failureNames.has(source.name)
+        ? { cause: { name: source.name } }
+        : {}),
+  });
+};
+
+export const browserFailure = (operation: string, cause?: unknown): BrowserRunFailure => {
+  if (cause instanceof BrowserRunFailure) return cause;
+
+  const failure = projectBrowserFailure(operation, cause);
+
+  return cause === undefined ? failure : FailureDiagnostic.withPrivateCause(failure, cause);
+};
 
 /** Keep mixed defects and interruptions distinct while discarding all foreign diagnostic content. */
 export const reportBrowserCause = <E>(
   operation: string,
   cause: Cause.Cause<E>,
 ): Effect.Effect<void> =>
-  ErrorReporter.report(
-    Cause.fromReasons(
-      cause.reasons
-        .filter((reason) => !Cause.isFailReason(reason) || !ErrorReporter.isIgnored(reason.error))
-        .map((reason) => {
-          switch (reason._tag) {
-            case "Fail":
-              return Cause.makeFailReason(browserFailure(operation, reason.error));
-            case "Die":
-              return Cause.makeDieReason(browserFailure(operation, reason.defect));
-            case "Interrupt":
-              return reason;
-          }
-        }),
+  Effect.suspend(() =>
+    ErrorReporter.report(
+      Cause.fromReasons(
+        cause.reasons
+          .filter((reason) => !Cause.isFailReason(reason) || !ErrorReporter.isIgnored(reason.error))
+          .map((reason) => {
+            switch (reason._tag) {
+              case "Fail":
+                return Cause.makeFailReason(projectBrowserFailure(operation, reason.error));
+              case "Die":
+                return Cause.makeDieReason(projectBrowserFailure(operation, reason.defect));
+              case "Interrupt":
+                return reason;
+            }
+          }),
+      ),
+    ),
+  ).pipe(
+    // Reporting is best effort; a defective sink must not replace the operation's failure.
+    Effect.catchCause((cause) =>
+      Cause.hasInterrupts(cause)
+        ? Effect.failCause(Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)))
+        : Effect.void,
     ),
   );

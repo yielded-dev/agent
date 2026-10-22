@@ -7,6 +7,8 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { strictSchema } from "./internal/strict-schema.ts";
 
+const PrivateCause = Symbol.for("@yielded/agent/FailureDiagnostic/PrivateCause");
+
 const Text = Schema.String.check(Schema.isMaxLength(16 * 1024));
 const Name = Schema.String.check(Schema.isMaxLength(1_024));
 const Scalar = Schema.Union([Text, Schema.Finite, Schema.Boolean, Schema.Null]);
@@ -219,12 +221,12 @@ export const capture = (
     const retained = node?._tag === "Error" ? node : undefined;
     const omittedFields: Array<string> = [];
 
-    const read = (key: string): unknown => {
+    const read = (key: string | symbol): unknown => {
       // A throwing accessor must not replace the original failure during diagnostic capture.
       try {
         return Reflect.get(value, key);
       } catch {
-        omittedFields.push(key);
+        omittedFields.push(typeof key === "string" ? key : "privateCause");
 
         return undefined;
       }
@@ -236,7 +238,8 @@ export const capture = (
     const stack = read("stack");
     const reason = read("reason");
     const code = read("code");
-    const cause = read("cause");
+    const privateCause = read(PrivateCause);
+    const cause = privateCause === undefined ? read("cause") : privateCause;
     const errors = read("errors");
     const capturedCause = cause === undefined ? undefined : nested(cause);
     const capturedReason = reason === undefined ? undefined : nested(reason);
@@ -339,3 +342,18 @@ export const Failure = Schema.Struct({
 }).pipe(strictSchema);
 
 export type Failure = typeof Failure.Type;
+
+/**
+ * Attach an original cause for trusted in-process inspection without enumerable JSON.
+ * Error Schemas must omit cause to exclude it from Schema transports; capture() retains it.
+ */
+export const withCause = <A extends object>(error: A, cause: unknown): A =>
+  Object.defineProperty(error, "cause", { value: cause, enumerable: false, configurable: true });
+
+/** Preserve an original for capture() while keeping an existing public cause projection intact. */
+export const withPrivateCause = <A extends object>(error: A, cause: unknown): A =>
+  Object.defineProperty(error, PrivateCause, {
+    value: cause,
+    enumerable: false,
+    configurable: true,
+  });

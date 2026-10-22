@@ -12,24 +12,24 @@ Model-context capacity and Thread history are separate from those execution budg
 Pass a partial `policy` to `Agent.make`. Omitted fields use standalone defaults; delegated
 children can inherit the parent's policy within their delegation ceilings.
 
-| Option                        | Default                                                                 | Meaning                                                                |
-| ----------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `maxTurns`                    | `12`                                                                    | Model turns per Run                                                    |
-| `maxToolCalls`                | `24`                                                                    | Tool calls, including programmatic calls                               |
-| `maxDuration`                 | `"5 minutes"`                                                           | Ordinary Run deadline; active Attempt deadline for durable execution   |
-| `toolConcurrency`             | `4`                                                                     | Parallel application handlers per batch                                |
-| `repeatedFailureLimit`        | `3`                                                                     | Consecutive terminal tool failures                                     |
-| `onExhaustion`                | `"final-answer"`                                                        | Turn, tool-call, and token exhaustion behavior                         |
-| `tokenBudget`                 | Unset                                                                   | Cumulative input and output tokens                                     |
-| `costBudgetMicrousd`          | Unset                                                                   | Estimated cost in millionths of a US dollar                            |
-| `completionReserveTokens`     | 20% of `tokenBudget`, capped at `4,096`; `4,096` without a token budget | Capacity reserved for final delivery                                   |
-| `contextTokenLimit`           | Unset                                                                   | Estimated live context that triggers compaction                        |
-| `toolResultBounds.maxBytes`   | `51,200`                                                                | Encoded bytes per application tool result                              |
-| `runStatus`                   | `"off"`                                                                 | Set `"appended"` for a derived status message in model requests        |
-| `restartOnJoinedInput`        | Off                                                                     | Replace a disposable model call on joined input, at most twice per Run |
-| `modelRetries`                | `0`                                                                     | Retry a qualifying model failure before content arrives                |
-| `compaction.keepRecentTokens` | `20,000`                                                                | Recent context preserved during compaction                             |
-| `compaction.mode`             | `"prune-then-summarize"`                                                | Compaction strategy                                                    |
+| Option                        | Default                                                                 | Meaning                                                                     |
+| ----------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `maxTurns`                    | `12`                                                                    | Model turns per Run; `null` disables the count ceiling                      |
+| `maxToolCalls`                | `24`                                                                    | Tool calls, including programmatic calls; `null` disables the count ceiling |
+| `maxDuration`                 | `"5 minutes"`                                                           | Ordinary Run deadline; active Attempt deadline for durable execution        |
+| `toolConcurrency`             | `4`                                                                     | Parallel application handlers per batch                                     |
+| `repeatedFailureLimit`        | `3`                                                                     | Consecutive terminal tool failures                                          |
+| `onExhaustion`                | `"final-answer"`                                                        | Turn, tool-call, and token exhaustion behavior                              |
+| `tokenBudget`                 | Unset                                                                   | Cumulative input and output tokens                                          |
+| `costBudgetMicrousd`          | Unset                                                                   | Estimated cost in millionths of a US dollar                                 |
+| `completionReserveTokens`     | 20% of `tokenBudget`, capped at `4,096`; `4,096` without a token budget | Capacity reserved for final delivery                                        |
+| `contextTokenLimit`           | Unset                                                                   | Estimated live context that triggers compaction                             |
+| `toolResultBounds.maxBytes`   | `51,200`                                                                | Encoded bytes per application tool result                                   |
+| `runStatus`                   | `"off"`                                                                 | Set `"appended"` for a derived status message in model requests             |
+| `restartOnJoinedInput`        | Off                                                                     | Replace a disposable model call on joined input, at most twice per Run      |
+| `modelRetries`                | `0`                                                                     | Retry a qualifying model failure before content arrives                     |
+| `compaction.keepRecentTokens` | `20,000`                                                                | Recent context preserved during compaction                                  |
+| `compaction.mode`             | `"prune-then-summarize"`                                                | Compaction strategy                                                         |
 
 ```ts twoslash
 import { Agent } from "@yielded/agent";
@@ -56,6 +56,12 @@ const researcher = Agent.make("researcher", {
 The [travel planner](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
 shows policies in a complete application.
 
+Use `maxTurns: null` and `maxToolCalls: null` when the host owns the Run lifetime through
+its finite duration and cancellation. Omitted counts retain the defaults above. JSON preserves
+`null`; a resolved `AgentPolicy` exposes disabled counts as `Infinity`. Per-Run allowances can
+still tighten them. An unbounded parent must supply an explicit finite delegation policy for
+subagent reservations.
+
 ## At the limit
 
 `onExhaustion: "final-answer"` allows at most one constrained finalization opportunity for
@@ -63,6 +69,10 @@ turn, tool-call, or token exhaustion. A [designated completion tool](/guide/agen
 A completed result carries
 `finishReason: "budget-exhausted"` and the exhausted dimension. Use `"fail"` when a partial
 answer is not acceptable. Duration, estimated cost, and repeated failure limits always fail.
+When a failed completion cannot be corrected because the next turn is exhausted, the policy
+error retains its original cause for private diagnostic capture. `toolFailureObserverLayer`
+also observes parameter rejections and returned tool failures with their original causes,
+including failures that the model later recovers from.
 
 Usage is measured at response boundaries and can cross a threshold. These budgets are not
 prepaid provider spending caps. A strict monetary ceiling requires host admission that reserves
