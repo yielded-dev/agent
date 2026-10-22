@@ -101,7 +101,6 @@ export default defineConfig({
       "src/durable/SubscriptionInput.ts",
       "src/durable/Subscriptions.ts",
       "src/durable/SubscriptionTransition.ts",
-      "src/durable/Certification.ts",
       "src/durable/DurableFailpointTestControl.ts",
       "src/durable/ScheduleStoreConformance.ts",
       "src/durable/SubmissionLedgerConformance.ts",

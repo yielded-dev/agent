@@ -23,16 +23,13 @@ import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 
 /**
- * Shared `CodeExecutor` conformance (TEST-015). Every adapter — the
- * deterministic `unisolated` substitute and each isolated adapter — runs
- * `codeExecutorConformanceCases` verbatim. Enforcement cases that only genuine
- * isolation can prove (ambient network denial, synchronous CPU runaway
- * termination) are NOT here; they belong to isolated adapters only
- * (testing spec §8.1).
+ * Reusable `CodeExecutor` behavior checks (TEST-015). These checks exercise values, errors,
+ * host calls, limits and interruption; they do not prove isolation. Actual ambient network
+ * denial and synchronous CPU runaway termination require checks against the isolated adapter.
+ * Implementation metadata is compared with the adapter's declaration, not independently verified.
  *
- * Cases assume the live `Clock` (the wall-clock case uses a short real
- * deadline) and take one fresh executor pass per case, so a suite may share
- * one executor Layer across cases.
+ * Cases assume the live `Clock` (the wall-clock case uses a short real deadline) and take one
+ * fresh executor pass per case, so a suite may share one executor Layer across cases.
  */
 export class CodeExecutorConformanceViolation extends Schema.TaggedError<CodeExecutorConformanceViolation>()(
   "CodeExecutorConformanceViolation",
@@ -48,7 +45,7 @@ export interface CodeExecutorConformanceCase {
 }
 
 export interface CodeExecutorConformanceOptions {
-  /** The posture the adapter under test must stamp on results and errors. */
+  /** The declared implementation metadata the adapter must stamp on results and errors. */
   readonly implementation: SandboxImplementation;
 }
 
@@ -176,7 +173,7 @@ const expectFailure = (
 export const codeExecutorConformanceCases = (
   options: CodeExecutorConformanceOptions,
 ): ReadonlyArray<CodeExecutorConformanceCase> => {
-  const posture = options.implementation;
+  const implementation = options.implementation;
 
   return [
     {
@@ -187,49 +184,20 @@ export const codeExecutorConformanceCases = (
           "async () => { const xs = [1, 2, 3].map((n) => n * 2); return { xs, sum: xs.reduce((a, b) => a + b, 0) }; }",
         ),
         unusedHost,
-        (result) =>
-          JSON.stringify(result.value) === JSON.stringify({ xs: [2, 4, 6], sum: 12 })
-            ? undefined
-            : `unexpected program value ${preview(result.value)}`,
+        (result) => {
+          if (JSON.stringify(result.value) !== JSON.stringify({ xs: [2, 4, 6], sum: 12 })) {
+            return `unexpected program value ${preview(result.value)}`;
+          }
+          if (
+            result.implementation.isolation !== implementation.isolation ||
+            result.implementation.identity !== implementation.identity
+          ) {
+            return `result implementation ${preview(result.implementation)} does not match the declared ${preview(implementation)}`;
+          }
+
+          return undefined;
+        },
       ),
-    },
-    {
-      name: "CAP-015 reports its isolation posture honestly in results and errors",
-      run: Effect.gen(function* () {
-        const caseName = "CAP-015 reports its isolation posture honestly in results and errors";
-
-        const result = yield* runPass(makeRequest("async () => 1"), unusedHost).pipe(
-          Effect.mapError((error) => violation(caseName, `expected success, got ${error._tag}`)),
-        );
-
-        if (
-          result.implementation.isolation !== posture.isolation ||
-          result.implementation.identity !== posture.identity
-        ) {
-          return yield* violation(
-            caseName,
-            `result posture ${preview(result.implementation)} does not match the declared ${preview(posture)}`,
-          );
-        }
-
-        const error = yield* runPass(makeRequest("async () => {"), unusedHost).pipe(
-          Effect.flip,
-          Effect.mapError(() => violation(caseName, "expected the invalid-source pass to fail")),
-        );
-
-        // Every expected execution failure carries the posture; an adapter
-        // omitting the field must fail this case, not slip past a probe.
-        if (
-          error.implementation === undefined ||
-          error.implementation.isolation !== posture.isolation ||
-          error.implementation.identity !== posture.identity
-        ) {
-          return yield* violation(
-            caseName,
-            `error posture ${preview(error.implementation)} does not match the declared ${preview(posture)}`,
-          );
-        }
-      }),
     },
     {
       name: "TEST-015 routes host calls through the CodeExecutionHost in program order",
@@ -316,10 +284,20 @@ export const codeExecutorConformanceCases = (
         makeRequest("async () => {"),
         unusedHost,
         "CodeSourceError",
-        (error) =>
-          error._tag === "CodeSourceError" && error.reason === "invalid"
-            ? undefined
-            : `expected reason invalid, got ${preview(error)}`,
+        (error) => {
+          if (error._tag !== "CodeSourceError" || error.reason !== "invalid") {
+            return `expected reason invalid, got ${preview(error)}`;
+          }
+          if (
+            error.implementation === undefined ||
+            error.implementation.isolation !== implementation.isolation ||
+            error.implementation.identity !== implementation.identity
+          ) {
+            return `error implementation ${preview(error.implementation)} does not match the declared ${preview(implementation)}`;
+          }
+
+          return undefined;
+        },
       ),
     },
     {
@@ -479,9 +457,9 @@ export const codeExecutorConformanceCases = (
       ),
     },
     {
-      name: "TEST-015 interruption reaches in-flight host calls and pass teardown",
+      name: "TEST-015 interruption reaches an in-flight host call",
       run: Effect.gen(function* () {
-        const caseName = "TEST-015 interruption reaches in-flight host calls and pass teardown";
+        const caseName = "TEST-015 interruption reaches an in-flight host call";
         const started = yield* Deferred.make<void>();
         const witness = { hostCallInterrupted: false };
 

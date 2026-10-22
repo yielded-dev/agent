@@ -32,15 +32,6 @@ import {
   SubmissionLookupById,
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
-import {
-  type CertificationCaseResult,
-  type CertificationReport,
-  CertificationSweepResult,
-  CertificationTierThreeReport,
-  CertifiedAdapterIdentity,
-  certifyPorts,
-  type CertificationScenario,
-} from "@yielded/agent/testing/certification";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
 import { ThreadStore, ThreadReader, ThreadStoreError } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
@@ -51,9 +42,7 @@ import type * as Response from "effect/ai/Response";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Cause from "effect/Cause";
-import * as Clock from "effect/Clock";
 import type * as Crypto from "effect/Crypto";
-import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -63,82 +52,23 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
-import { makeCertificationReport } from "./internal/certification-report.ts";
+/** A failed coordinator recovery or failpoint coverage check. */
+export class DurableCoordinatorConformanceViolation extends Schema.TaggedError<DurableCoordinatorConformanceViolation>()(
+  "DurableCoordinatorConformanceViolation",
+  { caseName: Schema.String, message: Schema.String },
+) {}
 
-/**
- * P7 WP2 — `certifyDurableAdapters` (plan §1): the one certification entry point a durable
- * adapter pair runs to earn a Schema-encoded certificate.
- *
- * - **Tier 1 — port contract**: the two shared conformance case arrays, verbatim, through
- *   `certifyPorts` (TEST-004/STORE-010).
- * - **Tier 2 — coordinator protocol + failpoint convergence**: the durable coordinator is
- *   assembled over the CANDIDATE Layer pair with a scripted deterministic model; every
- *   reached `DurableRuntimeFailpointLocation` is armed one-shot across the six scenario shapes
- *   (plain / uncertain-tool / durable-steps / approval / join / delegation). Unreached locations
- *   share a verified clean run per shape; new unaccounted-for locations get a full sweep.
- *   After the injected fault the runner asserts the state stays CLASSIFIABLE (recovery +
- *   the public unblocking operations `resolveUnknown`/`resolveApproval` are the only levers
- *   used) and that the re-drive CONVERGES to `verifyThreadInvariants` with `requireAllSettled`,
- *   including schema, identity, order and active state from native paged verification.
- * - **Tier 3 — real loss lever**: recorded honestly. A durable adapter either supplies a
- *   `CertificationCrashLever` executed in this run, cites its committed real-loss evidence
- *   (process-kill / eviction suites), or the certificate says `not-exercised`. A non-durable
- *   reference adapter records `not-applicable`.
- *
- * The runner is adapter-neutral and platform-neutral: it imports nothing Node-only, so the
- * same entry point runs under `@effect/vitest` on Node and inside workerd (storage-cloudflare's
- * in-workerd runner). Tier 1 uses a TestClock to show that elapsed time cannot replace a live
- * owner; only `Crypto.Crypto` is required from the environment.
- */
-
-// ---------------------------------------------------------------------------
-// Options
-// ---------------------------------------------------------------------------
-
-/**
- * A real-loss lever supplied by an adapter that wants Tier 3 exercised IN this certification
- * run (kill/evict/reopen around a designated row subset). Rows report with
- * `suite: "real-loss"`. Failures must be captured per-row — the lever's error channel is
- * `never` so a certificate is always produced.
- */
-export type CertificationCrashLever = Effect.Effect<ReadonlyArray<CertificationCaseResult>>;
-
-export interface CertifyDurableAdaptersOptions<LedgerE = never, StoreE = never> {
-  /** Adapter pair identity named by the certificate (durability is read from the ledger). */
-  readonly adapter: {
-    readonly name: string;
-    readonly version?: string | undefined;
-  };
-  /**
-   * The candidate Layer pair. The ledger Layer also supplies its co-owned settlement publisher.
-   * When both ports must share one connection root (the ADR-0011
-   * "same file" rule), pass the SAME combined Layer instance for both fields — Layer
-   * memoization builds it once. A candidate may require `Crypto.Crypto` (the memory reference
-   * does); the certification's own environment supplies nothing else.
-   */
-  readonly submissionLedger: Layer.Layer<
-    SubmissionLedger | SettlementPublisher,
-    LedgerE,
-    Crypto.Crypto
-  >;
-  readonly threadStore: Layer.Layer<ThreadStore | StorageOwner, StoreE, Crypto.Crypto>;
-  /** Defaults to `WakeScheduler.layerNoop`; the runner re-drives lanes explicitly. */
-  readonly wakeScheduler?: Layer.Layer<WakeScheduler> | undefined;
-  /** Executes Tier 3 in this run; takes precedence over `tierThreeEvidence`. */
-  readonly crashLever?: CertificationCrashLever | undefined;
-  /** Repository-relative citations of committed real-loss suites (Tier 3 `recorded-evidence`). */
-  readonly tierThreeEvidence?: ReadonlyArray<string> | undefined;
-}
-
-/** The six Tier-2 scenario shapes in sweep order. */
-export const CERTIFICATION_SCENARIOS: ReadonlyArray<CertificationScenario> = [
+/** The six coordinator scenario shapes in sweep order. */
+const SCENARIOS = [
   "plain",
   "uncertain-tool",
   "durable-steps",
   "approval",
   "join",
   "delegation",
-];
+] as const;
+
+type CoordinatorScenario = (typeof SCENARIOS)[number];
 
 /**
  * Coordinator failpoint locations that none of the six scenario shapes can reach, recorded
@@ -147,10 +77,10 @@ export const CERTIFICATION_SCENARIOS: ReadonlyArray<CertificationScenario> = [
  * by the P5/S2 suites (`packages/testing/test/durable-tools.test.ts` "resolveUnknown is idempotent across the
  * intent failpoint", `durable-runtime.test.ts` abort rows,
  * `durable-subagents.test.ts` abort propagation) and by the process-kill/eviction crash
- * matrices. Runner tests assert the observed never-fired set equals EXACTLY this list, so a
- * protocol change that silently stops exercising a location fails the certification.
+ * matrices. The aggregate check requires the observed never-fired set to equal this list, so a
+ * protocol change that silently stops exercising a location fails conformance.
  */
-export const TIER2_UNREACHED_LOCATIONS: ReadonlyArray<DurableRuntimeFailpointLocation> = [
+const UNREACHED_LOCATIONS: ReadonlyArray<DurableRuntimeFailpointLocation> = [
   // Active timeout recording is covered before/after append by durable-runtime.test.ts.
   "run:before-duration-append",
   "run:after-duration-append",
@@ -199,23 +129,10 @@ export const TIER2_UNREACHED_LOCATIONS: ReadonlyArray<DurableRuntimeFailpointLoc
   // by packages/effect-agent/test/durable/worker-host.test.ts ("repairs an accepted parent update after ...").
   // Node restart/lost-ack coverage is in packages/platform-node/test/worker-updates.test.ts;
   // Cloudflare eviction/alarm recovery is in packages/platform-cloudflare/test/background-workers.test.ts.
-  // These suites are not executed by this certification runner; its update rows remain not-triggered.
+  // These suites run independently; this sweep does not exercise the update boundaries.
   "update:before-canonical-append",
   "update:after-canonical-append",
 ];
-
-/** Locations of `tier2` rows whose armed fault never fired in ANY scenario, sorted. */
-export const tier2NeverFiredLocations = (
-  tier2: ReadonlyArray<CertificationSweepResult>,
-): ReadonlyArray<DurableRuntimeFailpointLocation> => {
-  const fired = new Set<DurableRuntimeFailpointLocation>();
-
-  for (const row of tier2) {
-    if (row.failpointFired) fired.add(row.location);
-  }
-
-  return DurableRuntimeFailpointLocation.literals.filter((location) => !fired.has(location)).sort();
-};
 
 // ---------------------------------------------------------------------------
 // Deterministic fixtures (scripted prompt-shape models, agents, delegation)
@@ -297,10 +214,9 @@ const promptShapeModel = (
     ),
   );
 
-// Tier-2 intentionally advances virtual time past a 30-second ownership lease on every
-// re-drive round. Keep its business-policy duration above the full eight-round sweep so this
-// fixture certifies crash convergence rather than accidentally relying on a fresh duration
-// allowance per replacement Attempt. RUN-030 owns the dedicated duration-expiry coverage.
+// Keep the fixture duration above the full eight-round recovery sweep so convergence does
+// not depend on a fresh duration allowance per replacement Attempt. The durable-runtime
+// duration-expiry cases exercise that policy separately.
 const CERTIFICATION_MAX_DURATION = "10 minutes" as const;
 
 const policy = AgentPolicy.make({
@@ -454,10 +370,10 @@ const identifiers = Layer.effect(
 const delegationSupport = Layer.mergeAll(SubagentReservationsMemoryLive, identifiers);
 
 // ---------------------------------------------------------------------------
-// Tier 2 — scenario cells
+// Coordinator scenario cells
 // ---------------------------------------------------------------------------
 
-interface CertificationCell {
+interface CoordinatorCell {
   readonly bindings: ReadonlyArray<ResolvedBinding>;
   /** Idempotent submission batch — safe to replay verbatim after a submit-boundary fault. */
   readonly submit: Effect.Effect<ReadonlyArray<Receipt>, DurableSubmitFailure, DurableAgentRuntime>;
@@ -477,7 +393,7 @@ const makeSingleAgentCell = (
   definition: { readonly id: AgentId; readonly input: typeof QuestionInput },
   resolved: ResolvedBinding,
   slug: string,
-): CertificationCell => {
+): CoordinatorCell => {
   const threadId = decodeThreadId(`certify-${slug}`);
 
   const submit = Effect.gen(function* () {
@@ -499,7 +415,7 @@ const makeSingleAgentCell = (
   };
 };
 
-const makeCell = Effect.fnUntraced(function* (scenario: CertificationScenario, slug: string) {
+const makeCell = Effect.fnUntraced(function* (scenario: CoordinatorScenario, slug: string) {
   switch (scenario) {
     case "plain": {
       const binding = Agent.withModel(
@@ -611,7 +527,7 @@ const makeCell = Effect.fnUntraced(function* (scenario: CertificationScenario, s
         );
       });
 
-      const cell: CertificationCell = {
+      const cell: CoordinatorCell = {
         bindings: [resolved],
         submit: Effect.gen(function* () {
           const host = yield* submitOne(`certify-key-${slug}-host`, "host question");
@@ -657,7 +573,7 @@ const makeCell = Effect.fnUntraced(function* (scenario: CertificationScenario, s
       const childResolved = yield* DurableWorkerBinding.make(childBinding, CHILD_DIGESTS);
       const threadId = decodeThreadId(`certify-${slug}`);
 
-      const cell: CertificationCell = {
+      const cell: CoordinatorCell = {
         bindings: [parentResolved, childResolved],
         submit: Effect.gen(function* () {
           const runtime = yield* DurableAgentRuntime;
@@ -698,7 +614,7 @@ const verifyLane = Effect.fnUntraced(function* (lane: ThreadId) {
 
   if (store.verification === undefined)
     return yield* ThreadStoreError.make({
-      operation: "adapter certification",
+      operation: "coordinator conformance",
       message: "The adapter must provide bounded native Thread verification",
     });
 
@@ -721,11 +637,15 @@ const failureTagOf = <E>(cause: Cause.Cause<E>): string => {
   return "defect";
 };
 
-type SweepOutcome = Pick<CertificationSweepResult, "failpointFired" | "status" | "detail">;
+interface SweepOutcome {
+  readonly failpointFired: boolean;
+  readonly status: "converged" | "not-triggered" | "failed";
+  readonly detail?: string;
+}
 
 /** Discover a clean path, or arm one location; both drives converge and verify real storage. */
 const runSweepCell = Effect.fnUntraced(function* (
-  scenario: CertificationScenario,
+  scenario: CoordinatorScenario,
   location: DurableRuntimeFailpointLocation | undefined,
   reached: Set<DurableRuntimeFailpointLocation>,
 ) {
@@ -893,185 +813,115 @@ const runSweepCell = Effect.fnUntraced(function* (
   } satisfies SweepOutcome;
 });
 
-// ---------------------------------------------------------------------------
-// Tier 3 — real loss lever record
-// ---------------------------------------------------------------------------
+const caseName = "coordinator recovery converges after injected faults";
 
 /**
- * Resolve the Tier-3 record honestly (plan §1): a non-durable reference adapter has no real
- * loss to exercise (`not-applicable`); a supplied lever runs NOW (`exercised`); committed
- * real-loss citations are recorded (`recorded-evidence`); otherwise the certificate says
- * `not-exercised` — a scoped statement, never a silent claim.
+ * Exercise six deterministic scenarios over disposable, pristine storage. Discover each clean
+ * path, arm every reached or unaccounted-for failpoint once, and require bounded recovery to
+ * settled, natively verified history. The final never-fired set must match the known paths
+ * outside these scenarios; every scenario must exercise at least one injected fault.
+ *
+ * Provide one combined adapter Layer with SubmissionLedger, ThreadStore, SettlementPublisher,
+ * StorageOwner and Crypto in a TestClock-backed environment. The helper owns its runtime Scope
+ * and supplies a no-op WakeScheduler because it re-drives lanes explicitly. Injected failures
+ * do not establish recovery after actual process loss or eviction.
  */
-export const resolveTierThree = Effect.fnUntraced(function* (
-  durability: CertifiedAdapterIdentity["durability"],
-  options: {
-    readonly crashLever?: CertificationCrashLever | undefined;
-    readonly tierThreeEvidence?: ReadonlyArray<string> | undefined;
-  },
-): Effect.fn.Return<CertificationTierThreeReport, never> {
-  if (durability === "non-durable") {
-    return CertificationTierThreeReport.make({
-      status: "not-applicable",
-      evidence: [],
-      cases: [],
-      detail:
-        "the adapter declares non-durable state (reference/conformance adapter); there is no real loss to exercise",
-    });
+export const durableCoordinatorConformance: Effect.Effect<
+  void,
+  DurableCoordinatorConformanceViolation | ThreadStoreError,
+  SubmissionLedger | ThreadStore | SettlementPublisher | StorageOwner | Crypto.Crypto
+> = Effect.gen(function* () {
+  const discoveries: Array<{
+    readonly scenario: CoordinatorScenario;
+    readonly outcome: SweepOutcome;
+    readonly reached: Set<DurableRuntimeFailpointLocation>;
+  }> = [];
+
+  for (const scenario of SCENARIOS) {
+    const reached = new Set<DurableRuntimeFailpointLocation>();
+    const outcome = yield* runSweepCell(scenario, undefined, reached);
+
+    discoveries.push({ scenario, outcome, reached });
   }
-  if (options.crashLever !== undefined) {
-    const cases = yield* options.crashLever;
+  const observed = new Set(discoveries.flatMap(({ reached }) => [...reached]));
 
-    return CertificationTierThreeReport.make({
-      status: cases.length === 0 ? "not-exercised" : "exercised",
-      evidence: options.tierThreeEvidence ?? [],
-      cases,
-      ...(cases.length === 0
-        ? { detail: "the supplied crash lever executed no real-loss cases" }
-        : {}),
-    });
-  }
-  if (options.tierThreeEvidence !== undefined && options.tierThreeEvidence.length > 0) {
-    return CertificationTierThreeReport.make({
-      status: "recorded-evidence",
-      evidence: options.tierThreeEvidence,
-      cases: [],
-    });
-  }
-
-  return CertificationTierThreeReport.make({
-    status: "not-exercised",
-    evidence: [],
-    cases: [],
-    detail:
-      "no crash lever was supplied and no committed real-loss evidence was cited; Tier 3 is NOT discharged for this adapter",
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
-
-const nowUtc: Effect.Effect<DateTime.Utc> = Effect.map(Clock.currentTimeMillis, (millis) =>
-  DateTime.toUtc(DateTime.makeUnsafe(millis)),
-);
-
-/**
- * Certify one durable adapter pair (plan §1, §8 WP2). Runs Tier 2 FIRST over pristine
- * storage (each cell converges to all-settled before the next starts, so the recovery scan
- * never sees foreign leftovers), then Tier 1's port contract cases (whose lanes deliberately
- * end in every nonterminal shape), then records Tier 3. Requires `Crypto.Crypto` and a
- * TestClock-backed environment; the candidate Layers are built exactly once.
- * Missing required durable storage capabilities fail with `ThreadStoreError`.
- */
-export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
-  options: CertifyDurableAdaptersOptions<LedgerE, StoreE>,
-): Effect.Effect<CertificationReport, LedgerE | StoreE | ThreadStoreError, Crypto.Crypto> => {
-  // RUN-036: certification uses the default-none Tool failure observer. Trusted application
-  // reporting adds no durable transition and is verified separately from adapter certification.
-  const environment = Layer.mergeAll(runStorageLayer(), ThreadReader.layer()).pipe(
-    Layer.provideMerge(
-      Layer.mergeAll(
-        options.submissionLedger,
-        options.threadStore,
-        options.wakeScheduler ?? WakeScheduler.layerNoop,
-        DurableRuntimeFailpointTestControl.layer,
-        ToolReconciler.uncertain,
-        DurableRuntimeConfig.layer({
-          deploymentId: Schema.decodeSync(DeploymentId)("deployment-certification"),
-          producerId: Schema.decodeSync(ProducerId)("producer-certification"),
-          settlementPollInterval: Duration.millis(50),
-          abortPollInterval: Duration.millis(50),
-        }),
-      ),
+  // Never silently omit a new location: arm it in every shape if neither clean discovery
+  // nor the known never-fired set accounts for it. Recovery can expose further routes.
+  const unaccounted = new Set(
+    DurableRuntimeFailpointLocation.literals.filter(
+      (location) => !observed.has(location) && !UNREACHED_LOCATIONS.includes(location),
     ),
   );
 
-  const program = Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
+  const fired = new Set<DurableRuntimeFailpointLocation>();
 
-    // Tier 2 — discover each deterministic shape without a fault. Unreached locations
-    // would all repeat this same clean drive, including its full invariant verification.
-    const tier2: Array<CertificationSweepResult> = [];
-
-    const discoveries: Array<{
-      readonly scenario: CertificationScenario;
-      readonly outcome: SweepOutcome;
-      readonly reached: Set<DurableRuntimeFailpointLocation>;
-    }> = [];
-
-    for (const scenario of CERTIFICATION_SCENARIOS) {
-      const reached = new Set<DurableRuntimeFailpointLocation>();
-
-      const outcome = yield* runSweepCell(scenario, undefined, reached);
-
-      discoveries.push({ scenario, outcome, reached });
+  for (const { scenario, outcome, reached } of discoveries) {
+    if (outcome.status === "failed") {
+      return yield* DurableCoordinatorConformanceViolation.make({
+        caseName,
+        message: `${scenario} discovery failed: ${outcome.detail}`,
+      });
     }
-    const observed = new Set(discoveries.flatMap(({ reached }) => [...reached]));
+    const outcomes = new Map<DurableRuntimeFailpointLocation, SweepOutcome>();
 
-    // Never silently omit a new location: if neither discovery nor the documented
-    // never-fired set accounts for it, arm it in EVERY shape. Tests pin the fired paths
-    // per shape and the never-fired set, so new or lost routes require explicit review.
-    const unaccounted = new Set(
-      DurableRuntimeFailpointLocation.literals.filter(
-        (location) => !observed.has(location) && !TIER2_UNREACHED_LOCATIONS.includes(location),
-      ),
-    );
+    while (true) {
+      // Schema order bounds this to one drive per location in each scenario.
+      const location = DurableRuntimeFailpointLocation.literals.find(
+        (candidate) =>
+          !outcomes.has(candidate) && (reached.has(candidate) || unaccounted.has(candidate)),
+      );
 
-    for (const discovery of discoveries) {
-      const { scenario, reached } = discovery;
-      const outcomes = new Map<DurableRuntimeFailpointLocation, SweepOutcome>();
+      if (location === undefined) break;
+      const result = yield* runSweepCell(scenario, location, reached);
 
-      if (discovery.outcome.status !== "failed") {
-        while (true) {
-          // Recovery may expose another route. Discover those too, without re-running a
-          // cell already checked. Schema order bounds this to one drive per location.
-          const location = DurableRuntimeFailpointLocation.literals.find(
-            (candidate) =>
-              !outcomes.has(candidate) && (reached.has(candidate) || unaccounted.has(candidate)),
-          );
-
-          if (location === undefined) break;
-          outcomes.set(location, yield* runSweepCell(scenario, location, reached));
-        }
+      outcomes.set(location, result);
+      if (result.status === "failed") {
+        return yield* DurableCoordinatorConformanceViolation.make({
+          caseName,
+          message: `${scenario} at ${location} failed: ${result.detail}`,
+        });
       }
-      for (const location of DurableRuntimeFailpointLocation.literals) {
-        const outcome = outcomes.get(location) ?? discovery.outcome;
-
-        tier2.push(
-          CertificationSweepResult.make({
-            scenario,
-            location,
-            ...outcome,
-            ...(outcomes.has(location) || outcome.status === "failed"
-              ? {}
-              : { detail: "verified clean scenario did not reach this location" }),
-          }),
-        );
-      }
+      if (result.failpointFired) fired.add(location);
     }
+    if (![...outcomes.values()].some((result) => result.failpointFired)) {
+      return yield* DurableCoordinatorConformanceViolation.make({
+        caseName,
+        message: `${scenario} did not fire any injected fault`,
+      });
+    }
+  }
 
-    // Tier 1 — the shared port contract suites, verbatim.
-    const tier1 = yield* certifyPorts();
+  const neverFired = DurableRuntimeFailpointLocation.literals
+    .filter((location) => !fired.has(location))
+    .sort();
 
-    // Tier 3 — the real loss lever record.
-    const capabilities = yield* ledger.capabilities;
-    const tier3 = yield* resolveTierThree(capabilities.durability, options);
+  const expected = [...UNREACHED_LOCATIONS].sort();
 
-    const generatedAt = yield* nowUtc;
-
-    return makeCertificationReport({
-      adapter: CertifiedAdapterIdentity.make({
-        name: options.adapter.name,
-        ...(options.adapter.version === undefined ? {} : { version: options.adapter.version }),
-        durability: capabilities.durability,
-      }),
-      generatedAt,
-      tier1,
-      tier2,
-      tier3,
+  if (
+    neverFired.length !== expected.length ||
+    neverFired.some((location, index) => location !== expected[index])
+  ) {
+    return yield* DurableCoordinatorConformanceViolation.make({
+      caseName,
+      message: `expected never-fired locations [${expected.join(", ")}], got [${neverFired.join(", ")}]`,
     });
-  });
-
-  return program.pipe(Effect.provide(environment));
-};
+  }
+}).pipe(
+  Effect.provide(
+    Layer.mergeAll(runStorageLayer(), ThreadReader.layer()).pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(
+          WakeScheduler.layerNoop,
+          DurableRuntimeFailpointTestControl.layer,
+          ToolReconciler.uncertain,
+          DurableRuntimeConfig.layer({
+            deploymentId: Schema.decodeSync(DeploymentId)("deployment-certification"),
+            producerId: Schema.decodeSync(ProducerId)("producer-certification"),
+            settlementPollInterval: Duration.millis(50),
+            abortPollInterval: Duration.millis(50),
+          }),
+        ),
+      ),
+    ),
+  ),
+);
