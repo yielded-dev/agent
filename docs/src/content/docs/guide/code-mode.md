@@ -25,7 +25,7 @@ const Analyze = CodeMode.make("analyze", {
 });
 ```
 
-Give the Agent `Analyze.tool` and provide `Analyze.layer`, the selected tool handlers, and a
+Give the Agent `Analyze.tool` and provide `Analyze.handlers`, the selected tool handlers, and a
 `CodeExecutor`. The generated program can call `sales.read`; it cannot discover arbitrary host
 services. Handlers still authorize the specific account or dataset being accessed.
 
@@ -44,9 +44,8 @@ closed inside the program; obtain approval through an appropriate outer workflow
 Writes are not transactional. A failed program can leave successful writes behind. Failure reports
 classify calls as succeeded, failed, uncertain, or not started; omitted evidence does not mean a
 call never ran. The model receives the diagnostic and can write a corrected, smaller program on
-the next turn. Built-in tool guidance asks it to continue authorized work after recoverable errors
-and reconcile partial effects before further actions. Programs are never automatically replayed;
-the model still decides whether to continue or report a blocker within the Agent's limits.
+the next turn. Programs are never automatically replayed. Put task continuation and recovery
+policy in the Agent's instructions; reconcile partial effects before retrying writes.
 
 The outer Code Mode tool is always `uncertain`, even if its allowlisted tools are readonly.
 A durable host cannot checkpoint or replay an unfinished JavaScript program automatically.
@@ -61,4 +60,7 @@ filesystem, or environment. Its authority is the scoped callback for allowlisted
 The [Cloudflare application](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
 provides runnable deployment setup; Code Mode additionally needs a Worker Loader binding.
 Use `ToolDiscovery` with `includeDeclarations: false` when method documentation is too large to
-send on every request. Discovery still respects the host's visibility policy.
+send on every request. This skips declaration generation until `Analyze.declarations` is read or
+`Analyze.describe(["sales.read"])` requests selected methods. Unsupported documentation schemas
+fail when rendered; invocation still validates the original Tool schemas. Discovery respects the
+host's current visibility policy.

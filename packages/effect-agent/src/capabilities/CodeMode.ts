@@ -112,6 +112,7 @@ export class CodeModeDescriptionError extends Schema.TaggedError<CodeModeDescrip
       "invalid-selection",
       "unknown-method",
       "invalid-bound",
+      "invalid-schema",
       "limit-exceeded",
     ]),
     message: BoundedFailureText,
@@ -240,7 +241,7 @@ export interface CodeModeDefinition<
   readonly name: Name;
   /** The assembled model-facing description, optionally including all declarations. */
   readonly description: string;
-  /** Rendered TypeScript declarations of the sandbox globals (documentation only). */
+  /** Lazily rendered TypeScript documentation; throws if an encoded schema cannot be rendered. */
   readonly declarations: string;
   /**
    * Render complete encoded-schema declarations for 1–64 unique, exact namespace.method names.
@@ -283,8 +284,8 @@ const defaultMaxEgressBytes = 64 * 1024;
 // Declaration rendering (capability spec §9.1): the encoded side of each
 // Schema — the JSON that actually crosses the sandbox boundary — rendered as
 // TypeScript documentation via the same JSON-schema derivation Effect AI
-// applies to Tool parameters. A schema the renderer cannot express fails Tool
-// construction closed rather than degrading to `unknown`.
+// applies to Tool parameters. A schema the renderer cannot express fails when
+// its declaration is requested rather than degrading to `unknown`.
 // ---------------------------------------------------------------------------
 
 const MAX_RENDER_DEPTH = 24;
@@ -425,13 +426,11 @@ interface ResolvedMethod {
   readonly namespace: string;
   readonly method: string;
   readonly tool: Tool.Any;
+  /** Private cache populated only when this method's documentation is requested. */
+  declaration: string | undefined;
 }
 
-interface RenderedMethod extends ResolvedMethod {
-  readonly declaration: string;
-}
-
-/** Render once at the synchronous construction boundary; describe only selects frozen declarations. */
+/** Render one encoded Tool signature; the definition caches it on first request. */
 const renderMethodDeclaration = (method: string, tool: Tool.Any): string => {
   const parameters = renderTopLevel(Tool.getJsonSchema(tool), "  ");
   const success = renderTopLevel(Tool.getJsonSchemaFromSchema(tool.successSchema), "  ");
@@ -445,21 +444,19 @@ const renderMethodDeclaration = (method: string, tool: Tool.Any): string => {
   return `${description}  ${method}(input: ${parameters}): Promise<${success}>;`;
 };
 
-const renderDeclarations = (methods: ReadonlyArray<RenderedMethod>): string => {
-  const namespaces = new Map<string, Array<RenderedMethod>>();
+const renderDeclarations = (methods: ReadonlyArray<ResolvedMethod>): string => {
+  const namespaces = new Map<string, Array<string>>();
 
   for (const method of methods) {
     const existing = namespaces.get(method.namespace) ?? [];
 
-    existing.push(method);
+    existing.push((method.declaration ??= renderMethodDeclaration(method.method, method.tool)));
     namespaces.set(method.namespace, existing);
   }
 
-  const blocks = [...namespaces.entries()].map(([namespace, members]) => {
-    const lines = members.map((member) => member.declaration);
-
-    return `declare const ${namespace}: {\n${lines.join("\n")}\n};`;
-  });
+  const blocks = [...namespaces.entries()].map(
+    ([namespace, lines]) => `declare const ${namespace}: {\n${lines.join("\n")}\n};`,
+  );
 
   return blocks.join("\n\n");
 };
@@ -640,7 +637,7 @@ const make = <
       }
       toolsByName.set(tool.name, tool);
       methodToTool.set(`${namespace}.${method}`, tool.name);
-      methods.push({ namespace, method, tool });
+      methods.push({ namespace, method, tool, declaration: undefined });
     }
   }
   if (methods.length === 0) {
@@ -648,17 +645,11 @@ const make = <
     throw new Error("Code Mode requires at least one allowlisted Tool");
   }
 
-  // Declarations derive from the encoded Schemas and fail construction closed
-  // on anything the renderer cannot express.
-  const renderedMethods = methods.map((method): RenderedMethod => ({
-    ...method,
-    declaration: renderMethodDeclaration(method.method, method.tool),
-  }));
-
-  const declarations = renderDeclarations(renderedMethods);
+  let declarations =
+    options.includeDeclarations === false ? undefined : renderDeclarations(methods);
 
   const methodsByPath = new Map(
-    renderedMethods.map((method) => [`${method.namespace}.${method.method}`, method]),
+    methods.map((method) => [`${method.namespace}.${method.method}`, method]),
   );
 
   const describe = Effect.fnUntraced(function* (
@@ -686,7 +677,7 @@ const make = <
       ),
     );
 
-    const selectedMethods: Array<RenderedMethod> = [];
+    const selectedMethods: Array<ResolvedMethod> = [];
 
     for (const path of paths) {
       const method = methodsByPath.get(path);
@@ -700,7 +691,14 @@ const make = <
       selectedMethods.push(method);
     }
 
-    const documentation = renderDeclarations(selectedMethods);
+    const documentation = yield* Effect.try({
+      try: () => renderDeclarations(selectedMethods),
+      catch: () =>
+        CodeModeDescriptionError.make({
+          reason: "invalid-schema",
+          message: "A selected method cannot be documented as TypeScript",
+        }),
+    });
 
     if (utf8ByteLength(documentation) > maxBytes) {
       return yield* CodeModeDescriptionError.make({
@@ -726,10 +724,7 @@ const make = <
     "",
     "The `code` argument must be one JavaScript async function expression; the sandbox invokes it exactly once with no arguments. It runs isolated with no ambient network, filesystem, environment, or secrets. Return one JSON value. `console.log` output is captured within a bounded budget and returned alongside the result.",
     "Namespace methods return Promises. An expected Tool failure rejects with a JSON envelope carrying a stable `_tag`; catch it to branch. Use Promise.all for independent calls; the host bounds concurrency. Await every call you need. Writes may complete before a failure: inspect call outcomes and never blindly retry a program.",
-    "A failed program is an intermediate observation. Read its diagnostic, logs, thrown value and call evidence; correct recoverable source, runtime or argument errors with a fresh, smaller program and continue the authorized task without asking permission again. Reconcile possible partial writes before further actions. Do not replay the failed program unchanged. Stop and report the actual obstacle when authority, required information, capabilities or execution limits prevent progress; a failed or refused step does not cancel independent permitted work.",
-    ...(options.includeDeclarations === false
-      ? []
-      : ["", "Sandbox globals:", "```ts", declarations, "```"]),
+    ...(declarations === undefined ? [] : ["", "Sandbox globals:", "```ts", declarations, "```"]),
   ].join("\n");
 
   const tool = Tool.make(name, {
@@ -744,7 +739,9 @@ const make = <
     .annotate(IncludesCatalogDocumentation, options.includeDeclarations !== false)
     .annotate(
       AdditionalToolCatalog,
-      Object.freeze(methods.map((method) => Object.freeze({ ...method }))),
+      Object.freeze(
+        methods.map(({ namespace, method, tool }) => Object.freeze({ namespace, method, tool })),
+      ),
     )
     .addDependency(ToolBroker) as CodeModeTool<Name>;
 
@@ -1084,10 +1081,26 @@ const make = <
     CodeModeLayerRequirements<Namespaces, RedactionRequirements>
   >;
 
+  if (declarations !== undefined) {
+    return Object.freeze({
+      name,
+      description,
+      declarations,
+      describe,
+      namespaces,
+      limits,
+      maxEgressBytes,
+      tool,
+      handlers,
+    });
+  }
+
   return Object.freeze({
     name,
     description,
-    declarations,
+    get declarations() {
+      return (declarations ??= renderDeclarations(methods));
+    },
     describe,
     namespaces,
     limits,

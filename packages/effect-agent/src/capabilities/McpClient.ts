@@ -1,7 +1,5 @@
 import * as McpProtocol from "effect/ai/McpProtocol";
 import * as McpSchema from "effect/ai/McpSchema";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -24,15 +22,18 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
-import { ToolExecutionClass, type ToolExecutionClassValue } from "../engine/DurableStep.ts";
 import {
   McpConnectionError,
   McpConnector,
   type McpConnectedServer,
   type McpConnectionRequest,
   McpServerIdentity,
-  McpToolOutputSchema,
+  McpToolResult,
+  McpToolCallFailed,
 } from "./Mcp.ts";
+
+export { McpToolResult, McpToolCallFailed } from "./Mcp.ts";
+export type { McpTool, McpToolkit } from "./Mcp.ts";
 
 // ---------------------------------------------------------------------------
 // MCP client: native Effect AI MCP schemas and protocol adapters, the Effect
@@ -71,34 +72,6 @@ export const defaultMcpClientInfo = McpSchema.Implementation.make({
   name: "effect-agent",
   version: "1.0.0",
 });
-
-/**
- * The model-visible result of a remote MCP tool call: the server's content
- * blocks and, when the tool declares an `outputSchema`, its structured result.
- * A result with `isError` never becomes this value; it fails the Tool Call.
- */
-export class McpToolResult extends Schema.Class<McpToolResult>(
-  "@effect-agent/capabilities/McpToolResult",
-)({
-  content: Schema.Array(McpSchema.ContentBlock),
-  structuredContent: Schema.optionalKey(Schema.Json),
-}) {}
-
-/**
- * Typed failure of one remote MCP tool call. `tool-error` carries the server's
- * error content; the other reasons describe why no trustworthy result exists.
- * None of them claims the remote effect did not happen.
- */
-export class McpToolCallFailed extends Schema.TaggedError<McpToolCallFailed>()(
-  "McpToolCallFailed",
-  {
-    serverId: Schema.NonEmptyString,
-    tool: Schema.NonEmptyString,
-    reason: Schema.Literals(["tool-error", "invalid-arguments", "protocol-error", "transport"]),
-    message: Schema.String,
-    content: Schema.optionalKey(Schema.Array(McpSchema.ContentBlock)),
-  },
-) {}
 
 /**
  * One reachable MCP server. `protocol` acquires a JSON-RPC transport in the
@@ -693,65 +666,6 @@ export const McpStdioTransport = {
   }),
 } as const;
 
-/**
- * Effect AI Tool derived from one discovered MCP tool. Its parameters are the
- * server's JSON Schema, so handlers receive `unknown` and the server validates
- * arguments; `Tool.getJsonSchema` still advertises the discovered schema. A
- * failed call returns `McpToolCallFailed` to the model as a failed tool result.
- */
-export type McpTool = Tool.Tool<
-  string,
-  {
-    readonly parameters: typeof Schema.Unknown;
-    readonly success: typeof McpToolResult;
-    readonly failure: typeof McpToolCallFailed;
-    readonly failureMode: "return";
-  }
->;
-
-/** Toolkit of discovered MCP tools; every member forwards `tools/call` to its server. */
-export type McpToolkit = Toolkit.Toolkit<Record<string, McpTool>>;
-
-const executionClassFor = (
-  annotations: McpSchema.ToolAnnotations | undefined,
-): ToolExecutionClassValue => {
-  if (annotations === undefined) return "uncertain";
-  if (annotations.readOnlyHint) return "readonly";
-  if (annotations.idempotentHint && !annotations.destructiveHint) return "idempotent";
-
-  return "uncertain";
-};
-
-const makeMcpTool = (tool: McpSchema.Tool, trustToolAnnotations: boolean): McpTool => {
-  // MCP servers may advertise valid JSON Schemas outside a model provider's strict subset.
-  let dynamic: McpTool = Tool.dynamic(tool.name, {
-    ...(tool.description === undefined ? {} : { description: tool.description }),
-    parameters: tool.inputSchema,
-    success: McpToolResult,
-    failure: McpToolCallFailed,
-    // MCP reports tool errors inside results so the model can self-correct;
-    // `return` hands the typed failure to the model the same way.
-    failureMode: "return",
-  }).annotate(Tool.Strict, false);
-
-  const title = tool.title ?? tool.annotations?.title;
-
-  if (title !== undefined) dynamic = dynamic.annotate(Tool.Title, title);
-  dynamic = dynamic.annotate(McpToolOutputSchema, Option.fromNullishOr(tool.outputSchema));
-  if (tool.annotations !== undefined) {
-    dynamic = dynamic
-      .annotate(Tool.Readonly, tool.annotations.readOnlyHint)
-      .annotate(Tool.Destructive, tool.annotations.destructiveHint)
-      .annotate(Tool.Idempotent, tool.annotations.idempotentHint)
-      .annotate(Tool.OpenWorld, tool.annotations.openWorldHint);
-  }
-  if (trustToolAnnotations) {
-    dynamic = dynamic.annotate(ToolExecutionClass, executionClassFor(tool.annotations));
-  }
-
-  return dynamic;
-};
-
 const ToolArguments = Schema.Record(Schema.String, Schema.Json);
 const decodeToolArguments = Schema.decodeUnknownEffect(ToolArguments);
 
@@ -897,27 +811,12 @@ const connectServer = Effect.fnUntraced(function* <R>(
     });
   });
 
-  const toolkit: McpToolkit = yield* Effect.try({
-    try: () =>
-      Toolkit.make(...tools.map((tool) => makeMcpTool(tool, transport.trustToolAnnotations))),
-    catch: connectionError(
-      serverId,
-      `MCP server ${serverId} advertised tools that cannot form a Toolkit`,
-    ),
-  });
-
-  const handlers = toolkit.toLayer(
-    Object.fromEntries(
-      tools.map((tool) => [tool.name, (params: unknown) => callTool(tool.name, params)] as const),
-    ),
-  );
-
   return {
     identity: McpServerIdentity.make({ serverId, implementation: initialized.serverInfo }),
     capabilities: initialized.capabilities,
     tools,
-    toolkit,
-    handlers,
+    callTool,
+    trustToolAnnotations: transport.trustToolAnnotations,
   } satisfies McpConnectedServer;
 });
 
@@ -964,8 +863,8 @@ const makeConnectorLayer = <R>(
 /**
  * `McpConnector` over real transports. Each `connect` acquires the transport
  * in the caller's Scope, negotiates a protocol revision, lists tools within the
- * request bounds, and returns dynamic Effect AI Tools plus the handler Layer
- * that forwards their calls. The Layer requires the union of every
+ * request bounds, and returns discovery metadata plus a typed call operation.
+ * `connectMcp` constructs the Toolkit and handlers. The Layer requires the union of every
  * transport's platform services.
  */
 export const layer = <const Transports extends ReadonlyArray<McpServerTransport<unknown>>>(

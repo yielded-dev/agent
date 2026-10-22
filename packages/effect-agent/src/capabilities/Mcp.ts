@@ -1,20 +1,18 @@
 import * as McpSchema from "effect/ai/McpSchema";
 import * as Tool from "effect/ai/Tool";
-import type * as Toolkit from "effect/ai/Toolkit";
+import * as Toolkit from "effect/ai/Toolkit";
 import * as Array from "effect/Array";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
-import * as JsonPointer from "effect/JsonPointer";
-import type * as JsonSchema from "effect/JsonSchema";
 import type * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 
 import { utf8ByteLength, utf8Bytes } from "../core/internal/utf8.ts";
+import { ToolExecutionClass, type ToolExecutionClassValue } from "../engine/DurableStep.ts";
 
 const MAX_MCP_TOOLS = 128;
 const MAX_MCP_DISCOVERY_BYTES = 1024 * 1024;
@@ -49,17 +47,90 @@ export class McpConnectionRequest extends Schema.Class<McpConnectionRequest>(
 }) {}
 
 /**
- * Tool annotation recording the `outputSchema` an MCP server advertised for a
- * Tool the framework client derived from discovery, or `None` when the server
- * advertised none. Such a Tool's Effect success Schema is the client's result
- * envelope rather than the wire contract, so discovery validation compares
- * this annotation instead. Tools without the annotation, including dynamic
- * Tools from other connectors, keep deriving it from their success Schema.
+ * The model-visible result of a remote MCP tool call: the server's content
+ * blocks and, when the tool declares an `outputSchema`, its structured result.
+ * A result with `isError` never becomes this value; it fails the Tool Call.
  */
-export class McpToolOutputSchema extends Context.Service<
-  McpToolOutputSchema,
-  Option.Option<McpSchema.ToolOutputJson>
->()("@effect-agent/capabilities/McpToolOutputSchema") {}
+export class McpToolResult extends Schema.Class<McpToolResult>(
+  "@effect-agent/capabilities/McpToolResult",
+)({
+  content: Schema.Array(McpSchema.ContentBlock),
+  structuredContent: Schema.optionalKey(Schema.Json),
+}) {}
+
+/**
+ * Typed failure of one remote MCP tool call. `tool-error` carries the server's
+ * error content; the other reasons describe why no trustworthy result exists.
+ * None of them claims the remote effect did not happen.
+ */
+export class McpToolCallFailed extends Schema.TaggedError<McpToolCallFailed>()(
+  "McpToolCallFailed",
+  {
+    serverId: Schema.NonEmptyString,
+    tool: Schema.NonEmptyString,
+    reason: Schema.Literals(["tool-error", "invalid-arguments", "protocol-error", "transport"]),
+    message: Schema.String,
+    content: Schema.optionalKey(Schema.Array(McpSchema.ContentBlock)),
+  },
+) {}
+
+/**
+ * Effect AI Tool derived from one discovered MCP tool. Its parameters are the
+ * server's JSON Schema, so handlers receive `unknown` and the server validates
+ * arguments; `Tool.getJsonSchema` still advertises the discovered schema. A
+ * failed call returns `McpToolCallFailed` to the model as a failed tool result.
+ */
+export type McpTool = Tool.Tool<
+  string,
+  {
+    readonly parameters: typeof Schema.Unknown;
+    readonly success: typeof McpToolResult;
+    readonly failure: typeof McpToolCallFailed;
+    readonly failureMode: "return";
+  }
+>;
+
+/** Toolkit of discovered MCP tools; every member forwards `tools/call` to its server. */
+export type McpToolkit = Toolkit.Toolkit<Record<string, McpTool>>;
+
+const executionClassFor = (
+  annotations: McpSchema.ToolAnnotations | undefined,
+): ToolExecutionClassValue => {
+  if (annotations === undefined) return "uncertain";
+  if (annotations.readOnlyHint) return "readonly";
+  if (annotations.idempotentHint && !annotations.destructiveHint) return "idempotent";
+
+  return "uncertain";
+};
+
+const makeMcpTool = (tool: McpSchema.Tool, trustToolAnnotations: boolean): McpTool => {
+  // MCP servers may advertise valid JSON Schemas outside a model provider's strict subset.
+  let dynamic: McpTool = Tool.dynamic(tool.name, {
+    ...(tool.description === undefined ? {} : { description: tool.description }),
+    parameters: tool.inputSchema,
+    success: McpToolResult,
+    failure: McpToolCallFailed,
+    // MCP reports tool errors inside results so the model can self-correct;
+    // `return` hands the typed failure to the model the same way.
+    failureMode: "return",
+  }).annotate(Tool.Strict, false);
+
+  const title = tool.title ?? tool.annotations?.title;
+
+  if (title !== undefined) dynamic = dynamic.annotate(Tool.Title, title);
+  if (tool.annotations !== undefined) {
+    dynamic = dynamic
+      .annotate(Tool.Readonly, tool.annotations.readOnlyHint)
+      .annotate(Tool.Destructive, tool.annotations.destructiveHint)
+      .annotate(Tool.Idempotent, tool.annotations.idempotentHint)
+      .annotate(Tool.OpenWorld, tool.annotations.openWorldHint);
+  }
+  if (trustToolAnnotations) {
+    dynamic = dynamic.annotate(ToolExecutionClass, executionClassFor(tool.annotations));
+  }
+
+  return dynamic;
+};
 
 /** Typed remote connection failure; no remote execution is claimed exactly-once. */
 export class McpConnectionError extends Schema.TaggedError<McpConnectionError>()(
@@ -104,24 +175,26 @@ export class McpDiscovery extends Schema.Class<McpDiscovery>(
 }) {}
 
 /**
- * Raw adapter result before the framework validates count and byte limits.
- * A connector that executes tools remotely supplies `handlers`; a connector
- * serving an application-authored Toolkit leaves them to the application.
+ * Raw discovery and execution from one scoped server. The framework constructs
+ * its Toolkit from these descriptors; connectors do not supply another copy.
  */
 export interface McpConnectedServer {
   readonly identity: McpServerIdentity;
   readonly capabilities: McpSchema.ServerCapabilities;
   readonly tools: ReadonlyArray<McpSchema.Tool>;
-  readonly toolkit: Toolkit.Any;
-  readonly handlers?: Layer.Layer<Tool.Handler<string>> | undefined;
+  readonly callTool: (
+    name: string,
+    parameters: unknown,
+  ) => Effect.Effect<McpToolResult, McpToolCallFailed>;
+  /** Server hints affect execution class only when the host explicitly trusts them. */
+  readonly trustToolAnnotations?: boolean | undefined;
 }
 
-/** Scoped validated MCP connection with native Effect AI dynamic Toolkit values. */
+/** Scoped connection with one Toolkit derived from validated, optionally pinned discovery. */
 export interface McpConnection {
   readonly discovery: McpDiscovery;
-  readonly toolkit: Toolkit.Any;
-  /** Handler Layer for `toolkit` when the connector executes tools remotely. */
-  readonly handlers?: Layer.Layer<Tool.Handler<string>> | undefined;
+  readonly toolkit: McpToolkit;
+  readonly handlers: Layer.Layer<Tool.Handler<string>>;
 }
 
 /** Adapter port for native Effect AI MCP protocol/schema integration. */
@@ -133,27 +206,6 @@ export class McpConnector extends Context.Service<
     ) => Effect.Effect<McpConnectedServer, McpConnectionError, Scope.Scope>;
   }
 >()("@effect-agent/capabilities/McpConnector") {}
-
-/**
- * `Tool.getJsonSchema`/`Tool.getJsonSchemaFromSchema` hoist a named, refined
- * type into `$defs` with a top-level `$ref`. MCP inputs require an object root,
- * and connectors may advertise named object outputs in that flattened form too.
- * Inline a single top-level `$ref` in locally derived schemas so those contracts
- * compare consistently with discovery. Explicit output annotations retain the
- * advertised schema unchanged, including non-object roots.
- */
-const flattenTopLevelRef = (schema: JsonSchema.JsonSchema): JsonSchema.JsonSchema => {
-  const ref = schema["$ref"];
-  const defs = schema["$defs"] as JsonSchema.Definitions | undefined;
-
-  if (typeof ref !== "string" || defs === undefined) return schema;
-
-  const key = ref.startsWith("#/$defs/")
-    ? JsonPointer.unescapeToken(ref.slice("#/$defs/".length))
-    : undefined;
-
-  return key !== undefined && Object.hasOwn(defs, key) ? defs[key] : schema;
-};
 
 const canonicalJson = (value: Schema.Json): Schema.Json => {
   if (
@@ -176,20 +228,6 @@ const canonicalJson = (value: Schema.Json): Schema.Json => {
   }
 
   return output;
-};
-
-/**
- * The `outputSchema` a Toolkit member claims. A Tool annotated with
- * `McpToolOutputSchema` reports exactly what discovery advertised, present or
- * absent; every other Tool derives it from its success Schema.
- */
-const toolkitOutputSchema = (tool: Tool.Any): JsonSchema.JsonSchema | undefined => {
-  const discovered = Context.getOption(tool.annotations, McpToolOutputSchema);
-
-  if (Option.isSome(discovered)) return Option.getOrUndefined(discovered.value);
-  const derived = flattenTopLevelRef(Tool.getJsonSchemaFromSchema(tool.successSchema));
-
-  return derived.type === "object" ? derived : undefined;
 };
 
 const digestJson = Effect.fnUntraced(function* (serverId: string, value: unknown) {
@@ -233,7 +271,7 @@ const digestJson = Effect.fnUntraced(function* (serverId: string, value: unknown
 /** Validate native discovery data before it enters Agent Tool context. */
 export const validateMcpDiscovery = Effect.fnUntraced(function* (
   request: McpConnectionRequest,
-  server: McpConnectedServer,
+  server: Pick<McpConnectedServer, "identity" | "capabilities" | "tools">,
 ) {
   if (server.identity.serverId !== request.serverId) {
     return yield* McpToolkitMismatch.make({
@@ -261,16 +299,10 @@ export const validateMcpDiscovery = Effect.fnUntraced(function* (
       });
     }
   }
-  const discoveredNames = server.tools.map((tool) => tool.name).sort();
-  const toolkitNames = Object.keys(server.toolkit.tools).sort();
-
-  if (
-    discoveredNames.length !== toolkitNames.length ||
-    discoveredNames.some((name, index) => name !== toolkitNames[index])
-  ) {
+  if (new Set(server.tools.map((tool) => tool.name)).size !== server.tools.length) {
     return yield* McpToolkitMismatch.make({
       serverId: request.serverId,
-      message: "Native Effect AI Toolkit names do not match MCP tool discovery",
+      message: "MCP discovery contains duplicate tool names",
     });
   }
 
@@ -282,36 +314,8 @@ export const validateMcpDiscovery = Effect.fnUntraced(function* (
     }))
     .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
 
-  const toolkitSchemas = yield* Effect.try({
-    try: () =>
-      Object.values(server.toolkit.tools)
-        .map((tool) => {
-          const outputSchema = toolkitOutputSchema(tool);
+  const toolkitDigest = yield* digestJson(request.serverId, discoverySchemas);
 
-          return {
-            name: tool.name,
-            inputSchema: flattenTopLevelRef(Tool.getJsonSchema(tool)),
-            ...(outputSchema === undefined ? {} : { outputSchema }),
-          };
-        })
-        .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)),
-    catch: (cause) =>
-      McpToolkitMismatch.make({
-        cause,
-        serverId: request.serverId,
-        message: "Could not derive JSON Schema from the native Effect AI Toolkit",
-      }),
-  });
-
-  const discoveryDigest = yield* digestJson(request.serverId, discoverySchemas);
-  const toolkitDigest = yield* digestJson(request.serverId, toolkitSchemas);
-
-  if (discoveryDigest !== toolkitDigest) {
-    return yield* McpToolkitMismatch.make({
-      serverId: request.serverId,
-      message: "Native Effect AI Toolkit schemas do not match MCP tool discovery",
-    });
-  }
   if (
     request.expectedToolkitSchemaDigest !== undefined &&
     request.expectedToolkitSchemaDigest !== toolkitDigest
@@ -406,9 +410,27 @@ export const connectMcp = Effect.fnUntraced(function* (request: McpConnectionReq
 
   const discovery = yield* validateMcpDiscovery(request, server);
 
-  return {
-    discovery,
-    toolkit: server.toolkit,
-    ...(server.handlers === undefined ? {} : { handlers: server.handlers }),
-  } satisfies McpConnection;
+  const toolkit: McpToolkit = yield* Effect.try({
+    try: () =>
+      Toolkit.make(
+        ...server.tools.map((tool) => makeMcpTool(tool, server.trustToolAnnotations ?? false)),
+      ),
+    catch: (cause) =>
+      McpConnectionError.make({
+        serverId: request.serverId,
+        message: "MCP discovery contains tools that cannot form a Toolkit",
+        cause,
+      }),
+  });
+
+  const handlers = toolkit.toLayer(
+    Object.fromEntries(
+      server.tools.map((tool) => [
+        tool.name,
+        (parameters: unknown) => server.callTool(tool.name, parameters),
+      ]),
+    ),
+  );
+
+  return { discovery, toolkit, handlers } satisfies McpConnection;
 });

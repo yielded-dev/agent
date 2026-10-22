@@ -2,7 +2,6 @@ import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import type * as Scope from "effect/Scope";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { DiscoveryTool, PinnedTool } from "../core/ToolExposure.ts";
@@ -21,7 +20,7 @@ export const Parameters = Schema.Struct({
   namespace: Schema.optionalKey(Namespace),
 });
 
-/** Metadata given to custom search only after host visibility and inherited grants are applied. */
+/** Metadata exposed only after host visibility and inherited grants are applied. */
 export class Descriptor extends Schema.Class<Descriptor>(
   "@effect-agent/capabilities/ToolDiscovery/Descriptor",
 )({
@@ -64,21 +63,14 @@ export const Result = Schema.Struct({
   notice: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(192))),
 });
 
-/** Invalid custom results and unsupported documentation remain typed failures. */
+/** Invalid catalogue metadata and unsupported documentation remain typed failures. */
 export class ToolDiscoveryError extends Schema.TaggedError<ToolDiscoveryError>()(
   "ToolDiscoveryError",
   {
-    reason: Schema.Literals([
-      "invalid-catalogue",
-      "invalid-matches",
-      "unknown-match",
-      "invalid-schema",
-    ]),
+    reason: Schema.Literals(["invalid-catalogue", "invalid-schema"]),
     message: Schema.String.check(Schema.isMaxLength(1_024)),
   },
 ) {}
-
-const MatchIds = Schema.Array(EntryId).check(Schema.isMaxLength(1_024), Schema.isUnique());
 
 const Bounds = Schema.Struct({
   maxResults: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 64 })),
@@ -99,7 +91,7 @@ const resultByteLength = Effect.fnUntraced(function* (result: typeof Result.Type
   return utf8ByteLength(encoded);
 });
 
-export interface Options<Failure extends Schema.Top = typeof Schema.Never, Requirements = never> {
+export interface Options {
   /** Optional generic instructions. Namespace names and hints are never appended here. */
   readonly description?: string | undefined;
   /** Maximum returned catalogue entries, default 8 and at most 64. */
@@ -113,20 +105,6 @@ export interface Options<Failure extends Schema.Top = typeof Schema.Never, Requi
   readonly maxResultBytes?: number | undefined;
   /** Short category hints returned only for namespaces present in the visible catalogue. */
   readonly namespaceDescriptions?: Readonly<Record<string, string>> | undefined;
-  /** Schema of the custom search's expected failures; defaults to Schema.Never. */
-  readonly failure?: Failure | undefined;
-  /**
-   * Rank unique Descriptor.id values, never tool names. Native tools and each Code Mode alias
-   * have distinct identities. Every returned id is checked before the result limit is applied.
-   * The catalogue is already filtered by the optional exact namespace and current authority.
-   * Services are captured with the handler Layer; temporary resources close after each search.
-   */
-  readonly search?:
-    | ((
-        request: typeof Parameters.Type,
-        catalogue: ReadonlyArray<Descriptor>,
-      ) => Effect.Effect<ReadonlyArray<string>, Failure["Type"], Requirements>)
-    | undefined;
 }
 
 const entryId = (entry: CatalogEntry): string =>
@@ -136,34 +114,6 @@ const entryId = (entry: CatalogEntry): string =>
 
 const compare = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
-const defaultSearch = (
-  request: typeof Parameters.Type,
-  catalogue: ReadonlyArray<Descriptor>,
-  entries: ReadonlyMap<string, CatalogEntry>,
-): ReadonlyArray<string> => {
-  const terms = request.query.trim().toLowerCase().split(/\s+/);
-
-  return catalogue
-    .filter((entry) => {
-      const original = entries.get(entry.id);
-
-      if (original === undefined) return false;
-
-      const text = [
-        entry.name,
-        entry.namespace ?? "",
-        entry.method ?? "",
-        Tool.getDescription(original.tool) ?? "",
-        entry.namespaceDescription ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return terms.every((term) => text.includes(term));
-    })
-    .map((entry) => entry.id);
-};
-
 /**
  * Build one native discover_tools Tool and its singleton Toolkit/handler Layer. Include the
  * Tool beside the application's existing native Tools. The engine owns catalogue authority
@@ -171,23 +121,12 @@ const defaultSearch = (
  * no exposure state. Default search matches all case-insensitive whitespace-separated terms
  * against names, descriptions, methods and namespace hints, ordered by catalogue id.
  */
-export const make = <Failure extends Schema.Top = typeof Schema.Never, Requirements = never>(
-  options: Options<Failure, Requirements> = {},
-) => {
+export const make = (options: Options = {}) => {
   const bounds = Schema.decodeSync(Bounds)({
     maxResults: options.maxResults ?? 8,
     maxResultBytes: options.maxResultBytes ?? 32 * 1024,
     namespaceDescriptions: options.namespaceDescriptions ?? {},
   });
-
-  const search = options.search;
-
-  const declaredFailure: Schema.Codec<
-    Failure["Type"],
-    Failure["Encoded"],
-    Failure["DecodingServices"],
-    Failure["EncodingServices"]
-  > = options.failure ?? Schema.Never;
 
   const tool = Tool.make("discover_tools", {
     description:
@@ -195,7 +134,7 @@ export const make = <Failure extends Schema.Top = typeof Schema.Never, Requireme
       "Find available tools using short search terms and an optional exact namespace. All terms must match a name, description or namespace hint, ignoring case. Returned native tools become available next turn. Code Mode matches document namespace methods and select their owning execution tool.",
     parameters: Parameters,
     success: Result,
-    failure: Schema.Union([declaredFailure, ToolDiscoveryError]),
+    failure: ToolDiscoveryError,
     failureMode: "error",
     dependencies: [CurrentToolCatalog],
   })
@@ -204,183 +143,152 @@ export const make = <Failure extends Schema.Top = typeof Schema.Never, Requireme
     .annotate(Tool.Readonly, true)
     .annotate(ToolExecutionClass, "readonly");
 
-  // Restore the known singleton name; native ToolsByName leaves its conditional deferred
-  // over the generic failure Schema. This assertion changes no Schema or runtime value.
-  const toolkit = Toolkit.make(tool) as unknown as Toolkit.Toolkit<{
-    readonly discover_tools: typeof tool;
-  }>;
+  const toolkit = Toolkit.make(tool);
 
-  const handlers = toolkit.toLayer(
-    Effect.gen(function* () {
-      const searchServices = yield* Effect.context<Exclude<Requirements, Scope.Scope>>();
+  const handlers = toolkit.toLayer({
+    discover_tools: Effect.fnUntraced(function* (request) {
+      const snapshot = yield* CurrentToolCatalog;
 
-      return toolkit.of({
-        discover_tools: Effect.fnUntraced(function* (request) {
-          const snapshot = yield* CurrentToolCatalog;
+      const entries = snapshot.entries
+        .filter((entry) => request.namespace === undefined || entry.namespace === request.namespace)
+        .toSorted((left, right) => compare(entryId(left), entryId(right)));
 
-          const entries = snapshot.entries
-            .filter(
-              (entry) => request.namespace === undefined || entry.namespace === request.namespace,
-            )
-            .toSorted((left, right) => compare(entryId(left), entryId(right)));
+      const catalogue: Array<{ readonly descriptor: Descriptor; readonly tool: Tool.Any }> = [];
+      const ids = new Set<string>();
 
-          const catalogue: Array<Descriptor> = [];
-          const byId = new Map<string, CatalogEntry>();
+      for (const entry of entries) {
+        const id = entryId(entry);
 
-          for (const entry of entries) {
-            const id = entryId(entry);
+        if (ids.has(id)) {
+          return yield* ToolDiscoveryError.make({
+            reason: "invalid-catalogue",
+            message: "The visible catalogue contains duplicate entry identities",
+          });
+        }
+        const description = Tool.getDescription(entry.tool);
 
-            if (byId.has(id)) {
-              return yield* ToolDiscoveryError.make({
-                reason: "invalid-catalogue",
-                message: "The visible catalogue contains duplicate entry identities",
-              });
-            }
-            const description = Tool.getDescription(entry.tool);
+        const namespaceDescription =
+          entry.namespace === undefined ||
+          !Object.hasOwn(bounds.namespaceDescriptions, entry.namespace)
+            ? undefined
+            : bounds.namespaceDescriptions[entry.namespace];
 
-            const namespaceDescription =
-              entry.namespace === undefined ||
-              !Object.hasOwn(bounds.namespaceDescriptions, entry.namespace)
-                ? undefined
-                : bounds.namespaceDescriptions[entry.namespace];
-
-            const descriptor = yield* Schema.decodeEffect(Descriptor)({
-              id,
-              kind: entry.kind,
-              name: entry.tool.name,
-              nativeToolName: entry.nativeToolName,
-              ...(entry.namespace === undefined ? {} : { namespace: entry.namespace }),
-              ...(entry.kind === "code-mode" ? { method: entry.method } : {}),
-              ...(description === undefined
-                ? {}
-                : {
-                    description:
-                      description.length > 2_048 ? `${description.slice(0, 2_047)}…` : description,
-                  }),
-              ...(namespaceDescription === undefined ? {} : { namespaceDescription }),
-            }).pipe(
-              Effect.mapError(() =>
-                ToolDiscoveryError.make({
-                  reason: "invalid-catalogue",
-                  message: "The visible catalogue contains invalid metadata",
-                }),
-              ),
-            );
-
-            catalogue.push(Object.freeze(descriptor));
-            byId.set(id, entry);
-          }
-
-          const ids =
-            search === undefined
-              ? defaultSearch(request, catalogue, byId)
-              : yield* Effect.scoped(search(request, Object.freeze(catalogue))).pipe(
-                  Effect.provideContext(searchServices),
-                );
-
-          const checkedIds = yield* Schema.decodeEffect(MatchIds)(ids).pipe(
-            Effect.mapError(() =>
-              ToolDiscoveryError.make({
-                reason: "invalid-matches",
-                message: "Search must return at most 1024 unique catalogue entry ids",
+        const descriptor = yield* Schema.decodeEffect(Descriptor)({
+          id,
+          kind: entry.kind,
+          name: entry.tool.name,
+          nativeToolName: entry.nativeToolName,
+          ...(entry.namespace === undefined ? {} : { namespace: entry.namespace }),
+          ...(entry.kind === "code-mode" ? { method: entry.method } : {}),
+          ...(description === undefined
+            ? {}
+            : {
+                description:
+                  description.length > 2_048 ? `${description.slice(0, 2_047)}…` : description,
               }),
-            ),
-          );
+          ...(namespaceDescription === undefined ? {} : { namespaceDescription }),
+        }).pipe(
+          Effect.mapError(() =>
+            ToolDiscoveryError.make({
+              reason: "invalid-catalogue",
+              message: "The visible catalogue contains invalid metadata",
+            }),
+          ),
+        );
 
-          if (checkedIds.some((id) => !byId.has(id))) {
-            return yield* ToolDiscoveryError.make({
-              reason: "unknown-match",
-              message: "Search returned an entry outside the visible catalogue",
-            });
-          }
+        catalogue.push({ descriptor, tool: entry.tool });
+        ids.add(id);
+      }
 
-          const descriptors = new Map(catalogue.map((descriptor) => [descriptor.id, descriptor]));
-          const matches: Array<Match> = [];
+      const terms = request.query.trim().toLowerCase().split(/\s+/);
 
-          for (const id of checkedIds.slice(0, bounds.maxResults)) {
-            const entry = byId.get(id);
-            const descriptor = descriptors.get(id);
+      const selected = catalogue.filter(({ descriptor, tool }) => {
+        const text = [
+          descriptor.name,
+          descriptor.namespace ?? "",
+          descriptor.method ?? "",
+          Tool.getDescription(tool) ?? "",
+          descriptor.namespaceDescription ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
 
-            if (entry === undefined || descriptor === undefined) {
-              return yield* ToolDiscoveryError.make({
-                reason: "unknown-match",
-                message: "Search returned an entry outside the visible catalogue",
-              });
-            }
-            const tool = entry.tool;
-
-            const schemas = yield* Effect.try({
-              try: () =>
-                Tool.isProviderDefined(tool)
-                  ? {
-                      parameters: tool.requiresHandler ? Tool.getJsonSchema(tool) : null,
-                      success: tool.requiresHandler
-                        ? Tool.getJsonSchemaFromSchema(tool.successSchema)
-                        : null,
-                      provider: {
-                        providerName: tool.providerName,
-                        requiresHandler: tool.requiresHandler,
-                      },
-                    }
-                  : {
-                      parameters: Tool.getJsonSchema(tool),
-                      success: Tool.getJsonSchemaFromSchema(tool.successSchema),
-                    },
-              catch: () =>
-                ToolDiscoveryError.make({
-                  reason: "invalid-schema",
-                  message: "A selected Tool cannot be documented as JSON Schema",
-                }),
-            });
-
-            const match = yield* Schema.decodeUnknownEffect(Match)({
-              ...descriptor,
-              ...schemas,
-            }).pipe(
-              Effect.mapError(() =>
-                ToolDiscoveryError.make({
-                  reason: "invalid-schema",
-                  message: "A selected Tool's documentation is outside the JSON surface",
-                }),
-              ),
-            );
-
-            matches.push(match);
-          }
-
-          const result = {
-            toolNames: [...new Set(matches.map((match) => match.nativeToolName))],
-            matches,
-          };
-
-          if ((yield* resultByteLength(result)) <= bounds.maxResultBytes) return result;
-
-          // Validate every selected schema before packing. A byte limit must not mask an
-          // invalid catalogue/schema. The empty notice envelope fits the minimum 256 bytes.
-          let bounded: typeof Result.Type = {
-            toolNames: [],
-            matches: [],
-            notice:
-              "Result byte limit reached. Narrow the search or namespace; if one tool still cannot fit, ask the host to increase maxResultBytes.",
-          };
-
-          for (const match of matches) {
-            const candidates = [...bounded.matches, match];
-
-            const candidate = {
-              ...bounded,
-              toolNames: [...new Set(candidates.map((entry) => entry.nativeToolName))],
-              matches: candidates,
-            };
-
-            if ((yield* resultByteLength(candidate)) <= bounds.maxResultBytes) bounded = candidate;
-          }
-
-          return bounded;
-        }),
+        return terms.every((term) => text.includes(term));
       });
+
+      const matches: Array<Match> = [];
+
+      for (const { descriptor, tool } of selected.slice(0, bounds.maxResults)) {
+        const schemas = yield* Effect.try({
+          try: () =>
+            Tool.isProviderDefined(tool)
+              ? {
+                  parameters: tool.requiresHandler ? Tool.getJsonSchema(tool) : null,
+                  success: tool.requiresHandler
+                    ? Tool.getJsonSchemaFromSchema(tool.successSchema)
+                    : null,
+                  provider: {
+                    providerName: tool.providerName,
+                    requiresHandler: tool.requiresHandler,
+                  },
+                }
+              : {
+                  parameters: Tool.getJsonSchema(tool),
+                  success: Tool.getJsonSchemaFromSchema(tool.successSchema),
+                },
+          catch: () =>
+            ToolDiscoveryError.make({
+              reason: "invalid-schema",
+              message: "A selected Tool cannot be documented as JSON Schema",
+            }),
+        });
+
+        const match = yield* Schema.decodeUnknownEffect(Match)({
+          ...descriptor,
+          ...schemas,
+        }).pipe(
+          Effect.mapError(() =>
+            ToolDiscoveryError.make({
+              reason: "invalid-schema",
+              message: "A selected Tool's documentation is outside the JSON surface",
+            }),
+          ),
+        );
+
+        matches.push(match);
+      }
+
+      const result = {
+        toolNames: [...new Set(matches.map((match) => match.nativeToolName))],
+        matches,
+      };
+
+      if ((yield* resultByteLength(result)) <= bounds.maxResultBytes) return result;
+
+      // Validate every selected schema before packing. A byte limit must not mask an
+      // invalid catalogue/schema. The empty notice envelope fits the minimum 256 bytes.
+      let bounded: typeof Result.Type = {
+        toolNames: [],
+        matches: [],
+        notice:
+          "Result byte limit reached. Narrow the search or namespace; if one tool still cannot fit, ask the host to increase maxResultBytes.",
+      };
+
+      for (const match of matches) {
+        const candidates = [...bounded.matches, match];
+
+        const candidate = {
+          ...bounded,
+          toolNames: [...new Set(candidates.map((entry) => entry.nativeToolName))],
+          matches: candidates,
+        };
+
+        if ((yield* resultByteLength(candidate)) <= bounds.maxResultBytes) bounded = candidate;
+      }
+
+      return bounded;
     }),
-  );
+  });
 
   return Object.freeze({ tool, toolkit, handlers });
 };

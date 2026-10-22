@@ -61,7 +61,7 @@ export class DocumentLibrary extends Context.Service<
  * The one content tool the doc-summarizer child uses. Its authored JSON
  * schema is what MCP discovery must serve byte-for-byte: the scripted MCP
  * fixture derives its discovery entry from `Tool.getJsonSchema(FetchDocument)`
- * and `validateMcpDiscovery` re-derives and digests both sides (CAP-009).
+ * and the assembly checks the discovered schemas before worker registration.
  */
 export const FetchDocument = Tool.make("fetch_document", {
   description: "Fetch one bounded research document by its identifier.",
