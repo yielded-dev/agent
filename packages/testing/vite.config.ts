@@ -14,7 +14,6 @@ export default defineConfig({
     entry: [
       "src/index.ts",
       "src/Certification.ts",
-      "src/Chaos.ts",
       "src/CodeExecutorConformance.ts",
       "src/CodeExecutorSubstitute.ts",
       "src/DocsResearcher.ts",

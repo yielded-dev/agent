@@ -11,7 +11,6 @@ import {
   makePhase6TravelPlannerBindings,
   phase1Trip,
   phase4TravelPlannerSubmitOptions,
-  phase6SupplierReconcilerLayer,
   phase6TravelPlannerDeploymentId,
   phase6TravelPlannerProducerPrefix,
 } from "@yielded/agent-testing/travel-planner";
@@ -61,7 +60,6 @@ const baseClass = ThreadObject.make(
     recoveryWindowMillis: 10,
     alarmBackoffCap: 100,
     observationPollInterval: 10,
-    toolReconciler: phase6SupplierReconcilerLayer,
     storageFailpoint: storageEvictionFailpoint,
     runtimeFailpoint: runtimeEvictionFailpoint,
   },

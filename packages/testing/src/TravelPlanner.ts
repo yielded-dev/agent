@@ -28,48 +28,13 @@ export {
 } from "./fixtures/travel-planner/definition.ts";
 
 export {
-  CatalogLifecycleCounts,
-  CatalogLifecycle,
-  type TravelPlannerCompletionControls,
-  ReverseCompletionToolkitLayer,
   FlightCatalogLayer,
   LodgingCatalogLayer,
   ActivityCatalogLayer,
-  BookingRef,
-  SupplierOperation,
-  SupplierBookingRecord,
-  SupplierUnavailable,
-  type SupplierBookRequest,
-  type SupplierHoldControls,
-  cancelBookingIdempotencyKey,
-  supplierBookingRefFor,
-  SupplierBookingDesk,
   TravelGuidanceLayer,
   DeterministicIdGeneratorLayer,
   TravelPlannerRuntimeLayer,
 } from "./fixtures/travel-planner/deterministic-layers.ts";
-
-export {
-  ItineraryHoldRequest,
-  ItineraryHold,
-  ItineraryHoldUnavailable,
-  ItineraryHoldGateway,
-  HoldItinerary,
-  TravelPlannerPhase2Toolkit,
-  TravelPlannerPhase2ToolkitLayer,
-  TravelPlannerPhase2,
-} from "./fixtures/travel-planner/phase2.ts";
-
-export {
-  phase3TravelPlannerThreadId,
-  phase3TravelPlannerProducerId,
-  phase3TravelPlannerRunId,
-  phase3TravelPlannerDefinitionDigests,
-  phase3TravelPlannerInitialBatch,
-  phase3TravelPlannerCompletionBatch,
-  phase3TravelPlannerBatches,
-  phase3TravelPlannerEncodedFixture,
-} from "./fixtures/travel-planner/phase3.ts";
 
 export {
   phase4TravelPlannerDeploymentId,
@@ -83,81 +48,18 @@ export {
   TravelPlannerPhase4Toolkit,
   TravelPlannerPhase4ToolkitLayer,
   TravelPlannerPhase4,
-  makePhase4TravelPlannerAgent,
   phase4TravelPlannerWorkerLayer,
-  TravelPlannerDurableEvidenceError,
-  travelPlanFromDurableSettlement,
-  normalizeDurableTravelPlannerEvidence,
 } from "./fixtures/travel-planner/phase4.ts";
-
-export {
-  phase5TravelPlannerDeploymentId,
-  phase5TravelPlannerProducerId,
-  phase5TravelPlannerPrincipal,
-  phase5TravelPlannerDefinitionDigests,
-  phase5TravelPlannerSubmitOptions,
-  TravelerRef,
-  FlightBookingRequest,
-  SupplierBookingConfirmation,
-  CancelBookingRequest,
-  CancellationConfirmation,
-  ItineraryBookingRequest,
-  ItineraryConfirmation,
-  TravelBookingReport,
-  bookFlightIdempotencyKey,
-  itineraryStepIdempotencyKey,
-  BookFlight,
-  CancelBooking,
-  BookItinerary,
-  TravelPlannerPhase5Toolkit,
-  TravelPlannerPhase5ToolkitLayer,
-  TravelSupplierReconcilerLayer,
-  TravelPlannerPhase5,
-  TravelPlannerBookingEvidenceError,
-  assertSettledBookingsExistAtSupplier,
-  phase5TravelPlannerWorkerLayer,
-} from "./fixtures/travel-planner/phase5.ts";
 
 export {
   phase6TravelPlannerDeploymentId,
   phase6TravelPlannerProducerPrefix,
-  phase6TravelPlannerProducerId,
-  phase6GatedPlannerDefinitionDigests,
-  type CrossPlatformEvidenceIdentity,
-  normalizeCrossPlatformTravelPlannerEvidence,
   phase6FlightCallId,
   phase6LodgingCallId,
   phase6ActivityCallId,
   phase6PlannerModel,
-  releasePhase6PlannerGate,
-  resetPhase6PlannerGate,
-  phase6GatedTrip,
-  phase6GatedPlannerModel,
-  phase6SupplierDesk,
-  phase6SupplierDeskLayer,
-  phase6SupplierReconcilerLayer,
-  phase6BookingToolCallId,
-  phase6BookingRef,
-  phase6BookingTrip,
-  phase6BookingModel,
-  phase6GuideInvocationCount,
-  phase6ResearchMission,
-  phase6ResearchDestination,
-  phase6ChildLookupCallId,
-  phase6CoordinatorModel,
-  releasePhase6ResearcherGate,
-  resetPhase6ResearcherGate,
-  phase6ResearcherModel,
   makePhase6TravelPlannerBindings,
-  phase6TravelPlannerGoldenEvidence,
 } from "./fixtures/travel-planner/phase6.ts";
-
-export {
-  PHASE7_LIVE_GATE_ENV,
-  PHASE7_LIVE_CREDENTIAL_ENV,
-  type Phase7LiveGateEnvironment,
-  phase7LiveProfileEnabled,
-} from "./fixtures/travel-planner/phase7.ts";
 
 export {
   phase1Trip,

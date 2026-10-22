@@ -141,8 +141,7 @@ export const encodedDestinationFacts = (destination: string): unknown => {
 };
 
 // ---------------------------------------------------------------------------
-// Invocation-counting scripted models (the P5 SupplierBookingDesk counter
-// pattern): the call counter and captured prompts live OUTSIDE the Model
+// Invocation-counting scripted models: the call counter and captured prompts live OUTSIDE the Model
 // Layer, so they survive Layer rebuilds across Attempts and across separate
 // runtime handles over the same SQLite file — "the child was never
 // re-executed" is asserted, not assumed.
