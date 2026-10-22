@@ -82,13 +82,14 @@ import {
   ThreadObjectNamespace,
   threadNamespaceFromEnv,
   type CloudflareBindingError,
+  type ThreadObjectRpc,
 } from "./CloudflareBindings.ts";
 import { AdmissionLimitExceeded, CloudflareDurableRuntimeConfig } from "./CloudflareConfig.ts";
+import { boundHostDiagnostic, HostProtocolError } from "./internal/host-protocol-error.ts";
 import {
   AbortRecorded,
   ApprovalRecorded,
   HostFailed,
-  HostProtocolError,
   ObservedPage,
   ProgressObserved,
   ProgressCancelled,
@@ -97,21 +98,16 @@ import {
   SubmissionStatusResponse,
   SubmitSucceeded,
   UnknownResolutionRecorded,
-  boundHostDiagnostic,
-  decodeAbortCommand,
-  decodeAwaitProgressRequest,
-  decodeAwaitSettlementRequest,
-  decodeCancelProgressRequest,
-  decodeApprovalDecisionCommand,
-  decodeObservePageRequest,
-  decodeReceipt,
-  decodeSubmitRequest,
-  decodeUnknownResolutionCommand,
   encodeHostResponse,
+  hostOperations,
+  type AwaitSettlementRequest,
+  type CancelProgressRequest,
   type HostFailure,
+  type HostOperation,
   type HostResponse,
+  type HostSuccess,
   type SubmitRequest,
-} from "./CloudflareThreadClient.ts";
+} from "./internal/host-protocol.ts";
 import {
   layerConfig,
   ThreadObjectPorts,
@@ -286,28 +282,35 @@ const protocolFailure = (context: string) => (error: { readonly message: string 
     message: boundHostDiagnostic(`${context}: ${error.message}`),
   });
 
-/** Fold one endpoint's typed failures into the uniform `HostResponse` envelope. */
-const respond = <Result extends HostResponse, Failure extends HostFailure>(
-  effect: Effect.Effect<Result, Failure, EndpointServices>,
-): Effect.Effect<HostResponse, never, EndpointServices> =>
-  effect.pipe(
-    Effect.map((result): HostResponse => result),
-    Effect.catch((failure) => Effect.succeed<HostResponse>(HostFailed.make({ failure }))),
-  );
+/** An invalid outgoing envelope still fulfills RPC with the protocol's typed failure. */
+const responseEncodingFailure = (error: Schema.SchemaError) =>
+  Effect.succeed<unknown>({
+    _tag: "HostFailed",
+    failure: {
+      _tag: "HostProtocolError",
+      message: boundHostDiagnostic(`The host response could not be encoded: ${error.message}`),
+    },
+  });
 
-/** Encode the response envelope; an unencodable response degrades to a protocol failure. */
 const encodeResponse = (response: HostResponse): Effect.Effect<unknown> =>
-  encodeHostResponse(response).pipe(
-    Effect.catch((error) =>
-      Effect.succeed<unknown>({
-        _tag: "HostFailed",
-        failure: {
-          _tag: "HostProtocolError",
-          message: boundHostDiagnostic(`The host response could not be encoded: ${error.message}`),
-        },
-      }),
-    ),
-  );
+  encodeHostResponse(response).pipe(Effect.catch(responseEncodingFailure));
+
+/** Decode once at ingress, then encode the operation's success or typed failure. */
+const endpoint = <Request, Success extends HostSuccess, Failure extends HostFailure>(
+  contract: HostOperation<Request, Success, Failure>,
+  handle: (
+    request: NoInfer<Request>,
+  ) => Effect.Effect<NoInfer<Success>, NoInfer<Failure> | HostProtocolError, EndpointServices>,
+) =>
+  Effect.fnUntraced(function* (encoded: unknown) {
+    const response = yield* contract.decodeRequest(encoded).pipe(
+      Effect.mapError(protocolFailure(`The ${contract.name} request could not be decoded`)),
+      Effect.flatMap(handle),
+      Effect.catch((failure) => Effect.succeed({ _tag: "HostFailed" as const, failure })),
+    );
+
+    return yield* contract.encodeResponse(response).pipe(Effect.catch(responseEncodingFailure));
+  });
 
 const utf8Bytes = (value: PersistedJson): number =>
   new TextEncoder().encode(JSON.stringify(value)).length;
@@ -519,199 +522,187 @@ export const submit = Effect.fnUntraced(function* (threadId: ThreadId, request: 
   );
 });
 
-const submitEndpoint = (encoded: unknown): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeSubmitRequest(encoded).pipe(
-    Effect.mapError(protocolFailure("The submit request could not be decoded")),
-    Effect.flatMap((request) =>
-      Effect.gen(function* () {
-        const identity = yield* ThreadObjectIdentity;
-        const receipt = yield* submit(identity.threadId, request);
-        const scheduling = yield* DurableObjectAlarm.ScheduleConfiguration;
+const submitEndpoint = endpoint(
+  hostOperations.submit,
+  Effect.fnUntraced(function* (request) {
+    const identity = yield* ThreadObjectIdentity;
+    const receipt = yield* submit(identity.threadId, request);
+    const scheduling = yield* DurableObjectAlarm.ScheduleConfiguration;
 
-        if (scheduling.dispatchAfterEvent === true) {
-          const maintenance = yield* ThreadMaintenance;
+    if (scheduling.dispatchAfterEvent === true) {
+      const maintenance = yield* ThreadMaintenance;
 
-          // effect-cf owns the background scope and native event lifetime. Admission is
-          // already durable; neither the Attempt nor its model request delays this receipt.
-          yield* maintenance.start(receipt);
-        }
+      // effect-cf owns the background scope and native event lifetime. Admission is
+      // already durable; neither the Attempt nor its model request delays this receipt.
+      yield* maintenance.start(receipt);
+    }
 
-        return SubmitSucceeded.make({ receipt });
+    return SubmitSucceeded.make({ receipt });
+  }),
+);
+
+const submissionStatusEndpoint = endpoint(
+  hostOperations.submissionStatus,
+  Effect.fnUntraced(function* (receipt) {
+    const authorizer = yield* OperationAuthorizer;
+
+    yield* authorizer.authorize(
+      OperationAuthorizationRequest.make({
+        operation: "awaitSettlement",
+        threadId: receipt.threadId,
+        submissionId: receipt.submissionId,
       }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
+    );
+    yield* requireReceiptThread(receipt.threadId);
+    yield* requireSubmissionThread(receipt.submissionId);
+    const runtime = yield* DurableAgentRuntime;
 
-const submissionStatusEndpoint = (
-  encoded: unknown,
-): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeReceipt(encoded).pipe(
-    Effect.mapError(protocolFailure("The receipt could not be decoded")),
-    Effect.flatMap((receipt) =>
-      Effect.gen(function* () {
-        const authorizer = yield* OperationAuthorizer;
+    return SubmissionStatusResponse.make({ status: yield* runtime.submissionStatus(receipt) });
+  }),
+);
 
-        yield* authorizer.authorize(
-          OperationAuthorizationRequest.make({
-            operation: "awaitSettlement",
-            threadId: receipt.threadId,
-            submissionId: receipt.submissionId,
-          }),
-        );
-        yield* requireReceiptThread(receipt.threadId);
-        yield* requireSubmissionThread(receipt.submissionId);
-        const runtime = yield* DurableAgentRuntime;
-
-        return SubmissionStatusResponse.make({ status: yield* runtime.submissionStatus(receipt) });
-      }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
-
-const awaitSettlementEndpoint = (
-  encoded: unknown,
+const settlementEndpoint = <Success extends SettlementReached | SettlementRecordReached>(
+  contract: HostOperation<
+    AwaitSettlementRequest,
+    Success | ProgressCancelled,
+    typeof hostOperations.awaitSettlement.failure.Type
+  >,
+  settle: (
+    receipt: AwaitSettlementRequest,
+  ) => Effect.Effect<
+    Success,
+    typeof hostOperations.awaitSettlement.failure.Type,
+    DurableAgentRuntime
+  >,
   includeRecord = false,
-): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeAwaitSettlementRequest(encoded).pipe(
-    Effect.mapError(protocolFailure("The receipt could not be decoded")),
-    Effect.flatMap((receipt) =>
-      Effect.gen(function* () {
-        const authorizer = yield* OperationAuthorizer;
+) =>
+  endpoint(
+    contract,
+    Effect.fnUntraced(function* (receipt) {
+      const authorizer = yield* OperationAuthorizer;
 
-        yield* authorizer.authorize(
-          OperationAuthorizationRequest.make({
-            operation: "awaitSettlement",
-            threadId: receipt.threadId,
-            submissionId: receipt.submissionId,
-          }),
-        );
-        if (includeRecord)
-          yield* authorizer.authorize(
-            OperationAuthorizationRequest.make({
-              operation: "observe",
-              threadId: receipt.threadId,
-            }),
-          );
-        yield* requireReceiptThread(receipt.threadId);
-        yield* requireSubmissionThread(receipt.submissionId);
-        const runtime = yield* DurableAgentRuntime;
-
-        const wait = Effect.gen(function* () {
-          if (includeRecord)
-            return SettlementRecordReached.make({
-              record: yield* runtime.awaitSettlementRecord(receipt),
-            });
-
-          return SettlementReached.make({ settlement: yield* runtime.awaitSettlement(receipt) });
-        });
-
-        if (receipt.waiterId === undefined) return yield* wait;
-        const registry = yield* ProgressWaitRegistry;
-
-        return yield* Effect.scoped(
-          Effect.gen(function* () {
-            const cancelled = yield* registry.subscribe(
-              JSON.stringify([receipt.threadId, receipt.waiterId]),
-            );
-
-            return yield* Effect.raceFirst(
-              wait,
-              cancelled.pipe(Effect.as(ProgressCancelled.make())),
-            );
-          }),
-        );
-      }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
-
-const awaitProgressEndpoint = (encoded: unknown): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeAwaitProgressRequest(encoded).pipe(
-    Effect.mapError(protocolFailure("The progress request could not be decoded")),
-    Effect.flatMap((request) =>
-      Effect.gen(function* () {
-        const identity = yield* ThreadObjectIdentity;
-        const runtime = yield* DurableAgentRuntime;
-        const registry = yield* ProgressWaitRegistry;
-
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            const cancelled = yield* registry.subscribe(
-              JSON.stringify([identity.threadId, request.waiterId]),
-            );
-
-            yield* Effect.raceFirst(
-              runtime.awaitProgress(identity.threadId, request.afterSequence),
-              cancelled,
-            );
-          }),
-        );
-
-        return ProgressObserved.make();
-      }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
-
-const cancelProgressEndpoint = (
-  encoded: unknown,
-): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeCancelProgressRequest(encoded).pipe(
-    Effect.mapError(protocolFailure("The progress cancellation could not be decoded")),
-    Effect.flatMap((request) =>
-      Effect.gen(function* () {
-        const identity = yield* ThreadObjectIdentity;
-        const registry = yield* ProgressWaitRegistry;
-
-        yield* registry.cancel(JSON.stringify([identity.threadId, request.waiterId]));
-
-        return ProgressCancelled.make();
-      }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
-
-const observePageEndpoint = (encoded: unknown): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeObservePageRequest(encoded).pipe(
-    Effect.mapError(protocolFailure("The observe request could not be decoded")),
-    Effect.flatMap((request) =>
-      Effect.gen(function* () {
-        const identity = yield* ThreadObjectIdentity;
-        const store = yield* ThreadStore;
-        // The same fail-closed authorization seam the runtime's `observe` consults (P7 WP1);
-        // the default reference preserves the possession behavior.
-        const authorizer = yield* OperationAuthorizer;
-
+      yield* authorizer.authorize(
+        OperationAuthorizationRequest.make({
+          operation: "awaitSettlement",
+          threadId: receipt.threadId,
+          submissionId: receipt.submissionId,
+        }),
+      );
+      if (includeRecord)
         yield* authorizer.authorize(
           OperationAuthorizationRequest.make({
             operation: "observe",
-            threadId: identity.threadId,
+            threadId: receipt.threadId,
           }),
         );
+      yield* requireReceiptThread(receipt.threadId);
+      yield* requireSubmissionThread(receipt.submissionId);
 
-        const records = yield* Stream.runCollect(
-          store.read(
-            ThreadRead.make({
-              threadId: identity.threadId,
-              ...(request.afterSequence === undefined
-                ? {}
-                : { afterSequence: request.afterSequence }),
-              limit: request.limit,
-            }),
-          ),
+      const wait = settle(receipt);
+
+      if (receipt.waiterId === undefined) return yield* wait;
+      const registry = yield* ProgressWaitRegistry;
+
+      return yield* Effect.scoped(
+        Effect.gen(function* () {
+          const cancelled = yield* registry.subscribe(
+            JSON.stringify([receipt.threadId, receipt.waiterId]),
+          );
+
+          return yield* Effect.raceFirst(wait, cancelled.pipe(Effect.as(ProgressCancelled.make())));
+        }),
+      );
+    }),
+  );
+
+const awaitSettlementEndpoint = settlementEndpoint(
+  hostOperations.awaitSettlement,
+  Effect.fnUntraced(function* (receipt) {
+    const runtime = yield* DurableAgentRuntime;
+
+    return SettlementReached.make({ settlement: yield* runtime.awaitSettlement(receipt) });
+  }),
+);
+
+const awaitSettlementRecordEndpoint = settlementEndpoint(
+  hostOperations.awaitSettlementRecord,
+  Effect.fnUntraced(function* (receipt) {
+    const runtime = yield* DurableAgentRuntime;
+
+    return SettlementRecordReached.make({ record: yield* runtime.awaitSettlementRecord(receipt) });
+  }),
+  true,
+);
+
+const awaitProgressEndpoint = endpoint(
+  hostOperations.awaitProgress,
+  Effect.fnUntraced(function* (request) {
+    const identity = yield* ThreadObjectIdentity;
+    const runtime = yield* DurableAgentRuntime;
+    const registry = yield* ProgressWaitRegistry;
+
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const cancelled = yield* registry.subscribe(
+          JSON.stringify([identity.threadId, request.waiterId]),
         );
 
-        return ObservedPage.make({ records: [...records] });
+        yield* Effect.raceFirst(
+          runtime.awaitProgress(identity.threadId, request.afterSequence),
+          cancelled,
+        );
       }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
+    );
+
+    return ProgressObserved.make();
+  }),
+);
+
+const cancelProgressEndpoint = endpoint<
+  CancelProgressRequest,
+  ProgressCancelled,
+  HostProtocolError
+>(
+  hostOperations.cancelProgress,
+  Effect.fnUntraced(function* (request) {
+    const identity = yield* ThreadObjectIdentity;
+    const registry = yield* ProgressWaitRegistry;
+
+    yield* registry.cancel(JSON.stringify([identity.threadId, request.waiterId]));
+
+    return ProgressCancelled.make();
+  }),
+);
+
+const observePageEndpoint = endpoint(
+  hostOperations.observePage,
+  Effect.fnUntraced(function* (request) {
+    const identity = yield* ThreadObjectIdentity;
+    const store = yield* ThreadStore;
+    // The same fail-closed authorization seam the runtime's `observe` consults (P7 WP1);
+    // the default reference preserves the possession behavior.
+    const authorizer = yield* OperationAuthorizer;
+
+    yield* authorizer.authorize(
+      OperationAuthorizationRequest.make({
+        operation: "observe",
+        threadId: identity.threadId,
+      }),
+    );
+
+    const records = yield* Stream.runCollect(
+      store.read(
+        ThreadRead.make({
+          threadId: identity.threadId,
+          ...(request.afterSequence === undefined ? {} : { afterSequence: request.afterSequence }),
+          limit: request.limit,
+        }),
+      ),
+    );
+
+    return ObservedPage.make({ records: [...records] });
+  }),
+);
 
 const watchTextEndpoint = (encoded: unknown): Effect.Effect<unknown, never, EndpointServices> =>
   Schema.decodeUnknownEffect(WatchTextRequest)(encoded).pipe(
@@ -732,84 +723,65 @@ const watchTextEndpoint = (encoded: unknown): Effect.Effect<unknown, never, Endp
     Effect.catch((failure) => encodeResponse(HostFailed.make({ failure }))),
   );
 
-const abortEndpoint = (encoded: unknown): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeAbortCommand(encoded).pipe(
-    Effect.mapError(protocolFailure("The abort command could not be decoded")),
-    Effect.flatMap((command) =>
-      Effect.gen(function* () {
-        const authorizer = yield* OperationAuthorizer;
+const abortEndpoint = endpoint(
+  hostOperations.abort,
+  Effect.fnUntraced(function* (command) {
+    const authorizer = yield* OperationAuthorizer;
 
-        yield* authorizer.authorize(
-          OperationAuthorizationRequest.make({
-            operation: "abort",
-            submissionId: command.submissionId,
-          }),
-        );
-        yield* requireSubmissionThread(command.submissionId);
-        const maintenance = yield* ThreadMaintenance;
-        const runtime = yield* DurableAgentRuntime;
-        const intent = yield* maintenance.withMutation(runtime.abort(command));
-
-        return AbortRecorded.make({ intent });
+    yield* authorizer.authorize(
+      OperationAuthorizationRequest.make({
+        operation: "abort",
+        submissionId: command.submissionId,
       }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
+    );
+    yield* requireSubmissionThread(command.submissionId);
+    const maintenance = yield* ThreadMaintenance;
+    const runtime = yield* DurableAgentRuntime;
+    const intent = yield* maintenance.withMutation(runtime.abort(command));
 
-const resolveApprovalEndpoint = (
-  encoded: unknown,
-): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeApprovalDecisionCommand(encoded).pipe(
-    Effect.mapError(protocolFailure("The approval command could not be decoded")),
-    Effect.flatMap((command) =>
-      Effect.gen(function* () {
-        const authorizer = yield* OperationAuthorizer;
+    return AbortRecorded.make({ intent });
+  }),
+);
 
-        yield* authorizer.authorize(
-          OperationAuthorizationRequest.make({
-            operation: "resolveApproval",
-            submissionId: command.submissionId,
-          }),
-        );
-        yield* requireSubmissionThread(command.submissionId);
-        const maintenance = yield* ThreadMaintenance;
-        const runtime = yield* DurableAgentRuntime;
-        const intent = yield* maintenance.withMutation(runtime.resolveApproval(command));
+const resolveApprovalEndpoint = endpoint(
+  hostOperations.resolveApproval,
+  Effect.fnUntraced(function* (command) {
+    const authorizer = yield* OperationAuthorizer;
 
-        return ApprovalRecorded.make({ intent });
+    yield* authorizer.authorize(
+      OperationAuthorizationRequest.make({
+        operation: "resolveApproval",
+        submissionId: command.submissionId,
       }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
+    );
+    yield* requireSubmissionThread(command.submissionId);
+    const maintenance = yield* ThreadMaintenance;
+    const runtime = yield* DurableAgentRuntime;
+    const intent = yield* maintenance.withMutation(runtime.resolveApproval(command));
 
-const resolveUnknownEndpoint = (
-  encoded: unknown,
-): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeUnknownResolutionCommand(encoded).pipe(
-    Effect.mapError(protocolFailure("The resolution command could not be decoded")),
-    Effect.flatMap((command) =>
-      Effect.gen(function* () {
-        const authorizer = yield* OperationAuthorizer;
+    return ApprovalRecorded.make({ intent });
+  }),
+);
 
-        yield* authorizer.authorize(
-          OperationAuthorizationRequest.make({
-            operation: "resolveUnknown",
-            submissionId: command.submissionId,
-          }),
-        );
-        yield* requireSubmissionThread(command.submissionId);
-        const maintenance = yield* ThreadMaintenance;
-        const runtime = yield* DurableAgentRuntime;
-        const intent = yield* maintenance.withMutation(runtime.resolveUnknown(command));
+const resolveUnknownEndpoint = endpoint(
+  hostOperations.resolveUnknown,
+  Effect.fnUntraced(function* (command) {
+    const authorizer = yield* OperationAuthorizer;
 
-        return UnknownResolutionRecorded.make({ intent });
+    yield* authorizer.authorize(
+      OperationAuthorizationRequest.make({
+        operation: "resolveUnknown",
+        submissionId: command.submissionId,
       }),
-    ),
-    respond,
-    Effect.flatMap(encodeResponse),
-  );
+    );
+    yield* requireSubmissionThread(command.submissionId);
+    const maintenance = yield* ThreadMaintenance;
+    const runtime = yield* DurableAgentRuntime;
+    const intent = yield* maintenance.withMutation(runtime.resolveUnknown(command));
+
+    return UnknownResolutionRecorded.make({ intent });
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // P7 administrative entry points (plan §3): explain/verify/retry/obligations over the SAME
@@ -1106,17 +1078,8 @@ const wakeEndpoint: Effect.Effect<void, never, EndpointServices> = Effect.gen(fu
 
 /** The per-Thread wire operations supported by native and application-owned endpoints. */
 export const ThreadRpcOperation = Schema.Literals([
-  "submitEncoded",
-  "submissionStatusEncoded",
-  "awaitSettlementEncoded",
-  "awaitSettlementRecordEncoded",
-  "awaitProgressEncoded",
-  "cancelProgressEncoded",
+  ...Object.values(hostOperations).map((operation) => operation.method),
   "watchTextEncoded",
-  "observePage",
-  "abortEncoded",
-  "resolveApprovalEncoded",
-  "resolveUnknownEncoded",
   "portCall",
   "wake",
 ]);
@@ -1127,7 +1090,7 @@ const threadRpc = {
   submitEncoded: submitEndpoint,
   submissionStatusEncoded: submissionStatusEndpoint,
   awaitSettlementEncoded: awaitSettlementEndpoint,
-  awaitSettlementRecordEncoded: (encoded) => awaitSettlementEndpoint(encoded, true),
+  awaitSettlementRecordEncoded: awaitSettlementRecordEndpoint,
   awaitProgressEncoded: awaitProgressEndpoint,
   cancelProgressEncoded: cancelProgressEndpoint,
   watchTextEncoded: watchTextEndpoint,
@@ -1214,29 +1177,19 @@ const effectCfPlatformLayer = (
   );
 
 /** The public endpoints and effect-cf invocation hook of one Thread Object instance. */
-export interface Instance<EventServices = never> extends InstanceType<
-  EffectCfDurableObject.DurableObjectClass<
-    Record<never, never>,
-    RuntimeServices | EventServices | ThreadMaintenanceAlarm
-  >
-> {
-  submitEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  submissionStatusEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  awaitSettlementEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  awaitSettlementRecordEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  awaitProgressEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  cancelProgressEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  watchTextEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  observePage(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  abortEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  resolveApprovalEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  resolveUnknownEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
+export interface Instance<EventServices = never>
+  extends
+    ThreadObjectRpc,
+    InstanceType<
+      EffectCfDurableObject.DurableObjectClass<
+        Record<never, never>,
+        RuntimeServices | EventServices | ThreadMaintenanceAlarm
+      >
+    > {
   explainEncoded(encoded: unknown): Promise<unknown>;
   verifyEncoded(encoded: unknown): Promise<unknown>;
   retryEncoded(encoded: unknown): Promise<unknown>;
   obligationsEncoded(encoded: unknown): Promise<unknown>;
-  portCall(encoded: unknown, traceContext?: unknown): Promise<unknown>;
-  wake(): Promise<void>;
   alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> | void;
 }
 
