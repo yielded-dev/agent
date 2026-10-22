@@ -1,5 +1,38 @@
 # @yielded/agent
 
+## 0.1.0-beta.189
+
+### Patch Changes
+
+- [#1078](https://github.com/yielded-dev/agent/pull/1078) [`2899b5b`](https://github.com/yielded-dev/agent/commit/2899b5bfbf3f7959f54eabedf8b05fa48e5d96a5) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Commit peer messages, worker reports, and parent updates atomically with their pending deliveries through paired native storage. Drain unresolved source publications with the previous release before upgrading an existing SQL store.
+
+- [#1091](https://github.com/yielded-dev/agent/pull/1091) [`b0ad3e8`](https://github.com/yielded-dev/agent/commit/b0ad3e8158ad5d0094749bda4ef6848a897b76a8) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Share current-source validation across memory recall and semantic indexing while retaining live access and stale-index checks. Preserve UTF-8 byte budgets and digest identities with shared byte counting and direct encoding.
+
+- [#1093](https://github.com/yielded-dev/agent/pull/1093) [`c906edf`](https://github.com/yielded-dev/agent/commit/c906edff7b327d925542e3d4cf82dd3c2624081a) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Construct MCP toolkits once from validated discovery, render CodeMode declarations only when requested, and keep task-continuation policy in Agent instructions.
+  **BEHAVIOR CHANGE:** supply discovery schemas and `callTool` from custom MCP connectors, and use native readonly discovery Tools instead of `ToolDiscovery.make` search and failure callbacks.
+
+- [#1095](https://github.com/yielded-dev/agent/pull/1095) [`37b958b`](https://github.com/yielded-dev/agent/commit/37b958b321a0db45f4a907aedeb8f2bc38defd9b) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Resolve AutoModel choices explicitly before passing the returned native model to `Agent.withModel` or a durable registration.
+  **BEHAVIOR CHANGE:** authorize and validate selection input in the host, and apply a Scope and timeout around selection plus execution; `AutoModel.make` no longer returns a model Layer.
+
+- [#1077](https://github.com/yielded-dev/agent/pull/1077) [`0b8eac1`](https://github.com/yielded-dev/agent/commit/0b8eac17011a6c2039a2ca3646f00affb2c2468d) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Construct background actions with `startTool`, `followUpTool`, `inspectTool`, `summaryTool`, `listTool`, and `cancelTool`, and register `Subagent.reporting` explicitly on the parent.
+
+- [#1075](https://github.com/yielded-dev/agent/pull/1075) [`eec9362`](https://github.com/yielded-dev/agent/commit/eec93627fdde15cf0944458ac83f61e9d7ed7cc7) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Use native EventSource and Subscriptions APIs in place of GitHubWorkflowSource and SubscriptionTools. Require Crypto only for messaging tools that prepare a new message.
+
+- [#1074](https://github.com/yielded-dev/agent/pull/1074) [`b31e5f1`](https://github.com/yielded-dev/agent/commit/b31e5f1dbbe27b194f3256e2ba731ecb66ea1b7d) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Use the registered child Definition for durable delegation identity and the resolved child policy for its tool allowance. Remove declaration digest overrides and parameter-based allowance callbacks.
+
+- [#1089](https://github.com/yielded-dev/agent/pull/1089) [`10b6040`](https://github.com/yielded-dev/agent/commit/10b60405b31d869bad6bc538f8696e8ec8ba0e8e) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remove the disconnected `ModelContext` text-only preparation and compaction API. **BEHAVIOR CHANGE:** Use `RunContextPreparation` from `@yielded/agent/run-options` and `ContextCompactor` from `@yielded/agent/context-compactor` for native prompt preparation and compaction.
+
+- [#1090](https://github.com/yielded-dev/agent/pull/1090) [`5a7dc22`](https://github.com/yielded-dev/agent/commit/5a7dc2224ee4d9842bf46ff28445a7b85228d3bf) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remove the optional `Remembering` coordinator and its store protocol. **BEHAVIOR CHANGE:** Own background extraction through committed activity processing and memory writes; `SourcePosition` and `comparePosition` remain available from `@yielded/agent/remembering-store`.
+
+- [#1094](https://github.com/yielded-dev/agent/pull/1094) [`98e2a67`](https://github.com/yielded-dev/agent/commit/98e2a67726cadf4ed955579ea145d89b7e580129) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Retire command queues, command-shaped Sandbox execution, the ephemeral approval adapters, and `redactedTranscript`; compose native Run hooks and Effect child-process services where needed.
+  **BEHAVIOR CHANGE:** remove `@yielded/agent-sandbox-local`, `@yielded/agent-workflow`, and NodeWorkflow; finish pending Agent work and parent Workflow notifications with the existing bridge deployment before upgrading.
+
+- [#1073](https://github.com/yielded-dev/agent/pull/1073) [`64146b5`](https://github.com/yielded-dev/agent/commit/64146b510b6069986ea31ab485a6cc5b5afeec81) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Release in-memory subagent reservation pools when their parent Run and attached children finish cleanup. Use the atomic `release` operation in place of `beginRelease`.
+
+- [#1072](https://github.com/yielded-dev/agent/pull/1072) [`a22bd71`](https://github.com/yielded-dev/agent/commit/a22bd7128bcd42b2c1f15a65eb57cb2df3f53b05) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Use `PreparedInputAdmission` for schedule, subscription, and worker-message delivery. Replace the scheduling-specific admission service and import `PreparedInput`, authorization decisions, retry reasons, and admission errors from `@yielded/agent/prepared-input-admission` using their `PreparedInput` names.
+
+- [#1088](https://github.com/yielded-dev/agent/pull/1088) [`2b25a65`](https://github.com/yielded-dev/agent/commit/2b25a653a8d8c576975506ce7c0ae0cce635aa44) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Allow `null` turn, tool-call, and native browser command ceilings when the host owns execution lifetime. Preserve private browser and tool-validation causes, including a failed completion when exhaustion prevents correction.
+
 ## 0.1.0-beta.188
 
 ### Minor Changes

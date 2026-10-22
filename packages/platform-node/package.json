@@ -1,6 +1,6 @@
 {
   "name": "@yielded/agent-platform-node",
-  "version": "0.1.0-beta.188",
+  "version": "0.1.0-beta.189",
   "description": "Class DN layer assembly for Effect Agent: the durable Node/SQLite runtime host, wake scheduler, and ownership drain.",
   "license": "MIT",
   "repository": {

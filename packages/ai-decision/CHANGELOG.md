@@ -1,5 +1,12 @@
 # @yielded/agent-ai-decision
 
+## 0.1.0-beta.189
+
+### Patch Changes
+
+- [#1095](https://github.com/yielded-dev/agent/pull/1095) [`37b958b`](https://github.com/yielded-dev/agent/commit/37b958b321a0db45f4a907aedeb8f2bc38defd9b) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Resolve AutoModel choices explicitly before passing the returned native model to `Agent.withModel` or a durable registration.
+  **BEHAVIOR CHANGE:** authorize and validate selection input in the host, and apply a Scope and timeout around selection plus execution; `AutoModel.make` no longer returns a model Layer.
+
 ## 0.1.0-beta.188
 
 No changes in this release.

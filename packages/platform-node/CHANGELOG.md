@@ -1,5 +1,17 @@
 # @yielded/agent-platform-node
 
+## 0.1.0-beta.189
+
+### Patch Changes
+
+- [#1094](https://github.com/yielded-dev/agent/pull/1094) [`98e2a67`](https://github.com/yielded-dev/agent/commit/98e2a67726cadf4ed955579ea145d89b7e580129) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Retire command queues, command-shaped Sandbox execution, the ephemeral approval adapters, and `redactedTranscript`; compose native Run hooks and Effect child-process services where needed.
+  **BEHAVIOR CHANGE:** remove `@yielded/agent-sandbox-local`, `@yielded/agent-workflow`, and NodeWorkflow; finish pending Agent work and parent Workflow notifications with the existing bridge deployment before upgrading.
+
+- [#1072](https://github.com/yielded-dev/agent/pull/1072) [`a22bd71`](https://github.com/yielded-dev/agent/commit/a22bd7128bcd42b2c1f15a65eb57cb2df3f53b05) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Use `PreparedInputAdmission` for schedule, subscription, and worker-message delivery. Replace the scheduling-specific admission service and import `PreparedInput`, authorization decisions, retry reasons, and admission errors from `@yielded/agent/prepared-input-admission` using their `PreparedInput` names.
+- Updated dependencies [[`2899b5b`](https://github.com/yielded-dev/agent/commit/2899b5bfbf3f7959f54eabedf8b05fa48e5d96a5), [`b0ad3e8`](https://github.com/yielded-dev/agent/commit/b0ad3e8158ad5d0094749bda4ef6848a897b76a8), [`c906edf`](https://github.com/yielded-dev/agent/commit/c906edff7b327d925542e3d4cf82dd3c2624081a), [`37b958b`](https://github.com/yielded-dev/agent/commit/37b958b321a0db45f4a907aedeb8f2bc38defd9b), [`0b8eac1`](https://github.com/yielded-dev/agent/commit/0b8eac17011a6c2039a2ca3646f00affb2c2468d), [`eec9362`](https://github.com/yielded-dev/agent/commit/eec93627fdde15cf0944458ac83f61e9d7ed7cc7), [`b31e5f1`](https://github.com/yielded-dev/agent/commit/b31e5f1dbbe27b194f3256e2ba731ecb66ea1b7d), [`10b6040`](https://github.com/yielded-dev/agent/commit/10b60405b31d869bad6bc538f8696e8ec8ba0e8e), [`5a7dc22`](https://github.com/yielded-dev/agent/commit/5a7dc2224ee4d9842bf46ff28445a7b85228d3bf), [`98e2a67`](https://github.com/yielded-dev/agent/commit/98e2a67726cadf4ed955579ea145d89b7e580129), [`64146b5`](https://github.com/yielded-dev/agent/commit/64146b510b6069986ea31ab485a6cc5b5afeec81), [`a22bd71`](https://github.com/yielded-dev/agent/commit/a22bd7128bcd42b2c1f15a65eb57cb2df3f53b05), [`2b25a65`](https://github.com/yielded-dev/agent/commit/2b25a653a8d8c576975506ce7c0ae0cce635aa44)]:
+  - @yielded/agent@0.1.0-beta.189
+  - @yielded/agent-storage-sqlite@0.1.0-beta.189
+
 ## 0.1.0-beta.188
 
 ### Patch Changes
