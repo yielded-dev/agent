@@ -104,7 +104,7 @@ import {
  * `resolveUnknown`/`resolveApproval` drivers decide them from a second real process.
  *
  * These tests use real clocks, real files, and real processes by necessity, so the suite runs
- * with `excludeTestServices` like the sandbox-local process tests.
+ * with `excludeTestServices`.
  */
 
 const resubmit = Effect.fnUntraced(function* (thread: string, key: string) {

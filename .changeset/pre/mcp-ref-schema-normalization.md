@@ -1,6 +1,5 @@
 ---
 "@yielded/agent": patch
-"@yielded/agent-sandbox-local": patch
 "@yielded/agent-storage-memory": patch
 "@yielded/agent-storage-sqlite": patch
 "@yielded/agent-storage-cloudflare": patch

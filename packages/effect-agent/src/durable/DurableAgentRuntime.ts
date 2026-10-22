@@ -991,8 +991,7 @@ export type DurableObligationFailure = LedgerError | ThreadStoreError | Operatio
  * canonical (`ToolApprovalRequested` + `ToolApprovalDecided`, one atomic batch) before it is
  * honored; `unresolved` falls through to the durable suspension path. The default (`undefined`)
  * suspends every undecided approval durably until `resolveApproval` decides it — the fail-closed
- * posture. Adapt the P2 `ApprovalResolver` capability stack through
- * `@effect-agent/capabilities`' `toDurableRunApprovalHook`.
+ * posture. Supply a native `RunApprovalHook`; return `unresolved` when policy cannot decide.
  */
 export const DurableApprovalResolver: Context.Reference<RunApprovalHook<never, never> | undefined> =
   Context.Reference<RunApprovalHook<never, never> | undefined>(

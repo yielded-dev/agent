@@ -133,9 +133,7 @@ A feature or fix usually needs a small change to existing guidance, not another 
 effect <- ai-decision (thread model selection)
 @yielded/agent <- storage-sql <- storage-sqlite / storage-postgres / storage-cloudflare
 @yielded/agent <- storage-memory
-@yielded/agent <- workflow
 @yielded/agent + selected adapters <- platform packages
-@yielded/agent <- sandbox-local
 @yielded/agent <- testing
 @yielded/agent <- pr-review
 ```

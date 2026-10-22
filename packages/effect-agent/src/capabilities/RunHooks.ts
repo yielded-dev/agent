@@ -1,6 +1,4 @@
 import type * as Prompt from "effect/ai/Prompt";
-import * as Clock from "effect/Clock";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -15,177 +13,19 @@ import {
 } from "../core/Thread.ts";
 import {
   type PreparedRunContext,
-  type RunApprovalDecision,
-  type RunApprovalHook,
-  type RunApprovalRequest,
   type RunBudgetHook,
   type RunContextHook,
   type RunContextRequest,
-  type RunInputHook,
   type RunOptions,
   type RunSchedulingHook,
 } from "../engine/RunOptions.ts";
-import {
-  type ApprovalAudit,
-  type ApprovalAuditLimitExceeded,
-  type ApprovalDecisionMismatch,
-  ApprovalRequestDraft,
-  type ApprovalResolver,
-  type ApprovalResolverError,
-  makeApprovalRequest,
-  requestApproval,
-} from "./Approval.ts";
 import { type BudgetExceeded, UsageDelta, type UsageBudgetNode } from "./Budget.ts";
-import type { RunCommandQueue } from "./Commands.ts";
-import type { RedactionError, Redactor } from "./Redaction.ts";
-
-/** Capability policy could not be normalized into the bounded approval request Schema. */
-export class ApprovalAdapterError extends Schema.TaggedError<ApprovalAdapterError>()(
-  "ApprovalAdapterError",
-  { message: Schema.String },
-) {}
 
 /** Engine usage data did not satisfy the non-negative budget delta Schema. */
 export class BudgetAdapterError extends Schema.TaggedError<BudgetAdapterError>()(
   "BudgetAdapterError",
   { message: Schema.String },
 ) {}
-
-/** Adapt the richer audited FIFO commands to the engine's safe-seam input hook. */
-export const toRunInputHook = (queue: RunCommandQueue): RunInputHook<never, never> => ({
-  drain: (policy) =>
-    queue.drain(policy).pipe(
-      Effect.map((commands) =>
-        commands.map((command) => ({
-          kind: command._tag === "SteeringCommand" ? ("steering" as const) : ("follow-up" as const),
-          input: command.content,
-        })),
-      ),
-    ),
-  end: () => queue.shutdown,
-});
-
-/** Explicit policy needed to turn a native Effect AI approval request into an audit request. */
-export interface RunApprovalAdapterPolicy {
-  readonly expiresInMillis: number;
-  readonly risk: ApprovalRequestDraft["risk"];
-  readonly denial: ApprovalRequestDraft["denial"];
-  readonly actionSummary: (request: RunApprovalRequest) => string;
-  readonly resourceTargets: (request: RunApprovalRequest) => ReadonlyArray<string>;
-}
-
-/** Adapt native Effect AI approval parts through structural redaction, audit, and timeout policy. */
-export const toRunApprovalHook = (
-  policy: RunApprovalAdapterPolicy,
-): RunApprovalHook<
-  | ApprovalResolverError
-  | ApprovalAuditLimitExceeded
-  | ApprovalDecisionMismatch
-  | ApprovalAdapterError
-  | RedactionError,
-  ApprovalResolver | ApprovalAudit | Redactor
-> => ({
-  request: Effect.fnUntraced(function* (engineRequest) {
-    const validatedPolicy = yield* Schema.decodeEffect(RunApprovalAdapterPolicySchema)(policy).pipe(
-      Effect.mapError((error) =>
-        ApprovalAdapterError.make({
-          message: `Approval adapter policy is invalid: ${error.message}`,
-        }),
-      ),
-    );
-
-    const now = yield* Clock.currentTimeMillis;
-
-    const metadata = yield* Effect.try({
-      try: () => ({
-        actionSummary: policy.actionSummary(engineRequest),
-        resourceTargets: policy.resourceTargets(engineRequest),
-      }),
-      catch: () =>
-        ApprovalAdapterError.make({
-          message: "Approval policy failed while describing the native Tool request",
-        }),
-    });
-
-    const draft = yield* Schema.decodeEffect(ApprovalRequestDraft)({
-      requestId: engineRequest.request.approvalId,
-      runId: engineRequest.runId,
-      threadId: engineRequest.threadId,
-      toolCallId: engineRequest.toolCallId,
-      toolName: engineRequest.toolName,
-      actionSummary: metadata.actionSummary,
-      resourceTargets: metadata.resourceTargets,
-      risk: validatedPolicy.risk,
-      expiresAt: DateTime.formatIso(
-        DateTime.toUtc(DateTime.makeUnsafe(now + validatedPolicy.expiresInMillis)),
-      ),
-      denial: validatedPolicy.denial,
-    }).pipe(
-      Effect.mapError((error) =>
-        ApprovalAdapterError.make({
-          message: `Approval adapter policy is invalid: ${error.message}`,
-        }),
-      ),
-    );
-
-    const request = yield* makeApprovalRequest(draft, engineRequest.parameters);
-    const decision = yield* requestApproval(request);
-
-    if (decision._tag === "ApprovalApproved") {
-      return { _tag: "approved" as const };
-    }
-    if (decision.timedOut && request.denial === "recoverable") {
-      return {
-        _tag: "unresolved" as const,
-        reason: decision.reason,
-      };
-    }
-
-    return {
-      _tag: "denied" as const,
-      reason: decision.reason,
-    };
-  }),
-});
-
-/**
- * Durable variant of `toRunApprovalHook` (P5 plan §2.6): the durable coordinator consults this
- * delegate for policy-AUTO decisions only, after its recorded-decision lookup misses. It reuses
- * the exact P2 approval stack — `ApprovalRequestDraft` policy metadata, structural redaction,
- * audit sink, expiry/timeout policy — but differs in two durable-specific ways:
- *
- * 1. The capability services (`ApprovalResolver | ApprovalAudit | Redactor`) are captured up
- *    front, so the returned hook is `RunApprovalHook<never, never>` — the shape the
- *    coordinator's `DurableApprovalResolver` reference accepts without leaking capability
- *    requirements into the durable runtime Layer.
- * 2. It FAILS CLOSED into `unresolved`: any adapter, audit, redaction, or resolver failure
- *    defers the decision to the durable suspension + `resolveApproval` path instead of
- *    approving, denying, or crashing the Attempt on a transient policy fault. Explicit
- *    policy denials (including the P2 timeout-denial for `denial: "terminal"`) still deny.
- */
-export const toDurableRunApprovalHook = Effect.fnUntraced(function* (
-  policy: RunApprovalAdapterPolicy,
-): Effect.fn.Return<
-  RunApprovalHook<never, never>,
-  never,
-  ApprovalResolver | ApprovalAudit | Redactor
-> {
-  const services = yield* Effect.context<ApprovalResolver | ApprovalAudit | Redactor>();
-  const hook = toRunApprovalHook(policy);
-
-  return {
-    request: (request) =>
-      hook.request(request).pipe(
-        Effect.provideContext(services),
-        Effect.catch((error) =>
-          Effect.succeed<RunApprovalDecision>({
-            _tag: "unresolved",
-            reason: `Approval delegation failed (${error._tag}); the decision defers to the durable resolveApproval path`,
-          }),
-        ),
-      ),
-  };
-});
 
 /** Adapt one hierarchical budget node to the engine's usage accounting seam. */
 export const toRunBudgetHook = (
@@ -273,11 +113,4 @@ export const toRunSchedulingHook = (
 ): RunSchedulingHook => ({
   runOverride,
   ...(toolRequiresSequential === undefined ? {} : { toolRequiresSequential }),
-});
-
-/** Validate policy configuration at adapter construction boundaries. */
-export const RunApprovalAdapterPolicySchema = Schema.Struct({
-  expiresInMillis: Schema.Int.check(Schema.isGreaterThan(0)),
-  risk: Schema.Literals(["low", "medium", "high", "critical"]),
-  denial: Schema.Literals(["terminal", "recoverable"]),
 });

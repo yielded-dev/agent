@@ -66,7 +66,6 @@ export default defineConfig({
           items: [
             { label: "Subagents", link: "/guide/subagents/" },
             { label: "Messaging", link: "/guide/messaging/" },
-            { label: "Effect Workflows", link: "/guide/workflows/" },
             { label: "Sandbox", link: "/guide/sandbox/" },
             { label: "Code Mode", link: "/guide/code-mode/" },
             { label: "Browser tools", link: "/guide/browser/" },

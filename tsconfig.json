@@ -2,16 +2,10 @@
   "files": [],
   "references": [
     {
-      "path": "./packages/workflow"
-    },
-    {
       "path": "./tooling/cloudflare-memory"
     },
     {
       "path": "./packages/effect-agent"
-    },
-    {
-      "path": "./packages/sandbox-local"
     },
     {
       "path": "./packages/storage-memory"

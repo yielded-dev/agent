@@ -2,7 +2,6 @@
 "@yielded/agent-platform-cloudflare": patch
 "@yielded/agent-platform-node": patch
 "@yielded/agent-pr-review": patch
-"@yielded/agent-sandbox-local": patch
 "@yielded/agent-storage-cloudflare": patch
 "@yielded/agent-storage-memory": patch
 "@yielded/agent-storage-sqlite": patch

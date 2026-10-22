@@ -20,8 +20,7 @@
     "./node-durable-host": "./src/NodeDurableHost.ts",
     "./node-scheduling": "./src/NodeScheduling.ts",
     "./node-subscriptions": "./src/NodeSubscriptions.ts",
-    "./node-wake-scheduler": "./src/NodeWakeScheduler.ts",
-    "./node-workflow": "./src/NodeWorkflow.ts"
+    "./node-wake-scheduler": "./src/NodeWakeScheduler.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -34,8 +33,7 @@
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@yielded/agent": "workspace:*",
-    "@yielded/agent-storage-sqlite": "workspace:*",
-    "@yielded/agent-workflow": "workspace:*"
+    "@yielded/agent-storage-sqlite": "workspace:*"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

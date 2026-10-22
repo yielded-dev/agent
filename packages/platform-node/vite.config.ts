@@ -28,7 +28,6 @@ export default defineConfig({
       "src/NodeScheduling.ts",
       "src/NodeSubscriptions.ts",
       "src/NodeWakeScheduler.ts",
-      "src/NodeWorkflow.ts",
     ],
     dts: true,
     sourcemap: true,

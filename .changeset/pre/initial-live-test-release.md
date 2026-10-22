@@ -1,5 +1,4 @@
 ---
-"@yielded/agent-sandbox-local": patch
 "@yielded/agent-storage-memory": patch
 "@yielded/agent-storage-sqlite": patch
 "@yielded/agent-platform-node": patch

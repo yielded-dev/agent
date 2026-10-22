@@ -1,15 +1,10 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import { describe, expect, it, layer } from "@effect/vitest";
+import { expect, layer } from "@effect/vitest";
 import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory-submission-ledger";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { compileRegistrations, type AgentAttemptContext } from "@yielded/agent/agent-registration";
-import {
-  ApprovalAuditMemoryLive,
-  ApprovalResolver,
-  ApprovalResolverError,
-} from "@yielded/agent/approval";
 import {
   ApprovalSuspensionError,
   DurableAgentRuntime,
@@ -17,7 +12,7 @@ import {
   DurableRuntimeConfig,
   type DurableSubmitOptions,
 } from "@yielded/agent/durable-agent-runtime";
-import { ThreadId, RunId, ToolCallId, TurnId, type SubmissionId } from "@yielded/agent/identifiers";
+import { ThreadId, ToolCallId, type SubmissionId } from "@yielded/agent/identifiers";
 import {
   DefinitionDigestInput,
   DefinitionDigests,
@@ -26,10 +21,8 @@ import {
   ProducerId,
   type CanonicalRecordEnvelope,
 } from "@yielded/agent/records";
-import { StructuralRedactorLive } from "@yielded/agent/redaction";
-import { toDurableRunApprovalHook } from "@yielded/agent/run-hooks";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import { RunToolAuthorization, type RunApprovalRequest } from "@yielded/agent/run-options";
+import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
@@ -47,7 +40,7 @@ import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
 import type * as Prompt from "effect/ai/Prompt";
-import * as Response from "effect/ai/Response";
+import type * as Response from "effect/ai/Response";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Cause from "effect/Cause";
@@ -668,50 +661,5 @@ layer(testLayer)("DUR P5 durable approval suspension (plan §2.6)", (it) => {
       expect(byId.has(`tool-settled:${runId}:1:book-1`)).toBe(true);
       expect(byId.has(`tool-settled:${runId}:1:book-2`)).toBe(true);
     }),
-  );
-});
-
-describe("toDurableRunApprovalHook (capabilities durable adapter)", () => {
-  const adapterPolicy = {
-    expiresInMillis: 60_000,
-    risk: "high",
-    denial: "terminal",
-    actionSummary: () => "Place a booking hold",
-    resourceTargets: () => ["booking:ref-1"],
-  } as const;
-
-  const adapterRequest: RunApprovalRequest = {
-    request: Response.toolApprovalRequestPart({
-      approvalId: "approval-adapter-1",
-      toolCallId: "book-1",
-    }),
-    threadId: decodeThreadId("thread-adapter"),
-    runId: Schema.decodeSync(RunId)("run-adapter-1"),
-    turnId: Schema.decodeSync(TurnId)("turn-adapter-1"),
-    toolCallId: decodeToolCallId("book-1"),
-    toolName: "book",
-    parameters: { ref: "r-1" },
-  };
-
-  it.effect("fails closed to unresolved when the resolver fails", () =>
-    Effect.gen(function* () {
-      const hook = yield* toDurableRunApprovalHook(adapterPolicy);
-      const decision = yield* hook.request(adapterRequest);
-
-      // Fail-closed: a policy fault must never approve, deny, or crash the Attempt — the
-      // decision defers to the durable suspension + resolveApproval path.
-      expect(decision._tag).toBe("unresolved");
-    }).pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          StructuralRedactorLive,
-          ApprovalAuditMemoryLive,
-          Layer.succeed(ApprovalResolver)({
-            request: () =>
-              Effect.fail(ApprovalResolverError.make({ message: "resolver backend is down" })),
-          }),
-        ),
-      ),
-    ),
   );
 });

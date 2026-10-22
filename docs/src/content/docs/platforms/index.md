@@ -40,4 +40,3 @@ changing hosts does not make it safe to replay.
 
 Start with the [Node example](/platforms/node/#start-the-host) or the
 [runnable Cloudflare app](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner).
-For execution driven by an Effect Workflow engine, see [Workflows](/guide/workflows/).
