@@ -35,7 +35,7 @@ import * as Stream from "effect/Stream";
 import type * as Take from "effect/Take";
 import * as Tracer from "effect/Tracer";
 
-import * as Agent from "../../core/Agent.ts";
+import type * as Agent from "../../core/Agent.ts";
 import {
   type CompletionToolDeclaration,
   type Definition,
@@ -553,8 +553,6 @@ type EventPublisher = (events: ReadonlyArray<RunEvent>) => Effect.Effect<void>;
 interface RunContext {
   readonly publish: EventPublisher | undefined;
   readonly progressFailure: Deferred.Deferred<never, ModelProtocolError | AgentPolicyError>;
-  /** A thread resolver owns model identity; context hooks must not replace it. */
-  readonly resolvedModel: boolean;
   readonly updates: Map<string, Update>;
   readonly validateUpdate: (value: Schema.Json) => Effect.Effect<void, UpdateError>;
   updateBytes: number;
@@ -5649,16 +5647,6 @@ const makeTurn = <
           ? { prompt }
           : yield* prepareWithinDeadline(context, options.context.prepare(contextRequest));
 
-      if (context.resolvedModel && modelContext.modelCall !== undefined) {
-        return yield* AiError.AiError.make({
-          module: "AgentRuntime",
-          method: "resolveModel",
-          reason: AiError.InvalidRequestError.make({
-            description: "Context preparation cannot replace a thread-resolved model",
-          }),
-        });
-      }
-
       const modelBounds = modelContext.modelCall?.context ?? (yield* ModelCallContext.current);
 
       const callContext =
@@ -8680,13 +8668,9 @@ function executeWithCompletion<
                     Effect.mapError(() => UpdateError.make({ reason: "validation" })),
                   );
 
-          const languageModel = yield* LanguageModel.LanguageModel;
-          const resolver = Agent.isModelResolver(languageModel) ? languageModel : undefined;
-
           const context: RunContext = {
             publish,
             progressFailure: yield* Deferred.make<never, ModelProtocolError | AgentPolicyError>(),
-            resolvedModel: resolver !== undefined,
             validateUpdate,
             updates: new Map(),
             updateBytes: 0,
@@ -9049,49 +9033,7 @@ function executeWithCompletion<
                 });
               });
 
-              if (resolver === undefined) return turns;
-
-              const catalog = yield* eligibleCatalog(
-                agent.definition,
-                { threadId, runId, turn: pending.turn, input: context.input },
-                options.subagentGrant,
-                options.delegationDepth ?? options.parentLink?.depth ?? 0,
-              );
-
-              const selectionPrompt = yield* Schema.encodeEffect(
-                Schema.fromJsonString(Prompt.Prompt),
-              )(pending.prompt).pipe(
-                Effect.mapError((cause) =>
-                  AiError.AiError.make({
-                    module: "AgentRuntime",
-                    method: "resolveModel",
-                    reason: AiError.InvalidRequestError.make({
-                      description: `Cannot encode model selection context: ${cause.message}`,
-                    }),
-                  }),
-                ),
-              );
-
-              const selected = yield* prepareWithinDeadline(
-                context,
-                resolver.resolve({
-                  threadId,
-                  state: {
-                    prompt: selectionPrompt,
-                    tools: catalog.map(({ tool }) => ({
-                      name: tool.name,
-                      description: tool.description ?? "",
-                    })),
-                  },
-                }),
-              );
-
-              const services = yield* prepareWithinDeadline(
-                context,
-                Layer.build(Layer.fresh(selected)),
-              );
-
-              return Effect.provide(turns, services);
+              return turns;
             }),
           );
 

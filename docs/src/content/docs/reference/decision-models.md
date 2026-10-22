@@ -33,33 +33,63 @@ Describe at least two approved native model Layers and give the catalog a versio
 
 ```
 
-Provide this Model Layer to the agent with a `DecisionModel`, provider clients,
-and shared `SelectionStore`. The first model call selects; later turns and Runs
-in that Thread retain the choice. New subagent Threads select independently.
+At host admission, authorize Thread access, validate input, and pass only permitted
+task context to `resolve`. Bind its returned native model to the Agent before running:
+
+```ts twoslash
+import { Agent, AgentRuntime, Identifiers } from "@yielded/agent";
+import { Effect, Schema } from "effect";
+
+import { Assistant, ThreadModels } from "./auto-model.ts";
+declare const threadId: Identifiers.ThreadId;
+declare const rawInput: unknown;
+declare const authorizeThread: (threadId: Identifiers.ThreadId) => Effect.Effect<void>;
+// ---cut---
+const run = Effect.gen(function* () {
+  yield* authorizeThread(threadId);
+  const input = yield* Schema.decodeUnknownEffect(Assistant.input)(rawInput);
+  const model = yield* ThreadModels.resolve({ threadId, state: { task: input } });
+
+  return yield* AgentRuntime.run(Agent.withModel(Assistant, model), input, { threadId });
+}).pipe(Effect.timeout("30 seconds"), Effect.scoped);
+```
+
+Supply a `DecisionModel`, native provider clients, and a shared `SelectionStore`
+around this workflow. Keep selection and execution in the caller's Scope and
+deadline; the Agent's generation budget starts after selection. Resolving the
+same Thread reuses its committed choice. Child agents use their configured
+native model; a separate per-child choice requires explicit host resolution.
 The [complete example](https://github.com/yielded-dev/agent/blob/main/docs/snippets/travel-planner/auto-model.ts)
-includes parent, child, provider, and store wiring.
+includes provider and store wiring shared across two requests.
 
 ### Configuration and records
 
-| API or option                              | Behavior/default                                                           |
-| ------------------------------------------ | -------------------------------------------------------------------------- |
-| `make({ models, version, instructions? })` | Builds a native Model Layer; construction performs no selection            |
-| `version`                                  | Required nonempty catalog identity; change with model settings             |
-| `instructions`                             | Defaults to choosing the least expensive capable profile from descriptions |
-| `layerMemory({ capacity? })`               | 10,000 distinct attempted Thread IDs; no expiry or eviction                |
-| `resolve({ threadId, state })`             | Uses the store's retained choice                                           |
-| `select` / `restore`                       | Explicit selection / validated restoration without selector I/O            |
+| API or option                              | Behavior/default                                                              |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| `make({ models, version, instructions? })` | Returns an explicit selector; construction performs no provider work          |
+| `version`                                  | Required nonempty catalog identity; change with model settings                |
+| `instructions`                             | Defaults to choosing the least expensive capable profile from descriptions    |
+| `layerMemory({ capacity? })`               | 10,000 distinct attempted Thread IDs; no expiry or eviction                   |
+| `resolve({ threadId, state })`             | Commits or restores a choice and returns a native Layer with captured clients |
+| `select({ threadId, state })`              | Makes a new decision on each execution; returns the model and record          |
+| `restore(threadId, record)`                | Validates a retained record and returns its model without decision I/O        |
 
 ### Thread ownership
 
-Provide `AutoModel.layerMemory()` once around all parent Runs and child handlers.
-It loses selections when its Scope closes. Durable hosts must supply an
-application-owned `SelectionStore` that atomically commits a winning `SelectionRecord`
-before generation and retains it across restarts. Persist records, never model Layers.
+Provide `AutoModel.layerMemory()` once around the application's resolutions and
+Runs. It loses selections when its Scope closes and fails at capacity instead of
+evicting a choice. Durable hosts supply an application-owned `SelectionStore` that
+atomically commits the winning record before generation and retains it across restarts.
+
+Persist the complete version 2 `SelectionRecord`: Thread ID, catalog version,
+profile ID, decision label and probabilities, optional confidence, and token usage.
+Manual `select` callers must commit that record before using the returned model.
+Acquire the returned native Layer during execution.
 
 Keep catalogs needed by active Threads. Invalid records, wrong Thread or catalog
-identity, and missing profiles fail with `AiError.InvalidRequestError`; they do not
-silently trigger reselection. Selector usage is separate from generative Run usage.
+identity, and missing profiles fail with an `AiError` whose reason is
+`InvalidRequestError`; they do not silently trigger reselection. Selector usage is
+retained in the record, separate from generative Run usage.
 There are no implicit retries, fallback models, thresholds, or mid-Thread switches.
 
 ## Language model adapter

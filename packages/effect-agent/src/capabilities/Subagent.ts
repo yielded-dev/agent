@@ -1153,8 +1153,6 @@ type SubagentHandler<
  * Build the Toolkit handler Layer using the provided model requirement, or pass
  * a native model / explicit child Binding as an override. Without an override,
  * provide the model with Layer.provide; the handler captures it at construction.
- * AutoModel resolves each new child's own Thread ID and projected first task.
- * Share its selection store across parent Runs and child handler Layers.
  *
  * Construction requirements carry the child Binding's full runtime needs and
  * both projections; they are captured once via `Effect.context` so the
