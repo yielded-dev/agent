@@ -77,7 +77,8 @@ canonical records. An explicit Unknown outcome stays parked for
 Closing the Scope stops admission, joins workers, releases live ownership, and
 closes storage. A replacement host opens the file and recovers retained work with
 fresh local owner generations. There are no distributed leases or takeover protocol.
-Use `host.explain`, `host.verify`, and `host.scanObligations` for inspection.
+The host Layer also supplies `DurableAgentRuntime`; use its `explain`, `verify`, and
+`scanObligations` methods for inspection and its recovery methods for operator actions.
 
 ## Custom runtime composition
 
