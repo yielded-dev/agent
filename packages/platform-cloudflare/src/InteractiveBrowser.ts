@@ -1,5 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import {
   BrowserActionResult,
   BrowserExpectedTargetState,
@@ -33,6 +34,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -48,7 +50,7 @@ import {
   type Page,
 } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
-import { BrowserRunBinding } from "./internal/browser-binding.ts";
+import { BrowserRunBinding, BrowserRunRefusal } from "./internal/browser-binding.ts";
 import {
   BrowserRunFailure,
   reportBrowserCause,
@@ -2640,6 +2642,20 @@ const makeHostService = (
             ),
       );
 
+    let acquisitionRefusal: BrowserRunRefusal | undefined;
+    let acquisitionError: InteractiveBrowserError | undefined;
+
+    const mapAcquisitionError = (cause: unknown): InteractiveBrowserError =>
+      isCapacityRefusal(cause)
+        ? FailureDiagnostic.withPrivateCause(
+            InteractiveBrowserCapacityError.make({
+              implementation: browserRunInteractiveImplementation,
+              message: "Browser Run has no capacity for a new browser session",
+            }),
+            cause,
+          )
+        : protocolError("Acquiring the Browser Run session failed", cause);
+
     const sessionIdValue = yield* Effect.acquireRelease(
       withinDeadline(
         resume === undefined
@@ -2649,31 +2665,54 @@ const makeHostService = (
                   signal,
                   closeLateAcquisition(
                     signal,
-                    () => binding.acquire(keepAliveMillis(fixedPolicy)),
+                    async () => {
+                      const acquired = await binding.acquire(keepAliveMillis(fixedPolicy));
+
+                      if (acquired instanceof BrowserRunRefusal) {
+                        acquisitionRefusal = acquired;
+                        acquisitionError = mapAcquisitionError(acquired.error);
+                      }
+
+                      return acquired;
+                    },
                     (id) =>
-                      runCleanup(
-                        Schema.decodeUnknownEffect(BrowserRunSessionId)(id).pipe(
-                          Effect.flatMap((value) => terminate(Redacted.make(value), [])),
-                        ),
-                      ),
+                      id instanceof BrowserRunRefusal
+                        ? runCleanup(id.failure)
+                        : runCleanup(
+                            Schema.decodeUnknownEffect(BrowserRunSessionId)(id).pipe(
+                              Effect.flatMap((value) => terminate(Redacted.make(value), [])),
+                            ),
+                          ),
                   ),
                 ),
-              catch: (cause) =>
-                isCapacityRefusal(cause)
-                  ? InteractiveBrowserCapacityError.make({
-                      implementation: browserRunInteractiveImplementation,
-                      message: "Browser Run has no capacity for a new browser session",
-                    })
-                  : protocolError("Acquiring the Browser Run session failed", cause),
+              catch: mapAcquisitionError,
             }).pipe(
-              Effect.flatMap(Schema.decodeUnknownEffect(BrowserRunSessionId)),
-              Effect.catchTag("SchemaError", () =>
-                protocolError("The Browser Run session identity was malformed"),
+              Effect.flatMap((acquired): Effect.Effect<string, InteractiveBrowserError> =>
+                acquired instanceof BrowserRunRefusal
+                  ? Effect.fail(acquisitionError ?? mapAcquisitionError(acquired.error)).pipe(
+                      Effect.ensuring(acquired.collect),
+                    )
+                  : Schema.decodeUnknownEffect(BrowserRunSessionId)(acquired).pipe(
+                      Effect.mapError(() =>
+                        protocolError("The Browser Run session identity was malformed"),
+                      ),
+                    ),
               ),
             )
           : Effect.succeed(Redacted.value(resume.sessionId)),
         fixedPolicy,
         startedAt,
+      ).pipe(
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit) &&
+          acquisitionRefusal !== undefined &&
+          acquisitionError !== undefined &&
+          !exit.cause.reasons.some(
+            (reason) => Cause.isFailReason(reason) && reason.error === acquisitionError,
+          )
+            ? Effect.fail(acquisitionError).pipe(Effect.ensuring(acquisitionRefusal.collect))
+            : Effect.void,
+        ),
       ),
       (id) =>
         Effect.suspend(() => {

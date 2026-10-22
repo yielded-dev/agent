@@ -11,6 +11,15 @@ const PrivateCause = Symbol.for("@yielded/agent/FailureDiagnostic/PrivateCause")
 
 const Text = Schema.String.check(Schema.isMaxLength(16 * 1024));
 const Name = Schema.String.check(Schema.isMaxLength(1_024));
+const HttpStatus = Schema.Int.check(Schema.isBetween({ minimum: 100, maximum: 599 }));
+const RequestId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/));
+
+const RetryAfter = Schema.String.check(
+  Schema.isPattern(
+    /^(?:[0-9]{1,10}|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), [0-9]{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT)$/,
+  ),
+);
+
 const Scalar = Schema.Union([Text, Schema.Finite, Schema.Boolean, Schema.Null]);
 
 /** Correlation only: never include inputs, tool parameters, request bodies, or credentials. */
@@ -45,6 +54,9 @@ export type Diagnostic =
       readonly stack?: string;
       readonly reason?: Diagnostic;
       readonly code?: string | number;
+      readonly status?: number;
+      readonly requestId?: string;
+      readonly retryAfter?: string;
       readonly cause?: Diagnostic;
       readonly errors?: ReadonlyArray<Diagnostic>;
       readonly context?: Context;
@@ -69,6 +81,9 @@ const diagnosticSchema = <Nested extends Schema.Top>(nested: Nested) =>
       stack: Schema.optionalKey(Text),
       reason: Schema.optionalKey(nested),
       code: Schema.optionalKey(Schema.Union([Name, Schema.Finite])),
+      status: Schema.optionalKey(HttpStatus),
+      requestId: Schema.optionalKey(RequestId),
+      retryAfter: Schema.optionalKey(RetryAfter),
       cause: Schema.optionalKey(nested),
       errors: Schema.optionalKey(Schema.Array(nested).check(Schema.isMaxLength(128))),
       context: Schema.optionalKey(Context),
@@ -238,6 +253,9 @@ export const capture = (
     const stack = read("stack");
     const reason = read("reason");
     const code = read("code");
+    const status = read("status");
+    const requestId = read("requestId");
+    const retryAfter = read("retryAfter");
     const privateCause = read(PrivateCause);
     const cause = privateCause === undefined ? read("cause") : privateCause;
     const errors = read("errors");
@@ -273,6 +291,19 @@ export const capture = (
       if (Predicate.isString(field)) context[key] = text(field, 1_024);
     }
 
+    const httpText = (value: string): string | undefined => {
+      if (value.length > remainingText) {
+        remainingText = 0;
+
+        return undefined;
+      }
+
+      return text(value, 256);
+    };
+
+    const capturedRequestId = Schema.is(RequestId)(requestId) ? httpText(requestId) : undefined;
+    const capturedRetryAfter = Schema.is(RetryAfter)(retryAfter) ? httpText(retryAfter) : undefined;
+
     const result: Diagnostic = {
       _tag: "Error",
       ...(Predicate.isString(tag) ? { errorTag: text(tag, 1_024) } : {}),
@@ -285,6 +316,9 @@ export const capture = (
         : Predicate.isNumber(code) && Number.isFinite(code)
           ? { code }
           : {}),
+      ...(Schema.is(HttpStatus)(status) ? { status } : {}),
+      ...(Schema.is(RequestId)(capturedRequestId) ? { requestId: capturedRequestId } : {}),
+      ...(Schema.is(RetryAfter)(capturedRetryAfter) ? { retryAfter: capturedRetryAfter } : {}),
       ...(capturedCause === undefined ? {} : { cause: capturedCause }),
       ...(Array.isArray(errors) ? { errors: capturedErrors } : {}),
       ...(Object.keys(context).length === 0 ? {} : { context }),

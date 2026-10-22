@@ -16,6 +16,7 @@ import {
   type BrowserRunInteractiveRequest,
   type BrowserRunInteractiveRequestListener,
 } from "@yielded/agent-platform-cloudflare/interactive-browser";
+import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import {
   type InteractiveBrowserError,
   BrowserClickRequest,
@@ -28,6 +29,8 @@ import {
   type BrowserHandle,
   type InteractiveBrowserNetworkPolicy,
 } from "@yielded/agent/interactive-browser";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -35,6 +38,9 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
+
+import { BrowserRunBinding } from "../src/internal/browser-binding.ts";
+import { browserFailure } from "../src/internal/browser-failure.ts";
 
 type CloseTarget =
   | "page"
@@ -451,6 +457,81 @@ const closedResources = (fixture: Fixture): ReadonlyArray<string> =>
 const awaitPromise = <A>(promise: Promise<A>): Effect.Effect<A> => Effect.promise(() => promise);
 
 describe("Browser Run interactive browser adapter", () => {
+  // https://github.com/yielded-dev/agent/commit/3b4e238f9c
+  it.effect("preserves provider diagnostics when classifying an acquisition capacity refusal", () =>
+    Effect.gen(function* () {
+      const original = browserFailure("interactive.acquire", {
+        status: 429,
+        message: "Provider acquisition quota reached",
+      });
+
+      const fixture = makeFixture({ launchError: original });
+      const error = yield* withBrowser(fixture, () => Effect.void).pipe(Effect.flip);
+
+      expect(error._tag).toBe("InteractiveBrowserCapacityError");
+      expect(JSON.stringify(FailureDiagnostic.capture(error))).toContain(
+        "Provider acquisition quota reached",
+      );
+      expect(JSON.stringify(error)).not.toContain("Provider acquisition quota reached");
+    }),
+  );
+
+  it.effect.each(["deadline", "interruption"])(
+    "retains a staged capacity refusal through interactive %s",
+    (stop) =>
+      Effect.gen(function* () {
+        const reading = yield* Deferred.make<void>();
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        const nativeBinding = yield* BrowserRunBinding.pipe(
+          Effect.provide(
+            BrowserRunBinding.layer({
+              fetch: async () =>
+                new Response(
+                  new ReadableStream(
+                    {
+                      async pull() {
+                        await runPromise(Deferred.succeed(reading, undefined));
+                      },
+                    },
+                    { highWaterMark: 0 },
+                  ),
+                  { status: 429 },
+                ),
+            }),
+          ),
+        );
+
+        const fixture = makeFixture();
+
+        const staged = {
+          ...fixture,
+          binding: {
+            ...fixture.binding,
+            acquire: (keepAlive: number) => nativeBinding.acquire(keepAlive, "interactive.acquire"),
+          },
+        };
+
+        const fiber = yield* withBrowser(
+          staged,
+          () => Effect.void,
+          policy({ maxElapsedMillis: 500 }),
+        ).pipe(Effect.forkChild);
+
+        yield* Deferred.await(reading);
+        if (stop === "interruption") fiber.interruptUnsafe();
+        yield* TestClock.adjust(5000);
+        const exit = yield* Fiber.await(fiber);
+        const diagnostic = JSON.stringify(FailureDiagnostic.capture(exit));
+
+        expect(exit._tag).toBe("Failure");
+        expect(diagnostic).toContain('"status":429');
+        expect(diagnostic).toContain("InteractiveBrowserCapacityError");
+        if (stop === "interruption" && exit._tag === "Failure")
+          expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+      }),
+  );
+
   it.effect("installs the request listener before interception can emit a request", () =>
     Effect.gen(function* () {
       const fixture = makeFixture({

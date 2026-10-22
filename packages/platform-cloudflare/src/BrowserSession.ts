@@ -34,13 +34,18 @@ import {
   BrowserRunLiveViewRequest,
   BrowserRunLiveViewResult,
 } from "./InteractiveBrowser.ts";
-import { BrowserRunBinding, type BrowserRunAttachment } from "./internal/browser-binding.ts";
+import {
+  BrowserRunBinding,
+  BrowserRunRefusal,
+  type BrowserRunAttachment,
+} from "./internal/browser-binding.ts";
 import {
   BrowserSessionPage,
   fillCredential,
   prepareCredential,
 } from "./internal/browser-credentials.ts";
 import {
+  BrowserRunFailure,
   inheritBrowserReport,
   mapBrowserError,
   reportBrowserCause,
@@ -482,18 +487,61 @@ export class BrowserSessions extends Context.Service<
               ),
         );
         cleanupState.result = "unconfirmed";
-        sessionId = yield* native("session.acquire", async (signal) => {
-          const id = Redacted.make(
-            await binding.acquire(options.keepAliveMillis ?? 600_000, "session.acquire"),
-          );
+        let refusal: BrowserRunRefusal | undefined;
+        let acquisitionExited = false;
 
-          if (signal.aborted) {
-            await runCleanup(cleanup(id));
-            signal.throwIfAborted();
-          }
+        sessionId = yield* Effect.uninterruptibleMask((restore) =>
+          restore(
+            native("session.acquire", async (signal) => {
+              const acquired = await binding.acquire(
+                options.keepAliveMillis ?? 600_000,
+                "session.acquire",
+              );
 
-          return id;
-        });
+              if (acquired instanceof BrowserRunRefusal) {
+                refusal = acquired;
+                if (acquisitionExited)
+                  await runCleanup(
+                    acquired.collect.pipe(
+                      Effect.andThen(
+                        reportBrowserCause("session.acquire", Cause.fail(acquired.error)),
+                      ),
+                    ),
+                  );
+
+                return acquired;
+              }
+              const id = Redacted.make(acquired);
+
+              if (signal.aborted) {
+                await runCleanup(cleanup(id));
+                signal.throwIfAborted();
+              }
+
+              return id;
+            }),
+          ).pipe(
+            Effect.onExit((exit) => {
+              acquisitionExited = true;
+
+              return Exit.isFailure(exit) && refusal !== undefined ? refusal.failure : Effect.void;
+            }),
+            Effect.filterOrElse(
+              (
+                acquired: BrowserRunRefusal | Redacted.Redacted<string>,
+              ): acquired is Redacted.Redacted<string> => !(acquired instanceof BrowserRunRefusal),
+              (refusal) => refusal.failure,
+            ),
+            Effect.tapCause((cause) => reportBrowserCause("session.acquire", cause)),
+            mapBrowserError((error) =>
+              error instanceof BrowserRunFailure
+                ? reportedBrowserError(
+                    failure("provider", "not-dispatched", "not-requested", error),
+                  )
+                : error,
+            ),
+          ),
+        );
         const connection = yield* connect(sessionId);
 
         const page = yield* native("session.page", async () => {
