@@ -1,3 +1,10 @@
+/**
+ * Explicit fault injection at durable coordinator boundaries for validating interruption and
+ * recovery behavior.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,6 +23,9 @@ import * as Schema from "effect/Schema";
  * start-link append, sibling per-call settles at the suspension seam, the `waitingForChild`
  * suspension, child abort propagation, the atomic join batch, and both reservation-release
  * transitions.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const DurableRuntimeFailpointLocation = Schema.Literals([
   "submit:after-admit",
@@ -76,9 +86,20 @@ export const DurableRuntimeFailpointLocation = Schema.Literals([
   "update:after-canonical-append",
 ]);
 
+/**
+ * Decoded value of {@link DurableRuntimeFailpointLocation}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableRuntimeFailpointLocation = typeof DurableRuntimeFailpointLocation.Type;
 
-/** Injected coordinator fault. Reaching the caller means the preceding durable step committed. */
+/**
+ * Injected coordinator fault. Reaching the caller means the preceding durable step committed.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DurableRuntimeFailpointError extends Schema.TaggedError<DurableRuntimeFailpointError>()(
   "DurableRuntimeFailpointError",
   {
@@ -86,6 +107,12 @@ export class DurableRuntimeFailpointError extends Schema.TaggedError<DurableRunt
   },
 ) {}
 
+/**
+ * Injects an effectful failure at a named coordinator boundary for recovery verification.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableRuntimeFailpointHandler = (
   location: DurableRuntimeFailpointLocation,
 ) => Effect.Effect<void, DurableRuntimeFailpointError>;
@@ -96,6 +123,9 @@ const noFailpoint: DurableRuntimeFailpointHandler = () => Effect.void;
  * Explicit fault-injection authority used at durable coordinator step boundaries. The process
  * crash harness (WP5) maps a hit to `process.exit`; in-process tests fail the step with the
  * typed `DurableRuntimeFailpointError` instead.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class DurableRuntimeFailpoint extends Context.Service<
   DurableRuntimeFailpoint,

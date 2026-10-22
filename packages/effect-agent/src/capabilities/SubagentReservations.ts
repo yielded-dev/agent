@@ -1,3 +1,10 @@
+/**
+ * Parent-owned budget reservations for bounded Subagent work, including settlement and release of
+ * unused allowances.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -18,16 +25,30 @@ const Natural = Schema.Natural;
  * `encodeURIComponent(parentRunId) + ":" + encodeURIComponent(parentToolCallId)`.
  * Component encoding escapes `:`; the mapping is injective for every
  * `(parentRunId, parentToolCallId)` pair.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const BudgetReservationId = Schema.NonEmptyString.pipe(
   Schema.brand("@effect-agent/capabilities/BudgetReservationId"),
 );
 
+/**
+ * Decoded value of {@link BudgetReservationId}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type BudgetReservationId = typeof BudgetReservationId.Type;
 
 const decodeBudgetReservationId = Schema.decodeSync(BudgetReservationId);
 
-/** Derive the stable reservation identity of one Subagent Invocation. */
+/**
+ * Derive the stable reservation identity of one Subagent Invocation.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeBudgetReservationId = (
   parentRunId: RunId,
   parentToolCallId: ToolCallId,
@@ -36,7 +57,12 @@ export const makeBudgetReservationId = (
     `${encodeURIComponent(parentRunId)}:${encodeURIComponent(parentToolCallId)}`,
   );
 
-/** One enforced hierarchical delegation budget dimension. */
+/**
+ * One enforced hierarchical delegation budget dimension.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubagentBudgetDimension = Schema.Literals([
   "total-child-invocations",
   "concurrent-children",
@@ -49,6 +75,12 @@ export const SubagentBudgetDimension = Schema.Literals([
   "result-bytes",
 ]);
 
+/**
+ * Decoded value of {@link SubagentBudgetDimension}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubagentBudgetDimension = typeof SubagentBudgetDimension.Type;
 
 const AmountFields = SubagentReservationAmounts.fields;
@@ -63,22 +95,48 @@ const OptionalAmountFields = {
   resultBytes: Schema.optionalKey(Natural),
 } as const;
 
-/** Observed child usage. An absent dimension was never reported and settles conservatively. */
+/**
+ * Observed child usage. An absent dimension was never reported and settles conservatively.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentObservedUsage extends Schema.Class<SubagentObservedUsage>(
   "@effect-agent/capabilities/SubagentObservedUsage",
 )(OptionalAmountFields) {}
 
-/** Remaining delegable allocation per configured dimension. Absent means not configured. */
+/**
+ * Remaining delegable allocation per configured dimension. Absent means not configured.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentAvailableAmounts extends Schema.Class<SubagentAvailableAmounts>(
   "@effect-agent/capabilities/SubagentAvailableAmounts",
 )(OptionalAmountFields) {}
 
-/** In-process release freezes accounting and refunds unused allocation atomically. */
+/**
+ * In-process release freezes accounting and refunds unused allocation atomically.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubagentReservationStatus = Schema.Literals(["reserved", "released"]);
 
+/**
+ * Decoded value of {@link SubagentReservationStatus}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubagentReservationStatus = typeof SubagentReservationStatus.Type;
 
-/** All-or-nothing allocation request for one Subagent Invocation. */
+/**
+ * All-or-nothing allocation request for one Subagent Invocation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentReservationRequest extends Schema.Class<SubagentReservationRequest>(
   "@effect-agent/capabilities/SubagentReservationRequest",
 )({
@@ -89,7 +147,12 @@ export class SubagentReservationRequest extends Schema.Class<SubagentReservation
   descendantInvocations: Schema.optionalKey(Natural),
 }) {}
 
-/** Accounting snapshot of one reservation: allocated, observed, covered, released, and overrun. */
+/**
+ * Accounting snapshot of one reservation: allocated, observed, covered, released, and overrun.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentReservationView extends Schema.Class<SubagentReservationView>(
   "@effect-agent/capabilities/SubagentReservationView",
 )({
@@ -104,7 +167,12 @@ export class SubagentReservationView extends Schema.Class<SubagentReservationVie
   overrun: SubagentReservationAmounts,
 }) {}
 
-/** Aggregate parent delegation budget snapshot including every reservation it owns. */
+/**
+ * Aggregate parent delegation budget snapshot including every reservation it owns.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentParentBudgetView extends Schema.Class<SubagentParentBudgetView>(
   "@effect-agent/capabilities/SubagentParentBudgetView",
 )({
@@ -119,6 +187,9 @@ export class SubagentParentBudgetView extends Schema.Class<SubagentParentBudgetV
 /**
  * Delegation admission or execution exhausted a bound. A child refused at the
  * in-process parent's reserved finish window reports zero duration limit and usage.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class SubagentBudgetExhausted extends Schema.TaggedError<SubagentBudgetExhausted>()(
   "SubagentBudgetExhausted",
@@ -130,7 +201,12 @@ export class SubagentBudgetExhausted extends Schema.TaggedError<SubagentBudgetEx
   },
 ) {}
 
-/** The stable key is already reserved with a different allocation; neither request may win silently. */
+/**
+ * The stable key is already reserved with a different allocation; neither request may win silently.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubagentReservationConflict extends Schema.TaggedError<SubagentReservationConflict>()(
   "SubagentReservationConflict",
   {
@@ -140,7 +216,12 @@ export class SubagentReservationConflict extends Schema.TaggedError<SubagentRese
   },
 ) {}
 
-/** No reservation exists for this identity. */
+/**
+ * No reservation exists for this identity.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubagentReservationUnknown extends Schema.TaggedError<SubagentReservationUnknown>()(
   "SubagentReservationUnknown",
   {
@@ -148,7 +229,12 @@ export class SubagentReservationUnknown extends Schema.TaggedError<SubagentReser
   },
 ) {}
 
-/** No delegation budget was registered for this parent Run. */
+/**
+ * No delegation budget was registered for this parent Run.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubagentParentBudgetUnknown extends Schema.TaggedError<SubagentParentBudgetUnknown>()(
   "SubagentParentBudgetUnknown",
   {
@@ -156,7 +242,12 @@ export class SubagentParentBudgetUnknown extends Schema.TaggedError<SubagentPare
   },
 ) {}
 
-/** The parent Run is already registered with different caps; neither set may win silently. */
+/**
+ * The parent Run is already registered with different caps; neither set may win silently.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubagentParentBudgetConflict extends Schema.TaggedError<SubagentParentBudgetConflict>()(
   "SubagentParentBudgetConflict",
   {
@@ -164,7 +255,12 @@ export class SubagentParentBudgetConflict extends Schema.TaggedError<SubagentPar
   },
 ) {}
 
-/** A parent budget cannot retire while one of its child reservations is unsettled. */
+/**
+ * A parent budget cannot retire while one of its child reservations is unsettled.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubagentParentBudgetActive extends Schema.TaggedError<SubagentParentBudgetActive>()(
   "SubagentParentBudgetActive",
   {
@@ -180,6 +276,9 @@ export class SubagentParentBudgetActive extends Schema.TaggedError<SubagentParen
  * never observe and spend the same remainder. The post-response usage hook in
  * `budget.ts` is deliberately not reused here: it accounts after the fact and
  * is not a reservation service.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SubagentReservations extends Context.Service<
   SubagentReservations,
@@ -726,6 +825,9 @@ const retireParentTransition = (
 /**
  * In-memory reservation ledger. All state lives in one `Ref` owned by the
  * Layer's Scope; every transition is a single atomic `Ref.modify`.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const SubagentReservationsMemoryLive: Layer.Layer<SubagentReservations> = Layer.effect(
   SubagentReservations,

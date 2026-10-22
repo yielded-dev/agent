@@ -1,3 +1,8 @@
+/**
+ * Durable subscription partitions, alarm extensions, and routed clients.
+ *
+ * @since 0.1.0
+ */
 import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   DoSubscriptionAlarmControl,
@@ -61,23 +66,45 @@ const SubscriptionAlarmPayload = Schema.Struct({
   generation: Schema.Int.check(Schema.isGreaterThan(0)),
 });
 
+/**
+ * A subscription alarm failed payload or dispatch validation.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubscriptionAlarmProtocolError extends Schema.TaggedError<SubscriptionAlarmProtocolError>()(
   "SubscriptionAlarmProtocolError",
   { message: Schema.String },
 ) {}
 
-/** Bounded host diagnostic; credentials and provider responses do not belong in alarm failures. */
+/**
+ * Bounded host diagnostic; credentials and provider responses do not belong in alarm failures.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubscriptionAlarmExtensionError extends Schema.TaggedError<SubscriptionAlarmExtensionError>()(
   "SubscriptionAlarmExtensionError",
   { code: Schema.NonEmptyString.check(Schema.isMaxLength(128)) },
 ) {}
 
-/** Native partition services supplied at alarm invocation, after the host Layer is built. */
+/**
+ * Native partition services supplied at alarm invocation, after the host Layer is built.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type SubscriptionPartitionAlarmServices =
   | Subscriptions
   | SubscriptionIntake
   | SubscriptionDriver;
 
+/**
+ * A named host alarm handler with visible Effect service requirements.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface SubscriptionPartitionAlarmHandler<R = SubscriptionPartitionAlarmServices> {
   readonly tag: string;
   readonly handle: (
@@ -85,17 +112,26 @@ export interface SubscriptionPartitionAlarmHandler<R = SubscriptionPartitionAlar
   ) => Effect.Effect<void, SubscriptionAlarmProtocolError | SubscriptionAlarmExtensionError, R>;
 }
 
-/** Host-only handlers; the framework reserves its namespace and rejects every unknown tag. */
+/**
+ * Host-only handlers; the framework reserves its namespace and rejects every unknown tag.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const SubscriptionPartitionAlarmExtension = Context.Reference<{
   readonly handlers: ReadonlyArray<SubscriptionPartitionAlarmHandler>;
 }>("@effect-agent/platform-cloudflare/SubscriptionPartitionAlarmExtension", {
   defaultValue: () => ({ handlers: [] }),
 });
 
-/** Capture host services once, deferring native partition services to invocation.
+/**
+ * Capture host services once, deferring native partition services to invocation.
  * Each invocation owns its codec/handler Scope and timeout.
  * Callback failures stay typed. Defects and interruption reach the native alarm multiplexer.
  * The host owns durable idempotency, prearming and external-effect uncertainty.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSubscriptionPartitionAlarmHandler = Effect.fnUntraced(function* <
   Payload extends Schema.Top,
@@ -169,17 +205,34 @@ export const makeSubscriptionPartitionAlarmHandler = Effect.fnUntraced(function*
   };
 });
 
+/**
+ * A subscription partition request or response failed protocol validation.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubscriptionPartitionProtocolError extends Schema.TaggedError<SubscriptionPartitionProtocolError>()(
   "SubscriptionPartitionProtocolError",
   { message: Schema.String.check(Schema.isMaxLength(4_096)) },
 ) {}
 
+/**
+ * Subscription limits are incompatible with the Cloudflare adapter.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CloudflareSubscriptionConfigError extends Schema.TaggedError<CloudflareSubscriptionConfigError>()(
   "CloudflareSubscriptionConfigError",
   { message: Schema.String },
 ) {}
 
-/** Reject limits whose four bounded phases could exceed the safe Durable Object alarm budget. */
+/**
+ * Reject limits whose four bounded phases could exceed the safe Durable Object alarm budget.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const validateCloudflareSubscriptionLimits = (
   limits: SubscriptionLimits,
   options: { readonly ancillaryAlarms?: boolean } = {},
@@ -351,13 +404,31 @@ const protocolFailure = (message: string): SubscriptionPartitionResponse => ({
   failure: SubscriptionPartitionProtocolError.make({ message: protocolMessage(message) }),
 });
 
+/**
+ * Derive the stable Durable Object name for a source partition.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const sourcePartitionName = (partition: SourcePartition): string =>
   JSON.stringify([partition.tenantId, partition.address]);
 
+/**
+ * Native RPC contract exposed by a subscription partition.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubscriptionPartitionObjectRpc extends Rpc.DurableObjectBranded {
   subscription(encoded: unknown): Promise<unknown>;
 }
 
+/**
+ * Host-supplied namespace used to route subscription requests.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class SubscriptionPartitionNamespace extends Context.Service<
   SubscriptionPartitionNamespace,
   { readonly namespace: DurableObjectNamespace<SubscriptionPartitionObjectRpc> }
@@ -369,7 +440,12 @@ const storageFailure = (code: string): SubscriptionError =>
 const corruptFailure = (code: string): SubscriptionError =>
   SubscriptionError.make({ reason: "corrupt", code });
 
-/** Worker-side management and trusted intake, routed to one fresh partition stub per call. */
+/**
+ * Worker-side management and trusted intake, routed to one fresh partition stub per call.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class CloudflareSubscriptionsClient {
   static layer(
     partition: SourcePartition,
@@ -617,6 +693,12 @@ export class CloudflareSubscriptionsClient {
   }
 }
 
+/**
+ * Identity of the source partition handling the current operation.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class SubscriptionPartitionIdentity extends Context.Service<
   SubscriptionPartitionIdentity,
   { readonly partition: SourcePartition }
@@ -912,6 +994,12 @@ type SubscriptionRuntimeServices =
   | SubscriptionPartitionIdentity
   | DurableObjectAlarm.DurableObjectAlarm;
 
+/**
+ * A deployed subscription partition with native RPC and alarms.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface SubscriptionPartitionObjectInstance extends InstanceType<
   EffectCfDurableObject.DurableObjectClass<Record<never, never>, SubscriptionRuntimeServices>
 > {
@@ -919,6 +1007,12 @@ export interface SubscriptionPartitionObjectInstance extends InstanceType<
   alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> | void;
 }
 
+/**
+ * Constructor of a deployed subscription partition.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface SubscriptionPartitionObjectClass {
   new (ctx: DurableObjectState, env: Cloudflare.Env): SubscriptionPartitionObjectInstance;
 }
@@ -926,6 +1020,9 @@ export interface SubscriptionPartitionObjectClass {
 /**
  * Build one source-addressed SQLite Durable Object. The host Layer binds the permitted source
  * catalog and authority. It must not retain cleanup-scoped resources across RPC events.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSubscriptionPartitionObjectClass = <E>(
   host: Layer.Layer<

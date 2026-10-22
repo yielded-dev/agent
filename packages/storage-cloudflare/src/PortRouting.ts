@@ -1,3 +1,8 @@
+/**
+ * Route supported storage operations to the Durable Object that owns each Thread.
+ *
+ * @since 0.1.0
+ */
 import type { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { LifecyclePublicationError } from "@yielded/agent/lifecycle-publication";
 import { MessageDeliveryStore, MessageDeliveryError } from "@yielded/agent/message-delivery";
@@ -130,7 +135,9 @@ type SubmissionId = SubmissionSnapshot["submissionId"];
 const ThreadIdSchema = ThreadMaterialization.fields.threadId;
 const decodeThreadId = Schema.decodeUnknownEffect(ThreadIdSchema);
 
-/** Owner-local maintenance scope; permits local inventory without global Object enumeration. */
+/** Owner-local maintenance scope; permits local inventory without global Object enumeration.
+ * @internal
+ */
 export const CurrentNativeSource = Context.Reference<boolean>(
   "@effect-agent/storage-cloudflare/CurrentNativeSource",
   { defaultValue: () => false },
@@ -153,6 +160,9 @@ const UUID_HEAD_PATTERN =
  * exists. This error never crosses the wire — it is the CALLER-side evidence that the
  * authority was unreachable, which is exactly the case `AdmissionIndeterminate` was
  * specified for (SUB-031).
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class PortTransportError extends Schema.TaggedError<PortTransportError>()(
   "PortTransportError",
@@ -188,6 +198,9 @@ const transportRetryableSignal = (cause: unknown): boolean | undefined => {
 /**
  * Build a `PortTransportError` from an arbitrary thrown transport cause, preserving the
  * platform stub's own `retryable` signal when present.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const portTransportFailure = (target: string, cause: unknown): PortTransportError => {
   const retryable = transportRetryableSignal(cause);
@@ -207,6 +220,9 @@ export const portTransportFailure = (target: string, cause: unknown): PortTransp
  * `namespace.idFromName(threadId)`; the protocol is transport-agnostic and any carrier
  * that moves the encoded envelopes verbatim satisfies this service. Implementations MUST
  * surface every delivery problem as `PortTransportError` and must never fabricate an answer.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ThreadPortTransport extends Context.Service<
   ThreadPortTransport,
@@ -218,7 +234,12 @@ export class ThreadPortTransport extends Context.Service<
   }
 >()("@effect-agent/storage-cloudflare/ThreadPortTransport") {}
 
-/** Construction options shared by both routed port Layers. */
+/**
+ * Construction options shared by both routed port Layers.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface RoutedPortOptions {
   /**
    * Decide whether this physical owner stores the addressed logical Thread. Local
@@ -279,6 +300,9 @@ const routableSubmissionTarget =
  * Read a Submission only from this physical owner. Encoded foreign identities fail before
  * storage access; opaque identities still use local lookup. A returned row must also belong
  * to an owned Thread. This is placement validation, not caller authorization.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeLocalSubmissionLookup = (
   options: RoutedPortOptions,
@@ -874,7 +898,12 @@ const makeRoutedLedgerServices = Effect.fnUntraced(function* (options: RoutedPor
   return Context.make(SubmissionLedger, routed);
 });
 
-/** Route the data-only atomic publication to the same owner as its canonical Thread. */
+/**
+ * Route the data-only atomic publication to the same owner as its canonical Thread.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const routedSettlementPublisherLayer = (options: RoutedPortOptions) =>
   Layer.effect(SettlementPublisher)(
     Effect.gen(function* () {
@@ -1348,6 +1377,9 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
  * Thread is Schema-encoded onto the `ThreadPortTransport` and executed by the
  * owning Object's local facet; any other foreign request fails fast typed. Provide the WP1
  * local facet (`submissionLedgerLayer`/`ledgerLayer`) and a transport to close it.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const routedSubmissionLedgerLayer = (
   options: RoutedPortOptions,
@@ -1359,6 +1391,9 @@ export const routedSubmissionLedgerLayer = (
  * requests execute locally; foreign store reads, writes, and exact-Thread work pages/rebuild
  * travel the transport. Work enumeration stays local under CurrentNativeSource; global
  * enumeration, foreign Prompt checkpoints, and observation fail typed.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const routedThreadStoreLayer = (
   options: RoutedPortOptions,
@@ -1367,7 +1402,12 @@ export const routedThreadStoreLayer = (
     Layer.provideMerge(Layer.effectContext(makeRoutedStoreServices(options))),
   );
 
-/** Route validated worker admission as one operation; source policy hooks stay at the caller. */
+/**
+ * Route validated worker admission as one operation; source policy hooks stay at the caller.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const routedWorkerAdmissionLayer = (options: RoutedPortOptions) =>
   Layer.effect(
     WorkerAdmissionPort,
@@ -1409,7 +1449,12 @@ export const routedWorkerAdmissionLayer = (options: RoutedPortOptions) =>
     }),
   );
 
-/** Route the existing owner-scoped list; delivery mutations remain source local. */
+/**
+ * Route the existing owner-scoped list; delivery mutations remain source local.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const routedMessageDeliveryStoreLayer = (options: RoutedPortOptions) =>
   Layer.effect(
     MessageDeliveryStore,
@@ -1511,6 +1556,9 @@ const capture = <Failure extends PortFailure, R>(
  * addressed Thread, and re-routing here could bounce a request between Objects.
  * Failures never escape — every typed port failure becomes a `PortFailed` envelope that
  * re-decodes on the caller side.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const executePortRequest = Effect.fnUntraced(function* (
   request: PortRequest,
@@ -1868,6 +1916,9 @@ const encodedProtocolFailure = (message: string): unknown => ({
  * envelope. Total by construction — a request that cannot be decoded, or a response that
  * cannot be encoded, answers `PortFailed(PortProtocolError)` instead of throwing, so the
  * transport never has to interpret exceptions as protocol answers.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const handleEncodedPortRequest = Effect.fnUntraced(function* (
   encoded: unknown,

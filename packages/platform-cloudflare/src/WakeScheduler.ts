@@ -1,3 +1,8 @@
+/**
+ * Best-effort cross-Object wake hints for already-retained Thread work.
+ *
+ * @since 0.1.0
+ */
 import { CurrentNativeSource } from "@yielded/agent-storage-cloudflare/port-routing";
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { makeWakeSubscriptionHub, WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -31,17 +36,10 @@ class RemoteWakeDropped extends Schema.TaggedError<RemoteWakeDropped>()("RemoteW
 }) {}
 
 /**
- * The DC `WakeScheduler` (plan §1.4):
+ * Send best-effort wake hints to another Thread owner. Failed hints are logged and dropped; retained work remains discoverable by owner recovery.
  *
- * - `notify(local)` wakes progress and settlement registrations, publishes a worker hint, and
- *   schedules the earliest alarm. Processing an owned Thread defers immediate alarms until
- *   processing exits; pre-armed recovery deadlines remain active. Progress hints skip settlement
- *   registrations; single-Thread native progress also omits the redundant worker hint.
- * - `notify(remote)` → fire-and-forget `wake()` on the owning Object's stub with every error
- *   swallowed and logged: hints are droppable, and the target's own alarm/scan pairing (the
- *   maintenance pass re-polls unsettled children) guarantees liveness without this call.
- * - `wakes` → the bounded sliding PubSub only. Thread waiters use Scope-owned one-shot hubs;
- *   the settlement poll interval and persisted alarm retain liveness after hint loss.
+ * @category layers
+ * @since 0.1.0
  */
 export const cloudflareWakeSchedulerLayer: Layer.Layer<
   WakeScheduler,

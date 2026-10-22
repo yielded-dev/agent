@@ -1,3 +1,8 @@
+/**
+ * Durable destination research harnesses with deterministic identifiers and invocation counts.
+ *
+ * @since 0.1.0
+ */
 import * as Agent from "@yielded/agent/agent";
 import { DurableWorkerBinding, type ResolvedBinding } from "@yielded/agent/agent-registration";
 import { type RuntimeBinding } from "@yielded/agent/agent-runtime";
@@ -41,40 +46,78 @@ import {
   TravelCoordinator,
 } from "./subagents.ts";
 
-/** Registered coordinator and researcher bindings for durable delegation tests. */
+/**
+ * Registered coordinator and researcher bindings for durable delegation tests.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const s2TravelPlannerDeploymentId = Schema.decodeSync(DeploymentId)(
   "travel-planner-s2-deployment",
 );
 
+/**
+ * Producer identity for the durable destination research fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const s2TravelPlannerProducerId = Schema.decodeSync(ProducerId)(
   "travel-planner-s2-producer",
 );
 
+/**
+ * Principal submitting the durable destination research fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const s2TravelPlannerPrincipal = Schema.decodeSync(Principal)("travel-planner-s2-principal");
 
 const digestOf = (character: string) => Schema.decodeSync(Digest)(character.repeat(64));
 
-/** Redacted, deterministic parent (coordinator) definition digests for this fixture version. */
+/**
+ * Redacted, deterministic parent (coordinator) definition digests for this fixture version.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const s2CoordinatorDigests = DefinitionDigests.make({
   agent: digestOf("a"),
   model: digestOf("b"),
   tools: digestOf("c"),
 });
 
-/** Child Binding digests retained from host registration for durable recovery. */
+/**
+ * Child Binding digests retained from host registration for durable recovery.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const s2ResearcherDigestStrings = {
   agent: "d".repeat(64),
   model: "e".repeat(64),
   tools: "f".repeat(64),
 } as const;
 
+/**
+ * Definition digests used when restoring the destination researcher child.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const s2ResearcherDigests = DefinitionDigests.make({
   agent: Schema.decodeSync(Digest)(s2ResearcherDigestStrings.agent),
   model: Schema.decodeSync(Digest)(s2ResearcherDigestStrings.model),
   tools: Schema.decodeSync(Digest)(s2ResearcherDigestStrings.tools),
 });
 
-/** Durable admission options for one coordinator Submission on one mission lane. */
+/**
+ * Durable admission options for one coordinator Submission on one mission lane.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const s2TravelPlannerSubmitOptions = (
   threadId: ThreadId,
   idempotencyKey: IdempotencyKey,
@@ -85,7 +128,12 @@ export const s2TravelPlannerSubmitOptions = (
   definitions: s2CoordinatorDigests,
 });
 
-/** The structural submit slice of the coordinator Binding (`DurableAgentRuntime.submit`). */
+/**
+ * The structural submit slice of the coordinator Binding (`DurableAgentRuntime.submit`).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const s2CoordinatorSubmitAgent = {
   definition: { id: TravelCoordinator.id, input: TravelCoordinator.input },
 } as const;
@@ -95,22 +143,45 @@ export const s2CoordinatorSubmitAgent = {
  * delegation policy (`delegationAllocationFromPolicy`): the conservation
  * evidence in the S2 tests checks the ledger reservation rows and the
  * canonical `SubagentJoined.finalAccounting` against exactly this value.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export const durableResearchAllocation = delegationAllocationFromPolicy(destinationResearchPolicy);
 
-/** The one scripted delegation Tool Call id of the durable coordinator Run. */
+/**
+ * The one scripted delegation Tool Call id of the durable coordinator Run.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const durableResearchCallId = "research-lhr-1";
 
-/** The child's own scripted guide-lookup Tool Call id. */
+/**
+ * The child's own scripted guide-lookup Tool Call id.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const durableChildLookupCallId = (destination: string): string => `lookup-${destination}`;
 
-/** The projected finding the parent joins (only the advisory crosses, SUB-015). */
+/**
+ * The projected finding the parent joins (only the advisory crosses, SUB-015).
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const durableResearchFinding = (destination: string) => ({
   destination: destinationReportFor(destination).destination,
   summary: destinationReportFor(destination).advisory,
 });
 
-/** The coordinator's expected final shortlist for one researched destination. */
+/**
+ * The coordinator's expected final shortlist for one researched destination.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const durableResearchShortlist = (destination: string): DestinationShortlist =>
   DestinationShortlist.make({
     recommendations: [
@@ -127,6 +198,9 @@ export const durableResearchShortlist = (destination: string): DestinationShortl
  * an authorized operator records through `resolveUnknown` when a child guide
  * lookup stopped at an Unknown Outcome (DUR-017 — the framework never guesses
  * or replays it).
+ *
+ * @category utils
+ * @since 0.1.0
  */
 export const encodedDestinationFacts = (destination: string): unknown => {
   const report = destinationReportFor(destination);
@@ -149,7 +223,12 @@ export const encodedDestinationFacts = (destination: string): unknown => {
 
 const scriptedUsage = { inputTokens: { total: 96 }, outputTokens: { total: 64 } };
 
-/** One scripted model whose behavior is keyed by the global invocation index. */
+/**
+ * One scripted model whose behavior is keyed by the global invocation index.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const makeInvocationCountingModel = Effect.fnUntraced(function* (
   name: string,
   script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>,
@@ -236,7 +315,12 @@ const researcherReportParts = (destination: string): ReadonlyArray<Response.Stre
 // digests when it establishes the child.
 // ---------------------------------------------------------------------------
 
-/** Runtime wiring for the durable slice: the declaration plus its registered child Binding. */
+/**
+ * Runtime wiring for the durable slice: the declaration plus its registered child Binding.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const durableDestinationResearchHandlersLayer = <ModelProvides, ModelRequires>(
   childBinding: RuntimeBinding<
     typeof DestinationBrief,
@@ -251,7 +335,12 @@ export const durableDestinationResearchHandlersLayer = <ModelProvides, ModelRequ
     mapChildFailure: mapResearchChildFailure,
   });
 
-/** Optional overrides for one durable research harness. */
+/**
+ * Optional overrides for one durable research harness.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DurableResearchHarnessOptions {
   /** Researched destination; defaults to "LHR". */
   readonly destination?: string | undefined;
@@ -261,7 +350,12 @@ export interface DurableResearchHarnessOptions {
   readonly childRegistrationDigests?: DefinitionDigests | undefined;
 }
 
-/** One durable coordinator/researcher pair with observable invocation counters. */
+/**
+ * One durable coordinator/researcher pair with observable invocation counters.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DurableResearchHarness {
   /** Host registrations for `NodeDurableAgentRuntimeOptions.bindings` (parent + child). */
   readonly bindings: ReadonlyArray<ResolvedBinding>;
@@ -286,6 +380,9 @@ export interface DurableResearchHarness {
  * fixture digests. The returned `bindings` are plain values: they can be
  * registered with several `NodeDurableAgentRuntime` stacks over the same SQLite
  * file while the counters keep counting across all of them.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeDurableResearchHarness = Effect.fnUntraced(function* (
   options?: DurableResearchHarnessOptions,

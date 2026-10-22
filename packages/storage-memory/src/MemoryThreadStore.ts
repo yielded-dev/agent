@@ -1,13 +1,22 @@
+/**
+ * Process-local Thread storage and shared ownership for paired memory adapters.
+ *
+ * @since 0.1.0
+ */
 import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import {
   type ThreadId,
+  type SubmissionId,
+  type ToolCallId,
   RunId,
   SubmissionId as importSubmissionId,
 } from "@yielded/agent/identifiers";
 import {
   MessageDeliveryError,
+  type MessageDeliveryRecord,
   prepareCanonicalMessageDeliveries,
 } from "@yielded/agent/message-delivery";
+import type { IdempotencyKey } from "@yielded/agent/receipt";
 import {
   ExportBatch,
   ExportedRecord,
@@ -49,6 +58,8 @@ import {
 } from "@yielded/agent/run-journal";
 import { StorageOwner, makeStorageOwner } from "@yielded/agent/run-storage";
 import {
+  type SubmissionSnapshot,
+  type WorkerLedgerState,
   submissionAbortRecordId,
   submissionInputRecordId,
   submissionSettlementRecordId,
@@ -64,6 +75,7 @@ import {
   type ThreadArchiveStorage,
 } from "@yielded/agent/thread-archive-range";
 import {
+  type PreparedImportPage,
   makeThreadImportProgress,
   captureImportSource,
   prepareImportPage,
@@ -79,6 +91,9 @@ import {
 } from "@yielded/agent/thread-import";
 import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
 import {
+  type ThreadStoreFailure,
+  type ThreadAdmission,
+  type ThreadExportSnapshot,
   type AppendRequest,
   type ExecutionCheckpoint,
   ThreadPeerCountRequest,
@@ -110,12 +125,16 @@ import {
   transferPageFits,
 } from "@yielded/agent/thread-store";
 import {
+  type TransferFacts,
+  type TransferSection,
   checkExportSource,
   exportThreadPage,
   ThreadExporterReader,
   type TransferManifest,
 } from "@yielded/agent/thread-transfer";
 import {
+  type ThreadWorkEntry,
+  type WorkThreadsPage,
   WORK_INDEX_VERSION,
   MAX_WORK_REBUILD_RECORDS,
   MAX_WORK_REBUILD_BYTES,
@@ -145,17 +164,182 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import {
-  MemoryThreadStoreKernel,
-  type MemoryLedgerTransfer,
-  type MemoryLedgerImport,
-  type MemoryDeliveryTransfer,
-  type MemoryDeliveryImport,
-  type MemoryDeliveryWriter,
-  type MemoryWorkOwner,
-  type PreparedMemoryAppend,
-} from "./internal/MemoryThreadStoreKernel.ts";
 import { boundedWorkSelection } from "./internal/WorkSelection.ts";
+
+/**
+ * Captured batch bytes and delivery records awaiting atomic memory publication.
+ *
+ * @category models
+ * @since 0.1.0
+ */
+export interface PreparedMemoryAppend {
+  readonly request: AppendRequest;
+  readonly batchJson: string;
+  readonly deliveries: ReadonlyArray<MessageDeliveryRecord>;
+}
+
+/**
+ * Validate under the owner's gate, then publish without yielding or throwing.
+ *
+ * @category models
+ * @since 0.1.0
+ */
+export type MemoryDeliveryWriter = (
+  records: ReadonlyArray<MessageDeliveryRecord>,
+) => Effect.Effect<() => void, MessageDeliveryError>;
+
+/**
+ * Staged admission import; its commit publishes synchronously under the shared Thread owner.
+ *
+ * @category models
+ * @since 0.1.0
+ */
+export interface MemoryLedgerImport {
+  readonly reader: Pick<ThreadImportReader["Service"], "admission" | "runOwner" | "commands">;
+  readonly stage: (
+    page: PreparedImportPage,
+  ) => Effect.Effect<void, ThreadImportRejected | ThreadStoreError>;
+  readonly prepareCommit: (
+    workerSeal?: Pick<WorkerLedgerState, "terminal">,
+  ) => Effect.Effect<() => void, ThreadImportRejected | ThreadStoreError, ThreadImportReader>;
+}
+
+/**
+ * Paired ledger operations for exporting and importing Thread admission state.
+ *
+ * @category models
+ * @since 0.1.0
+ */
+export interface MemoryLedgerTransfer {
+  readonly snapshot: (threadId: ThreadId) => Effect.Effect<
+    Omit<typeof ThreadExportSnapshot.Type, "deliveries"> & {
+      readonly idle: boolean;
+      readonly workerSeal?: Pick<WorkerLedgerState, "terminal">;
+    },
+    ThreadStoreError
+  >;
+  readonly facts: (
+    threadId: ThreadId,
+    section: Exclude<TransferSection, "deliveries">,
+    after: string | undefined,
+  ) => Effect.Effect<{ readonly facts: TransferFacts; readonly after: string }, ThreadStoreError>;
+  readonly startImport: (
+    threadId: ThreadId,
+  ) => Effect.Effect<MemoryLedgerImport, ThreadImportRejected | ThreadStoreError>;
+  readonly submissions: (threadId: ThreadId) => Stream.Stream<SubmissionSnapshot, ThreadStoreError>;
+  readonly admission: (
+    threadId: ThreadId,
+    submissionId: SubmissionId,
+  ) => Effect.Effect<ThreadAdmission | undefined, ThreadStoreError>;
+  readonly commands: ThreadImportReader["Service"]["commands"];
+}
+
+/**
+ * Staged delivery import whose commit publishes synchronously under the Thread owner.
+ *
+ * @category models
+ * @since 0.1.0
+ */
+export interface MemoryDeliveryImport {
+  readonly record: ThreadImportReader["Service"]["delivery"];
+  readonly stage: (
+    page: PreparedImportPage,
+  ) => Effect.Effect<void, ThreadImportRejected | ThreadStoreError>;
+  readonly prepareCommit: () => Effect.Effect<
+    () => void,
+    ThreadImportRejected | ThreadStoreError,
+    ThreadDeliveryImportReader
+  >;
+}
+
+/**
+ * Paired delivery operations for Thread transfer and retained peer-message counts.
+ *
+ * @category models
+ * @since 0.1.0
+ */
+export interface MemoryDeliveryTransfer {
+  readonly record: (
+    threadId: ThreadId,
+    messageId: IdempotencyKey,
+  ) => ReturnType<ThreadImportReader["Service"]["delivery"]>;
+  readonly snapshot: (threadId: ThreadId) => {
+    readonly idle: boolean;
+    readonly deliveries: number;
+  };
+  readonly facts: (
+    threadId: ThreadId,
+    after: string | undefined,
+  ) => Effect.Effect<{ readonly facts: TransferFacts; readonly after: string }, ThreadStoreError>;
+  readonly startImport: (
+    threadId: ThreadId,
+  ) => Effect.Effect<MemoryDeliveryImport, ThreadImportRejected | ThreadStoreError>;
+  readonly peerCount: (threadId: ThreadId, nowMillis: number, limit: number) => number;
+}
+
+/**
+ * Native control metadata only; callers already hold the journal's shared gate.
+ *
+ * @category models
+ * @since 0.1.0
+ */
+export interface MemoryWorkOwner {
+  readonly page: (
+    threadId: ThreadId,
+    after: string | undefined,
+    limit: number,
+  ) => Effect.Effect<
+    {
+      readonly entries: ReadonlyArray<ThreadWorkEntry>;
+      readonly after?: string;
+    },
+    ThreadStoreError
+  >;
+  readonly threads: (
+    request: WorkThreadsRequest,
+  ) => Effect.Effect<WorkThreadsPage, ThreadStoreError>;
+}
+
+/**
+ * Shared owner supplied by MemoryThreadStoreLive to its paired ledger and delivery Layers.
+ * Applications compose those Layers; adapter implementations use this service to publish atomically.
+ *
+ * @category services
+ * @since 0.1.0
+ */
+export class MemoryThreadStoreKernel extends Context.Service<
+  MemoryThreadStoreKernel,
+  {
+    readonly owner: StorageOwner["Service"];
+    readonly withMutation: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
+    readonly registerWorkOwner: (
+      kind: "admissions" | "deliveries",
+      owner: MemoryWorkOwner,
+    ) => Effect.Effect<void>;
+    readonly registerDeliveryWriter: (writer: MemoryDeliveryWriter) => Effect.Effect<void>;
+    readonly checkThreadCapacity: (threadId: ThreadId) => Effect.Effect<void, ThreadStoreError>;
+    readonly initializeWork: (threadId: ThreadId) => void;
+    readonly registerLedgerTransfer: (transfer: MemoryLedgerTransfer) => Effect.Effect<void>;
+    readonly registerDeliveryTransfer: (transfer: MemoryDeliveryTransfer) => Effect.Effect<void>;
+    readonly prepareAppend: (
+      request: AppendRequest,
+    ) => Effect.Effect<PreparedMemoryAppend, ThreadStoreFailure>;
+    readonly appendPrepared: (
+      prepared: PreparedMemoryAppend,
+    ) => Effect.Effect<AppendResult, ThreadStoreFailure>;
+    readonly record: (
+      threadId: ThreadId,
+      recordId: RecordId,
+    ) => Effect.Effect<RecordEnvelope | undefined>;
+    /** Bounded canonical outcomes for one call; caller holds the shared mutation gate. */
+    readonly toolCallResults: (
+      threadId: ThreadId,
+      runId: RunId,
+      toolCallId: ToolCallId,
+    ) => Effect.Effect<ReadonlyArray<RecordEnvelope>>;
+    readonly tail: (threadId: ThreadId) => Effect.Effect<ThreadTail, ThreadStoreFailure>;
+  }
+>()("@effect-agent/storage-memory/internal/MemoryThreadStoreKernel") {}
 
 const MAX_THREADS = 256;
 const RECORD_CHUNK_SIZE = 1_024;
@@ -2724,12 +2908,20 @@ const makeThreadStore = Effect.gen(function* () {
  * SubmissionLedger port; this Layer provides ThreadStore, ThreadReader, and ThreadImport.
  * Importing admissions requires a MemorySubmissionLedger paired with this store.
  * Publishing canonical messages requires a paired MemoryMessageDeliveryStore.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const MemoryThreadStoreLive = ThreadReader.layer().pipe(
   Layer.provideMerge(Layer.effectContext(makeThreadStore)),
 );
 
-/** Configure a finite retained Thread capacity. Invalid construction options throw immediately. */
+/**
+ * Configure a finite retained Thread capacity. Invalid construction options throw immediately.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const memoryThreadStoreLayer = (options: { readonly maxThreads?: number } = {}) =>
   MemoryThreadStoreLive.pipe(
     Layer.provide(

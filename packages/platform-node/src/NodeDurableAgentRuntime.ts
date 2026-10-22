@@ -1,3 +1,8 @@
+/**
+ * Scoped Node runtime assembly over one SQLite database.
+ *
+ * @since 0.1.0
+ */
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { messageDeliveryStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-message-delivery-store";
@@ -65,7 +70,12 @@ const WorkerConcurrency = Schema.Int.check(
   Schema.isLessThanOrEqualTo(64),
 );
 
-/** The supplied Node durable runtime configuration failed schema validation (DEPLOY-003). */
+/**
+ * The supplied Node durable runtime configuration failed schema validation (DEPLOY-003).
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class NodePlatformConfigError extends Schema.TaggedError<NodePlatformConfigError>()(
   "NodePlatformConfigError",
   {
@@ -78,6 +88,9 @@ export class NodePlatformConfigError extends Schema.TaggedError<NodePlatformConf
  * Validated Node durable runtime configuration (deployment §4: decoded once during Layer
  * construction, exposed as a typed service). Every cadence is in milliseconds and every bound is
  * finite; `workerConcurrency` caps how many worker loops `NodeDurableHost.runWorkers` drives.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export class NodeDurableAgentRuntimeConfigValue extends Schema.Class<NodeDurableAgentRuntimeConfigValue>(
   "@effect-agent/platform-node/NodeDurableAgentRuntimeConfigValue",
@@ -104,7 +117,12 @@ export class NodeDurableAgentRuntimeConfigValue extends Schema.Class<NodeDurable
   verifyOnOpen: Schema.Boolean,
 }) {}
 
-/** Explicit configuration authority for the assembled Node durable runtime. */
+/**
+ * Explicit configuration authority for the assembled Node durable runtime.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class NodeDurableAgentRuntimeConfig extends Context.Service<
   NodeDurableAgentRuntimeConfig,
   NodeDurableAgentRuntimeConfigValue
@@ -114,6 +132,9 @@ export class NodeDurableAgentRuntimeConfig extends Context.Service<
  * Raw (unvalidated) construction options for `NodeDurableAgentRuntime.layer`. Optional fields default
  * to the documented production values; everything is schema-decoded into
  * `NodeDurableAgentRuntimeConfigValue` before any resource opens (deployment §5 gate 1).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface NodeDurableAgentRuntimeOptions<
   ContextError = never,
@@ -181,7 +202,12 @@ export interface NodeDurableAgentRuntimeOptions<
     | undefined;
 }
 
-/** Built-in construction failures. `layer` also preserves supplied service Layers' errors. */
+/**
+ * Built-in construction failures. `layer` also preserves supplied service Layers' errors.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type NodeDurableAgentRuntimeInitializationError =
   | NodePlatformConfigError
   | MessageDeliveryError
@@ -190,6 +216,9 @@ export type NodeDurableAgentRuntimeInitializationError =
 /**
  * The services `NodeDurableAgentRuntime.layer` provides. Additional SQLite adapters can use
  * the same client and storage configuration, sharing its serialized connection and Scope.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type NodeDurableAgentRuntimeServices = Layer.Success<
   ReturnType<typeof NodeDurableAgentRuntime.layer>
@@ -342,9 +371,17 @@ const privateMessageDeliveryLayer = Layer.effect(MessageDeliveryStore)(
  * `DurableAgentRuntime` on top. Storage compatibility is
  * verified during construction: an incompatible database file fails the Layer with
  * `SqliteStorageCompatibilityError` before anything is mutated (DEPLOY-008).
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class NodeDurableAgentRuntime {
-  /** Validated configuration Layer; fails typed when the supplied options are out of bounds. */
+  /**
+   * Validated configuration Layer; fails typed when the supplied options are out of bounds.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static configLayer<
     ContextError = never,
     ContextRequirements = never,
@@ -365,7 +402,12 @@ export class NodeDurableAgentRuntime {
     return Layer.effect(NodeDurableAgentRuntimeConfig)(configFromOptions(options));
   }
 
-  /** The full DN runtime stack over one SQLite file. */
+  /**
+   * The full DN runtime stack over one SQLite file.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static layer<
     ContextError = never,
     ContextRequirements = never,
@@ -386,7 +428,12 @@ export class NodeDurableAgentRuntime {
     return NodeDurableAgentRuntime.assemble(DurableAgentRuntime.layerWithServices, options);
   }
 
-  /** Own typed executable registrations for every worker using this Node runtime. */
+  /**
+   * Own typed executable registrations for every worker using this Node runtime.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static layerRegistered<
     const Entries extends ReadonlyArray<AgentRegistration>,
     ContextError = never,
@@ -439,7 +486,12 @@ export class NodeDurableAgentRuntime {
     );
   }
 
-  /** Construct from registrations already resolved within the enclosing application Scope. */
+  /**
+   * Construct from registrations already resolved within the enclosing application Scope.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static layerWithBindings<
     ContextError = never,
     ContextRequirements = never,

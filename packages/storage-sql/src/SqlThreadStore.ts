@@ -1,3 +1,8 @@
+/**
+ * Thread storage and prepared canonical appends over a shared SQL journal.
+ *
+ * @since 0.1.0
+ */
 import { utf8ByteLength, digestCanonicalJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { prepareCanonicalMessageDeliveries } from "@yielded/agent/message-delivery";
@@ -6,7 +11,6 @@ import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
   ObservationOffset,
-  RecordEnvelope,
 } from "@yielded/agent/records";
 import { isOperationalRecord } from "@yielded/agent/run-continuation";
 import {
@@ -53,6 +57,12 @@ import {
   makeExecutionRead,
 } from "./SqlThreadNativeReads.ts";
 
+/**
+ * Adapter namespace, diagnostics, read polling, verification, and observation offset settings.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlThreadStoreOptions<
   S extends Diagnostic,
   C extends Diagnostic,
@@ -66,15 +76,12 @@ export interface SqlThreadStoreOptions<
   readonly offsetPrefix: string;
 }
 
-const encodeOperationalFacts = Schema.encodeSync(
-  Schema.fromJsonString(Schema.Array(RecordEnvelope)),
-);
-
-/** Stable retry intent; derived progress and the caller's newly observed tail are excluded. */
-export const sqlCommitIntentDigest = (batchJson: string, facts: ReadonlyArray<RecordEnvelope>) =>
-  digestCanonicalJson(JSON.stringify([batchJson, encodeOperationalFacts(facts)]));
-
-/** Capture exact wire and active retry intent before acquiring the writer transaction. */
+/**
+ * Capture exact wire and active retry intent before acquiring the writer transaction.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const prepareSqlAppend = Effect.fnUntraced(function* (
   request: AppendRequest,
   offsetPrefix: string,
@@ -143,7 +150,12 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
   } satisfies RawAppendRequest;
 });
 
-/** Canonical ThreadStore behavior over an adapter-initialized SQL journal. */
+/**
+ * Canonical ThreadStore behavior over an adapter-initialized SQL journal.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   S extends Diagnostic,
   C extends Diagnostic,
@@ -608,6 +620,12 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   };
 });
 
+/**
+ * Constructs the ThreadStore facet over an initialized journal and adapter settings.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlThreadStore = <
   S extends Diagnostic,
   C extends Diagnostic,

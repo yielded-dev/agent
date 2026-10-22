@@ -1,3 +1,8 @@
+/**
+ * SQLite persistence for an explicitly owned subscription partition.
+ *
+ * @since 0.1.0
+ */
 import { makeSqlSubscriptionStore } from "@yielded/agent-storage-sql/sql-subscription-store";
 import { SourcePartition, SubscriptionError, SubscriptionStore } from "@yielded/agent/subscription";
 import * as Effect from "effect/Effect";
@@ -22,6 +27,12 @@ const makeSubscriptionStore = Effect.fnUntraced(function* (owned: SourcePartitio
   });
 });
 
+/**
+ * Subscription storage for one explicit source partition.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const subscriptionStoreLayer = (
   partition: SourcePartition,
 ): Layer.Layer<

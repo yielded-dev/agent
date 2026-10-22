@@ -1,3 +1,8 @@
+/**
+ * SQLite storage for source-owned message delivery obligations.
+ *
+ * @since 0.1.0
+ */
 import {
   makeSqlMessageDeliveryStore,
   registerCanonicalMessageWriter,
@@ -11,7 +16,12 @@ import * as Layer from "effect/Layer";
 
 import { initializeSqliteJournal } from "./internal/sqlite-journal.ts";
 
-/** Source-owned message obligations in the host's existing SQLite database. */
+/**
+ * Source-owned message obligations in the host's existing SQLite database.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const messageDeliveryStoreLayer = (limits?: MessageDeliveryStoreLimits) =>
   Layer.effect(
     MessageDeliveryStore,

@@ -21,7 +21,11 @@ const reportFailure = (cause: Cause.Cause<MessageDeliveryFailure>): Effect.Effec
         }),
       );
 
-/** Caller-owned loop. Indexed scans repair absent hints even when both Threads have settled. */
+/**
+ * Caller-owned loop. Indexed scans repair absent hints even when both Threads have settled.
+ *
+ * @internal
+ */
 export const runNodeMessageDeliveries = Effect.fnUntraced(function* (scanInterval: number) {
   const driver = yield* MessageDeliveryDriver;
   const store = yield* MessageDeliveryStore;

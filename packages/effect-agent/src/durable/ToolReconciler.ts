@@ -1,3 +1,11 @@
+/**
+ * Host evidence about declared ordinary tool calls whose outcomes were not committed. Proven
+ * completion, nonexecution, or safe retry can resolve uncertainty; the default leaves it
+ * unresolved.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -11,6 +19,9 @@ import { Digest, PersistedJson, DeclaredToolCall } from "./Records.ts";
  * Call (durability §10): deterministic identities for supplier-side lookup plus the exact
  * Schema-encoded parameters and their digest. Derived from the canonical normalized response
  * and the owning Submission's identities — never from in-memory Attempt state.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class DeclaredToolCallEvidence extends Schema.Class<DeclaredToolCallEvidence>(
   "@effect-agent/thread/DeclaredToolCallEvidence",
@@ -28,7 +39,12 @@ export class DeclaredToolCallEvidence extends Schema.Class<DeclaredToolCallEvide
   replay: DeclaredToolCall.fields.replay,
 }) {}
 
-/** Proof of nonexecution: resume the original operation or report it unavailable. */
+/**
+ * Proof of nonexecution: resume the original operation or report it unavailable.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReconciliationNeverStarted extends Schema.TaggedClass<ReconciliationNeverStarted>(
   "@effect-agent/thread/ReconciliationNeverStarted",
 )("NeverStarted", {}) {}
@@ -36,6 +52,9 @@ export class ReconciliationNeverStarted extends Schema.TaggedClass<Reconciliatio
 /**
  * Proof that the external execution completed: `result` is the recovered supplier truth, which
  * becomes canonical (`ToolCallSettled` + `ToolCallResolved`) WITHOUT executing anything.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ReconciliationCompleted extends Schema.TaggedClass<ReconciliationCompleted>(
   "@effect-agent/thread/ReconciliationCompleted",
@@ -44,12 +63,22 @@ export class ReconciliationCompleted extends Schema.TaggedClass<ReconciliationCo
   isFailure: Schema.Boolean,
 }) {}
 
-/** Only the original operation, identity and parameters may repeat under supported semantics. */
+/**
+ * Only the original operation, identity and parameters may repeat under supported semantics.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReconciliationSafeToRetry extends Schema.TaggedClass<ReconciliationSafeToRetry>(
   "@effect-agent/thread/ReconciliationSafeToRetry",
 )("SafeToRetry", {}) {}
 
-/** No proof either way: the outcome is Unknown and requires authorized resolution (DUR-017). */
+/**
+ * No proof either way: the outcome is Unknown and requires authorized resolution (DUR-017).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReconciliationUncertain extends Schema.TaggedClass<ReconciliationUncertain>(
   "@effect-agent/thread/ReconciliationUncertain",
 )("Uncertain", {
@@ -62,6 +91,9 @@ export class ReconciliationUncertain extends Schema.TaggedClass<ReconciliationUn
  * execution is safe to repeat, or nothing — in which case the Run enters Unknown. The engine
  * never invents an external result. Proven nonexecution can close a retired operation with
  * an explicit not-executed result; uncertainty stays parked.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ReconciliationDecision = Schema.Union([
   ReconciliationNeverStarted,
@@ -70,10 +102,21 @@ export const ReconciliationDecision = Schema.Union([
   ReconciliationUncertain,
 ]);
 
+/**
+ * Decoded value of {@link ReconciliationDecision}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ReconciliationDecision = typeof ReconciliationDecision.Type;
 
-/** The reconciliation policy itself failed (supplier unreachable, corrupt lookup, ...). The
- * caller treats this as no proof: the call stays open and the pass may retry. */
+/**
+ * The reconciliation policy itself failed (supplier unreachable, corrupt lookup, ...). The
+ * caller treats this as no proof: the call stays open and the pass may retry.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ToolReconcilerError extends Schema.TaggedError<ToolReconcilerError>()(
   "ToolReconcilerError",
   {
@@ -91,6 +134,9 @@ export class ToolReconcilerError extends Schema.TaggedError<ToolReconcilerError>
  *
  * `ToolReconciler.uncertain` is the fail-closed default (AGENTS rule 11): with no registered
  * policy, every open call stays Unknown and routes to the authorized DUR-017 resolution path.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ToolReconciler extends Context.Service<
   ToolReconciler,

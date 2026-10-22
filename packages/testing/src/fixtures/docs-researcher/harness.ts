@@ -1,3 +1,8 @@
+/**
+ * Durable document research bindings, model counters, and redacted preview helpers.
+ *
+ * @since 0.1.0
+ */
 import * as Agent from "@yielded/agent/agent";
 import { DurableWorkerBinding, type ResolvedBinding } from "@yielded/agent/agent-registration";
 import { type DurableSubmitOptions } from "@yielded/agent/durable-agent-runtime";
@@ -45,33 +50,66 @@ import {
 // Attempts and separate runtime handles over the same SQLite file.
 // ---------------------------------------------------------------------------
 
+/**
+ * Deployment identity for the durable document research fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const docsResearcherDeploymentId = Schema.decodeSync(DeploymentId)(
   "docs-researcher-p7-deployment",
 );
 
+/**
+ * Producer identity for the durable document research fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const docsResearcherProducerId = Schema.decodeSync(ProducerId)(
   "docs-researcher-p7-producer",
 );
 
+/**
+ * Principal submitting the durable document research fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const docsResearcherPrincipal = Schema.decodeSync(Principal)("docs-researcher-p7-principal");
 
 const digestOf = (pair: string) => Schema.decodeSync(Digest)(pair.repeat(32));
 
-/** Redacted, deterministic coordinator definition digests for this fixture version. */
+/**
+ * Redacted, deterministic coordinator definition digests for this fixture version.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const docsCoordinatorDigests = DefinitionDigests.make({
   agent: digestOf("40"),
   model: digestOf("41"),
   tools: digestOf("42"),
 });
 
-/** Deterministic child registration digests for this fixture version. */
+/**
+ * Deterministic child registration digests for this fixture version.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const docsSummarizerDigests = DefinitionDigests.make({
   agent: digestOf("50"),
   model: digestOf("51"),
   tools: digestOf("52"),
 });
 
-/** Durable admission options for one docs-researcher Submission on one mission lane. */
+/**
+ * Durable admission options for one docs-researcher Submission on one mission lane.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const docsResearcherSubmitOptions = (
   threadId: ThreadId,
   idempotencyKey: IdempotencyKey,
@@ -82,15 +120,30 @@ export const docsResearcherSubmitOptions = (
   definitions: docsCoordinatorDigests,
 });
 
-/** The structural submit slice of the coordinator Binding (`DurableAgentRuntime.submit`). */
+/**
+ * The structural submit slice of the coordinator Binding (`DurableAgentRuntime.submit`).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const docsResearcherSubmitAgent = {
   definition: { id: DocsResearcher.id, input: DocsResearcher.input },
 } as const;
 
-/** The deterministic delegation Tool Call identity for one document. */
+/**
+ * The deterministic delegation Tool Call identity for one document.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const summarizeCallId = (documentId: string): string => `summarize-${documentId}`;
 
-/** The child's own scripted fetch Tool Call identity for one document. */
+/**
+ * The child's own scripted fetch Tool Call identity for one document.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const fetchCallId = (documentId: string): string => `fetch-${documentId}`;
 
 const scriptedUsage = { inputTokens: { total: 96 }, outputTokens: { total: 64 } };
@@ -176,13 +229,23 @@ const makeCountingModel = Effect.fnUntraced(function* (
   return { model, calls: Ref.get(calls), prompts: Ref.get(prompts) };
 });
 
-/** Optional overrides for one docs-researcher harness. */
+/**
+ * Optional overrides for one docs-researcher harness.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DocsResearcherHarnessOptions {
   /** Documents to research; defaults to the full two-document corpus. */
   readonly documentIds?: ReadonlyArray<string> | undefined;
 }
 
-/** One durable coordinator/summarizer pair with observable counters and MCP evidence. */
+/**
+ * One durable coordinator/summarizer pair with observable counters and MCP evidence.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DocsResearcherHarness {
   /** Resolved registrations for the parent and child workers. */
   readonly bindings: ReadonlyArray<ResolvedBinding>;
@@ -208,6 +271,9 @@ export interface DocsResearcherHarness {
  * "the tools the summarizer runs are the tools discovery served" is enforced
  * at assembly, not assumed. Content-tool execution then flows through the
  * counting `DocumentLibrary` — the scripted MCP server's content store.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeDocsResearcherHarness = Effect.fnUntraced(function* (
   options?: DocsResearcherHarnessOptions,
@@ -311,6 +377,9 @@ const encodeResearchDocument = Schema.encodeEffect(ResearchDocument);
  * secret marker and all — passes through the configured structural `Redactor`
  * before anything may quote it outside the child Thread (SEC-008,
  * CAP-013). Tests assert the preview keeps shape but no scalar content.
+ *
+ * @category utils
+ * @since 0.1.0
  */
 export const redactedDocumentPreview = Effect.fn("DocsResearcher.redactedDocumentPreview")(
   function* (documentId: string): Effect.fn.Return<RedactedPreview, RedactionError, Redactor> {
@@ -327,4 +396,10 @@ export const redactedDocumentPreview = Effect.fn("DocsResearcher.redactedDocumen
 // Crypto is deliberately in the harness requirements (`connectMcp` digests
 // discovery): callers provide a platform Crypto Layer, keeping this fixture
 // platform-neutral.
+/**
+ * Services the document research harness needs from its caller.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type DocsResearcherHarnessRequirements = Crypto.Crypto;

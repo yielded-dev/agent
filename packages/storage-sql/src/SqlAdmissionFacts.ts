@@ -1,3 +1,8 @@
+/**
+ * Decoding of accepted admission and control facts from validated SQL rows.
+ *
+ * @since 0.1.0
+ */
 import {
   AbortIntent,
   ApprovalDecisionIntent,
@@ -17,6 +22,9 @@ const decodeResolution = Schema.decodeUnknownEffect(UnknownResolutionIntent);
 /**
  * Decode immutable facts after the adapter has validated its native row and storage bounds.
  * Ledger state, canonical application markers, caching and diagnostics remain adapter-owned.
+ *
+ * @category utilities
+ * @since 0.1.0
  */
 export const decodeAdmissionFact = Effect.fnUntraced(function* (row: {
   readonly submission_id: string;
@@ -73,7 +81,12 @@ export const decodeAdmissionFact = Effect.fnUntraced(function* (row: {
   });
 });
 
-/** Accepted abort fact only; the ledger derives canonicalRecordId from canonical history. */
+/**
+ * Accepted abort fact only; the ledger derives canonicalRecordId from canonical history.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const decodeAbortFact = (row: {
   readonly submission_id: string;
   readonly author: string;
@@ -87,7 +100,12 @@ export const decodeAbortFact = (row: {
     requestedAt: row.requested_at,
   });
 
-/** Accepted approval fact without a canonical application marker. */
+/**
+ * Accepted approval fact without a canonical application marker.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const decodeApprovalFact = (row: {
   readonly submission_id: string;
   readonly tool_call_id: string;
@@ -105,7 +123,12 @@ export const decodeApprovalFact = (row: {
     decidedAt: row.decided_at,
   });
 
-/** Accepted unknown-resolution fact without a canonical application marker. */
+/**
+ * Accepted unknown-resolution fact without a canonical application marker.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const decodeResolutionFact = Effect.fnUntraced(function* (row: {
   readonly submission_id: string;
   readonly tool_call_id: string;

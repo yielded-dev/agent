@@ -1,3 +1,8 @@
+/**
+ * A deterministic trip, expected itinerary, and scripted happy-path model turns.
+ *
+ * @since 0.1.0
+ */
 import * as Schema from "effect/Schema";
 
 import type { ScriptedTurnInput } from "../../ScriptedModel.ts";
@@ -5,6 +10,12 @@ import { TravelPlan, TripRequest, type TravelPlan as TravelPlanValue } from "./d
 
 const usage = { inputTokens: { total: 128 }, outputTokens: { total: 96 } };
 
+/**
+ * The deterministic San Francisco to London trip used by the planner happy path.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase1Trip = Schema.decodeSync(TripRequest)({
   request:
     "Plan a review-only London trip using the deterministic flight, lodging, and activity searches.",
@@ -17,6 +28,12 @@ export const phase1Trip = Schema.decodeSync(TripRequest)({
   currency: "USD",
 });
 
+/**
+ * The expected itinerary for the deterministic planner catalogs and trip.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const expectedTravelPlan: TravelPlanValue = Schema.decodeSync(TravelPlan)({
   itineraries: [
     {
@@ -41,6 +58,12 @@ export const expectedTravelPlan: TravelPlanValue = Schema.decodeSync(TravelPlan)
   ],
 });
 
+/**
+ * Scripted catalog calls followed by the expected travel plan response.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase1HappyPathTurns = [
   {
     _tag: "Stream",

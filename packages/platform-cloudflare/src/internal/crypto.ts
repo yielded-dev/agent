@@ -8,7 +8,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as PlatformError from "effect/PlatformError";
 
-/** Workers use native SHA-256 while retaining BrowserCrypto's services and overrides. */
+/** Workers use native SHA-256 while retaining BrowserCrypto's services and overrides.
+ * @internal
+ */
 export const cloudflareCryptoLayer: Layer.Layer<Crypto.Crypto> = Layer.effect(
   Crypto.Crypto,
   Effect.gen(function* () {

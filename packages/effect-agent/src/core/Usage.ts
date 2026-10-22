@@ -1,3 +1,10 @@
+/**
+ * Provider-independent model usage, response identity, cost estimates, and Run totals with explicit
+ * accounting completeness.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -5,7 +12,12 @@ import { RunId } from "./Identifiers.ts";
 
 const UsageIdentity = Schema.NonEmptyString.check(Schema.isMaxLength(256));
 
-/** Bounded provider response identity. Request configuration is not response evidence. */
+/**
+ * Bounded provider response identity. Request configuration is not response evidence.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ModelResponseIdentity extends Schema.Class<ModelResponseIdentity>(
   "@effect-agent/core/ModelResponseIdentity",
 )({
@@ -13,7 +25,12 @@ export class ModelResponseIdentity extends Schema.Class<ModelResponseIdentity>(
   model: Schema.optionalKey(UsageIdentity),
 }) {}
 
-/** Missing legacy status means unknown, never a free call or a complete report. */
+/**
+ * Missing legacy status means unknown, never a free call or a complete report.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const UsageCompleteness = Schema.Literals(["complete", "partial", "unknown"]);
 
 const hasAdditiveTotal = (total: number, components: ReadonlyArray<number>): boolean => {
@@ -34,7 +51,12 @@ const InputTokenUsageFields = Schema.Struct({
   ),
 );
 
-/** Provider-reported input-token components for one completed model call. */
+/**
+ * Provider-reported input-token components for one completed model call.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class InputTokenUsage extends Schema.Class<InputTokenUsage>(
   "@effect-agent/core/InputTokenUsage",
 )(InputTokenUsageFields) {}
@@ -49,12 +71,22 @@ const OutputTokenUsageFields = Schema.Struct({
   }),
 );
 
-/** Provider-reported output-token components for one completed model call. */
+/**
+ * Provider-reported output-token components for one completed model call.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class OutputTokenUsage extends Schema.Class<OutputTokenUsage>(
   "@effect-agent/core/OutputTokenUsage",
 )(OutputTokenUsageFields) {}
 
-/** Canonical, provider-independent accounting for one completed model call. */
+/**
+ * Canonical, provider-independent accounting for one completed model call.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ModelCallUsage extends Schema.Class<ModelCallUsage>(
   "@effect-agent/core/ModelCallUsage",
 )({
@@ -78,6 +110,9 @@ export class ModelCallUsage extends Schema.Class<ModelCallUsage>(
  * Observed model usage and estimated cost, without per-model attribution.
  * Numeric zero with unknown coverage never establishes free execution. Missing legacy
  * statuses mean unknown. Unobserved calls are excluded from the numeric call/token totals.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RunTotals extends Schema.Class<RunTotals>("@effect-agent/core/RunTotals")({
   modelCalls: Schema.Natural,
@@ -91,7 +126,12 @@ export class RunTotals extends Schema.Class<RunTotals>("@effect-agent/core/RunTo
   unobservedModelCalls: Schema.optionalKey(Schema.Natural),
 }) {}
 
-/** Own Run usage and disjoint attached-descendant usage. Add each component once. */
+/**
+ * Own Run usage and disjoint attached-descendant usage. Add each component once.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunUsageReport extends Schema.Class<RunUsageReport>(
   "@effect-agent/core/RunUsageReport",
 )({
@@ -99,13 +139,23 @@ export class RunUsageReport extends Schema.Class<RunUsageReport>(
   delegatedUsage: RunTotals,
 }) {}
 
-/** A verified child report retained across durable parent Attempts. */
+/**
+ * A verified child report retained across durable parent Attempts.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ChildRunUsage extends Schema.Class<ChildRunUsage>("@effect-agent/core/ChildRunUsage")({
   runId: RunId,
   report: RunUsageReport,
 }) {}
 
-/** Known absence of observed work. */
+/**
+ * Known absence of observed work.
+ *
+ * @category defaults
+ * @since 0.1.0
+ */
 export const emptyRunTotals = (): RunTotals =>
   RunTotals.make({
     modelCalls: 0,
@@ -118,7 +168,12 @@ export const emptyRunTotals = (): RunTotals =>
     unobservedModelCalls: 0,
   });
 
-/** No accounting evidence, including legacy child reports. This is not known zero spend. */
+/**
+ * No accounting evidence, including legacy child reports. This is not known zero spend.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const unknownRunTotals = (): RunTotals =>
   RunTotals.make({
     ...emptyRunTotals(),
@@ -126,7 +181,12 @@ export const unknownRunTotals = (): RunTotals =>
     pricingStatus: "unknown",
   });
 
-/** Settlement-sized aggregate for calls sharing one pricing identity. */
+/**
+ * Settlement-sized aggregate for calls sharing one pricing identity.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ModelUsageGroup extends Schema.Class<ModelUsageGroup>(
   "@effect-agent/core/ModelUsageGroup",
 )({
@@ -222,7 +282,12 @@ const RunUsageSummaryFields = Schema.Struct({
   ),
 );
 
-/** Settlement aggregate included with a terminal Run settlement. */
+/**
+ * Settlement aggregate included with a terminal Run settlement.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunUsageSummary extends Schema.Class<RunUsageSummary>(
   "@effect-agent/core/RunUsageSummary",
 )(RunUsageSummaryFields) {}
@@ -248,7 +313,12 @@ interface MutableUsageGroup {
 const emptyInputTokens = () => ({ total: 0, uncached: 0, cacheRead: 0, cacheWrite: 0 });
 const emptyOutputTokens = () => ({ total: 0, text: 0, reasoning: 0 });
 
-/** Canonical usage could not be aggregated without exceeding safe-integer accounting. */
+/**
+ * Canonical usage could not be aggregated without exceeding safe-integer accounting.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class UsageAggregationError extends Schema.TaggedError<UsageAggregationError>()(
   "UsageAggregationError",
   {
@@ -278,7 +348,12 @@ const checkedAdd = (
       );
 };
 
-/** Combine disjoint totals, retaining uncertainty and rejecting numeric overflow. */
+/**
+ * Combine disjoint totals, retaining uncertainty and rejecting numeric overflow.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const sumRunTotals = Effect.fnUntraced(function* (
   contributions: ReadonlyArray<RunTotals>,
 ): Effect.fn.Return<RunTotals, UsageAggregationError> {
@@ -350,7 +425,12 @@ export const sumRunTotals = Effect.fnUntraced(function* (
   });
 });
 
-/** Flatten a canonical settlement summary without discarding its coverage markers. */
+/**
+ * Flatten a canonical settlement summary without discarding its coverage markers.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const runTotalsFromSummary = (summary: RunUsageSummary): RunTotals =>
   RunTotals.make({
     modelCalls: summary.modelCalls,
@@ -367,6 +447,9 @@ export const runTotalsFromSummary = (summary: RunUsageSummary): RunTotals =>
  * Deterministically aggregate canonical per-call usage without making cached tokens free.
  * A validated seed retains earlier call totals and pricing groups without retaining those calls.
  * Empty contributions do not change completeness; the seed is never mutated.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const summarizeModelUsage = Effect.fnUntraced(function* (
   calls: ReadonlyArray<ModelCallUsage>,

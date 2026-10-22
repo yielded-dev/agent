@@ -1,3 +1,10 @@
+/**
+ * Source-Thread-owned frozen input delivery, with separate destination acceptance and settlement
+ * tracking. The host drives bounded retries and keeps parked obligations visible.
+ *
+ * @since 0.1.0
+ */
+
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -29,14 +36,32 @@ const BoundedName = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLengt
 const receiptsEqual = Schema.toEquivalence(Receipt);
 const settlementsEqual = Schema.toEquivalence(Settlement);
 
-/** An owner is always a source Thread. Destination admission has its own frozen key. */
+/**
+ * An owner is always a source Thread. Destination admission has its own frozen key.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryKey = Schema.Struct({
   ownerThreadId: ThreadId,
   messageId: IdempotencyKey,
 });
 
+/**
+ * Decoded value of {@link MessageDeliveryKey}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryKey = typeof MessageDeliveryKey.Type;
 
+/**
+ * Automatic-attempt, timeout, retry-delay, and settlement-poll bounds; all durations are
+ * milliseconds.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryPolicy = Schema.Struct({
   maxAutomaticAttempts: Positive.check(Schema.isLessThanOrEqualTo(100)),
   attemptTimeoutMillis: Positive.check(Schema.isLessThanOrEqualTo(300_000)),
@@ -45,8 +70,21 @@ export const MessageDeliveryPolicy = Schema.Struct({
   settlementPollMillis: Positive,
 }).check(Schema.makeFilter((value) => value.retryBaseMillis <= value.retryMaxMillis));
 
+/**
+ * Decoded value of {@link MessageDeliveryPolicy}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryPolicy = typeof MessageDeliveryPolicy.Type;
 
+/**
+ * Eight automatic attempts, a 30-second attempt timeout, retries from 1 to 60 seconds, and 5-second
+ * settlement polling.
+ *
+ * @category defaults
+ * @since 0.1.0
+ */
 export const defaultMessageDeliveryPolicy: MessageDeliveryPolicy = {
   maxAutomaticAttempts: 8,
   attemptTimeoutMillis: 30_000,
@@ -55,6 +93,13 @@ export const defaultMessageDeliveryPolicy: MessageDeliveryPolicy = {
   settlementPollMillis: 5_000,
 };
 
+/**
+ * Per-source-Thread pending capacities and the maximum encoded envelope size in bytes, with a
+ * separate worker-update allowance.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryStoreLimits = Schema.Struct({
   maxPendingPerOwner: Positive,
   maxEnvelopeBytes: Positive,
@@ -62,8 +107,20 @@ export const MessageDeliveryStoreLimits = Schema.Struct({
   maxPendingUpdatesPerOwner: Schema.optionalKey(Positive),
 });
 
+/**
+ * Decoded value of {@link MessageDeliveryStoreLimits}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryStoreLimits = typeof MessageDeliveryStoreLimits.Type;
 
+/**
+ * Allows 100 ordinary pending deliveries, 32 pending worker updates, and 256 KiB per envelope.
+ *
+ * @category defaults
+ * @since 0.1.0
+ */
 export const defaultMessageDeliveryStoreLimits: MessageDeliveryStoreLimits = {
   maxPendingPerOwner: 100,
   maxEnvelopeBytes: 262_144,
@@ -77,6 +134,13 @@ const ParkReason = Schema.Literals([
   "awaiting-settlement",
 ]);
 
+/**
+ * Source-owned frozen admission envelope and its retry, acceptance, settlement, refusal, or parked
+ * state.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryRecord = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   key: MessageDeliveryKey,
@@ -125,8 +189,21 @@ export const MessageDeliveryRecord = Schema.Struct({
   ),
 );
 
+/**
+ * Decoded value of {@link MessageDeliveryRecord}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryRecord = typeof MessageDeliveryRecord.Type;
 
+/**
+ * A delivery operation failed validation, conflicted, exceeded capacity, or encountered missing,
+ * unavailable, or corrupt storage.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MessageDeliveryError extends Schema.TaggedError<MessageDeliveryError>()(
   "MessageDeliveryError",
   {
@@ -144,6 +221,12 @@ export class MessageDeliveryError extends Schema.TaggedError<MessageDeliveryErro
   },
 ) {}
 
+/**
+ * An injected failure at a message-delivery mutation boundary.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MessageDeliveryFailpointError extends Schema.TaggedError<MessageDeliveryFailpointError>()(
   "MessageDeliveryFailpointError",
   {
@@ -151,8 +234,20 @@ export class MessageDeliveryFailpointError extends Schema.TaggedError<MessageDel
   },
 ) {}
 
+/**
+ * Expected delivery storage failures and injected mutation failures.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryFailure = MessageDeliveryError | MessageDeliveryFailpointError;
 
+/**
+ * Optional message-delivery fault injection; the default handler does nothing.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const MessageDeliveryFailpoint = Context.Reference<{
   readonly hit: (point: string) => Effect.Effect<void, MessageDeliveryFailpointError>;
 }>("@effect-agent/thread/MessageDeliveryFailpoint", {
@@ -161,7 +256,12 @@ export const MessageDeliveryFailpoint = Context.Reference<{
 
 const fence = { expectedVersion: Positive, nowMillis: ScheduleInstant };
 
-/** Terminal destination evidence, independent of an expiring source transport claim. */
+/**
+ * Terminal destination evidence, independent of an expiring source transport claim.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryCompletion = Schema.Struct({
   receipt: Receipt,
   settlement: Settlement,
@@ -169,6 +269,13 @@ export const MessageDeliveryCompletion = Schema.Struct({
   inputDigest: Digest,
 });
 
+/**
+ * Atomic delivery lifecycle commands, fenced by the current version except for terminal destination
+ * evidence.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryChange = Schema.Union([
   Schema.Struct({
     _tag: Schema.Literal("Complete"),
@@ -202,9 +309,20 @@ export const MessageDeliveryChange = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("Defer"), ...fence, untilMillis: ScheduleInstant }),
 ]);
 
+/**
+ * Decoded value of {@link MessageDeliveryChange}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryChange = typeof MessageDeliveryChange.Type;
 
-/** Select one native index per page; index filters cannot be combined. */
+/**
+ * Select one native index per page; index filters cannot be combined.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryPageRequest = Schema.Struct({
   ownerThreadId: ThreadId,
   limit: Positive.check(Schema.isLessThanOrEqualTo(4096)),
@@ -227,13 +345,32 @@ export const MessageDeliveryPageRequest = Schema.Struct({
   ),
 );
 
+/**
+ * Decoded value of {@link MessageDeliveryPageRequest}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryPageRequest = typeof MessageDeliveryPageRequest.Type;
 
+/**
+ * A bounded list of retained deliveries and the last-message cursor for the next page, or null when
+ * complete.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryPage = Schema.Struct({
   items: Schema.Array(MessageDeliveryRecord),
   next: Schema.NullOr(IdempotencyKey),
 });
 
+/**
+ * Decoded value of {@link MessageDeliveryPage}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryPage = typeof MessageDeliveryPage.Type;
 
 /**
@@ -242,6 +379,9 @@ export type MessageDeliveryPage = typeof MessageDeliveryPage.Type;
  * Completed rows retain deduplication evidence without consuming pending capacity. The host owns
  * total retention quotas; rows are never deleted automatically.
  * `due`/`nextDeadline` are bounded host recovery seams, never model-facing management operations.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class MessageDeliveryStore extends Context.Service<
   MessageDeliveryStore,
@@ -279,6 +419,9 @@ export class MessageDeliveryStore extends Context.Service<
  * Shipped worker admission reserves the source input before returning that receipt. Policy can
  * therefore leave accepted worker discovery to canonical outstanding inputs; a no-receipt action
  * delivery remains uncertain, including when parked or due in the future.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const readPending = Effect.fnUntraced(function* (
   request: Pick<MessageDeliveryPageRequest, "ownerThreadId" | "limit">,
@@ -320,13 +463,31 @@ export const readPending = Effect.fnUntraced(function* (
   return records;
 });
 
+/**
+ * Encodes source Thread and message identity as an unambiguous JSON tuple for storage lookup.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const messageDeliveryKeyString = (key: MessageDeliveryKey): string =>
   JSON.stringify([key.ownerThreadId, key.messageId]);
 
+/**
+ * Returns whether a delivery still reserves pending capacity; parked and accepted deliveries remain
+ * counted.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const messageDeliveryUsesCapacity = (record: MessageDeliveryRecord): boolean =>
   record.status !== "processed" && record.status !== "refused";
 
-/** Terminal peer sends retain capacity through the last granted delivery window, never for life. */
+/**
+ * Terminal peer sends retain capacity through the last granted delivery window, never for life.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const peerMessageRetentionDeadline = (record: MessageDeliveryRecord): number | null =>
   !messageDeliveryUsesCapacity(record) &&
   record.envelope.messageAdmission !== undefined &&
@@ -334,19 +495,43 @@ export const peerMessageRetentionDeadline = (record: MessageDeliveryRecord): num
     ? record.deadlineAtMillis
     : null;
 
+/**
+ * Checks whether the frozen envelope contains a typed worker update admission.
+ *
+ * @category guards
+ * @since 0.1.0
+ */
 export const isWorkerUpdateDelivery = (record: MessageDeliveryRecord): boolean =>
   Schema.is(WorkerUpdate)(record.envelope.messageAdmission);
 
+/**
+ * Selects the ordinary or worker-update pending allowance; omitted update capacity defaults to 32.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const messageDeliveryCapacity = (limits: MessageDeliveryStoreLimits, update: boolean) => ({
   pending: update ? (limits.maxPendingUpdatesPerOwner ?? 32) : limits.maxPendingPerOwner,
 });
 
+/**
+ * Returns the next epoch-millisecond check for pending or accepted work, or null for inactive
+ * delivery states.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const messageDeliveryDeadline = (record: MessageDeliveryRecord): number | null =>
   record.status === "pending" || record.status === "accepted"
     ? Math.min(record.deadlineAtMillis, record.leaseUntilMillis ?? record.retry.nextAttemptAtMillis)
     : null;
 
-/** Creation identity deliberately excludes operational counters and renewed recovery deadlines. */
+/**
+ * Creation identity deliberately excludes operational counters and renewed recovery deadlines.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const sameMessageDeliveryIdentity = (
   left: MessageDeliveryRecord,
   right: MessageDeliveryRecord,
@@ -362,6 +547,13 @@ export const sameMessageDeliveryIdentity = (
 const error = (reason: MessageDeliveryError["reason"], operation: string, cause?: unknown) =>
   MessageDeliveryError.make({ reason, operation, ...(cause === undefined ? {} : { cause }) });
 
+/**
+ * Validates a value against a schema's decoded shape and reports a delivery validation error
+ * labeled with the operation.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateMessageDelivery = <A, I>(
   schema: Schema.Codec<A, I>,
   value: unknown,
@@ -380,7 +572,12 @@ const MessageDeliveryPreparation = Schema.Struct({
   predecessor: Schema.optionalKey(IdempotencyKey),
 });
 
-/** Freeze and digest the complete admission envelope before publishing the obligation. */
+/**
+ * Freeze and digest the complete admission envelope before publishing the obligation.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const prepareMessageDelivery = Effect.fnUntraced(function* (options: {
   readonly key: MessageDeliveryKey;
   readonly envelope: PreparedInput;
@@ -451,6 +648,9 @@ export const prepareMessageDelivery = Effect.fnUntraced(function* (options: {
  * Derive source-owned outbox rows from privately captured canonical records. Native adapters
  * publish these rows, their due indexes and the source records in one transaction. The v1
  * record contract uses the default delivery policy; replay retains the existing row's progress.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const prepareCanonicalMessageDeliveries = Effect.fnUntraced(function* (
   threadId: ThreadId,
@@ -502,7 +702,12 @@ export const prepareCanonicalMessageDeliveries = Effect.fnUntraced(function* (
   return deliveries;
 });
 
-/** Pure reducer used under the adapter's atomic compare-and-swap boundary. */
+/**
+ * Pure reducer used under the adapter's atomic compare-and-swap boundary.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const applyMessageDeliveryChange = (
   record: MessageDeliveryRecord,
   change: MessageDeliveryChange,
@@ -689,11 +894,23 @@ export const applyMessageDeliveryChange = (
   });
 };
 
+/**
+ * Bounds one delivery wave to 1–100 records and 1–32 concurrent operations.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MessageDeliveryDriverLimits = Schema.Struct({
   batchSize: Positive.check(Schema.isLessThanOrEqualTo(100)),
   concurrency: Positive.check(Schema.isLessThanOrEqualTo(32)),
 });
 
+/**
+ * Decoded value of {@link MessageDeliveryDriverLimits}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MessageDeliveryDriverLimits = typeof MessageDeliveryDriverLimits.Type;
 
 /**
@@ -701,6 +918,9 @@ export type MessageDeliveryDriverLimits = typeof MessageDeliveryDriverLimits.Typ
  * after source/receiver settlement. Failed or interrupted calls retain their expiring claim;
  * no ordinary tool is replayed here, only idempotent PreparedInput admission/status lookup.
  * Spans expose operation names; envelopes, principals, and message contents are never logged.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class MessageDeliveryDriver extends Context.Service<
   MessageDeliveryDriver,

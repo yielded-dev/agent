@@ -1,3 +1,10 @@
+/**
+ * Per-Run history staging and commit with adapters that retain shared Thread conversations
+ * incrementally or only after success.
+ *
+ * @since 0.1.0
+ */
+
 import type * as Prompt from "effect/ai/Prompt";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -13,7 +20,12 @@ import {
   type ThreadError,
 } from "../core/Thread.ts";
 
-/** A history adapter rejected a read, staged value, or completed Run commit. */
+/**
+ * A history adapter rejected a read, staged value, or completed Run commit.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadHistoryError extends Schema.TaggedError<ThreadHistoryError>()(
   "ThreadHistoryError",
   {
@@ -41,6 +53,9 @@ export class ThreadHistoryError extends Schema.TaggedError<ThreadHistoryError>()
  * Commit must succeed before RunCompleted becomes observable. Schema-encoded input is opaque
  * here; the adapter owns its persistence boundary. A failed commit may have reached storage;
  * callers must inspect history before retrying external execution.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ThreadHistoryRun {
   readonly prompt: Prompt.Prompt;
@@ -60,6 +75,9 @@ export interface ThreadHistoryRun {
  * PersistentHistory.layer from @yielded/agent/persistent-history instead commits successful
  * Runs to an explicit ThreadStore. Durable hosts retain history through their journal hooks.
  * No implementation may retry model or Tool execution or claim interrupted-work recovery.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ThreadHistory extends Context.Service<
   ThreadHistory,
@@ -130,5 +148,10 @@ export class ThreadHistory extends Context.Service<
   static readonly layer = ThreadHistory.layerFromStore.pipe(Layer.provideMerge(layerMemory));
 }
 
-/** Retain in-memory conversation history for the application Scope. */
+/**
+ * Retain in-memory conversation history for the application Scope.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const layer = ThreadHistory.layer;

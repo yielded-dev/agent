@@ -1,3 +1,8 @@
+/**
+ * Adapter-neutral certification of storage contracts, durable recovery, and supplied real-loss evidence.
+ *
+ * @since 0.1.0
+ */
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { DurableWorkerBinding, type ResolvedBinding } from "@yielded/agent/agent-registration";
@@ -65,32 +70,6 @@ import * as Stream from "effect/Stream";
 
 import { makeCertificationReport } from "./internal/certification-report.ts";
 
-/**
- * P7 WP2 — `certifyDurableAdapters` (plan §1): the one certification entry point a durable
- * adapter pair runs to earn a Schema-encoded certificate.
- *
- * - **Tier 1 — port contract**: the two shared conformance case arrays, verbatim, through
- *   `certifyPorts` (TEST-004/STORE-010).
- * - **Tier 2 — coordinator protocol + failpoint convergence**: the durable coordinator is
- *   assembled over the CANDIDATE Layer pair with a scripted deterministic model; every
- *   reached `DurableRuntimeFailpointLocation` is armed one-shot across the six scenario shapes
- *   (plain / uncertain-tool / durable-steps / approval / join / delegation). Unreached locations
- *   share a verified clean run per shape; new unaccounted-for locations get a full sweep.
- *   After the injected fault the runner asserts the state stays CLASSIFIABLE (recovery +
- *   the public unblocking operations `resolveUnknown`/`resolveApproval` are the only levers
- *   used) and that the re-drive CONVERGES to `verifyThreadInvariants` with `requireAllSettled`,
- *   including schema, identity, order and active state from native paged verification.
- * - **Tier 3 — real loss lever**: recorded honestly. A durable adapter either supplies a
- *   `CertificationCrashLever` executed in this run, cites its committed real-loss evidence
- *   (process-kill / eviction suites), or the certificate says `not-exercised`. A non-durable
- *   reference adapter records `not-applicable`.
- *
- * The runner is adapter-neutral and platform-neutral: it imports nothing Node-only, so the
- * same entry point runs under `@effect/vitest` on Node and inside workerd (storage-cloudflare's
- * in-workerd runner). Tier 1 uses a TestClock to show that elapsed time cannot replace a live
- * owner; only `Crypto.Crypto` is required from the environment.
- */
-
 // ---------------------------------------------------------------------------
 // Options
 // ---------------------------------------------------------------------------
@@ -100,9 +79,18 @@ import { makeCertificationReport } from "./internal/certification-report.ts";
  * run (kill/evict/reopen around a designated row subset). Rows report with
  * `suite: "real-loss"`. Failures must be captured per-row — the lever's error channel is
  * `never` so a certificate is always produced.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type CertificationCrashLever = Effect.Effect<ReadonlyArray<CertificationCaseResult>>;
 
+/**
+ * Candidate storage layers and optional real-loss evidence used by adapter certification.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface CertifyDurableAdaptersOptions<LedgerE = never, StoreE = never> {
   /** Adapter pair identity named by the certificate (durability is read from the ledger). */
   readonly adapter: {
@@ -130,7 +118,12 @@ export interface CertifyDurableAdaptersOptions<LedgerE = never, StoreE = never> 
   readonly tierThreeEvidence?: ReadonlyArray<string> | undefined;
 }
 
-/** The six Tier-2 scenario shapes in sweep order. */
+/**
+ * The six Tier-2 scenario shapes in sweep order.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const CERTIFICATION_SCENARIOS: ReadonlyArray<CertificationScenario> = [
   "plain",
   "uncertain-tool",
@@ -149,6 +142,9 @@ export const CERTIFICATION_SCENARIOS: ReadonlyArray<CertificationScenario> = [
  * `durable-subagents.test.ts` abort propagation) and by the process-kill/eviction crash
  * matrices. Runner tests assert the observed never-fired set equals EXACTLY this list, so a
  * protocol change that silently stops exercising a location fails the certification.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export const TIER2_UNREACHED_LOCATIONS: ReadonlyArray<DurableRuntimeFailpointLocation> = [
   // Active timeout recording is covered before/after append by durable-runtime.test.ts.
@@ -204,7 +200,12 @@ export const TIER2_UNREACHED_LOCATIONS: ReadonlyArray<DurableRuntimeFailpointLoc
   "update:after-canonical-append",
 ];
 
-/** Locations of `tier2` rows whose armed fault never fired in ANY scenario, sorted. */
+/**
+ * Locations of `tier2` rows whose armed fault never fired in ANY scenario, sorted.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const tier2NeverFiredLocations = (
   tier2: ReadonlyArray<CertificationSweepResult>,
 ): ReadonlyArray<DurableRuntimeFailpointLocation> => {
@@ -903,7 +904,7 @@ const runSweepCell = Effect.fnUntraced(function* (
  * real-loss citations are recorded (`recorded-evidence`); otherwise the certificate says
  * `not-exercised` — a scoped statement, never a silent claim.
  */
-export const resolveTierThree = Effect.fnUntraced(function* (
+const resolveTierThree = Effect.fnUntraced(function* (
   durability: CertifiedAdapterIdentity["durability"],
   options: {
     readonly crashLever?: CertificationCrashLever | undefined;
@@ -957,12 +958,16 @@ const nowUtc: Effect.Effect<DateTime.Utc> = Effect.map(Clock.currentTimeMillis, 
 );
 
 /**
- * Certify one durable adapter pair (plan §1, §8 WP2). Runs Tier 2 FIRST over pristine
- * storage (each cell converges to all-settled before the next starts, so the recovery scan
- * never sees foreign leftovers), then Tier 1's port contract cases (whose lanes deliberately
- * end in every nonterminal shape), then records Tier 3. Requires `Crypto.Crypto` and a
- * TestClock-backed environment; the candidate Layers are built exactly once.
- * Missing required durable storage capabilities fail with `ThreadStoreError`.
+ * Certify a candidate adapter pair with coordinator recovery sweeps and port contract checks.
+ * Start with pristine storage: recovery sweeps run first and settle each scenario before the
+ * next begins. Tier 3 executes the supplied real-loss lever or records citations without
+ * claiming that real loss was exercised in this run.
+ *
+ * Requires `Crypto.Crypto` and a TestClock-backed environment. Candidate layers are built
+ * once. Missing required durable storage capabilities fail with `ThreadStoreError`.
+ *
+ * @category utils
+ * @since 0.1.0
  */
 export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
   options: CertifyDurableAdaptersOptions<LedgerE, StoreE>,

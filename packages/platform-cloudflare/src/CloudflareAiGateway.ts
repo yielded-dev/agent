@@ -1,3 +1,8 @@
+/**
+ * Route Effect AI HTTP clients through Cloudflare AI Gateway.
+ *
+ * @since 0.1.0
+ */
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -18,12 +23,23 @@ const Segment = Schema.NonEmptyString.check(
 
 const decodeSegment = Schema.decodeUnknownSync(Segment);
 
-/** Options understood by upstream Effect AI clients; no model or provider wrapper is created. */
+/**
+ * Options understood by upstream Effect AI clients; no model or provider wrapper is created.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface ClientOptions {
   readonly apiUrl: string;
   readonly transformClient: (client: HttpClient.HttpClient) => HttpClient.HttpClient;
 }
 
+/**
+ * Account, gateway, and provider identity for provider-specific routing.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface ProviderOptions {
   readonly accountId: string;
   readonly gatewayId: string;
@@ -33,6 +49,12 @@ export interface ProviderOptions {
   readonly apiToken?: Redacted.Redacted<string>;
 }
 
+/**
+ * Account, gateway, and provider endpoint for REST routing.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface RestOptions {
   readonly accountId: string;
   readonly gatewayId: string;
@@ -42,7 +64,12 @@ export interface RestOptions {
   readonly protocol: "responses" | "chat-completions" | "messages";
 }
 
-/** Choose exactly one route: a native provider path or an account REST protocol. */
+/**
+ * Choose exactly one route: a native provider path or an account REST protocol.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type RouteOptions =
   | (ProviderOptions & { readonly protocol?: never })
   | (RestOptions & { readonly provider?: never });
@@ -133,6 +160,9 @@ const clientOptions = (
  * for BYOK-in-request, or omit apiKey for Gateway stored keys / Unified Billing.
  * Provider model names and request bodies pass through unchanged. This module is Node-safe.
  * Custom transforms and redirect policies must retain this endpoint and credential boundary.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const provider = (options: ProviderOptions): ClientOptions =>
   clientOptions(
@@ -146,6 +176,9 @@ export const provider = (options: ProviderOptions): ClientOptions =>
  * model names, e.g. openai/gpt-6-sol or anthropic/claude-haiku-4.5, and omit provider apiKey.
  * OpenAI clients append /responses or /chat/completions; Anthropic appends /v1/messages.
  * Compatibility remains the responsibility of the selected upstream client and model.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const rest = (options: RestOptions): ClientOptions =>
   clientOptions(
@@ -167,6 +200,9 @@ export const rest = (options: RestOptions): ClientOptions =>
  *   Gateway.provide(AnthropicClient.layer, { ...options, provider: "anthropic" }),
  * )
  * ```
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const provide = <Client, E, R>(
   clientLayer: (options: ClientOptions) => Layer.Layer<Client, E, R>,

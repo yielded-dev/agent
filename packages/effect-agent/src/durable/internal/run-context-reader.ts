@@ -15,7 +15,12 @@ import {
 } from "../ThreadStore.ts";
 import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 
-/** Canonical history access bound by the recovery or verification-snapshot owner. */
+/**
+ * Canonical history access bound by the recovery or verification-snapshot owner.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class RunContextReader extends Context.Service<
   RunContextReader,
   {

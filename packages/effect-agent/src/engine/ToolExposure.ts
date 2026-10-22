@@ -1,9 +1,23 @@
+/**
+ * Engine snapshots and host visibility hooks for eligible native Tools and programmatic catalogue
+ * entries.
+ *
+ * @since 0.1.0
+ */
+
 import type * as Tool from "effect/ai/Tool";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 
 import type { RunId, ThreadId } from "../core/Identifiers.ts";
 
+/**
+ * One discoverable native Tool or programmatic Code Mode method, retaining the native Tool that
+ * owns its execution.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CatalogEntry =
   | {
       readonly kind: "native";
@@ -19,7 +33,12 @@ export type CatalogEntry =
       readonly nativeToolName: string;
     };
 
-/** Engine-owned per-Turn snapshot. All candidates passed host visibility and inherited grants. */
+/**
+ * Engine-owned per-Turn snapshot. All candidates passed host visibility and inherited grants.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class CurrentToolCatalog extends Context.Service<
   CurrentToolCatalog,
   {
@@ -27,7 +46,12 @@ export class CurrentToolCatalog extends Context.Service<
   }
 >()("@effect-agent/engine/ToolExposure/CurrentToolCatalog") {}
 
-/** Host visibility is checked before a discovery Handler may inspect candidate documentation. */
+/**
+ * Host visibility is checked before a discovery Handler may inspect candidate documentation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface VisibilityRequest {
   readonly threadId: ThreadId;
   readonly runId: RunId;
@@ -37,12 +61,22 @@ export interface VisibilityRequest {
   readonly toolNames: ReadonlyArray<string>;
 }
 
-/** Resolve host dependencies when constructing the policy Layer. */
+/**
+ * Resolve host dependencies when constructing the policy Layer.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface VisibilityHook {
   readonly visible: (request: VisibilityRequest) => Effect.Effect<ReadonlyArray<string>>;
 }
 
-/** Optional host policy captured by durable runtimes; action authorization remains independent. */
+/**
+ * Optional host policy captured by durable runtimes; action authorization remains independent.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const RunToolVisibility = Context.Reference<VisibilityHook | undefined>(
   "@effect-agent/engine/ToolExposure/RunToolVisibility",
   { defaultValue: () => undefined },

@@ -29,11 +29,13 @@ import { RunToolVisibility, type CatalogEntry, type VisibilityRequest } from "..
 
 const invalid = (message: string) => ModelProtocolError.make({ message });
 
+/** @internal */
 export const decodeSelection = (value: unknown) =>
   Schema.decodeUnknownEffect(Selection)(value).pipe(
     Effect.mapError(() => invalid("Invalid Tool exposure selection")),
   );
 
+/** @internal */
 export const decodeSnapshot = (value: unknown) =>
   Schema.decodeUnknownEffect(Snapshot)(value).pipe(
     Effect.mapError(() => invalid("Invalid recorded Tool exposure snapshot")),
@@ -53,6 +55,7 @@ export const decodeSnapshot = (value: unknown) =>
     ),
   );
 
+/** @internal */
 export const eligibleCatalog = Effect.fnUntraced(function* (
   definition: AnyDefinition,
   request: Omit<VisibilityRequest, "toolNames">,
@@ -123,6 +126,7 @@ export const eligibleCatalog = Effect.fnUntraced(function* (
   );
 });
 
+/** @internal */
 export const validateSelection = Effect.fnUntraced(function* (
   value: unknown,
   definition: AnyDefinition,
@@ -147,6 +151,7 @@ export const validateSelection = Effect.fnUntraced(function* (
   return Selection.make({ toolNames: Object.freeze([...selection.toolNames]) });
 });
 
+/** @internal */
 export const exposureSnapshot = Effect.fnUntraced(function* (
   definition: AnyDefinition,
   selection: Selection | undefined,

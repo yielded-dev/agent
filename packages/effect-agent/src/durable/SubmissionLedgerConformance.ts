@@ -1,3 +1,10 @@
+/**
+ * Adapter-neutral contracts for admission, readiness, ownership, control intents, child
+ * reservations, and settlement obligations.
+ *
+ * @since 0.1.0
+ */
+
 import type * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -102,7 +109,12 @@ import {
   getRecord,
 } from "./ThreadStore.ts";
 
-/** A SubmissionLedger contract invariant that an adapter under test violated. */
+/**
+ * A SubmissionLedger contract invariant that an adapter under test violated.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class SubmissionLedgerConformanceViolation extends Schema.TaggedError<SubmissionLedgerConformanceViolation>()(
   "SubmissionLedgerConformanceViolation",
   {
@@ -111,6 +123,13 @@ export class SubmissionLedgerConformanceViolation extends Schema.TaggedError<Sub
   },
 ) {}
 
+/**
+ * Ledger, settlement-publication, digest, or shared contract assertion failures during adapter
+ * conformance checks.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubmissionLedgerConformanceFailure =
   | SubmissionLedgerFailure
   | SettlementPublicationFailure
@@ -124,6 +143,9 @@ export type SubmissionLedgerConformanceFailure =
  * `@effect/vitest` test environment (`it.effect`), and they compute real content digests, so the
  * host suite must provide `Crypto.Crypto` and the same owner's `ThreadStore` and
  * `SettlementPublisher`.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface SubmissionLedgerConformanceCase {
   readonly name: string;
@@ -4633,6 +4655,9 @@ const cooperativeHandoff = conformanceCase(
  * The shared, adapter-parameterized SubmissionLedger contract suite (STORE-010). Every durable
  * ledger adapter test suite must execute each case against its own ledger provisioning, inside
  * the `@effect/vitest` test environment (TestClock) and with `Crypto.Crypto` provided.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const submissionLedgerConformanceCases: ReadonlyArray<SubmissionLedgerConformanceCase> = [
   admissionIdempotency,

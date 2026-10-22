@@ -1,3 +1,10 @@
+/**
+ * Schema-validated Run limits and context-compaction policy for Agent definitions. Count ceilings may
+ * be unbounded; wall-clock duration remains finite.
+ *
+ * @since 0.1.0
+ */
+
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -22,7 +29,12 @@ const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 const CompactionMode = Schema.Literals(["prune", "summarize", "prune-then-summarize"]);
 
-/** Inputs normalized and validated by `CompactionPolicy.make`. */
+/**
+ * Inputs normalized and validated by `CompactionPolicy.make`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CompactionPolicyInput = Readonly<{
   /** Estimated tokens of recent history preserved verbatim across a compaction; defaults to `20_000`. */
   readonly keepRecentTokens?: number;
@@ -30,7 +42,12 @@ export type CompactionPolicyInput = Readonly<{
   readonly mode?: typeof CompactionMode.Type;
 }>;
 
-/** How the engine reduces model context when `contextTokenLimit` is crossed. */
+/**
+ * How the engine reduces model context when `contextTokenLimit` is crossed.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CompactionPolicy extends Schema.Class<CompactionPolicy>("CompactionPolicy")({
   keepRecentTokens: PositiveInt,
   mode: CompactionMode,
@@ -108,7 +125,12 @@ const AgentPolicyFields = Schema.Struct({
 
 type AgentPolicyFields = typeof AgentPolicyFields.Type;
 
-/** Inputs normalized and validated by `AgentPolicy.make`. */
+/**
+ * Inputs normalized and validated by `AgentPolicy.make`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type AgentPolicyInput = Readonly<
   Omit<
     AgentPolicyFields,
@@ -143,7 +165,12 @@ export type AgentPolicyInput = Readonly<
   }
 >;
 
-/** Schema class for agent run limits; wall-clock duration remains finite. */
+/**
+ * Schema class for agent run limits; wall-clock duration remains finite.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AgentPolicy extends Schema.Class<AgentPolicy>("AgentPolicy")(AgentPolicyFields) {
   /** Resolve an optional declaration against standalone or inherited defaults. */
   static resolve(input: Partial<AgentPolicyInput> = {}, parent?: AgentPolicy): AgentPolicy {

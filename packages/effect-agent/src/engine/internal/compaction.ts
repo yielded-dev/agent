@@ -18,20 +18,45 @@ import { boundedCanonicalJsonSnapshot } from "./provider-result-staging.ts";
  * append-only within an Attempt; only the outgoing model prompt is rebuilt.
  */
 
-/** Model-visible replacement for a tool result cleared by prune compaction. */
+/**
+ * Model-visible replacement for a tool result cleared by prune compaction.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const CLEARED_TOOL_RESULT = "[tool result cleared by compaction]";
 
-/** Prefix of the user message that carries a compaction summary into the prompt. */
+/**
+ * Prefix of the user message that carries a compaction summary into the prompt.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const COMPACTION_SUMMARY_PREFIX = "The prior thread was compacted into this summary:\n\n";
 
-/** Rollover text is recovery evidence; it never asserts that an external action succeeded. */
+/**
+ * Rollover text is recovery evidence; it never asserts that an external action succeeded.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const CONTEXT_ROLLOVER_PREFIX =
   "A fresh context window has started. Earlier conversation has left this model view. Restore relevant notes and use available history tools to retrieve evidence; verify live state before repeating an action.\n\n";
 
-/** Stable across Attempts; the initial window uses turn zero. */
+/**
+ * Stable across Attempts; the initial window uses turn zero.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const contextWindowId = (runId: string, turn: number): string => `context:${runId}:${turn}`;
 
-/** Shared by the live interpreter and canonical journal projection. */
+/**
+ * Shared by the live interpreter and canonical journal projection.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const contextWindowMessage = (windowId: string, handoff?: string): Prompt.Message =>
   Prompt.makeMessage("user", {
     content: [
@@ -45,6 +70,7 @@ export const contextWindowMessage = (windowId: string, handoff?: string): Prompt
  * Fixed summarization instruction (RUN-026). The skeleton mirrors what the
  * surveyed harnesses converged on; exact file paths and identifiers must
  * survive because the continuing agent sees only this summary plus the tail.
+ * @internal
  */
 export const COMPACTION_INSTRUCTION = [
   "You are compacting an agent thread to reclaim context space.",
@@ -70,7 +96,10 @@ export const COMPACTION_INSTRUCTION = [
 const CONTEXT_OVERFLOW_PATTERN =
   /context[\s_-]?length|prompt is too long|maximum context (?:length|window)|input .{0,24}too long|exceeds .{0,24}context|too many (?:input )?tokens|context[\s_-]?window[\s_-]?exceeded|context overflow/i;
 
-/** RUN-027: does this provider error text describe a context-window overflow? */
+/**
+ * RUN-027: does this provider error text describe a context-window overflow?
+ * @internal
+ */
 export const isContextOverflowMessage = (text: string): boolean =>
   CONTEXT_OVERFLOW_PATTERN.test(text);
 
@@ -78,6 +107,9 @@ export const isContextOverflowMessage = (text: string): boolean =>
  * Deterministic context estimate: UTF-8 bytes/4 for text and structural JSON,
  * plus image reservations based on dimensions when available. Image encodings
  * are transport, not text tokens. This never changes the model-visible message.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const estimateMessageTokens = (message: Prompt.Message): number => {
   let text: string | undefined;
@@ -110,7 +142,12 @@ export const estimateMessageTokens = (message: Prompt.Message): number => {
   );
 };
 
-/** Sum of `estimateMessageTokens` over a message array. */
+/**
+ * Sum of `estimateMessageTokens` over a message array.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const estimatePromptTokens = (
   messages: ReadonlyArray<Prompt.Message>,
   estimate: (message: Prompt.Message) => number = estimateMessageTokens,
@@ -126,7 +163,10 @@ export const estimatePromptTokens = (
 
 const isTokenEstimate = Schema.is(Schema.Natural);
 
-/** Validate each replacement at the Effect caller's boundary without throwing from arithmetic. */
+/**
+ * Validate each replacement at the Effect caller's boundary without throwing from arithmetic.
+ * @internal
+ */
 export const evaluateMessageTokenEstimates = <A>(
   override: ContextMessageTokenEstimator | undefined,
   operation: (estimate: (message: Prompt.Message) => number) => A,
@@ -150,6 +190,9 @@ export const evaluateMessageTokenEstimates = <A>(
  * are positions in the SOURCE prompt (the official-history basis handed to
  * each Turn). Ordinary history grows append-only. Prepared history must retain
  * content-equivalent covered prefixes or the engine rejects the next Turn.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ContextCompactionState {
   /**
@@ -188,7 +231,10 @@ export interface ContextCompactionState {
   lastViewLength: number;
 }
 
-/** Fresh compaction state for a new Run. */
+/**
+ * Fresh compaction state for a new Run.
+ * @internal
+ */
 export const initialCompactionState = (): ContextCompactionState => ({
   protectedStart: -1,
   protectedEnd: -1,
@@ -251,6 +297,7 @@ const summaryMessage = (summary: string): Prompt.Message =>
  * compaction state: protected block in place, covered span replaced by the
  * summary message, old tool results cleared. Identity when no compaction has
  * happened.
+ * @internal
  */
 export const buildCompactedView = (
   source: ReadonlyArray<Prompt.Message>,
@@ -314,6 +361,7 @@ export const buildCompactedView = (
  * estimates fit inside `keepRecentTokens`. If the whole view exceeds `targetTokens`,
  * clear more older results until it fits or only the newest result remains.
  * Replaced messages consume no retention budget. Never decreases the bound.
+ * @internal
  */
 export const choosePruneBound = (
   source: ReadonlyArray<Prompt.Message>,
@@ -394,6 +442,7 @@ export const choosePruneBound = (
  * Walks newest→oldest accumulating view estimates until `keepRecentTokens`
  * is retained, then moves the cut down to keep leading user/system messages
  * with their assistant response and tool results with their declaring assistant.
+ * @internal
  */
 export const chooseSummarizeCut = (
   source: ReadonlyArray<Prompt.Message>,
@@ -432,6 +481,7 @@ export const chooseSummarizeCut = (
  * cut, protected block excluded, in order. Starting at the replacement boundary
  * keeps repeated compactions incremental: the previously covered span lives
  * on only through the previous summary, never as resubmitted raw history.
+ * @internal
  */
 export const collectCoveredMessages = (
   source: ReadonlyArray<Prompt.Message>,
@@ -490,10 +540,14 @@ const partText = (part: Prompt.Message["content"][number] | string): string => {
 /**
  * Character budget for the complete default summarizer request, including
  * its instruction, transcript delimiters, previous summary, and elision marker.
+ * @internal
  */
 export const SUMMARY_INPUT_BUDGET = 80_000;
+/** @internal */
 export const SUMMARY_MAX_LENGTH = 65_536;
+/** @internal */
 export const SUMMARY_REQUEST_PREFIX = `${COMPACTION_INSTRUCTION}\n\n<transcript>\n`;
+/** @internal */
 export const SUMMARY_REQUEST_SUFFIX = "\n</transcript>";
 
 const SUMMARY_MESSAGE_CLIP = 2_000;
@@ -523,6 +577,7 @@ const summaryBlock = (message: Prompt.Message): string => {
  * Deterministic emergency input record, not a progress summary. Keep recent user inputs and
  * the last, as-yet-unconsumed Tool batch. Clip before rendering large payloads, identify Tool
  * calls for archive lookup, and never recursively copy earlier recovery records.
+ * @internal
  */
 export const buildRolloverHandoff = (
   source: ReadonlyArray<Prompt.Message>,
@@ -608,6 +663,7 @@ export const buildRolloverHandoff = (
  * marker. A previous summary is folded in first so nothing silently drops
  * out of coverage across repeated compactions. An oversized previous summary
  * returns undefined before rendering: callers must reject it, never truncate it.
+ * @internal
  */
 export const renderForSummary = (
   covered: ReadonlyArray<Prompt.Message>,

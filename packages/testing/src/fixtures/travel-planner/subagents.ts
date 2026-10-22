@@ -1,3 +1,8 @@
+/**
+ * Bounded destination research delegation with scripted child models and explicit result projections.
+ *
+ * @since 0.1.0
+ */
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { type RuntimeBinding } from "@yielded/agent/agent-runtime";
@@ -25,16 +30,34 @@ import { AirportCode } from "./definition.ts";
 // travel-service Tool; it never becomes a second child loop (SUB-001/003).
 // ---------------------------------------------------------------------------
 
+/**
+ * The destination requested from the research guide.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class DestinationQuery extends Schema.Class<DestinationQuery>("DestinationQuery")({
   destination: AirportCode,
 }) {}
 
+/**
+ * Destination highlights and advisory text returned by the guide.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class DestinationFacts extends Schema.Class<DestinationFacts>("DestinationFacts")({
   destination: AirportCode,
   highlights: Schema.Array(Schema.String),
   advisory: Schema.NonEmptyString,
 }) {}
 
+/**
+ * The guide could not supply facts for the requested destination.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DestinationGuideUnavailable extends Schema.TaggedError<DestinationGuideUnavailable>()(
   "DestinationGuideUnavailable",
   {
@@ -43,6 +66,12 @@ export class DestinationGuideUnavailable extends Schema.TaggedError<DestinationG
   },
 ) {}
 
+/**
+ * Looks up destination facts or reports typed unavailability.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class DestinationGuide extends Context.Service<
   DestinationGuide,
   {
@@ -52,6 +81,12 @@ export class DestinationGuide extends Context.Service<
   }
 >()("@effect-agent/testing/travel-planner/DestinationGuide") {}
 
+/**
+ * A destination lookup tool backed by DestinationGuide.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const LookupDestination = Tool.make("lookup_destination", {
   parameters: DestinationQuery,
   success: DestinationFacts,
@@ -60,23 +95,53 @@ export const LookupDestination = Tool.make("lookup_destination", {
   dependencies: [DestinationGuide],
 });
 
+/**
+ * The destination lookup tool available to the researcher child.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const DestinationResearcherToolkit = Toolkit.make(LookupDestination);
 
+/**
+ * Connects the child lookup handler to DestinationGuide.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const DestinationResearcherToolkitLayer = DestinationResearcherToolkit.toLayer({
   lookup_destination: (query) => Effect.flatMap(DestinationGuide, (guide) => guide.lookup(query)),
 });
 
+/**
+ * The destination and focus passed into the researcher child.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class DestinationBrief extends Schema.Class<DestinationBrief>("DestinationBrief")({
   destination: AirportCode,
   focus: Schema.NonEmptyString,
 }) {}
 
+/**
+ * The bounded research report returned by the child.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class DestinationReport extends Schema.Class<DestinationReport>("DestinationReport")({
   destination: AirportCode,
   highlights: Schema.Array(Schema.String),
   advisory: Schema.NonEmptyString,
 }) {}
 
+/**
+ * A child agent that looks up one destination and returns a bounded report.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const DestinationResearcher = Agent.make("destination-researcher", {
   input: DestinationBrief,
   output: DestinationReport,
@@ -117,7 +182,12 @@ const guideFacts = new Map<string, DestinationFacts>([
   ],
 ]);
 
-/** Deterministic guide lookup shared by the default and test-local guide Layers. */
+/**
+ * Deterministic guide lookup shared by the default and test-local guide Layers.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const destinationLookup = (
   query: DestinationQuery,
 ): Effect.Effect<DestinationFacts, DestinationGuideUnavailable> => {
@@ -144,7 +214,12 @@ const requireDestinationFacts = (destination: string): DestinationFacts => {
   return facts;
 };
 
-/** The report the scripted researcher writes after consulting the guide. */
+/**
+ * The report the scripted researcher writes after consulting the guide.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const destinationReportFor = (destination: string): DestinationReport => {
   const facts = requireDestinationFacts(destination);
 
@@ -155,15 +230,32 @@ export const destinationReportFor = (destination: string): DestinationReport => 
   });
 };
 
+/**
+ * Encode the expected destination report as JSON for a scripted model response.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const encodedDestinationReport = (destination: string): string =>
   JSON.stringify(Schema.encodeSync(DestinationReport)(destinationReportFor(destination)));
 
+/**
+ * Provides destination facts from the deterministic research corpus.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const DestinationGuideLayer = Layer.succeed(
   DestinationGuide,
   DestinationGuide.of({ lookup: destinationLookup }),
 );
 
-/** Child-side construction requirements of the delegation handler Layer. */
+/**
+ * Child-side construction requirements of the delegation handler Layer.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const DestinationResearchSupportLayer = Layer.mergeAll(
   DestinationResearcherToolkitLayer,
   DestinationGuideLayer,
@@ -174,6 +266,12 @@ export const DestinationResearchSupportLayer = Layer.mergeAll(
 // one Effect AI Tool with explicit input/result projections and finite bounds.
 // ---------------------------------------------------------------------------
 
+/**
+ * The destination and focus requested through the coordinator delegation tool.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class DestinationResearchRequest extends Schema.Class<DestinationResearchRequest>(
   "DestinationResearchRequest",
 )({
@@ -181,6 +279,12 @@ export class DestinationResearchRequest extends Schema.Class<DestinationResearch
   focus: Schema.NonEmptyString,
 }) {}
 
+/**
+ * The projected destination findings permitted to cross back to the parent.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class DestinationResearchFindings extends Schema.Class<DestinationResearchFindings>(
   "DestinationResearchFindings",
 )({
@@ -188,6 +292,12 @@ export class DestinationResearchFindings extends Schema.Class<DestinationResearc
   summary: Schema.NonEmptyString,
 }) {}
 
+/**
+ * A child research failure exposed through its error tag.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DestinationResearchFailed extends Schema.TaggedError<DestinationResearchFailed>()(
   "DestinationResearchFailed",
   {
@@ -201,11 +311,20 @@ export class DestinationResearchFailed extends Schema.TaggedError<DestinationRes
  * concurrent delegation preflights without sleeps. It also keeps the
  * projection's construction requirements honestly visible in the handler
  * Layer's `R`. The open Layer never waits.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ResearchDispatchGate extends Context.Service<
   ResearchDispatchGate,
   { readonly awaitDispatch: (destination: string) => Effect.Effect<void> }
 >()("@effect-agent/testing/travel-planner/ResearchDispatchGate") {
+  /**
+   * Allow every research dispatch immediately.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static readonly layerOpen = Layer.succeed(
     this,
     ResearchDispatchGate.of({ awaitDispatch: () => Effect.void }),
@@ -216,6 +335,9 @@ export class ResearchDispatchGate extends Context.Service<
  * Finite per-invocation bounds (SUB-009): each child may use two Turns and
  * one Tool Call; the parent Run may establish at most two children with at
  * most two running concurrently.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const destinationResearchPolicy = SubagentPolicy.make({
   maxChildren: 2,
@@ -225,6 +347,12 @@ export const destinationResearchPolicy = SubagentPolicy.make({
   maxDuration: "10 seconds",
 });
 
+/**
+ * Delegates bounded destination research and projects only approved findings to the parent.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const destinationResearchDelegation = Subagent.make("delegate_destination_research", {
   description:
     "Research one candidate destination with the deterministic travel guide and return a bounded finding.",
@@ -254,12 +382,22 @@ export const destinationResearchDelegation = Subagent.make("delegate_destination
   policy: destinationResearchPolicy,
 });
 
-/** Total mapping from every expected child Run failure to the declared Tool failure (SUB-028). */
+/**
+ * Total mapping from every expected child Run failure to the declared Tool failure (SUB-028).
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const mapResearchChildFailure = (failure: {
   readonly _tag: string;
 }): DestinationResearchFailed => DestinationResearchFailed.make({ childErrorTag: failure._tag });
 
-/** Runtime wiring: pair the immutable delegation with one explicit child Binding. */
+/**
+ * Runtime wiring: pair the immutable delegation with one explicit child Binding.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const destinationResearchHandlersLayer = <ModelProvides, ModelRequires>(
   childBinding: RuntimeBinding<
     typeof DestinationBrief,
@@ -278,11 +416,23 @@ export const destinationResearchHandlersLayer = <ModelProvides, ModelRequires>(
 // Travel Coordinator: the parent Agent that delegates destination research.
 // ---------------------------------------------------------------------------
 
+/**
+ * The coordinator mission and candidate destinations.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ResearchMission extends Schema.Class<ResearchMission>("ResearchMission")({
   request: Schema.NonEmptyString,
   candidates: Schema.Array(AirportCode).check(Schema.isMinLength(1)),
 }) {}
 
+/**
+ * One researched destination and its bounded recommendation.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class DestinationRecommendation extends Schema.Class<DestinationRecommendation>(
   "DestinationRecommendation",
 )({
@@ -290,6 +440,12 @@ export class DestinationRecommendation extends Schema.Class<DestinationRecommend
   summary: Schema.NonEmptyString,
 }) {}
 
+/**
+ * The coordinator output containing researched destination recommendations.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class DestinationShortlist extends Schema.Class<DestinationShortlist>(
   "DestinationShortlist",
 )({
@@ -297,12 +453,35 @@ export class DestinationShortlist extends Schema.Class<DestinationShortlist>(
   nextAction: Schema.Literal("review"),
 }) {}
 
-/** Parent-only transcript markers used to prove child context isolation (SUB-006/015). */
+/**
+ * Parent-only transcript markers used to prove child context isolation (SUB-006/015).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const coordinatorConfidentialMarker = "coordinator-vault-7q42";
+/**
+ * Synthetic private mission marker used to detect leakage across the child boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const missionConfidentialMarker = "traveler-dossier-19f";
 
+/**
+ * The destination research delegation tool exposed to the coordinator.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const TravelCoordinatorToolkit = Toolkit.make(destinationResearchDelegation.tool);
 
+/**
+ * A coordinator that delegates destination research and returns a bounded shortlist.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const TravelCoordinator = Agent.make("travel-coordinator", {
   input: ResearchMission,
   output: DestinationShortlist,
@@ -323,11 +502,23 @@ export const TravelCoordinator = Agent.make("travel-coordinator", {
     "Coordinate bounded destination research through one declared attached delegation Tool.",
 });
 
+/**
+ * The deterministic multi-destination mission submitted to the coordinator.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const researchMission = Schema.decodeSync(ResearchMission)({
   request: `Shortlist one September culture city; keep ${missionConfidentialMarker} inside the coordinator thread.`,
   candidates: ["LHR", "CDG"],
 });
 
+/**
+ * The expected shortlist for the deterministic research mission.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const expectedDestinationShortlist = DestinationShortlist.make({
   recommendations: researchMission.candidates.map((destination) =>
     DestinationRecommendation.make({
@@ -344,13 +535,24 @@ export const expectedDestinationShortlist = DestinationShortlist.make({
 
 const scriptedUsage = { inputTokens: { total: 96 }, outputTokens: { total: 64 } };
 
+/**
+ * A tool call identifier, destination, and focus used to script coordinator delegation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DestinationResearchCall {
   readonly id: string;
   readonly destination: string;
   readonly focus: string;
 }
 
-/** One coordinator Turn that declares the given delegation Tool Calls in order. */
+/**
+ * One coordinator Turn that declares the given delegation Tool Calls in order.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const coordinatorResearchTurn = (
   calls: ReadonlyArray<DestinationResearchCall>,
 ): ScriptedTurnInput => ({
@@ -367,7 +569,12 @@ export const coordinatorResearchTurn = (
   termination: { _tag: "Complete" },
 });
 
-/** The coordinator's final structured-output Turn. */
+/**
+ * The coordinator's final structured-output Turn.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const coordinatorShortlistTurn = (shortlist: DestinationShortlist): ScriptedTurnInput => ({
   _tag: "Stream",
   parts: [
@@ -383,7 +590,12 @@ export const coordinatorShortlistTurn = (shortlist: DestinationShortlist): Scrip
   termination: { _tag: "Complete" },
 });
 
-/** Static researcher script for single-child tests: one guide lookup, then the report. */
+/**
+ * Static researcher script for single-child tests: one guide lookup, then the report.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const researcherHappyPathTurns = (
   destination: string,
 ): readonly [ScriptedTurnInput, ScriptedTurnInput] => [
@@ -423,6 +635,9 @@ export const researcherHappyPathTurns = (
 /**
  * Deterministic controls for parallel researcher children whose completions
  * are released in a caller-selected order without clocks or sleeps.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface DestinationResearcherControls {
   /** Await the first model request of the child researching this destination. */
@@ -462,6 +677,9 @@ const researcherReportParts = (destination: string): ReadonlyArray<Response.Stre
  * prompt, signals `started`, and calls the guide Tool; Turn two waits for the
  * caller's `release` before writing the report. Each child Run builds the
  * Model Layer inside its own scope.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const makeDestinationResearcherModel = Effect.fnUntraced(function* (
   destinations: ReadonlyArray<string>,

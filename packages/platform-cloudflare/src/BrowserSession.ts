@@ -1,3 +1,8 @@
+/**
+ * Application-owned Cloudflare browser sessions with scoped local attachments.
+ *
+ * @since 0.1.0
+ */
 /// <reference types="@cloudflare/workers-types" />
 
 import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
@@ -47,10 +52,7 @@ import {
   reportedBrowserError,
 } from "./internal/browser-failure.ts";
 import { BrowserRunReadonlyLiveView } from "./internal/browser-readonly-live-view.ts";
-import {
-  BrowserRunSessionLifecycle,
-  type BrowserRunLifecycleOptions,
-} from "./internal/browser-session-lifecycle.ts";
+import { BrowserRunSessionLifecycle } from "./internal/browser-session-lifecycle.ts";
 
 export {
   BrowserRunHandoffRequest,
@@ -68,7 +70,12 @@ const PositiveMillis = Schema.Int.check(
 const SessionId = Schema.Redacted(Schema.String.check(Schema.isUUID()));
 const ProviderId = Schema.Redacted(Schema.NonEmptyString.check(Schema.isMaxLength(256)));
 
-/** Private host record, not a model capability. Persist together with the owner's controller state. */
+/**
+ * Private host record, not a model capability. Persist together with the owner's controller state.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserSessionReference extends Schema.Class<BrowserSessionReference>(
   "BrowserSessionReference",
 )({
@@ -80,6 +87,12 @@ export class BrowserSessionReference extends Schema.Class<BrowserSessionReferenc
   commandTimeoutMillis: PositiveMillis,
 }) {}
 
+/**
+ * Session lifetime and command deadlines; keep-alive cannot exceed ten minutes.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class BrowserSessionOptions extends Schema.Class<BrowserSessionOptions>(
   "BrowserSessionOptions",
 )({
@@ -88,7 +101,13 @@ export class BrowserSessionOptions extends Schema.Class<BrowserSessionOptions>(
   commandTimeoutMillis: Schema.optionalKey(PositiveMillis),
 }) {}
 
-/** No SDK text, selectors, page data, or credential values are retained in public failures. */
+/**
+ * Encoded failures omit SDK text, selectors, page data, and credential values.
+ * Original causes remain available only to host code.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BrowserSessionError extends Schema.TaggedError<BrowserSessionError>()(
   "BrowserSessionError",
   {
@@ -116,6 +135,9 @@ export class BrowserSessionError extends Schema.TaggedError<BrowserSessionError>
  * fences old attempts, authorizes human access, and calls BrowserSessions.close on expiry/stop.
  * Native callbacks are trusted host code: never start unawaited work. Adapters retaining SDK
  * handles must scope their release and use run for every operation on the retained page.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface BrowserSession {
   readonly reference: BrowserSessionReference;
@@ -357,11 +379,33 @@ const targetId = (page: Page, commandTimeoutMillis: number) =>
     ),
   );
 
+/**
+ * Host account and redacted REST token used for browser cleanup and Live View.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
+export interface BrowserRunLifecycleOptions {
+  readonly accountId: string;
+  readonly apiToken: Redacted.Redacted<string>;
+}
+
+/**
+ * Host browser binding and REST credentials for application-owned sessions.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface BrowserSessionsOptions extends BrowserRunLifecycleOptions {
   readonly browser: Pick<BrowserRun, "fetch">;
 }
 
-/** Native Cloudflare sessions; no framework browser workflow, checkpoint transfer, or observation policy. */
+/**
+ * Native Cloudflare sessions; no framework browser workflow, checkpoint transfer, or observation policy.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class BrowserSessions extends Context.Service<
   BrowserSessions,
   {
@@ -398,6 +442,7 @@ export class BrowserSessions extends Context.Service<
     ) => Effect.Effect<void, BrowserSessionError>;
   }
 >()("@effect-agent/platform-cloudflare/BrowserSessions") {
+  /** @internal */
   static readonly layerNoDeps = Layer.effect(
     this,
     Effect.gen(function* () {
@@ -962,6 +1007,12 @@ export class BrowserSessions extends Context.Service<
     }),
   );
 
+  /**
+   * Provide scoped session attachments and exact-session cleanup from the host binding and credentials.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static layer(options: BrowserSessionsOptions) {
     return this.layerNoDeps.pipe(
       Layer.provide(BrowserRunBinding.layer(options.browser)),

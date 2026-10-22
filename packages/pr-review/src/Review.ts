@@ -1,3 +1,8 @@
+/**
+ * Bounded, provider-neutral pull-request reviews with host-validated findings.
+ *
+ * @since 0.1.0
+ */
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy, CompactionPolicy } from "@yielded/agent/agent-policy";
 import * as AgentRuntime from "@yielded/agent/agent-runtime";
@@ -36,25 +41,63 @@ const ReviewBlocker = Schema.NonEmptyString.check(Schema.isMaxLength(2_000));
 const ReviewNotesText = Schema.String.check(Schema.isMaxLength(4_000));
 const ReviewNotes = Schema.Struct({ text: ReviewNotesText, revision: Schema.Natural });
 
-/** Host admission bounds, independent of the model's working context. */
+/**
+ * Maximum number of distinct changed paths admitted by one review.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_REVIEW_FILES = 1_000;
+/**
+ * Maximum character count of one admitted textual patch.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_REVIEW_PATCH_CHARS = 2_000_000;
+/**
+ * Maximum aggregate character count of admitted textual patches.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_REVIEW_TOTAL_PATCH_CHARS = 8_000_000;
 const INLINE_PATCH_CHARS = 32_000;
 const DIFF_PAGE_CHARS = 32_000;
 const MAX_REVIEW_TURNS = 4_096;
 const MAX_REVIEW_TOOL_CALLS = 16_384;
 
-/** Native strategies share the same review ledger and execution budgets. */
+/**
+ * Native strategies share the same review ledger and execution budgets.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ReviewCompaction = Schema.Literals(["prune", "rollover"]);
+/**
+ * A native strategy for bounding a review context.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ReviewCompaction = typeof ReviewCompaction.Type;
 
-/** Working-context bound for pressure experiments; it never widens host input admission. */
+/**
+ * Working-context bound for pressure experiments; it never widens host input admission.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ReviewContextTokenLimit = Schema.Int.check(
   Schema.isBetween({ minimum: 16_000, maximum: 128_000 }),
 );
 
-/** Emitted native compaction evidence, without source, summaries, or handoff text. */
+/**
+ * Emitted native compaction evidence, without source, summaries, or handoff text.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ReviewCompactionEvent = Schema.Struct({
   kind: Schema.Literals(["clear-tool-results", "summarize", "rollover"]),
   turn: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -62,8 +105,20 @@ export const ReviewCompactionEvent = Schema.Struct({
   tokensAfterEstimate: Schema.Natural,
 });
 
+/**
+ * Recorded metadata for one native context-compaction event.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ReviewCompactionEvent = typeof ReviewCompactionEvent.Type;
 
+/**
+ * Permitted concurrent research children for an opt-in delegated review.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ReviewResearchConcurrency = Schema.Literals([1, 2]);
 
 const ReviewContextOptions = Schema.Struct({
@@ -74,7 +129,12 @@ const ReviewContextOptions = Schema.Struct({
 
 const ChildCount = Schema.Natural.check(Schema.isLessThanOrEqualTo(2));
 
-/** Measured native delegation events and incomplete child results; contains no child prose. */
+/**
+ * Measured native delegation events and incomplete child results; contains no child prose.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ReviewResearchStats = Schema.Struct({
   delegations: Schema.Natural,
   started: ChildCount,
@@ -84,7 +144,12 @@ export const ReviewResearchStats = Schema.Struct({
   incomplete: ChildCount,
 });
 
-/** One complete textual patch supplied by the host. */
+/**
+ * One complete textual patch supplied by the host.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewChange extends Schema.Class<ReviewChange>(
   "@effect-agent/pr-review/ReviewChange",
 )({
@@ -92,7 +157,12 @@ export class ReviewChange extends Schema.Class<ReviewChange>(
   patch: Schema.NonEmptyString.check(Schema.isMaxLength(MAX_REVIEW_PATCH_CHARS)),
 }) {}
 
-/** Complete prior feedback selected by the host for verification, not new defect discovery. */
+/**
+ * Complete prior feedback selected by the host for verification, not new defect discovery.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewFollowUp extends Schema.Class<ReviewFollowUp>(
   "@effect-agent/pr-review/ReviewFollowUp",
 )({
@@ -103,6 +173,9 @@ export class ReviewFollowUp extends Schema.Class<ReviewFollowUp>(
 /**
  * Evidence that every blocker in one prior review is fixed, refuted, or obsolete.
  * The host still owns authorization and publication.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ReviewResolution extends Schema.Class<ReviewResolution>(
   "@effect-agent/pr-review/ReviewResolution",
@@ -113,9 +186,20 @@ export class ReviewResolution extends Schema.Class<ReviewResolution>(
 
 const Resolutions = Schema.Array(ReviewResolution).check(Schema.isMaxLength(8));
 
+/**
+ * Maximum serialized character count of attributed review discussion.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_REVIEW_DISCUSSION_CHARS = 32_000;
 
-/** Attributed, untrusted context; neither a complete review history nor dismissal authority. */
+/**
+ * Attributed, untrusted context; neither a complete review history nor dismissal authority.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewDiscussion extends Schema.Class<ReviewDiscussion>(
   "@effect-agent/pr-review/ReviewDiscussion",
 )(
@@ -142,7 +226,12 @@ export class ReviewDiscussion extends Schema.Class<ReviewDiscussion>(
   ),
 ) {}
 
-/** The provider-neutral input to one review pass. */
+/**
+ * The provider-neutral input to one review pass.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewRequest extends Schema.Class<ReviewRequest>(
   "@effect-agent/pr-review/ReviewRequest",
 )({
@@ -170,10 +259,27 @@ export class ReviewRequest extends Schema.Class<ReviewRequest>(
   discussion: Schema.optionalKey(ReviewDiscussion),
 }) {}
 
+/**
+ * Finding severities used to prioritize the review report.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ReviewSeverity = Schema.Literals(["blocking", "important", "nit"]);
+/**
+ * The severity assigned to an actionable finding.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ReviewSeverity = typeof ReviewSeverity.Type;
 
-/** A model-claimed problem kind used only to label findings for readers. */
+/**
+ * A model-claimed problem kind used only to label findings for readers.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ReviewCategory = Schema.Literals([
   "correctness",
   "security",
@@ -187,9 +293,20 @@ export const ReviewCategory = Schema.Literals([
   "docs",
 ]);
 
+/**
+ * A presentation label describing the kind of reported defect.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ReviewCategory = typeof ReviewCategory.Type;
 
-/** One actionable defect. `line` is a RIGHT-side line in the supplied patch. */
+/**
+ * One actionable defect. `line` is a RIGHT-side line in the supplied patch.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewFinding extends Schema.Class<ReviewFinding>(
   "@effect-agent/pr-review/ReviewFinding",
 )({
@@ -202,7 +319,12 @@ export class ReviewFinding extends Schema.Class<ReviewFinding>(
   body: Schema.NonEmptyString.check(Schema.isMaxLength(2_000)),
 }) {}
 
-/** Host-validated findings with a host-authored summary of the reviewed scope. */
+/**
+ * Host-validated findings with a host-authored summary of the reviewed scope.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewReport extends Schema.Class<ReviewReport>(
   "@effect-agent/pr-review/ReviewReport",
 )({
@@ -230,11 +352,22 @@ const ReviewUsageFields = Schema.Struct({
   ),
 );
 
+/**
+ * Token, search, and estimated spending totals across provider attempts.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewUsage extends Schema.Class<ReviewUsage>("@effect-agent/pr-review/ReviewUsage")(
   ReviewUsageFields,
 ) {}
 
-/** Host accounting covers every provider attempt, including compaction and failed requests. */
+/**
+ * Host accounting covers every provider attempt, including compaction and failed requests.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewCostSnapshot extends Schema.Class<ReviewCostSnapshot>(
   "@effect-agent/pr-review/ReviewCostSnapshot",
 )({
@@ -260,11 +393,20 @@ export class ReviewCostSnapshot extends Schema.Class<ReviewCostSnapshot>(
  * Input-token refusals also return incomplete outcomes without a paid attempt.
  * Capped hosts enforce spending at their provider boundary; the reviewer's
  * generic turn/tool status is disabled for these runs.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export interface ReviewCostControl {
   readonly snapshot: Effect.Effect<ReviewCostSnapshot>;
 }
 
+/**
+ * A validated report with coverage, budget, and execution accounting.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReviewOutcome extends Schema.Class<ReviewOutcome>(
   "@effect-agent/pr-review/ReviewOutcome",
 )({
@@ -418,6 +560,12 @@ const formatRequest = (request: ReviewRequest): string => {
   ].join("\n\n");
 };
 
+/**
+ * A finding, coverage claim, or prior-review resolution failed host validation.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ReviewVerificationError extends Schema.TaggedError<ReviewVerificationError>()(
   "ReviewVerificationError",
   { message: Schema.String },
@@ -610,9 +758,21 @@ const commentableLines = (patch: string): ReadonlySet<number> => {
   return lines;
 };
 
+/**
+ * Test whether a patch contains a RIGHT-side line eligible for a diff comment.
+ *
+ * @category guards
+ * @since 0.1.0
+ */
 export const isCommentableLine = (patch: string, line: number): boolean =>
   commentableLines(patch).has(line);
 
+/**
+ * Model, host policy, spending admission, and optional research settings for a reviewer.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ReviewerOptions<Provider, ModelProvides, ModelRequires> {
   readonly model: Model.Model<Provider, LanguageModel.LanguageModel | ModelProvides, ModelRequires>;
   readonly guidance?: string | undefined;
@@ -688,7 +848,12 @@ const validatedFinding = Effect.fnUntraced(function* (
   });
 });
 
-/** One navigable review with a complete change index and bounded evidence tools. */
+/**
+ * One navigable review with a complete change index and bounded evidence tools.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
   options: ReviewerOptions<Provider, ModelProvides, ModelRequires>,
 ) => {

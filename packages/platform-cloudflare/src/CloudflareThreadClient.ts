@@ -1,3 +1,8 @@
+/**
+ * Schema-validated requests, responses, and clients for Thread Object RPC.
+ *
+ * @since 0.1.0
+ */
 import { AgentInputError } from "@yielded/agent/agent-error";
 import { DigestError } from "@yielded/agent/digest";
 import {
@@ -85,7 +90,12 @@ export { decodeLiveText, LiveTextFrame } from "./LiveText.ts";
 
 const PROGRESS_CANCELLATION_TIMEOUT = "1 second";
 
-/** The Worker-side stub call itself failed (RPC rejection, overload, eviction mid-call). */
+/**
+ * The Worker-side stub call itself failed (RPC rejection, overload, eviction mid-call).
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadClientError extends Schema.TaggedError<ThreadClientError>()(
   "ThreadClientError",
   {
@@ -108,6 +118,9 @@ export class ThreadClientError extends Schema.TaggedError<ThreadClientError>()(
  * input schema (the Worker bundles the same Agent definitions as the Object, so schema
  * validation happens client-side; the resolved Binding re-validates at claim time). The
  * Thread identity is deliberately absent — the addressed Object IS the lane.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export class SubmitRequest extends Schema.Class<SubmitRequest>(
   "@effect-agent/platform-cloudflare/SubmitRequest",
@@ -123,7 +136,12 @@ export class SubmitRequest extends Schema.Class<SubmitRequest>(
   inputPayload: PersistedJson,
 }) {}
 
-/** One bounded page of canonical records after an optional sequence. */
+/**
+ * One bounded page of canonical records after an optional sequence.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ObservePageRequest extends Schema.Class<ObservePageRequest>(
   "@effect-agent/platform-cloudflare/ObservePageRequest",
 )({
@@ -131,14 +149,24 @@ export class ObservePageRequest extends Schema.Class<ObservePageRequest>(
   limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1_024)),
 }) {}
 
-/** Receipt-shaped observation request; the optional identity owns only the remote wait. */
+/**
+ * Receipt-shaped observation request; the optional identity owns only the remote wait.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class AwaitSettlementRequest extends Receipt.extend<AwaitSettlementRequest>(
   "@effect-agent/platform-cloudflare/AwaitSettlementRequest",
 )({
   waiterId: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256))),
 }) {}
 
-/** One event-driven wait for canonical progress strictly after this sequence. */
+/**
+ * One event-driven wait for canonical progress strictly after this sequence.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class AwaitProgressRequest extends Schema.Class<AwaitProgressRequest>(
   "@effect-agent/platform-cloudflare/AwaitProgressRequest",
 )({
@@ -146,7 +174,12 @@ export class AwaitProgressRequest extends Schema.Class<AwaitProgressRequest>(
   waiterId: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256)),
 }) {}
 
-/** Best-effort cancellation of one in-flight progress or settlement observation. */
+/**
+ * Best-effort cancellation of one in-flight progress or settlement observation.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class CancelProgressRequest extends Schema.Class<CancelProgressRequest>(
   "@effect-agent/platform-cloudflare/CancelProgressRequest",
 )({
@@ -162,6 +195,9 @@ export class CancelProgressRequest extends Schema.Class<CancelProgressRequest>(
  * closed-union discipline as the WP2 `PortFailure`: members re-decode to the SAME tagged
  * classes on the Worker side; `cause` chains travel as Schema defects without instance
  * fidelity (plan §2.8).
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const HostFailure = Schema.Union([
   AgentInputError,
@@ -184,72 +220,146 @@ export const HostFailure = Schema.Union([
   HostProtocolError,
 ]);
 
+/**
+ * Typed failures that can cross the Thread Object host protocol.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type HostFailure = typeof HostFailure.Type;
 
+/**
+ * Successful admission receipt returned by a Thread owner.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class SubmitSucceeded extends Schema.TaggedClass<SubmitSucceeded>(
   "@effect-agent/platform-cloudflare/SubmitSucceeded",
 )("SubmitSucceeded", {
   receipt: Receipt,
 }) {}
 
+/**
+ * Current retained state of an admitted submission.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class SubmissionStatusResponse extends Schema.TaggedClass<SubmissionStatusResponse>(
   "@effect-agent/platform-cloudflare/SubmissionStatusResponse",
 )("SubmissionStatusResponse", { status: SubmissionStatus }) {}
 
+/**
+ * Terminal settlement observed for an admitted submission.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class SettlementReached extends Schema.TaggedClass<SettlementReached>(
   "@effect-agent/platform-cloudflare/SettlementReached",
 )("SettlementReached", {
   settlement: Settlement,
 }) {}
 
-/** The exact canonical record of an operationally finalized Submission. */
+/**
+ * The exact canonical record of an operationally finalized Submission.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class SettlementRecordReached extends Schema.TaggedClass<SettlementRecordReached>(
   "@effect-agent/platform-cloudflare/SettlementRecordReached",
 )("SettlementRecordReached", {
   record: SubmissionSettledRecord,
 }) {}
 
+/**
+ * A bounded page of retained Thread records.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ObservedPage extends Schema.TaggedClass<ObservedPage>(
   "@effect-agent/platform-cloudflare/ObservedPage",
 )("ObservedPage", {
   records: Schema.Array(CanonicalRecordEnvelope).check(Schema.isMaxLength(1_024)),
 }) {}
 
-/** A record was already committed or an incarnation-local hint says the caller should re-read. */
+/**
+ * A record was already committed or an incarnation-local hint says the caller should re-read.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ProgressObserved extends Schema.TaggedClass<ProgressObserved>(
   "@effect-agent/platform-cloudflare/ProgressObserved",
 )("ProgressObserved", {}) {}
 
+/**
+ * Acknowledgement that a progress wait was cancelled.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ProgressCancelled extends Schema.TaggedClass<ProgressCancelled>(
   "@effect-agent/platform-cloudflare/ProgressCancelled",
 )("ProgressCancelled", {}) {}
 
+/**
+ * Acknowledgement that an abort intent was retained.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class AbortRecorded extends Schema.TaggedClass<AbortRecorded>(
   "@effect-agent/platform-cloudflare/AbortRecorded",
 )("AbortRecorded", {
   intent: AbortIntent,
 }) {}
 
+/**
+ * Acknowledgement that an approval decision was retained.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ApprovalRecorded extends Schema.TaggedClass<ApprovalRecorded>(
   "@effect-agent/platform-cloudflare/ApprovalRecorded",
 )("ApprovalRecorded", {
   intent: ApprovalDecisionIntent,
 }) {}
 
+/**
+ * Acknowledgement that an unknown-outcome resolution was retained.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class UnknownResolutionRecorded extends Schema.TaggedClass<UnknownResolutionRecorded>(
   "@effect-agent/platform-cloudflare/UnknownResolutionRecorded",
 )("UnknownResolutionRecorded", {
   intent: UnknownResolutionIntent,
 }) {}
 
-/** The entry point failed TYPED on the Object; the failure re-decodes verbatim. */
+/**
+ * The entry point failed TYPED on the Object; the failure re-decodes verbatim.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class HostFailed extends Schema.TaggedClass<HostFailed>(
   "@effect-agent/platform-cloudflare/HostFailed",
 )("HostFailed", {
   failure: HostFailure,
 }) {}
 
-/** The uniform answer of one host entry point. Callers narrow by the tag their call implies. */
+/**
+ * The uniform answer of one host entry point. Callers narrow by the tag their call implies.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const HostResponse = Schema.Union([
   SubmitSucceeded,
   SettlementReached,
@@ -264,33 +374,159 @@ export const HostResponse = Schema.Union([
   HostFailed,
 ]);
 
+/**
+ * Decoded value of the HostResponse schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type HostResponse = typeof HostResponse.Type;
 
 // ---------------------------------------------------------------------------
 // Codecs (shared by the Object endpoints and the Worker client)
 // ---------------------------------------------------------------------------
 
+/**
+ * Decode and validate submit request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeSubmitRequest = Schema.decodeUnknownEffect(SubmitRequest);
 // Encode the caller's fields directly: constructing a Class first would validate the
 // same envelope twice. The Object still decodes its untrusted request independently.
+/**
+ * Encode submit request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeSubmitRequest = Schema.encodeEffect(Schema.Struct(SubmitRequest.fields));
+/**
+ * Decode and validate receipt through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeReceipt = Schema.decodeUnknownEffect(Receipt);
+/**
+ * Encode receipt through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeReceipt = Schema.encodeEffect(Receipt);
+/**
+ * Decode and validate await settlement request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeAwaitSettlementRequest = Schema.decodeUnknownEffect(AwaitSettlementRequest);
+/**
+ * Encode await settlement request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeAwaitSettlementRequest = Schema.encodeEffect(AwaitSettlementRequest);
+/**
+ * Decode and validate observe page request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeObservePageRequest = Schema.decodeUnknownEffect(ObservePageRequest);
+/**
+ * Encode observe page request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeObservePageRequest = Schema.encodeEffect(ObservePageRequest);
+/**
+ * Decode and validate await progress request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeAwaitProgressRequest = Schema.decodeUnknownEffect(AwaitProgressRequest);
+/**
+ * Encode await progress request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeAwaitProgressRequest = Schema.encodeEffect(AwaitProgressRequest);
+/**
+ * Decode and validate cancel progress request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeCancelProgressRequest = Schema.decodeUnknownEffect(CancelProgressRequest);
+/**
+ * Encode cancel progress request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeCancelProgressRequest = Schema.encodeEffect(CancelProgressRequest);
+/**
+ * Decode and validate abort command through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeAbortCommand = Schema.decodeUnknownEffect(AbortCommand);
+/**
+ * Encode abort command through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeAbortCommand = Schema.encodeEffect(AbortCommand);
+/**
+ * Decode and validate approval decision command through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeApprovalDecisionCommand = Schema.decodeUnknownEffect(ApprovalDecisionCommand);
+/**
+ * Encode approval decision command through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeApprovalDecisionCommand = Schema.encodeEffect(ApprovalDecisionCommand);
+/**
+ * Decode and validate unknown resolution command through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeUnknownResolutionCommand = Schema.decodeUnknownEffect(UnknownResolutionCommand);
+/**
+ * Encode unknown resolution command through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeUnknownResolutionCommand = Schema.encodeEffect(UnknownResolutionCommand);
+/**
+ * Encode host response through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeHostResponse = Schema.encodeEffect(HostResponse);
+/**
+ * Decode and validate host response through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeHostResponse = Schema.decodeUnknownEffect(HostResponse);
 
 // ---------------------------------------------------------------------------
@@ -362,12 +598,54 @@ const ClientUnknownHostFailure = Schema.Union([
   HostProtocolError,
 ]);
 
+/**
+ * Typed host and transport failures from submission.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type ClientSubmitFailure = typeof ClientSubmitHostFailure.Type | ThreadClientError;
+/**
+ * Typed host and transport failures from settlement waiting.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type ClientAwaitFailure = typeof ClientAwaitHostFailure.Type | ThreadClientError;
+/**
+ * Typed host and transport failures from history observation.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type ClientObserveFailure = typeof ClientObserveHostFailure.Type | ThreadClientError;
+/**
+ * Typed host and transport failures from progress waiting.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type ClientProgressFailure = ClientObserveFailure;
+/**
+ * Typed host and transport failures from abort requests.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type ClientAbortFailure = typeof ClientAbortHostFailure.Type | ThreadClientError;
+/**
+ * Typed host and transport failures from approval decisions.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type ClientApprovalFailure = typeof ClientApprovalHostFailure.Type | ThreadClientError;
+/**
+ * Typed host and transport failures from unknown-outcome resolution.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type ClientUnknownFailure = typeof ClientUnknownHostFailure.Type | ThreadClientError;
 
 const outOfContract = (threadId: string, operation: string, observed: string): ThreadClientError =>
@@ -391,7 +669,12 @@ const hostRpcMethods = {
   resolveUnknown: "resolveUnknownEncoded",
 } as const satisfies Record<string, keyof ThreadObjectRpc>;
 
-/** Worker-side client over the Thread Object namespace (DEPLOY-010). */
+/**
+ * Worker-side client over the Thread Object namespace (DEPLOY-010).
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class CloudflareThreadClient extends Context.Service<
   CloudflareThreadClient,
   {

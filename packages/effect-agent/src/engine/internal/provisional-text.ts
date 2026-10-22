@@ -5,19 +5,24 @@ import * as Effect from "effect/Effect";
 import type { AttemptId, RunId, SubmissionId, ThreadId, TurnId } from "../../core/Identifiers.ts";
 import * as ProvisionalText from "../../core/ProvisionalText.ts";
 
+/** @internal */
 export interface ModelHandle {
   readonly offerUnsafe: (part: Extract<ProvisionalText.Event, { _tag: "Text" }>["part"]) => boolean;
   readonly discard: () => void;
   readonly close: () => void;
 }
 
+/** @internal */
 export interface Attempt {
   readonly threadId: ThreadId;
   readonly openModel: (runId: RunId, turnId: TurnId) => ModelHandle | undefined;
   readonly close: () => void;
 }
 
-/** Bound only from a trusted Claim, inside captured registration and per-Attempt services. */
+/**
+ * Bound only from a trusted Claim, inside captured registration and per-Attempt services.
+ * @internal
+ */
 export const CurrentAttempt = Context.Reference<Attempt | undefined>(
   "@effect-agent/engine/ProvisionalText/CurrentAttempt",
   { defaultValue: () => undefined },
@@ -90,7 +95,10 @@ const makeAttempt = Effect.fnUntraced(function* (
   };
 });
 
-/** Disabled observation acquires no Scope, counters, handles, or event payloads. */
+/**
+ * Disabled observation acquires no Scope, counters, handles, or event payloads.
+ * @internal
+ */
 export const withAttempt = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   threadId: ThreadId,

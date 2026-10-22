@@ -12,6 +12,7 @@ import {
   delegationAllocationFromPolicy,
 } from "./subagent-contract.ts";
 
+/** @internal */
 export const resolveSubagentPolicy = (
   delegation: {
     readonly target: Pick<AnyDefinition, "policy" | "policyOverrides">;
@@ -135,7 +136,10 @@ export const resolveSubagentPolicy = (
   return { policy, childPolicy, allocation: delegationAllocationFromPolicy(policy), caps };
 };
 
-/** Conservative subtree remainder after reserving this Run's own full execution ceiling. */
+/**
+ * Conservative subtree remainder after reserving this Run's own full execution ceiling.
+ * @internal
+ */
 export const residualSubagentCaps = (
   declared: SubagentDelegationCaps,
   parent: AgentPolicy,

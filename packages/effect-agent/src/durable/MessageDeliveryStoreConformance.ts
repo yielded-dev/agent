@@ -1,3 +1,10 @@
+/**
+ * Shared fixtures and adapter-neutral contract cases for atomic message delivery, replay, recovery,
+ * and capacity accounting.
+ *
+ * @since 0.1.0
+ */
+
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
@@ -26,6 +33,12 @@ import {
 import { DefinitionDigests, Digest } from "./Records.ts";
 import { IdempotencyKey, Principal, QueueSequence, Settlement } from "./SubmissionLedger.ts";
 
+/**
+ * A message-delivery adapter violated a shared storage contract assertion.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MessageDeliveryConformanceViolation extends Schema.TaggedError<MessageDeliveryConformanceViolation>()(
   "MessageDeliveryConformanceViolation",
   { message: Schema.String },
@@ -34,7 +47,12 @@ export class MessageDeliveryConformanceViolation extends Schema.TaggedError<Mess
 const verify = (condition: boolean, message: string) =>
   condition ? Effect.void : Effect.fail(MessageDeliveryConformanceViolation.make({ message }));
 
-/** One valid frozen envelope shared by real storage and restart tests. */
+/**
+ * One valid frozen envelope shared by real storage and restart tests.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const makeMessageDeliveryFixture = Effect.fn("MessageDeliveryConformance.fixture")(
   function* (messageId = "message", owner = "sender", text = "hello") {
     const digest = Schema.decodeSync(Digest)("a".repeat(64));
@@ -69,6 +87,12 @@ export const makeMessageDeliveryFixture = Effect.fn("MessageDeliveryConformance.
   },
 );
 
+/**
+ * Fixed destination receipt used by the message-delivery storage conformance fixtures.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const messageDeliveryFixtureReceipt = Receipt.make({
   threadId: Schema.decodeSync(ThreadId)("receiver"),
   receiptId: Schema.decodeSync(ReceiptId)("receipt"),
@@ -76,6 +100,12 @@ export const messageDeliveryFixtureReceipt = Receipt.make({
   queueSequence: Schema.decodeSync(QueueSequence)(0),
 });
 
+/**
+ * Builds a frozen worker-update envelope for exercising the separate update-capacity contract.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeWorkerUpdateDeliveryFixture = Effect.fn(
   "MessageDeliveryConformance.updateFixture",
 )(function* (id: string) {
@@ -111,7 +141,12 @@ export const makeWorkerUpdateDeliveryFixture = Effect.fn(
   });
 });
 
-/** Every case starts with an empty store; all clocks and expected values are explicit. */
+/**
+ * Every case starts with an empty store; all clocks and expected values are explicit.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const messageDeliveryStoreConformanceCases = [
   {
     name: "reserves ordinary delivery capacity when worker updates saturate their separate bound",

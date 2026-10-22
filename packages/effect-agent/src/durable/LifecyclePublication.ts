@@ -1,3 +1,10 @@
+/**
+ * Native lifecycle facts retained for ordered, idempotent host publication. Acknowledgement follows
+ * the host transaction while undelivered facts remain available for recovery.
+ *
+ * @since 0.1.0
+ */
+
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -39,7 +46,12 @@ import {
 } from "./SubmissionLedger.ts";
 import { getRunInput } from "./ThreadStore.ts";
 
-/** Immutable native admission evidence. It is private and grants no application authority. */
+/**
+ * Immutable native admission evidence. It is private and grants no application authority.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const LifecyclePublicationSource = SubmissionSnapshot.mapFields((fields) => ({
   submissionId: fields.submissionId,
   threadId: fields.threadId,
@@ -57,9 +69,20 @@ export const LifecyclePublicationSource = SubmissionSnapshot.mapFields((fields) 
   createdAt: fields.createdAt,
 }));
 
+/**
+ * Decoded value of {@link LifecyclePublicationSource}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type LifecyclePublicationSource = typeof LifecyclePublicationSource.Type;
 
-/** Closed producer facts; model history, Tool payloads and diagnostics are not a publication API. */
+/**
+ * Closed producer facts; model history, Tool payloads and diagnostics are not a publication API.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const LifecyclePublicationFact = Schema.Union([
   Schema.TaggedStruct("DeliveryRetained", {
     key: MessageDeliveryKey,
@@ -103,12 +126,21 @@ export const LifecyclePublicationFact = Schema.Union([
   SubmissionSettledRecord,
 ]);
 
+/**
+ * Decoded value of {@link LifecyclePublicationFact}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type LifecyclePublicationFact = typeof LifecyclePublicationFact.Type;
 
 /**
  * An exact undelivered native fact. `id` is stable across retries and lost acknowledgements.
  * Ordinals order facts only within ownerThreadId. Accepted input order is source.queueSequence;
  * never compare ordinals from the launching Thread and its worker Thread.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class LifecyclePublication extends Schema.Class<LifecyclePublication>(
   "@effect-agent/thread/LifecyclePublication",
@@ -122,6 +154,12 @@ export class LifecyclePublication extends Schema.Class<LifecyclePublication>(
   fact: LifecyclePublicationFact,
 }) {}
 
+/**
+ * Native lifecycle publication storage is unavailable, conflicting, corrupt, or at capacity.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class LifecyclePublicationError extends Schema.TaggedError<LifecyclePublicationError>()(
   "LifecyclePublicationError",
   {
@@ -130,10 +168,20 @@ export class LifecyclePublicationError extends Schema.TaggedError<LifecyclePubli
   },
 ) {}
 
-/** Bound both retained facts and the immutable admission evidence resolved before dispatch. */
+/**
+ * Bound both retained facts and the immutable admission evidence resolved before dispatch.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const lifecyclePublicationBatchMaxFacts = 8;
 
-/** One owner's bounded pending prefix, strictly ordered by its durable ordinals. */
+/**
+ * One owner's bounded pending prefix, strictly ordered by its durable ordinals.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const LifecyclePublicationBatch = Schema.NonEmptyArray(LifecyclePublication).check(
   Schema.isMaxLength(lifecyclePublicationBatchMaxFacts),
   Schema.makeFilter(
@@ -150,11 +198,23 @@ export const LifecyclePublicationBatch = Schema.NonEmptyArray(LifecyclePublicati
   ),
 );
 
+/**
+ * Decoded value of {@link LifecyclePublicationBatch}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type LifecyclePublicationBatch = typeof LifecyclePublicationBatch.Type;
 
-/** Native recovery state, independent of Attempts. Hosts serialize drains per storage owner. */
+/**
+ * Native recovery state, independent of Attempts. Hosts serialize drains per storage owner.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface LifecyclePublicationStorage {
-  /** Select up to `limit` due owners, with a bounded pending prefix for each selected owner.
+  /**
+   * Select up to `limit` due owners, with a bounded pending prefix for each selected owner.
    * `retainedOnly` excludes unmaterialized source facts, for a precommitted start prefix.
    */
   readonly pending: (
@@ -166,7 +226,8 @@ export interface LifecyclePublicationStorage {
   readonly acknowledge: (
     publications: LifecyclePublicationBatch,
   ) => Effect.Effect<void, LifecyclePublicationError>;
-  /** Optional atomic acknowledgement of up to 100 successfully published owner batches.
+  /**
+   * Optional atomic acknowledgement of up to 100 successfully published owner batches.
    * Validate every exact batch before consuming any debt. Empty waves succeed without writes.
    * Wrappers that validate acknowledgement authority must wrap this method too.
    * Custom services may omit this; drains then acknowledge each batch immediately.
@@ -208,6 +269,9 @@ export interface LifecyclePublicationStorage {
  * may include already committed identities plus later facts; deduplicate each fact's `id`.
  * Private input/update/result fields remain private; select declared public fields explicitly.
  * Revocation/deletion is an acknowledged domain decision, not an infrastructure retry.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class LifecyclePublicationHandler extends Context.Service<
   LifecyclePublicationHandler,
@@ -218,13 +282,23 @@ export class LifecyclePublicationHandler extends Context.Service<
   }
 >()("@effect-agent/thread/LifecyclePublicationHandler") {}
 
-/** Adapter configuration; the opt-in layer captures its explicit Crypto requirement once. */
+/**
+ * Adapter configuration; the opt-in layer captures its explicit Crypto requirement once.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const LifecyclePublicationConfig = Context.Reference<Option.Option<Crypto.Crypto>>(
   "@effect-agent/thread/LifecyclePublicationConfig",
   { defaultValue: () => Option.none() },
 );
 
-/** Enable native SQL obligations without changing dependencies of disabled storage assemblies. */
+/**
+ * Enable native SQL obligations without changing dependencies of disabled storage assemblies.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const lifecyclePublicationLayer = Layer.effect(LifecyclePublicationConfig)(
   Effect.map(Crypto.Crypto, Option.some),
 );
@@ -284,6 +358,9 @@ const withSource = Effect.fnUntraced(
  * Acknowledgements are exact and idempotent. An optional storage wave acknowledgement commits
  * completed batches in groups of up to 100, including when a later dispatch is interrupted. No producer or
  * external Tool is re-executed here.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const drainLifecyclePublications = Effect.fnUntraced(function* (
   storage: LifecyclePublicationStorage,

@@ -1,3 +1,9 @@
+/**
+ * Shared CodeExecutor contract checks. Use a live Clock; isolated adapters must additionally
+ * prove their isolation guarantees.
+ *
+ * @since 0.1.0
+ */
 import {
   CodeExecutionHost,
   CodeExecutionLimits,
@@ -23,16 +29,10 @@ import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 
 /**
- * Shared `CodeExecutor` conformance (TEST-015). Every adapter — the
- * deterministic `unisolated` substitute and each isolated adapter — runs
- * `codeExecutorConformanceCases` verbatim. Enforcement cases that only genuine
- * isolation can prove (ambient network denial, synchronous CPU runaway
- * termination) are NOT here; they belong to isolated adapters only
- * (testing spec §8.1).
+ * A named executor contract case failed its expected result or error checks.
  *
- * Cases assume the live `Clock` (the wall-clock case uses a short real
- * deadline) and take one fresh executor pass per case, so a suite may share
- * one executor Layer across cases.
+ * @category errors
+ * @since 0.1.0
  */
 export class CodeExecutorConformanceViolation extends Schema.TaggedError<CodeExecutorConformanceViolation>()(
   "CodeExecutorConformanceViolation",
@@ -42,11 +42,23 @@ export class CodeExecutorConformanceViolation extends Schema.TaggedError<CodeExe
   },
 ) {}
 
+/**
+ * One named contract check that runs against the supplied CodeExecutor service.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface CodeExecutorConformanceCase {
   readonly name: string;
   readonly run: Effect.Effect<void, CodeExecutorConformanceViolation, CodeExecutor>;
 }
 
+/**
+ * The implementation identity and isolation posture expected from the executor under test.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface CodeExecutorConformanceOptions {
   /** The posture the adapter under test must stamp on results and errors. */
   readonly implementation: SandboxImplementation;
@@ -173,6 +185,13 @@ const expectFailure = (
     }),
   );
 
+/**
+ * Build the shared executor checks. Run each case with a live Clock and the candidate
+ * CodeExecutor layer; these checks do not establish security isolation.
+ *
+ * @category utils
+ * @since 0.1.0
+ */
 export const codeExecutorConformanceCases = (
   options: CodeExecutorConformanceOptions,
 ): ReadonlyArray<CodeExecutorConformanceCase> => {

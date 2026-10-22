@@ -1,3 +1,8 @@
+/**
+ * SQL subscription state and delivery obligations over adapter-owned tables.
+ *
+ * @since 0.1.0
+ */
 import { Digest } from "@yielded/agent/records";
 import {
   AcceptedEvent,
@@ -62,7 +67,12 @@ const error = (reason: SubscriptionError["reason"], code: string) =>
 const unavailable = (operation: string) => error("storage", operation);
 const corrupt = (operation: string) => error("corrupt", operation);
 
-/** Rebuild only the observation derivative inside the adapter's atomic layout upgrade. */
+/**
+ * Rebuild only the observation derivative inside the adapter's atomic layout upgrade.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const backfillSubscriptionSettlementObservation = Effect.fnUntraced(function* () {
   const sql = (yield* SqlClientService.SqlClient).withoutTransforms();
 
@@ -149,7 +159,12 @@ const sameDeliveryIdentity = (left: SubscriptionDelivery, right: SubscriptionDel
   left.subscriptionFingerprint === right.subscriptionFingerprint &&
   left.eventDigest === right.eventDigest;
 
-/** Adapter-specific storage limits. */
+/**
+ * Adapter-specific storage limits.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlSubscriptionStoreOptions {
   readonly namespace?: string;
   /** Stored JSON decoder ceiling in UTF-16 code units; admission byte limits remain separate. */
@@ -168,6 +183,9 @@ export interface SqlSubscriptionStoreOptions {
  * partition, initializes its tables, and selects the transaction at construction.
  * The returned methods capture the SQL client, transaction, and failpoint handler.
  * Cloudflare's transaction also updates its native alarm before committing.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
   partition: SourcePartition,

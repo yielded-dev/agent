@@ -1,3 +1,10 @@
+/**
+ * Pluggable context estimation and sequential compaction decisions that change the model’s view
+ * while preserving source history.
+ *
+ * @since 0.1.0
+ */
+
 import type * as LanguageModel from "effect/ai/LanguageModel";
 import type * as Model from "effect/ai/Model";
 import * as Prompt from "effect/ai/Prompt";
@@ -30,6 +37,9 @@ import {
  * A proposed view change. Source indices are exclusive prefix bounds, never record sequences.
  * Summaries contain at most 65,536 characters; the interpreter rejects oversized decisions
  * before committing or changing coverage.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const CompactionDecision = Schema.Union([
   Schema.Struct({
@@ -48,20 +58,41 @@ export const CompactionDecision = Schema.Union([
   }),
 ]);
 
+/**
+ * Decoded value of {@link CompactionDecision}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CompactionDecision = typeof CompactionDecision.Type;
 
-/** Expected strategy or decision-validation failure. Causes stay in the live Effect only. */
+/**
+ * Expected strategy or decision-validation failure. Causes stay in the live Effect only.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CompactionError extends Schema.TaggedError<CompactionError>()("CompactionError", {
   message: Schema.String.check(Schema.isMaxLength(4_096)),
   cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
-/** Upstream Model.captureRequirements returns this closed Layer. */
+/**
+ * Upstream Model.captureRequirements returns this closed Layer.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CompactionModelLayer = Layer.Layer<
   LanguageModel.LanguageModel | Model.ProviderName | Model.ModelName
 >;
 
-/** A full message estimate, or undefined to use the native structural estimate. */
+/**
+ * A full message estimate, or undefined to use the native structural estimate.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ContextMessageTokenEstimator = (message: Prompt.Message) => number | undefined;
 
 /**
@@ -71,6 +102,9 @@ export type ContextMessageTokenEstimator = (message: Prompt.Message) => number |
  * All model work must use summarize so it is metered.
  * Callback failures and requirements pass through unchanged; strategy dependencies belong to
  * its construction Layer. Protected messages cannot be removed and Tool pairs cannot be split by a decision.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface CompactionRequest<E, R> {
   readonly threadId: ThreadId;
@@ -93,6 +127,13 @@ export interface CompactionRequest<E, R> {
   ) => Effect.Effect<string, E, R>;
 }
 
+/**
+ * Context-size estimation and a stream of compaction decisions. Consumers commit each decision
+ * before requesting the next.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ContextCompaction {
   /** Non-negative finite integer estimate, used for admission and derived prompt overhead too. */
   readonly estimate: (messages: ReadonlyArray<Prompt.Message>) => number;
@@ -226,6 +267,9 @@ const defaultCompactor = (model?: CompactionModelLayer): ContextCompaction => ({
  * The sole interpreter compaction port. Runs without an installed service provide layer at their
  * composition boundary. Decorators yield this service during construction and receive their
  * underlying implementation through Layer.provide. Direct harnesses use the same Layer contract.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ContextCompactor extends Context.Service<ContextCompactor, ContextCompaction>()(
   "@effect-agent/engine/ContextCompactor",

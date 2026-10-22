@@ -1,3 +1,8 @@
+/**
+ * Process-local subscription state and delivery obligations for one source partition.
+ *
+ * @since 0.1.0
+ */
 import { Digest } from "@yielded/agent/records";
 import { compareScheduleNames } from "@yielded/agent/schedule-transition";
 import {
@@ -1706,6 +1711,12 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
   });
 });
 
+/**
+ * Constructs process-local subscription storage for the supplied source partition.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const memorySubscriptionStoreLayer = (
   partition: SourcePartition,
 ): Layer.Layer<SubscriptionStore, SubscriptionError> =>

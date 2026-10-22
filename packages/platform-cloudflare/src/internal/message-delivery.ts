@@ -17,7 +17,9 @@ import { DurableAlarmError, ThreadMessageDelivery, ThreadMutationGate } from "..
 import { ThreadObjectPlacement } from "../CloudflareBindings.ts";
 import * as DueQueue from "./due-queue.ts";
 
-/** Every write prearms its owner; the delivery due index owns its recovery deadline. */
+/** Every write prearms its owner; the delivery due index owns its recovery deadline.
+ * @internal
+ */
 export const guardedMessageDeliveryStoreLayer = Layer.effect(
   MessageDeliveryStore,
   Effect.gen(function* () {
@@ -82,7 +84,9 @@ export const guardedMessageDeliveryStoreLayer = Layer.effect(
   }),
 );
 
-/** Build the driver in the Object's Scope only when retained delivery work is due. */
+/** Build the driver in the Object's Scope only when retained delivery work is due.
+ * @internal
+ */
 export const lazyThreadMessageDeliveryLayer = <E, R>(
   driver: Layer.Layer<MessageDeliveryDriver, E, R>,
 ) =>
@@ -144,7 +148,9 @@ export const lazyThreadMessageDeliveryLayer = <E, R>(
     }),
   );
 
-/** Message progress shares the native alarm slot without blocking source runtime work. */
+/** Message progress shares the native alarm slot without blocking source runtime work.
+ * @internal
+ */
 export const threadMessageDeliveryLayer = lazyThreadMessageDeliveryLayer(
   Layer.effect(MessageDeliveryDriver, MessageDeliveryDriver),
 );

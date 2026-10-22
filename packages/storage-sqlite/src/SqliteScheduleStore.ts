@@ -1,3 +1,8 @@
+/**
+ * SQLite persistence for scheduled agent input.
+ *
+ * @since 0.1.0
+ */
 import {
   makeSqlScheduleStore,
   SqlScheduleWriteTransaction,
@@ -12,7 +17,12 @@ import type { SqliteStorageConfig } from "./SqliteStorageConfig.ts";
 import type { SqliteStorageFailpoint } from "./SqliteStorageFailpoint.ts";
 import type { SqliteStorageInitializationError } from "./SqliteThreadStore.ts";
 
-/** SQLite implementation of the atomic ScheduleStore port. */
+/**
+ * SQLite implementation of the atomic ScheduleStore port.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const scheduleStoreLayer: Layer.Layer<
   ScheduleStore,
   SqliteStorageInitializationError,

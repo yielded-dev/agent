@@ -1,3 +1,10 @@
+/**
+ * A disposable semantic ranking index with fixed embedding and chunking contracts. Search
+ * candidates require authoritative content and access revalidation.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -15,7 +22,12 @@ const Positive = Schema.Int.check(
 const Timestamp = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
 const Vector = Schema.Array(Schema.Finite).check(Schema.isMinLength(1), Schema.isMaxLength(4_096));
 
-/** A host declaration of the exact embedding space and deterministic chunking policy. */
+/**
+ * A host declaration of the exact embedding space and deterministic chunking policy.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SemanticMemoryProfile extends Schema.Class<SemanticMemoryProfile>(
   "@effect-agent/core/SemanticMemoryProfile",
 )({
@@ -29,6 +41,13 @@ export class SemanticMemoryProfile extends Schema.Class<SemanticMemoryProfile>(
   distance: Schema.Literal("cosine"),
 }) {}
 
+/**
+ * Schema for an embedded passage with its ordinal and exact UTF-8 byte range in the authoritative
+ * source.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SemanticMemoryChunk extends Schema.Class<SemanticMemoryChunk>(
   "@effect-agent/core/SemanticMemoryChunk",
 )({
@@ -50,11 +69,24 @@ class MemoryIndexSourceWire extends Schema.Class<MemoryIndexSourceWire>(
   "@effect-agent/core/MemoryIndexSource",
 )(SourceFields) {}
 
+/**
+ * Type produced by {@link MemoryIndexSource}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type MemoryIndexSource<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> = Omit<
   MemoryIndexSourceWire,
   "key"
 > & { readonly key: MemoryKey<Namespace> };
 
+/**
+ * Schema and constructor identifying the namespace, source revision, and generation represented by
+ * an index entry.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryIndexSource = {
   Wire: MemoryIndexSourceWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -74,9 +106,22 @@ class MemoryIndexReplacementWire extends Schema.Class<MemoryIndexReplacementWire
   chunks: Schema.Array(SemanticMemoryChunk).check(Schema.isMinLength(1), Schema.isMaxLength(256)),
 }) {}
 
+/**
+ * Type produced by {@link MemoryIndexReplacement}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type MemoryIndexReplacement<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> =
   Omit<MemoryIndexReplacementWire, "source"> & { readonly source: MemoryIndexSource<Namespace> };
 
+/**
+ * Schema and constructor for a complete source replacement with a fixed embedding profile and
+ * ordered chunks.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryIndexReplacement = {
   Wire: MemoryIndexReplacementWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -100,9 +145,22 @@ class MemoryIndexCandidateWire extends Schema.Class<MemoryIndexCandidateWire>(
   indexedAt: Timestamp,
 }) {}
 
+/**
+ * Type produced by {@link MemoryIndexCandidate}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type MemoryIndexCandidate<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> =
   Omit<MemoryIndexCandidateWire, "key"> & { readonly key: MemoryKey<Namespace> };
 
+/**
+ * Schema and constructor for a ranked passage candidate with source lineage and cosine score.
+ * Revalidate against the authoritative source before use.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryIndexCandidate = {
   Wire: MemoryIndexCandidateWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -123,11 +181,24 @@ class MemoryIndexQueryWire extends Schema.Class<MemoryIndexQueryWire>(
   maxScannedChunks: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_536 })),
 }) {}
 
+/**
+ * Type produced by {@link MemoryIndexQuery}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type MemoryIndexQuery<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> = Omit<
   MemoryIndexQueryWire,
   "namespace"
 > & { readonly namespace: Namespace };
 
+/**
+ * Schema and constructor for a namespace-bound vector query with result-count, score, and scan
+ * limits.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryIndexQuery = {
   Wire: MemoryIndexQueryWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -145,11 +216,24 @@ class MemoryIndexSearchWire extends Schema.Class<MemoryIndexSearchWire>(
   scannedChunks: Schema.Natural,
 }) {}
 
+/**
+ * Type produced by {@link MemoryIndexSearch}.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type MemoryIndexSearch<Namespace extends MemoryNamespace.Any = MemoryNamespace.Any> = Omit<
   MemoryIndexSearchWire,
   "candidates"
 > & { readonly candidates: ReadonlyArray<MemoryIndexCandidate<Namespace>> };
 
+/**
+ * Schema and constructor for ranked candidates and the total indexed chunk count examined before
+ * threshold and result limits.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryIndexSearch = {
   Wire: MemoryIndexSearchWire,
   make: <Namespace extends MemoryNamespace.Any>(
@@ -160,6 +244,13 @@ export const MemoryIndexSearch = {
     }),
 };
 
+/**
+ * A semantic-index operation failed validation, availability, compatibility, fencing,
+ * resource-limit, or integrity checks.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryIndexError extends Schema.TaggedError<MemoryIndexError>()("MemoryIndexError", {
   operation: Identity,
   reason: Schema.Literals([
@@ -192,6 +283,9 @@ export class MemoryIndexError extends Schema.TaggedError<MemoryIndexError>()("Me
  * Search is ranking only: callers MUST recheck authoritative revision, access, and withdrawal.
  * This port tracks no builds, extraction progress, or corpus completeness. The host owns source
  * discovery, refresh scheduling, and required freshness.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SemanticMemoryIndex extends Context.Service<
   SemanticMemoryIndex,

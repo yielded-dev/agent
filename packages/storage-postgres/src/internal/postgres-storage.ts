@@ -19,11 +19,15 @@ import {
 } from "../PostgresStorageError.ts";
 import { applyPostgresLayout, inspectPostgresStorage } from "./storage-layout.ts";
 
-export { CurrentPostgresStorageVersion, readPostgresStorageHeader } from "./storage-layout.ts";
+export { CurrentPostgresStorageVersion } from "./storage-layout.ts";
+
+/** @internal */
+export { readPostgresStorageHeader } from "./storage-layout.ts";
 
 const storageError = (operation: string) => (cause: SqlError.SqlError) =>
   PostgresStorageError.make({ operation, cause, message: cause.message });
 
+/** @internal */
 export const classifyWriteFailure =
   (operation: string) =>
   (cause: SqlError.SqlError): PostgresStorageError | PostgresWriteContention =>
@@ -40,6 +44,8 @@ export const classifyWriteFailure =
 /**
  * Applications route each Thread to one scoped owner. This local gate is shared by all ports
  * using the same client/namespace; it is not a distributed lock or failover protocol.
+ *
+ * @internal
  */
 export const makeWriteTransaction = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
@@ -60,7 +66,11 @@ export const makeWriteTransaction = Effect.fnUntraced(function* (
 const withReadTransaction = (sql: SqlClient.SqlClient) =>
   makeSqlTransaction(sql, { begin: "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" });
 
-/** Run while holding the owner transaction, including when this schema does not yet exist. */
+/**
+ * Run while holding the owner transaction, including when this schema does not yet exist.
+ *
+ * @internal
+ */
 export const ensurePostgresSchema = Effect.fnUntraced(function* (schema: string) {
   const sql = yield* SqlClient.SqlClient;
   const { execute } = yield* makeSqlQuery();
@@ -73,6 +83,7 @@ export const ensurePostgresSchema = Effect.fnUntraced(function* (schema: string)
   }
 });
 
+/** @internal */
 export const postgresStorageErrors = {
   storage: (fields: StorageErrorFields) => PostgresStorageError.make(fields),
   corruption: (fields: CorruptionErrorFields) => PostgresStorageCorruptionError.make(fields),
@@ -83,7 +94,11 @@ const isTransactionFailure = Schema.is(
   Schema.Union([PostgresStorageError, PostgresWriteContention]),
 );
 
-/** Inspect under the owner gate before any DDL; current headers commit together. */
+/**
+ * Inspect under the owner gate before any DDL; current headers commit together.
+ *
+ * @internal
+ */
 export const initializePostgresStorage = Effect.fn("PostgresStorage.initializeLayout")(function* ({
   lockTimeout,
   schema,
@@ -109,7 +124,11 @@ export const initializePostgresStorage = Effect.fn("PostgresStorage.initializeLa
   );
 });
 
-/** Bind shared journal operations without repeating format initialization. */
+/**
+ * Bind shared journal operations without repeating format initialization.
+ *
+ * @internal
+ */
 export const makePostgresJournal = Effect.fnUntraced(function* (
   lockTimeout: number,
   hitFailpoint: (

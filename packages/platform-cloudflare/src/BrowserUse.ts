@@ -1,3 +1,8 @@
+/**
+ * A scoped browser command adapter over an authorized Cloudflare browser session.
+ *
+ * @since 0.1.0
+ */
 import {
   BrowserCdp,
   BrowserUseError,
@@ -21,13 +26,24 @@ import type {
 import type { BrowserSession, BrowserSessionError } from "./BrowserSession.ts";
 import { mapBrowserError, reportBrowserCause } from "./internal/browser-failure.ts";
 
+/**
+ * Commands checked by the host before browser dispatch.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type Command =
   | { readonly kind: "connect" | "tabs" | "new-tab" }
   | { readonly kind: "send"; readonly request: typeof SendRequest.Type }
   | { readonly kind: "frames"; readonly request: typeof FramesRequest.Type }
   | { readonly kind: "close-tab"; readonly request: typeof CloseTabRequest.Type };
 
-/** Current SDK metadata, never a grant supplied by page content or generated code. */
+/**
+ * Current SDK metadata, never a grant supplied by page content or generated code.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface AuthorizationContext {
   /** Absent during initial attachment. */
   readonly pageUrl?: string;
@@ -36,6 +52,12 @@ export interface AuthorizationContext {
   readonly frameUrl?: string;
 }
 
+/**
+ * Host authorization and command limits; the maximum tab count defaults to eight.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface Options<R = never> {
   /**
    * Runs under the BrowserSession lock before every command. Arbitrary CDP/page JavaScript
@@ -81,6 +103,9 @@ interface AttachedPage {
  * implicit waits, input retries, or generated-code execution live in this adapter.
  * CDP connections persist within the attachment (including remote object IDs); pages persist
  * for the host-owned session. Scope release detaches connections without closing pages.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const make = Effect.fnUntraced(function* <R>(
   session: Pick<BrowserSession, "run">,

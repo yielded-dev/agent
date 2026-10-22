@@ -1,5 +1,16 @@
+/**
+ * Named storage fault-injection locations for SQL adapter verification.
+ *
+ * @since 0.1.0
+ */
 import * as Schema from "effect/Schema";
 
+/**
+ * Named persistence boundary at which SQL adapter verification may inject a failure.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SqlStorageFailpointLocation = Schema.Literals([
   "materialize:before",
   "materialize:after",
@@ -47,4 +58,10 @@ export const SqlStorageFailpointLocation = Schema.Literals([
   "ledger:child-settled:after",
 ]);
 
+/**
+ * Named persistence boundary at which SQL adapter verification may inject a failure.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SqlStorageFailpointLocation = typeof SqlStorageFailpointLocation.Type;

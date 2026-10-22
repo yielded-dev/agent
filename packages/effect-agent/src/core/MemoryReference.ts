@@ -1,3 +1,10 @@
+/**
+ * Schemas for authoritative memory content, source revisions, attribution, passages, and bounded
+ * recall results.
+ *
+ * @since 0.1.0
+ */
+
 import * as Schema from "effect/Schema";
 
 import { utf8ByteLength } from "./internal/utf8.ts";
@@ -6,7 +13,12 @@ const Identity = Schema.NonEmptyString.check(Schema.isMaxLength(1_024));
 const Locator = Schema.NonEmptyString.check(Schema.isMaxLength(8_192));
 const Timestamp = Schema.Number.check(Schema.isFinite(), Schema.isGreaterThanOrEqualTo(0));
 
-/** Consumer-defined JSON metadata, bounded independently of readable content. */
+/**
+ * Consumer-defined JSON metadata, bounded independently of readable content.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryMetadata = Schema.Record(
   Schema.String.check(Schema.isMaxLength(128)),
   Schema.Json,
@@ -18,7 +30,12 @@ export const MemoryMetadata = Schema.Record(
   ),
 );
 
-/** Identity in the consumer's authoritative source. `null` means revision is unknown. */
+/**
+ * Identity in the consumer's authoritative source. `null` means revision is unknown.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class MemorySourceReference extends Schema.Class<MemorySourceReference>(
   "@effect-agent/core/MemorySourceReference",
 )({
@@ -31,6 +48,9 @@ export class MemorySourceReference extends Schema.Class<MemorySourceReference>(
  * Evidence of who said something, where, when, and who observed it. Interpretation is
  * consumer-defined, for example "proposal" or "inference". Repeated references retain
  * the same originId; they are not independent corroboration. Unknown activity time is null.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class MemoryAttribution extends Schema.Class<MemoryAttribution>(
   "@effect-agent/core/MemoryAttribution",
@@ -51,6 +71,9 @@ export class MemoryAttribution extends Schema.Class<MemoryAttribution>(
 /**
  * Readable authoritative content, independent of any index, model, or fixed memory taxonomy.
  * Recording/extraction time never substitutes for the original source activity time.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class MemoryContent extends Schema.Class<MemoryContent>("@effect-agent/core/MemoryContent")({
   text: Schema.NonEmptyString.check(Schema.isMaxLength(1_048_576)),
@@ -63,7 +86,12 @@ export class MemoryContent extends Schema.Class<MemoryContent>("@effect-agent/co
   extractedAt: Schema.optionalKey(Timestamp),
 }) {}
 
-/** A bounded passage supplied directly by a document reader or external retriever. */
+/**
+ * A bounded passage supplied directly by a document reader or external retriever.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class MemoryPassage extends Schema.Class<MemoryPassage>("@effect-agent/core/MemoryPassage")({
   version: Schema.Literal(1),
   /** Host-bound authority for composition, not model-visible metadata or an access grant. */
@@ -73,7 +101,12 @@ export class MemoryPassage extends Schema.Class<MemoryPassage>("@effect-agent/co
   content: MemoryContent,
 }) {}
 
-/** No-match, unavailable, and insufficient freshness are distinct consumer-visible outcomes. */
+/**
+ * No-match, unavailable, and insufficient freshness are distinct consumer-visible outcomes.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const MemoryLookup = Schema.Union([
   Schema.TaggedStruct("Found", {
     passages: Schema.Array(MemoryPassage).check(Schema.isMaxLength(128)),
@@ -87,9 +120,20 @@ export const MemoryLookup = Schema.Union([
   }),
 ]);
 
+/**
+ * Decoded value of {@link MemoryLookup}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MemoryLookup = typeof MemoryLookup.Type;
 
-/** Output bounds cover the complete rendered reference text, including citations and provenance. */
+/**
+ * Output bounds cover the complete rendered reference text, including citations and provenance.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class MemoryRecallLimits extends Schema.Class<MemoryRecallLimits>(
   "@effect-agent/core/MemoryRecallLimits",
 )({
@@ -104,7 +148,12 @@ export class MemoryRecallLimits extends Schema.Class<MemoryRecallLimits>(
   timeoutMillis: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 60_000 })),
 }) {}
 
-/** A recall contract or essential-source requirement could not be satisfied. */
+/**
+ * A recall contract or essential-source requirement could not be satisfied.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class MemoryRecallError extends Schema.TaggedError<MemoryRecallError>()(
   "MemoryRecallError",
   {

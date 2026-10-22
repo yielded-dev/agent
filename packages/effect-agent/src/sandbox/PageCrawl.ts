@@ -1,3 +1,10 @@
+/**
+ * Scoped exact-host crawling into bounded Markdown records, with fixed limits and adapter-owned job
+ * cleanup.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
@@ -21,15 +28,42 @@ const HttpStatus = Schema.Int.check(
   Schema.isLessThanOrEqualTo(599),
 );
 
-/** One credential-free HTTPS URL. The first adapter confines every record to its exact host. */
+/**
+ * One credential-free HTTPS URL. The first adapter confines every record to its exact host.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const PageCrawlStartUrl = PageCaptureTargetUrl;
+/**
+ * Decoded value of {@link PageCrawlStartUrl}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCrawlStartUrl = typeof PageCrawlStartUrl.Type;
 
-/** The declared uses Cloudflare evaluates against a site's Content Signals. */
+/**
+ * The declared uses Cloudflare evaluates against a site's Content Signals.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCrawlPurpose = Schema.Literals(["search", "ai-input", "ai-train"]);
+/**
+ * Decoded value of {@link PageCrawlPurpose}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCrawlPurpose = typeof PageCrawlPurpose.Type;
 
-/** Immutable caller limits for one scoped crawl. */
+/**
+ * Immutable caller limits for one scoped crawl.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCrawlLimits extends Schema.Class<PageCrawlLimits>("PageCrawlLimits")({
   maxPages: PositiveInt.check(Schema.isLessThanOrEqualTo(MAX_PAGES)),
   maxDepth: PositiveInt.check(Schema.isLessThanOrEqualTo(MAX_DEPTH)),
@@ -38,7 +72,12 @@ export class PageCrawlLimits extends Schema.Class<PageCrawlLimits>("PageCrawlLim
   deadlineMillis: PositiveInt.check(Schema.isLessThanOrEqualTo(MAX_DEADLINE_MILLIS)),
 }) {}
 
-/** A rendered Markdown crawl rooted at one exact HTTPS host. */
+/**
+ * A rendered Markdown crawl rooted at one exact HTTPS host.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCrawlRequest extends Schema.Class<PageCrawlRequest>("PageCrawlRequest")({
   startUrl: PageCrawlStartUrl,
   purposes: Schema.Array(PageCrawlPurpose).check(
@@ -49,7 +88,12 @@ export class PageCrawlRequest extends Schema.Class<PageCrawlRequest>("PageCrawlR
   limits: PageCrawlLimits,
 }) {}
 
-/** Cloudflare's documented status for one discovered URL. */
+/**
+ * Cloudflare's documented status for one discovered URL.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCrawlRecordStatus = Schema.Literals([
   "queued",
   "completed",
@@ -59,9 +103,20 @@ export const PageCrawlRecordStatus = Schema.Literals([
   "cancelled",
 ]);
 
+/**
+ * Decoded value of {@link PageCrawlRecordStatus}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCrawlRecordStatus = typeof PageCrawlRecordStatus.Type;
 
-/** Bounded origin metadata when Cloudflare reached the URL. */
+/**
+ * Bounded origin metadata when Cloudflare reached the URL.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCrawlRecordMetadata extends Schema.Class<PageCrawlRecordMetadata>(
   "PageCrawlRecordMetadata",
 )({
@@ -70,7 +125,12 @@ export class PageCrawlRecordMetadata extends Schema.Class<PageCrawlRecordMetadat
   title: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(4_096))),
 }) {}
 
-/** One untrusted page record. Non-completed statuses may have no Markdown. */
+/**
+ * One untrusted page record. Non-completed statuses may have no Markdown.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCrawlRecord extends Schema.Class<PageCrawlRecord>("PageCrawlRecord")({
   url: PageCrawlStartUrl,
   status: PageCrawlRecordStatus,
@@ -78,7 +138,12 @@ export class PageCrawlRecord extends Schema.Class<PageCrawlRecord>("PageCrawlRec
   metadata: Schema.optionalKey(PageCrawlRecordMetadata),
 }) {}
 
-/** Cloudflare refused a request because of a request-rate or browser-quota limit. */
+/**
+ * Cloudflare refused a request because of a request-rate or browser-quota limit.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCrawlRateLimitedError extends Schema.TaggedError<PageCrawlRateLimitedError>()(
   "PageCrawlRateLimitedError",
   {
@@ -90,7 +155,12 @@ export class PageCrawlRateLimitedError extends Schema.TaggedError<PageCrawlRateL
   },
 ) {}
 
-/** The REST transport or provider response violated the crawl protocol. */
+/**
+ * The REST transport or provider response violated the crawl protocol.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCrawlProtocolError extends Schema.TaggedError<PageCrawlProtocolError>()(
   "PageCrawlProtocolError",
   {
@@ -100,7 +170,12 @@ export class PageCrawlProtocolError extends Schema.TaggedError<PageCrawlProtocol
   },
 ) {}
 
-/** The first record or operation that crossed one immutable caller limit. */
+/**
+ * The first record or operation that crossed one immutable caller limit.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCrawlLimitError extends Schema.TaggedError<PageCrawlLimitError>()(
   "PageCrawlLimitError",
   {
@@ -112,7 +187,12 @@ export class PageCrawlLimitError extends Schema.TaggedError<PageCrawlLimitError>
   },
 ) {}
 
-/** A documented non-success terminal job status. */
+/**
+ * A documented non-success terminal job status.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCrawlTerminalError extends Schema.TaggedError<PageCrawlTerminalError>()(
   "PageCrawlTerminalError",
   {
@@ -127,6 +207,13 @@ export class PageCrawlTerminalError extends Schema.TaggedError<PageCrawlTerminal
   },
 ) {}
 
+/**
+ * Schema for crawl rate limits, protocol failures, caller-limit violations, and unsuccessful
+ * terminal job states.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCrawlError = Schema.Union([
   PageCrawlRateLimitedError,
   PageCrawlProtocolError,
@@ -134,9 +221,20 @@ export const PageCrawlError = Schema.Union([
   PageCrawlTerminalError,
 ]);
 
+/**
+ * Decoded value of {@link PageCrawlError}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCrawlError = typeof PageCrawlError.Type;
 
-/** Scoped exact-host crawl stream. Provider job identity and polling stay adapter-private. */
+/**
+ * Scoped exact-host crawl stream. Provider job identity and polling stay adapter-private.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class PageCrawl extends Context.Service<
   PageCrawl,
   {
@@ -146,6 +244,13 @@ export class PageCrawl extends Context.Service<
   }
 >()("@effect-agent/sandbox/PageCrawl") {}
 
+/**
+ * Adapter function for a scoped stream of bounded crawl records. Provider job identity remains
+ * private to the adapter.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCrawlCrawl = (
   request: PageCrawlRequest,
 ) => Stream.Stream<PageCrawlRecord, PageCrawlError, Scope.Scope>;

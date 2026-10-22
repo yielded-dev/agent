@@ -1,3 +1,8 @@
+/**
+ * Schedule storage and alarm replacement within one Durable Object transaction.
+ *
+ * @since 0.1.0
+ */
 import {
   makeSqlScheduleStore,
   SqlScheduleWriteTransaction,
@@ -37,12 +42,24 @@ class ScheduleTableNameRow extends Schema.Class<ScheduleTableNameRow>(
   name: Schema.String,
 }) {}
 
+/**
+ * The next alarm deadline retained with a schedule state mutation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DoScheduleAlarmReplacement {
   readonly deadlineAtMillis: number | null;
   /** Included in every logical alarm payload so equal-time replacement stays distinguishable. */
   readonly generation: number;
 }
 
+/**
+ * Replace the owner alarm inside the schedule transaction.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DoScheduleReplaceAlarm = (
   replacement: DoScheduleAlarmReplacement,
 ) => Effect.Effect<void, ScheduleStorageError>;
@@ -50,6 +67,9 @@ export type DoScheduleReplaceAlarm = (
 /**
  * Platform-owned transaction boundary for schedule SQL and logical alarm mutation. The callback
  * and its `replaceAlarm` capability belong to one fiber and must not escape or fork.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class DoScheduleTransaction extends Context.Service<
   DoScheduleTransaction,
@@ -60,7 +80,12 @@ export class DoScheduleTransaction extends Context.Service<
   }
 >()("@effect-agent/storage-cloudflare/DoScheduleTransaction") {}
 
-/** Platform driver operations that use the same schedule-state and alarm transaction. */
+/**
+ * Platform driver operations that use the same schedule-state and alarm transaction.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class DoScheduleAlarmControl extends Context.Service<
   DoScheduleAlarmControl,
   {
@@ -262,6 +287,9 @@ const makeServices = Effect.gen(function* () {
 /**
  * Durable Object SQLite ScheduleStore. Platform code supplies the one transaction owner that
  * combines these SQL mutations with its logical and native alarm lifecycle.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const scheduleStoreLayer: Layer.Layer<
   ScheduleStore | DoScheduleAlarmControl,

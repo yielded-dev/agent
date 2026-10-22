@@ -7,9 +7,20 @@ import * as Semaphore from "effect/Semaphore";
 import type { ThreadId } from "../../core/Identifiers.ts";
 import { type Claim, LedgerError, OwnershipLost } from "../SubmissionLedger.ts";
 
+/**
+ * Runs an Effect under the physical storage owner's shared mutation serialization.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type MutationGate = <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
 
-/** Local capability only. It is never encoded, persisted, or reconstructed from an Attempt ID. */
+/**
+ * Local capability only. It is never encoded, persisted, or reconstructed from an Attempt ID.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface OwnerGeneration {
   readonly claim: Claim;
   readonly identity: object;
@@ -18,6 +29,13 @@ export interface OwnerGeneration {
   readonly use: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E | OwnershipLost, R>;
 }
 
+/**
+ * Shared process-local ownership registry and mutation/progress gates for all facets of one
+ * physical storage owner.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface StorageOwnerService {
   readonly identity: object;
   readonly withMutation: MutationGate;
@@ -35,6 +53,12 @@ export interface StorageOwnerService {
   ) => Effect.Effect<Option.Option<OwnerGeneration>, E | LedgerError, R | Scope.Scope>;
 }
 
+/**
+ * Provides the shared local ownership capability used to fence claims and storage mutations.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class StorageOwner extends Context.Service<StorageOwner, StorageOwnerService>()(
   "@effect-agent/durable/StorageOwner",
 ) {}
@@ -48,7 +72,12 @@ const ActiveProgress = Context.Reference<
   { readonly owner: object; readonly threadId: ThreadId } | undefined
 >("@effect-agent/durable/internal/ActiveProgress", { defaultValue: () => undefined });
 
-/** Reuse the physical owner's gate; reentrant calls remain in the same mutation. */
+/**
+ * Reuse the physical owner's gate; reentrant calls remain in the same mutation.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeStorageOwner = Effect.fnUntraced(function* (gate: MutationGate) {
   const identity = {};
   let closed = false;

@@ -1,3 +1,10 @@
+/**
+ * Immutable Agent definitions and model bindings, with schema-defined input, output, updates,
+ * instructions, and execution policy.
+ *
+ * @since 0.1.0
+ */
+
 import type * as AiError from "effect/ai/AiError";
 import type * as LanguageModel from "effect/ai/LanguageModel";
 import type * as Model from "effect/ai/Model";
@@ -6,8 +13,7 @@ import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import type * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
-import type * as Schema from "effect/Schema";
-import * as S from "effect/Schema";
+import * as Schema from "effect/Schema";
 
 import type {
   AgentInputDecodeError,
@@ -16,29 +22,55 @@ import type {
   AgentRunDispositionError,
 } from "./AgentError.ts";
 import { AgentPolicy, type AgentPolicyInput } from "./AgentPolicy.ts";
+import type { UpdateToolkit } from "./AgentUpdates.ts";
 import { AgentId } from "./Identifiers.ts";
-import { type UpdateToolkit, withUpdateTool } from "./internal/agent-updates.ts";
+import { withUpdateTool } from "./internal/agent-updates.ts";
 import type { Configuration } from "./ToolExposure.ts";
 
-/** Prompt input produced directly or by an Effect that preserves its failure and requirements. */
+/**
+ * Prompt input produced directly or by an Effect that preserves its failure and requirements.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type InstructionResult<E = never, R = never> =
   | Prompt.RawInput
   | Effect.Effect<Prompt.RawInput, E, R>;
 
-/** Static prompt input or an input-dependent source evaluated once while preparing a run. */
+/**
+ * Static prompt input or an input-dependent source evaluated once while preparing a run.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type InstructionSource<Input, E = never, R = never> =
   | Prompt.RawInput
   | ((input: Input) => InstructionResult<E, R>);
 
-/** Definition-owned projection from decoded Agent input to model-visible prompt content. */
+/**
+ * Definition-owned projection from decoded Agent input to model-visible prompt content.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type InputPromptSource<Input, E = never, R = never> = (
   input: Input,
 ) => InstructionResult<E, R>;
 
-/** Native services needed to execute and identify model calls. */
+/**
+ * Native services needed to execute and identify model calls.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ModelServices = LanguageModel.LanguageModel | Model.ProviderName | Model.ModelName;
 
-/** Accepts native model Layers that provide generation and model identity. */
+/**
+ * Accepts native model Layers that provide generation and model identity.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type NativeModel<ModelValue> =
   ModelValue extends Layer.Layer<infer Provides, never, infer _Requires>
     ? ModelServices extends Provides
@@ -46,7 +78,12 @@ export type NativeModel<ModelValue> =
       : never
     : never;
 
-/** Definition-owned boundary for selecting and validating an application run disposition. */
+/**
+ * Definition-owned boundary for selecting and validating an application run disposition.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface RunDispositionDeclaration<Output, DispositionSchema extends Schema.Top> {
   /**
    * Opt background workers into one retained assignment. The encoded disposition must be
@@ -61,7 +98,12 @@ export interface RunDispositionDeclaration<Output, DispositionSchema extends Sch
   readonly fromOutput: (output: Output) => unknown;
 }
 
-/** Values available to a Definition-owned completion Tool projector after canonical decoding. */
+/**
+ * Values available to a Definition-owned completion Tool projector after canonical decoding.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface CompletionProjectionInput<Parameters = unknown, Result = unknown> {
   readonly parameters: Parameters;
   readonly result: Result;
@@ -75,6 +117,9 @@ export interface CompletionProjectionInput<Parameters = unknown, Result = unknow
  * model can correct them within ordinary Run budgets; completed provider results are retained.
  * Missing provider results and invalid pending resumed batches fail closed. The completion
  * designation never permits side-effect replay.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface CompletionToolDeclaration<
   Parameters = unknown,
@@ -97,7 +142,12 @@ type CompletionToolFor<ToolkitValue extends Toolkit.Any, Output> = {
   > & { readonly tool: Name };
 }[keyof ToolkitValue["tools"] & string];
 
-/** Immutable, model-agnostic schemas, behavior, tools, and bounds for an agent. */
+/**
+ * Immutable, model-agnostic schemas, behavior, tools, and bounds for an agent.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface Definition<
   InputSchema extends Schema.Top,
   OutputSchema extends Schema.Top,
@@ -133,7 +183,7 @@ export interface Definition<
   /** Native Effect AI toolkit whose failures and requirements remain visible. */
   readonly toolkit: ToolkitValue;
   readonly toolExposure?: Configuration | undefined;
-  /** Finite execution bounds enforced by the runtime. */
+  /** Run execution policy enforced by the runtime; count ceilings may be unbounded. */
   readonly policy: AgentPolicy;
   /** Explicit policy fields, retained so delegated runs can inherit omitted fields. */
   readonly policyOverrides?: Partial<AgentPolicyInput> | undefined;
@@ -143,7 +193,12 @@ export interface Definition<
   readonly description?: string | undefined;
 }
 
-/** Options for a model-agnostic agent definition. */
+/**
+ * Options for a model-agnostic agent definition.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DefinitionOptions<
   InputSchema extends Schema.Top,
   OutputSchema extends Schema.Top,
@@ -179,7 +234,12 @@ type AnyDefinitionShape = Definition<
   Schema.Top | undefined
 >;
 
-/** Immutable pairing of an agent definition with a native model Layer. */
+/**
+ * Immutable pairing of an agent definition with a native model Layer.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface Binding<DefinitionValue extends AnyDefinitionShape, ModelValue> {
   readonly definition: DefinitionValue;
   readonly model: NativeModel<ModelValue>;
@@ -204,10 +264,20 @@ type ModelRequirements<Value> =
 
 /** Constructors and type projections for definitions and runnable model bindings. */
 
-/** Type-erased definition used at generic framework boundaries. */
+/**
+ * Type-erased definition used at generic framework boundaries.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type AnyDefinition = AnyDefinitionShape;
 
-/** Read-only interpreter program or binding used at inspection and projection boundaries. */
+/**
+ * Read-only interpreter program or binding used at inspection and projection boundaries.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface Any {
   readonly definition: AnyDefinition;
   readonly model?: unknown;
@@ -230,60 +300,120 @@ type RunDispositionSchemaOf<DefinitionValue extends AnyDefinition> = [
     ? DispositionSchema
     : never;
 
-/** Literal Agent ID, retained by Agent.make. */
+/**
+ * Literal Agent ID, retained by Agent.make.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Name<A extends AnyDefinition | Any> = DefinitionOf<A>["id"] extends AgentId &
   (infer N extends string)
   ? N
   : string;
 
-/** Declared update Schema, or never for Agents without updates. */
+/**
+ * Declared update Schema, or never for Agents without updates.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type UpdatesSchema<A extends AnyDefinition | Any> = Exclude<
   DefinitionOf<A>["updates"],
   undefined
 >;
 
-/** Decoded intermediate update value. */
+/**
+ * Decoded intermediate update value.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Update<A extends AnyDefinition | Any> = UpdatesSchema<A>["Type"];
 
-/** Decoded input type of a definition or binding. */
+/**
+ * Decoded input type of a definition or binding.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Input<AgentValue extends AnyDefinition | Any> =
   DefinitionOf<AgentValue>["input"]["Type"];
 
-/** Encoded input accepted by the primary execution operations. */
+/**
+ * Encoded input accepted by the primary execution operations.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type EncodedInput<AgentValue extends AnyDefinition | Any> =
   DefinitionOf<AgentValue>["input"]["Encoded"];
 
-/** Decoded output type of a definition or binding. */
+/**
+ * Decoded output type of a definition or binding.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Output<AgentValue extends AnyDefinition | Any> =
   DefinitionOf<AgentValue>["output"]["Type"];
 
-/** Input Schema carried by a definition or binding. */
+/**
+ * Input Schema carried by a definition or binding.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type InputSchema<AgentValue extends AnyDefinition | Any> = DefinitionOf<AgentValue>["input"];
 
-/** Output Schema carried by a definition or binding. */
+/**
+ * Output Schema carried by a definition or binding.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type OutputSchema<AgentValue extends AnyDefinition | Any> =
   DefinitionOf<AgentValue>["output"];
 
-/** Application run-disposition Schema carried by a definition or binding, or `never`. */
+/**
+ * Application run-disposition Schema carried by a definition or binding, or `never`.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type RunDispositionSchema<AgentValue extends AnyDefinition | Any> = RunDispositionSchemaOf<
   DefinitionOf<AgentValue>
 >;
 
-/** Decoded application run disposition declared by a definition or binding. */
+/**
+ * Decoded application run disposition declared by a definition or binding.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type RunDisposition<AgentValue extends AnyDefinition | Any> = [
   RunDispositionSchema<AgentValue>,
 ] extends [never]
   ? never
   : RunDispositionSchema<AgentValue>["Type"];
 
-/** Validation failure admitted only by definitions that declare a run disposition. */
+/**
+ * Validation failure admitted only by definitions that declare a run disposition.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type RunDispositionFailure<AgentValue extends AnyDefinition | Any> = [
   RunDispositionSchemaOf<DefinitionOf<AgentValue>>,
 ] extends [never]
   ? never
   : AgentRunDispositionError;
 
-/** Effect AI tool map carried by a definition or binding. */
+/**
+ * Effect AI tool map carried by a definition or binding.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Tools<AgentValue extends AnyDefinition | Any> = Toolkit.Tools<
   DefinitionOf<AgentValue>["toolkit"]
 >;
@@ -296,10 +426,20 @@ type ToolMapValues<ToolMap extends Record<string, Tool.Any>> = ToolMap extends u
   ? ToolMap[keyof ToolMap]
   : never;
 
-/** All possible tools, including keys present in only one definition or binding branch. */
+/**
+ * All possible tools, including keys present in only one definition or binding branch.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type ToolUnion<AgentValue extends AnyDefinition | Any> = ToolMapValues<Tools<AgentValue>>;
 
-/** Instruction, tool-handler, and Schema services required before a Model is bound. */
+/**
+ * Instruction, tool-handler, and Schema services required before a Model is bound.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type DefinitionRequirements<DefinitionValue extends AnyDefinition> =
   DefinitionValue extends unknown
     ?
@@ -320,7 +460,12 @@ export type DefinitionRequirements<DefinitionValue extends AnyDefinition> =
         | RunDispositionSchemaOf<DefinitionValue>["EncodingServices"]
     : never;
 
-/** Definition services plus native model services, or a binding's model Layer requirements. */
+/**
+ * Definition services plus native model services, or a binding's model Layer requirements.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Requirements<AgentValue extends AnyDefinition | Any> =
   | DefinitionRequirements<DefinitionOf<AgentValue>>
   | (AgentValue extends { readonly model: infer ModelValue }
@@ -335,7 +480,12 @@ type DefinitionFailure<DefinitionValue extends AnyDefinition> = DefinitionValue 
       | Tool.HandlerError<ToolUnion<DefinitionValue>>
   : never;
 
-/** Failures from every possible definition, preserving each branch's instruction input type. */
+/**
+ * Failures from every possible definition, preserving each branch's instruction input type.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Failure<AgentValue extends AnyDefinition | Any> =
   | DefinitionFailure<DefinitionOf<AgentValue>>
   | AiError.AiError
@@ -344,7 +494,12 @@ export type Failure<AgentValue extends AnyDefinition | Any> =
   | AgentOutputError
   | RunDispositionFailure<AgentValue>;
 
-/** Validate an agent ID and return a shallowly frozen, model-agnostic definition. */
+/**
+ * Validate an agent ID and return a shallowly frozen, model-agnostic definition.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export function make<
   const Name extends string,
   InputSchema extends Schema.Top,
@@ -378,6 +533,12 @@ export function make<
   NoInfer<UpdatesSchema>
 > & { readonly id: AgentId & Name };
 
+/**
+ * Validate an agent ID and return a shallowly frozen, model-agnostic definition.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export function make<
   const Name extends string,
   InputSchema extends Schema.Top,
@@ -410,6 +571,12 @@ export function make<
   NoInfer<UpdatesSchema>
 > & { readonly id: AgentId & Name };
 
+/**
+ * Validate an agent ID and return a shallowly frozen, model-agnostic definition.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export function make<
   const Name extends string,
   InputSchema extends Schema.Top,
@@ -442,6 +609,12 @@ export function make<
   NoInfer<UpdatesSchema>
 > & { readonly id: AgentId & Name };
 
+/**
+ * Validate an agent ID and return a shallowly frozen, model-agnostic definition.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export function make<
   const Name extends string,
   InputSchema extends Schema.Top,
@@ -473,6 +646,12 @@ export function make<
   NoInfer<UpdatesSchema>
 > & { readonly id: AgentId & Name };
 
+/**
+ * Validate an agent ID and return a shallowly frozen, model-agnostic definition.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export function make(
   id: string,
   options: {
@@ -515,7 +694,7 @@ export function make(
             ...options.toolExposure,
             initialToolNames: Object.freeze([...(options.toolExposure.initialToolNames ?? [])]),
           }),
-    id: S.decodeSync(AgentId)(id),
+    id: Schema.decodeSync(AgentId)(id),
     completion:
       options.completion === undefined ? undefined : Object.freeze({ ...options.completion }),
     runDisposition:
@@ -525,12 +704,23 @@ export function make(
   });
 }
 
-/** Bind a native model Layer without acquiring or hiding its requirements. */
+/**
+ * Bind a native model Layer without acquiring or hiding its requirements.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export function withModel<DefinitionValue extends AnyDefinition, ModelValue>(
   definition: DefinitionValue,
   model: NativeModel<ModelValue>,
 ): Binding<DefinitionValue, ModelValue>;
 
+/**
+ * Bind a native model Layer without acquiring or hiding its requirements.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export function withModel<DefinitionValue extends AnyDefinition, ModelValue>(
   definition: DefinitionValue,
   model: ModelValue,

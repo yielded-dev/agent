@@ -1,3 +1,8 @@
+/**
+ * Deterministic travel catalogs, planning instructions, and identifiers for reusable fixtures.
+ *
+ * @since 0.1.0
+ */
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
@@ -39,6 +44,12 @@ const activities = ActivitySearchResult.make({
   activities: ["British Museum timed entry", "Thames evening walk"],
 });
 
+/**
+ * Provides the deterministic flight catalog.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const FlightCatalogLayer = Layer.succeed(
   FlightCatalog,
   FlightCatalog.of({
@@ -54,6 +65,12 @@ export const FlightCatalogLayer = Layer.succeed(
   }),
 );
 
+/**
+ * Provides the deterministic lodging catalog.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const LodgingCatalogLayer = Layer.succeed(
   LodgingCatalog,
   LodgingCatalog.of({
@@ -69,6 +86,12 @@ export const LodgingCatalogLayer = Layer.succeed(
   }),
 );
 
+/**
+ * Provides the deterministic activity catalog.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const ActivityCatalogLayer = Layer.succeed(
   ActivityCatalog,
   ActivityCatalog.of({
@@ -84,6 +107,12 @@ export const ActivityCatalogLayer = Layer.succeed(
   }),
 );
 
+/**
+ * Provides fixed review-only planning instructions without an external service.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const TravelGuidanceLayer = Layer.succeed(
   TravelGuidance,
   TravelGuidance.of({
@@ -102,6 +131,12 @@ export const TravelGuidanceLayer = Layer.succeed(
   }),
 );
 
+/**
+ * Provides scope-local sequential identifiers for reproducible fixture histories.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const DeterministicIdGeneratorLayer = Layer.effect(
   IdGenerator,
   Effect.gen(function* () {
@@ -123,6 +158,12 @@ export const DeterministicIdGeneratorLayer = Layer.effect(
   }),
 );
 
+/**
+ * Combines deterministic identifiers, catalogs, guidance, history, and planner handlers.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const TravelPlannerRuntimeLayer = Layer.mergeAll(
   RunContextPreparationPassthrough,
   ThreadHistory.layer,

@@ -1,3 +1,8 @@
+/**
+ * A history-aware scripted planner and stable identities for persisted-runtime restart checks.
+ *
+ * @since 0.1.0
+ */
 import * as Agent from "@yielded/agent/agent";
 import { DurableWorkerBinding, type ResolvedBinding } from "@yielded/agent/agent-registration";
 import { DeploymentId } from "@yielded/agent/records";
@@ -17,19 +22,48 @@ import {
 } from "./phase4.ts";
 import { expectedTravelPlan } from "./scenarios.ts";
 
-/** Stable deployment identity for the persisted-runtime restart fixture. */
+/**
+ * Stable deployment identity for the persisted-runtime restart fixture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase6TravelPlannerDeploymentId = Schema.decodeSync(DeploymentId)(
   "travel-planner-p6-deployment",
 );
 
-/** Each Thread Object mints its producer identity from this prefix and its Thread ID. */
+/**
+ * Each Thread Object mints its producer identity from this prefix and its Thread ID.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase6TravelPlannerProducerPrefix = "travel-planner-p6-producer";
 
 const scriptedUsage = { inputTokens: { total: 128 }, outputTokens: { total: 96 } };
 
-/** The P1/P4 happy-path Tool Call identities (scenarios.ts, byte-stable since P1). */
+/**
+ * The P1/P4 happy-path Tool Call identities (scenarios.ts, byte-stable since P1).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase6FlightCallId = "flight-call-1";
+
+/**
+ * Stable lodging tool call identifier used by the restart planner model.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase6LodgingCallId = "lodging-call-1";
+
+/**
+ * Stable activity tool call identifier used by the restart planner model.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const phase6ActivityCallId = "activity-call-1";
 
 /** Turn 1 of the planner: the SAME three search declarations as `phase1HappyPathTurns`. */
@@ -75,6 +109,9 @@ const plannerDecide = (promptJson: string): Stream.Stream<Response.StreamPartEnc
 /**
  * Select the next response from committed search history so a fresh runtime incarnation
  * resumes the planner without retaining an in-memory model-turn counter.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const phase6PlannerModel = Model.make(
   "scripted",
@@ -89,7 +126,12 @@ export const phase6PlannerModel = Model.make(
   ),
 );
 
-/** Capture the planner registration used by the persisted-runtime restart scenarios. */
+/**
+ * Capture the planner registration used by the persisted-runtime restart scenarios.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const makePhase6TravelPlannerBindings: Effect.Effect<ReadonlyArray<ResolvedBinding>> =
   DurableWorkerBinding.make(
     Agent.withModel(TravelPlannerPhase4, phase6PlannerModel),

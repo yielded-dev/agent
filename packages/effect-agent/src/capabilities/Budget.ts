@@ -1,3 +1,10 @@
+/**
+ * Hierarchical usage accounting and finite limits shared across global, tenant, Agent, Thread, and
+ * Run scopes. Costs are measured in micro-USD.
+ *
+ * @since 0.1.0
+ */
+
 import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -8,9 +15,20 @@ import type * as Scope from "effect/Scope";
 const Natural = Schema.Natural;
 const BudgetLevel = Schema.Literals(["global", "tenant", "agent", "thread", "run"]);
 
+/**
+ * Decoded value of {@link BudgetLevel}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type BudgetLevel = typeof BudgetLevel.Type;
 
-/** Fixed units avoid floating-point currency accounting: costs are micro-USD. */
+/**
+ * Fixed units avoid floating-point currency accounting: costs are micro-USD.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class UsageTotals extends Schema.Class<UsageTotals>(
   "@effect-agent/capabilities/UsageTotals",
 )({
@@ -30,7 +48,12 @@ export class UsageTotals extends Schema.Class<UsageTotals>(
   elapsedMillis: Natural,
 }) {}
 
-/** Increment recorded at one model/tool accounting boundary. */
+/**
+ * Increment recorded at one model/tool accounting boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class UsageDelta extends Schema.Class<UsageDelta>("@effect-agent/capabilities/UsageDelta")({
   /** `1` for a model-response boundary, `0` for a mid-pass tool charge; gates last-call tracking. */
   modelCalls: Natural,
@@ -45,7 +68,12 @@ export class UsageDelta extends Schema.Class<UsageDelta>("@effect-agent/capabili
   costMicrousd: Natural,
 }) {}
 
-/** All optional limits are finite when present; absent means not configured. */
+/**
+ * All optional limits are finite when present; absent means not configured.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class UsageBudgetLimits extends Schema.Class<UsageBudgetLimits>(
   "@effect-agent/capabilities/UsageBudgetLimits",
 )({
@@ -56,7 +84,12 @@ export class UsageBudgetLimits extends Schema.Class<UsageBudgetLimits>(
   maxDurationMillis: Schema.optionalKey(Natural),
 }) {}
 
-/** Identity and local limits for one node in a global-to-Run budget hierarchy. */
+/**
+ * Identity and local limits for one node in a global-to-Run budget hierarchy.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class UsageBudgetNodeConfig extends Schema.Class<UsageBudgetNodeConfig>(
   "@effect-agent/capabilities/UsageBudgetNodeConfig",
 )({
@@ -65,7 +98,12 @@ export class UsageBudgetNodeConfig extends Schema.Class<UsageBudgetNodeConfig>(
   limits: UsageBudgetLimits,
 }) {}
 
-/** Typed finite-budget rejection. A rejected increment is not committed at any hierarchy level. */
+/**
+ * Typed finite-budget rejection. A rejected increment is not committed at any hierarchy level.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BudgetExceeded extends Schema.TaggedError<BudgetExceeded>()("BudgetExceeded", {
   scopeLevel: BudgetLevel,
   scopeId: Schema.NonEmptyString,
@@ -74,7 +112,12 @@ export class BudgetExceeded extends Schema.TaggedError<BudgetExceeded>()("Budget
   observedValue: Natural,
 }) {}
 
-/** Hierarchical accounting authority. All ancestors share one atomic Ref-backed transaction. */
+/**
+ * Hierarchical accounting authority. All ancestors share one atomic Ref-backed transaction.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface UsageBudgetNode {
   readonly level: BudgetLevel;
   readonly id: string;
@@ -110,7 +153,12 @@ export interface UsageBudgetNode {
   ) => Effect.Effect<A, E | BudgetExceeded, R>;
 }
 
-/** A child budget must move strictly inward through the declared hierarchy. */
+/**
+ * A child budget must move strictly inward through the declared hierarchy.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InvalidBudgetHierarchy extends Schema.TaggedError<InvalidBudgetHierarchy>()(
   "InvalidBudgetHierarchy",
   {
@@ -119,7 +167,12 @@ export class InvalidBudgetHierarchy extends Schema.TaggedError<InvalidBudgetHier
   },
 ) {}
 
-/** A child `level:id` is already registered with different limits; neither set may win silently. */
+/**
+ * A child `level:id` is already registered with different limits; neither set may win silently.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BudgetNodeConflict extends Schema.TaggedError<BudgetNodeConflict>()(
   "BudgetNodeConflict",
   {
@@ -512,7 +565,12 @@ const makeNode = (
   };
 };
 
-/** Create the outermost node of a hierarchy. Child nodes share its atomic ledger. */
+/**
+ * Create the outermost node of a hierarchy. Child nodes share its atomic ledger.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeUsageBudgetRoot = Effect.fnUntraced(function* (config: UsageBudgetNodeConfig) {
   const startedAt = yield* Clock.currentTimeMillis;
   const key = nodeKeyComponent(config);
@@ -535,7 +593,12 @@ export const makeUsageBudgetRoot = Effect.fnUntraced(function* (config: UsageBud
   return makeNode(ledger, key, [], config, handleId);
 });
 
-/** Compatibility constructor for a standalone Run budget. */
+/**
+ * Compatibility constructor for a standalone Run budget.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeUsageBudget = (limits: UsageBudgetLimits): Effect.Effect<UsageBudgetNode> =>
   makeUsageBudgetRoot(
     UsageBudgetNodeConfig.make({

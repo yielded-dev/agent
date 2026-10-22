@@ -1,3 +1,10 @@
+/**
+ * Versioned canonical Thread facts, active Run state, and bounded persistence schemas. Provider SDK
+ * objects never form the durable record format.
+ *
+ * @since 0.1.0
+ */
+
 import * as Prompt from "effect/ai/Prompt";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -37,49 +44,126 @@ import { WorkerBudgetScope, WorkerRef, WorkerSource, WorkerStop } from "../core/
 import { ContextHandoff } from "../engine/ContextWindow.ts";
 import { HistoryPrompt } from "./internal/history-prompt.ts";
 
-/** Stable identity of one canonical record. */
+/**
+ * Stable identity of one canonical record.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RecordId = Schema.NonEmptyString.pipe(Schema.brand("@effect-agent/thread/RecordId"));
 
+/**
+ * Decoded value of {@link RecordId}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RecordId = typeof RecordId.Type;
 
-/** Stable idempotency identity of one atomic append. */
+/**
+ * Stable idempotency identity of one atomic append.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const BatchId = Schema.NonEmptyString.pipe(Schema.brand("@effect-agent/thread/BatchId"));
 
+/**
+ * Decoded value of {@link BatchId}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type BatchId = typeof BatchId.Type;
 
-/** Identity of the deployment that produced a record. */
+/**
+ * Identity of the deployment that produced a record.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const DeploymentId = Schema.NonEmptyString.pipe(
   Schema.brand("@effect-agent/thread/DeploymentId"),
 );
 
+/**
+ * Decoded value of {@link DeploymentId}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DeploymentId = typeof DeploymentId.Type;
 
-/** Identity of a canonical-log producer. */
+/**
+ * Identity of a canonical-log producer.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ProducerId = Schema.NonEmptyString.pipe(
   Schema.brand("@effect-agent/thread/ProducerId"),
 );
 
+/**
+ * Decoded value of {@link ProducerId}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ProducerId = typeof ProducerId.Type;
 
-/** SHA-256 digest encoded as lowercase hexadecimal text. */
+/**
+ * SHA-256 digest encoded as lowercase hexadecimal text.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const Digest = Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)).pipe(
   Schema.brand("@effect-agent/thread/Digest"),
 );
 
+/**
+ * Decoded value of {@link Digest}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type Digest = typeof Digest.Type;
 
-/** Adapter-owned resume cursor. Callers must not parse or synthesize it. */
+/**
+ * Adapter-owned resume cursor. Callers must not parse or synthesize it.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ObservationOffset = Schema.NonEmptyString.pipe(
   Schema.brand("@effect-agent/thread/ObservationOffset"),
 );
 
+/**
+ * Decoded value of {@link ObservationOffset}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ObservationOffset = typeof ObservationOffset.Type;
 
-/** Gap-free position in one Thread's canonical sequence. */
+/**
+ * Gap-free position in one Thread's canonical sequence.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CanonicalSequence = Schema.Natural.pipe(
   Schema.brand("@effect-agent/thread/CanonicalSequence"),
 );
 
+/**
+ * Decoded value of {@link CanonicalSequence}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CanonicalSequence = typeof CanonicalSequence.Type;
 
 const BoundedText = Schema.String.check(Schema.isMaxLength(64 * 1024));
@@ -89,6 +173,9 @@ const BoundedName = Schema.NonEmptyString.check(Schema.isMaxLength(256));
  * Private failed-Settlement evidence. The summary remains the safe public projection; diagnostic
  * and context preserve structured causal evidence for authorized operators, never model context.
  * Optional fields allow reading supported Settlements written before causal capture was available.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const SettlementFailureDiagnostic = FailureDiagnostic.Failure.pipe(
   Schema.annotate({
@@ -96,16 +183,52 @@ export const SettlementFailureDiagnostic = FailureDiagnostic.Failure.pipe(
   }),
 );
 
+/**
+ * Decoded value of {@link SettlementFailureDiagnostic}.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export type SettlementFailureDiagnostic = typeof SettlementFailureDiagnostic.Type;
 
 /** Positive canonical (Run-relative, Attempt-independent) Turn number. */
 const TurnNumber = Schema.Int.check(Schema.isGreaterThan(0));
 
+/**
+ * Maximum JSON nesting depth accepted at persistence boundaries: 64, counting the root at depth
+ * zero.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_PERSISTED_JSON_DEPTH = 64;
+/**
+ * Maximum number of entries in any persisted JSON array or object: 4,096.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_PERSISTED_JSON_COLLECTION_LENGTH = 4_096;
+/**
+ * Maximum number of visited values in one persisted JSON payload: 65,536.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_PERSISTED_JSON_NODES = 65_536;
+/**
+ * Maximum canonical UTF-8 size of one persisted JSON payload: 1 MiB.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_PERSISTED_JSON_BYTES = 1024 * 1024;
-/** Whole record wire includes bounded payloads and their canonical envelope. */
+/**
+ * Whole record wire includes bounded payloads and their canonical envelope.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_CANONICAL_RECORD_BYTES = 4 * 1024 * 1024;
 
 /**
@@ -196,15 +319,31 @@ const isPersistedJson = boundedJson({
   bytes: MAX_PERSISTED_JSON_BYTES,
 });
 
-/** Canonical JSON admitted to persisted records and checkpoints under explicit resource limits. */
+/**
+ * Canonical JSON admitted to persisted records and checkpoints under explicit resource limits.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PersistedJson = Schema.declare(isPersistedJson, {
   identifier: "@effect-agent/thread/PersistedJson",
   description: "JSON bounded by canonical persistence depth, collection, node, and byte limits",
 });
 
+/**
+ * Decoded value of {@link PersistedJson}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PersistedJson = typeof PersistedJson.Type;
 
-/** Whole record wire reserves room for the payload's envelope and additional bounded fields. */
+/**
+ * Whole record wire reserves room for the payload's envelope and additional bounded fields.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RecordJson = Schema.declare(
   boundedJson({
     depth: MAX_PERSISTED_JSON_DEPTH + 4,
@@ -217,9 +356,20 @@ export const RecordJson = Schema.declare(
   },
 );
 
+/**
+ * Decoded value of {@link RecordJson}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RecordJson = typeof RecordJson.Type;
 
-/** Schema-owned replay inputs whose individual definitions are incorporated into digests. */
+/**
+ * Schema-owned replay inputs whose individual definitions are incorporated into digests.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class DefinitionDigestInput extends Schema.Class<DefinitionDigestInput>(
   "@effect-agent/thread/DefinitionDigestInput",
 )({
@@ -228,7 +378,12 @@ export class DefinitionDigestInput extends Schema.Class<DefinitionDigestInput>(
   tools: PersistedJson,
 }) {}
 
-/** Admission-time operation fingerprints. Agent fingerprints remain immutable evidence only. */
+/**
+ * Admission-time operation fingerprints. Agent fingerprints remain immutable evidence only.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ReplayContract extends Schema.Class<ReplayContract>(
   "@effect-agent/thread/ReplayContract",
 )({
@@ -238,7 +393,12 @@ export class ReplayContract extends Schema.Class<ReplayContract>(
   tools: Schema.Record(Schema.String, Digest),
 }) {}
 
-/** Digests identify admission exactly; only an unfinished operation needs replay compatibility. */
+/**
+ * Digests identify admission exactly; only an unfinished operation needs replay compatibility.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class DefinitionDigests extends Schema.Class<DefinitionDigests>(
   "@effect-agent/thread/DefinitionDigests",
 )({
@@ -248,6 +408,12 @@ export class DefinitionDigests extends Schema.Class<DefinitionDigests>(
   replay: Schema.optionalKey(ReplayContract),
 }) {}
 
+/**
+ * Canonical fact binding a new Thread to its Agent identity and accepted definition digests.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ThreadCreated extends Schema.TaggedClass<ThreadCreated>(
   "@effect-agent/thread/ThreadCreated",
 )("ThreadCreated", {
@@ -258,6 +424,9 @@ export class ThreadCreated extends Schema.TaggedClass<ThreadCreated>(
 /**
  * One recorded Thread input. `submissionId` is present only for durably accepted work;
  * retained history has no admission or settlement obligation. `kind` identifies the input seam.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class UserInputRecorded extends Schema.TaggedClass<UserInputRecorded>(
   "@effect-agent/thread/UserInputRecorded",
@@ -269,7 +438,12 @@ export class UserInputRecorded extends Schema.TaggedClass<UserInputRecorded>(
   messageAdmission: Schema.optionalKey(InputMessage),
 }) {}
 
-/** Immutable Run start and per-Attempt duration allowance, before any agent execution. */
+/**
+ * Immutable Run start and per-Attempt duration allowance, before any agent execution.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunStartedRecord extends Schema.TaggedClass<RunStartedRecord>(
   "@effect-agent/thread/RunStartedRecord",
 )("RunStarted", {
@@ -279,7 +453,12 @@ export class RunStartedRecord extends Schema.TaggedClass<RunStartedRecord>(
   maxDurationMillis: Schema.Finite.check(Schema.isGreaterThan(0)),
 }) {}
 
-/** An active Attempt exhausted its execution allowance; downtime alone never writes this. */
+/**
+ * An active Attempt exhausted its execution allowance; downtime alone never writes this.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunDurationExhausted extends Schema.TaggedClass<RunDurationExhausted>(
   "@effect-agent/thread/RunDurationExhausted",
 )("RunDurationExhausted", { runId: RunId }) {}
@@ -302,6 +481,9 @@ const PersistedResponseMessages = PersistedJson.pipe(
  * Final model output. Immediate history records the successful Run's source messages for
  * recall and a full retained model-context snapshot for the next Run. Durable execution
  * instead journals individual ModelResponseRecorded Turns and exact context references.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ModelCompleted extends Schema.TaggedClass<ModelCompleted>(
   "@effect-agent/thread/ModelCompleted",
@@ -325,6 +507,13 @@ export class ModelCompleted extends Schema.TaggedClass<ModelCompleted>(
   ),
 ) {}
 
+/**
+ * Canonical bounded result of one application Tool Call, with explicit failure and budget-rejection
+ * evidence.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ToolCallSettled extends Schema.TaggedClass<ToolCallSettled>(
   "@effect-agent/thread/ToolCallSettled",
 )("ToolCallSettled", {
@@ -338,7 +527,12 @@ export class ToolCallSettled extends Schema.TaggedClass<ToolCallSettled>(
   budgetRejected: Schema.optionalKey(Schema.Literal(true)),
 }) {}
 
-/** Compact execution evidence committed with a declaration, before any handler can start. */
+/**
+ * Compact execution evidence committed with a declaration, before any handler can start.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ToolOperation extends Schema.Class<ToolOperation>(
   "@effect-agent/thread/ToolOperation",
 )({
@@ -349,7 +543,12 @@ export class ToolOperation extends Schema.Class<ToolOperation>(
   replay: Digest,
 }) {}
 
-/** Derived recovery input from one committed response; never a separate canonical record. */
+/**
+ * Derived recovery input from one committed response; never a separate canonical record.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class DeclaredToolCall extends Schema.Class<DeclaredToolCall>(
   "@effect-agent/thread/DeclaredToolCall",
 )({
@@ -361,7 +560,12 @@ export class DeclaredToolCall extends Schema.Class<DeclaredToolCall>(
   parametersDigest: Digest,
 }) {}
 
-/** A retired call's runtime result. Unavailable readonly work may already have been observed. */
+/**
+ * A retired call's runtime result. Unavailable readonly work may already have been observed.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ToolUnavailable extends Schema.TaggedClass<ToolUnavailable>()("ToolUnavailable", {
   toolName: BoundedName,
   execution: Schema.Literals(["not-executed", "unavailable"]),
@@ -453,11 +657,23 @@ const ModelResponseRecordedFields = Schema.Struct({
   ),
 );
 
+/**
+ * Canonical complete model response for a Turn, retaining prompt messages, declared tool
+ * operations, and available usage evidence.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ModelResponseRecorded extends Schema.TaggedClass<ModelResponseRecorded>(
   "@effect-agent/thread/ModelResponseRecorded",
 )("ModelResponseRecorded", ModelResponseRecordedFields) {}
 
-/** Monotonic reservations charged before programmatic execution or grace finalization. */
+/**
+ * Monotonic reservations charged before programmatic execution or grace finalization.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunPolicyUsageReserved extends Schema.TaggedClass<RunPolicyUsageReserved>()(
   "RunPolicyUsageReserved",
   {
@@ -471,6 +687,9 @@ export class RunPolicyUsageReserved extends Schema.TaggedClass<RunPolicyUsageRes
  * A durable Unknown Outcome: the external effect of one declared ordinary Tool Call may have
  * happened but was not confirmed canonically (DUR-009/DUR-017). It is neither success nor
  * ordinary failure; automatic continuation stops until an authorized resolution arrives.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ToolCallUnknown extends Schema.TaggedClass<ToolCallUnknown>(
   "@effect-agent/thread/ToolCallUnknown",
@@ -482,7 +701,12 @@ export class ToolCallUnknown extends Schema.TaggedClass<ToolCallUnknown>(
   reason: BoundedText,
 }) {}
 
-/** How one open/unknown Tool Call was authoritatively closed (DUR-017 resolution audit). */
+/**
+ * How one open/unknown Tool Call was authoritatively closed (DUR-017 resolution audit).
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ToolCallResolution = Schema.Literals([
   "completed-with-result",
   "failed-with-error",
@@ -490,6 +714,12 @@ export const ToolCallResolution = Schema.Literals([
   "safe-retry",
 ]);
 
+/**
+ * Decoded value of {@link ToolCallResolution}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ToolCallResolution = typeof ToolCallResolution.Type;
 
 /**
@@ -497,6 +727,9 @@ export type ToolCallResolution = typeof ToolCallResolution.Type;
  * truth or an authorized `resolveUnknown` command. `author`/`reason` make every resolution an
  * attributable decision (DUR-017); a `completed-with-result` resolution is accompanied by the
  * per-call `ToolCallSettled` record carrying the recovered result.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ToolCallResolved extends Schema.TaggedClass<ToolCallResolved>(
   "@effect-agent/thread/ToolCallResolved",
@@ -513,6 +746,9 @@ export class ToolCallResolved extends Schema.TaggedClass<ToolCallResolved>(
  * external side effect stays honestly at-least-once-executed. Only success is recorded — a failing
  * Step body fails into the handler's error channel and re-executes on re-entry. `output` is the
  * Schema-encoded Step output; `outputDigest` pins it for replay-divergence detection.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ToolStepSettled extends Schema.TaggedClass<ToolStepSettled>(
   "@effect-agent/thread/ToolStepSettled",
@@ -528,6 +764,9 @@ export class ToolStepSettled extends Schema.TaggedClass<ToolStepSettled>(
  * A canonical approval request for one declared Tool Call (CAP-006, durability §8): with this
  * record durable, "waiting for explicit approval" is a safe suspension boundary — the resumed
  * Attempt replays the declared batch instead of re-invoking the model.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ToolApprovalRequested extends Schema.TaggedClass<ToolApprovalRequested>(
   "@effect-agent/thread/ToolApprovalRequested",
@@ -542,15 +781,29 @@ export class ToolApprovalRequested extends Schema.TaggedClass<ToolApprovalReques
   blocksInitialDispatch: Schema.Boolean,
 }) {}
 
-/** The two-valued approval decision family shared by canonical records and ledger intents. */
+/**
+ * The two-valued approval decision family shared by canonical records and ledger intents.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ApprovalDecision = Schema.Literals(["approved", "denied"]);
 
+/**
+ * Decoded value of {@link ApprovalDecision}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ApprovalDecision = typeof ApprovalDecision.Type;
 
 /**
  * The canonical decision for one requested approval. Appended by the deciding Attempt (policy
  * auto-decisions) or by the resuming Attempt after a durable `resolveApproval` intent; it is the
  * deterministic decision authority for every later Attempt of the same Run.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ToolApprovalDecided extends Schema.TaggedClass<ToolApprovalDecided>(
   "@effect-agent/thread/ToolApprovalDecided",
@@ -566,6 +819,9 @@ export class ToolApprovalDecided extends Schema.TaggedClass<ToolApprovalDecided>
 /**
  * A Run resumed inference without a retained response. One marker makes usage coverage
  * incomplete; it does not count missing provider calls or retain Attempt history.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class ModelResponseInterrupted extends Schema.TaggedClass<ModelResponseInterrupted>(
   "@effect-agent/thread/ModelResponseInterrupted",
@@ -573,7 +829,12 @@ export class ModelResponseInterrupted extends Schema.TaggedClass<ModelResponseIn
   runId: RunId,
 }) {}
 
-/** Disposable call cancellation: no response or Tool declaration is canonical. */
+/**
+ * Disposable call cancellation: no response or Tool declaration is canonical.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ModelCallAborted extends Schema.TaggedClass<ModelCallAborted>()("ModelCallAborted", {
   runId: RunId,
   turnId: TurnId,
@@ -596,6 +857,9 @@ export class ModelCallAborted extends Schema.TaggedClass<ModelCallAborted>()("Mo
  * Summaries exceeding BoundedText are rejected before append, never truncated.
  * `summary` is present exactly for `summarize` records; the projection
  * treats a summarize record without one as invalid and ignores it fail-safe.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CompactionCreated extends Schema.TaggedClass<CompactionCreated>(
   "@effect-agent/thread/CompactionCreated",
@@ -608,6 +872,12 @@ export class CompactionCreated extends Schema.TaggedClass<CompactionCreated>(
   handoff: Schema.optionalKey(ContextHandoff),
 }) {}
 
+/**
+ * Canonical terminal Run failure carrying its bounded persisted failure value.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunFailed extends Schema.TaggedClass<RunFailed>("@effect-agent/thread/RunFailed")(
   "RunFailed",
   {
@@ -635,10 +905,23 @@ const RunCompletedFields = Schema.Struct({
   ),
 );
 
+/**
+ * Validated Run completion intent with encoded output and optional disposition or budget-exhaustion
+ * metadata.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunCompleted extends Schema.TaggedClass<RunCompleted>(
   "@effect-agent/thread/RunCompleted",
 )("RunCompleted", RunCompletedFields) {}
 
+/**
+ * Canonical annotation recording the reason for an administrative repair.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RepairAnnotated extends Schema.TaggedClass<RepairAnnotated>(
   "@effect-agent/thread/RepairAnnotated",
 )("RepairAnnotated", {
@@ -646,14 +929,28 @@ export class RepairAnnotated extends Schema.TaggedClass<RepairAnnotated>(
   details: PersistedJson,
 }) {}
 
-/** Terminal outcome family for one accepted Submission (DUR-002). */
+/**
+ * Terminal outcome family for one accepted Submission (DUR-002).
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SettlementOutcome = Schema.Literals(["completed", "failed", "aborted"]);
 
+/**
+ * Decoded value of {@link SettlementOutcome}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SettlementOutcome = typeof SettlementOutcome.Type;
 
 /**
  * A durable abort command made canonical before the active worker is interrupted (DUR-012).
  * Repeating the same abort command is idempotent; abort never rewrites a prior terminal outcome.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class AbortRequested extends Schema.TaggedClass<AbortRequested>(
   "@effect-agent/thread/AbortRequested",
@@ -745,27 +1042,55 @@ const SubmissionSettledFields = RawSubmissionSettled.check(
   }),
 );
 
+/**
+ * Canonical terminal outcome of accepted input, including its result when applicable and retained
+ * usage or failure evidence.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubmissionSettled extends Schema.TaggedClass<SubmissionSettled>(
   "@effect-agent/thread/SubmissionSettled",
 )("SubmissionSettled", SubmissionSettledFields) {}
 
-/** Canonical completed settlement; joined completion may legitimately carry no independent result. */
+/**
+ * Canonical completed settlement; joined completion may legitimately carry no independent result.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CompletedSubmissionSettled = SubmissionSettled & {
   readonly outcome: "completed";
 };
 
-/** Canonical failed settlement; its bounded diagnostic is required and typed. */
+/**
+ * Canonical failed settlement; its bounded diagnostic is required and typed.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type FailedSubmissionSettled = SubmissionSettled & {
   readonly outcome: "failed";
   readonly result: SettlementFailureDiagnostic;
 };
 
-/** Canonical aborted settlement; abort records intent rather than fabricating a terminal result. */
+/**
+ * Canonical aborted settlement; abort records intent rather than fabricating a terminal result.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type AbortedSubmissionSettled = SubmissionSettled & {
   readonly outcome: "aborted";
   readonly result?: never;
 };
 
+/**
+ * Type produced by {@link SubmissionSettledRecord}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubmissionSettledRecord =
   | CompletedSubmissionSettled
   | FailedSubmissionSettled
@@ -782,6 +1107,9 @@ export type SubmissionSettledRecord =
  * `{ outcome: "failed", finishReason: "budget-exhausted" }` or a
  * `policyLimit` contradicting `result.errorTag` fails closed at decode
  * instead of becoming trusted audit history (STORE-006, RUN-011).
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const SubmissionSettledRecord = SubmissionSettled.pipe(
   Schema.refine(
@@ -802,6 +1130,9 @@ export const SubmissionSettledRecord = SubmissionSettled.pipe(
  * record alone — no live delegation handler is required. `childPrincipal`/`childIdempotencyKey`
  * carry the ledger admission scope with the ledger's exact bounds; the layering keeps their
  * branded Schemas in the ledger port.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubagentRequested extends Schema.TaggedClass<SubagentRequested>(
   "@effect-agent/thread/SubagentRequested",
@@ -833,6 +1164,9 @@ export class SubagentRequested extends Schema.TaggedClass<SubagentRequested>(
  * PARENT-log record that the intended child exists as accepted work:
  * the full established child identity. It is appended only after the child Receipt
  * exists — SUB-017 holds by construction because `childReceiptId` is a required field.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubagentStarted extends Schema.TaggedClass<SubagentStarted>(
   "@effect-agent/thread/SubagentStarted",
@@ -851,6 +1185,9 @@ export class SubagentStarted extends Schema.TaggedClass<SubagentStarted>(
  * consumed/released accounting decision for the reservation. It commits in ONE atomic batch with
  * the parent `ToolCallSettled` record (SUB-019); `beginChildBudgetRelease` replays
  * `finalAccounting` from this record, so canonical history authorizes the release (DUR-015).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubagentJoined extends Schema.TaggedClass<SubagentJoined>(
   "@effect-agent/thread/SubagentJoined",
@@ -873,6 +1210,9 @@ export class SubagentJoined extends Schema.TaggedClass<SubagentJoined>(
  * `ThreadCreated` (its own single-record batch, so the generic `thread-created:{cid}`
  * batch identity is never contradicted) and the join path verifies it fail-closed — a fabricated
  * child or parent identity fails Parent Link verification (SUB-004, D10).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubagentLineageRecorded extends Schema.TaggedClass<SubagentLineageRecorded>(
   "@effect-agent/thread/SubagentLineageRecorded",
@@ -889,6 +1229,13 @@ export class SubagentLineageRecorded extends Schema.TaggedClass<SubagentLineageR
   grant: SubagentRequested.fields.grant,
 }) {}
 
+/**
+ * Frozen source definition and return-address evidence used to deliver a worker's canonical
+ * outcome.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerReportingIntent = Schema.Struct({
   /** Absent only in historical custom-report origins; these remain readable as evidence. */
   mode: Schema.optionalKey(Schema.Literal("standard")),
@@ -911,16 +1258,32 @@ export const WorkerReportingIntent = Schema.Struct({
   Schema.makeFilter((value) => (value.mode === "standard") === (value.returnAddress !== undefined)),
 );
 
-/** Exact successful predecessor evidence; a locator alone grants no authority. */
+/**
+ * Exact successful predecessor evidence; a locator alone grants no authority.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerContinuation = Schema.Struct({
   worker: WorkerRef,
   receipt: Receipt,
   settlementId: SettlementId,
 }).check(Schema.makeFilter((value) => value.worker.threadId === value.receipt.threadId));
 
+/**
+ * Decoded value of {@link WorkerContinuation}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerContinuation = typeof WorkerContinuation.Type;
 
-/** Immutable worker Thread origin. Each input has its own digest and parameters separately. */
+/**
+ * Immutable worker Thread origin. Each input has its own digest and parameters separately.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerOrigin = Schema.Struct({
   worker: WorkerRef,
   source: WorkerSource,
@@ -943,9 +1306,20 @@ export const WorkerOrigin = Schema.Struct({
   reporting: Schema.optionalKey(WorkerReportingIntent),
 }).check(Schema.makeFilter((value) => value.expiresAtMillis > value.createdAtMillis));
 
+/**
+ * Decoded value of {@link WorkerOrigin}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerOrigin = typeof WorkerOrigin.Type;
 
-/** Frozen per-input metadata; it grants no attached-child or parent-abort semantics. */
+/**
+ * Frozen per-input metadata; it grants no attached-child or parent-abort semantics.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerAdmission = Schema.Struct({
   origin: WorkerOrigin,
   /** Run executing this handoff, independently of immutable lineage and subtree funding. */
@@ -961,9 +1335,20 @@ export const WorkerAdmission = Schema.Struct({
   reportKind: Schema.optionalKey(Schema.Literal("update")),
 });
 
+/**
+ * Decoded value of {@link WorkerAdmission}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerAdmission = typeof WorkerAdmission.Type;
 
-/** Owner command retained before the destination inbox is sealed. */
+/**
+ * Owner command retained before the destination inbox is sealed.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WorkerStopRequested extends Schema.TaggedClass<WorkerStopRequested>()(
   "WorkerStopRequested",
   {
@@ -973,25 +1358,45 @@ export class WorkerStopRequested extends Schema.TaggedClass<WorkerStopRequested>
   },
 ) {}
 
-/** The named canonical obligation closed only after its owning state durably completes. */
+/**
+ * The named canonical obligation closed only after its owning state durably completes.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WorkHandoffCompleted extends Schema.TaggedClass<WorkHandoffCompleted>()(
   "WorkHandoffCompleted",
   { preparationId: RecordId, ownerId: Schema.NonEmptyString.check(Schema.isMaxLength(4096)) },
 ) {}
 
-/** Source-log capacity reservation, retained independently of the source Run's settlement. */
+/**
+ * Source-log capacity reservation, retained independently of the source Run's settlement.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WorkerInputRequested extends Schema.TaggedClass<WorkerInputRequested>()(
   "WorkerInputRequested",
   { admission: WorkerAdmission, inputDigest: Digest },
 ) {}
 
-/** Child-log origin, reconstructed from a retained delivery before the child becomes ready. */
+/**
+ * Child-log origin, reconstructed from a retained delivery before the child becomes ready.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WorkerOriginRecorded extends Schema.TaggedClass<WorkerOriginRecorded>()(
   "WorkerOriginRecorded",
   { origin: WorkerOrigin },
 ) {}
 
-/** Canonical child completion acknowledgement releases only this input's active capacity. */
+/**
+ * Canonical child completion acknowledgement releases only this input's active capacity.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WorkerInputCompleted extends Schema.TaggedClass<WorkerInputCompleted>()(
   "WorkerInputCompleted",
   {
@@ -1010,6 +1415,9 @@ export class WorkerInputCompleted extends Schema.TaggedClass<WorkerInputComplete
  * Frozen report decision for one actual Run, shared by every joined Receipt. The envelope is
  * a Schema-encoded PreparedInput, committed atomically with its initial delivery row.
  * Keeping the encoded value here avoids a Records/PreparedInput schema dependency cycle.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class WorkerReportPrepared extends Schema.TaggedClass<WorkerReportPrepared>()(
   "WorkerReportPrepared",
@@ -1023,7 +1431,12 @@ export class WorkerReportPrepared extends Schema.TaggedClass<WorkerReportPrepare
   },
 ) {}
 
-/** Accepted update and its optional parent outbox row commit with this canonical fact. */
+/**
+ * Accepted update and its optional parent outbox row commit with this canonical fact.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class AgentUpdateEmitted extends Schema.TaggedClass<AgentUpdateEmitted>()(
   "AgentUpdateEmitted",
   {
@@ -1041,7 +1454,12 @@ export class AgentUpdateEmitted extends Schema.TaggedClass<AgentUpdateEmitted>()
   },
 ) {}
 
-/** Permanent bounded report refusal. Application errors and raw Run dispositions stay private. */
+/**
+ * Permanent bounded report refusal. Application errors and raw Run dispositions stay private.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WorkerReportRefused extends Schema.TaggedClass<WorkerReportRefused>()(
   "WorkerReportRefused",
   {
@@ -1063,7 +1481,12 @@ export class WorkerReportRefused extends Schema.TaggedClass<WorkerReportRefused>
   },
 ) {}
 
-/** Frozen peer provenance, committed with its outbox row and readable through routed storage. */
+/**
+ * Frozen peer provenance, committed with its outbox row and readable through routed storage.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PeerMessagePrepared extends Schema.TaggedClass<PeerMessagePrepared>()(
   "PeerMessagePrepared",
   {
@@ -1081,6 +1504,9 @@ export class PeerMessagePrepared extends Schema.TaggedClass<PeerMessagePrepared>
  * The source keeps its own execution ceiling; descendants spend only the remaining allocation.
  * Reservations include future descendant slots and never refund, including after interruption.
  * resultBytes reserves the terminal/projection result, not cumulative Tool output bytes.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReserved>()(
   "SubtreeBudgetReserved",
@@ -1098,14 +1524,28 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/** Fact identity; active-only references resolve inside their Run checkpoint. */
+/**
+ * Fact identity; active-only references resolve inside their Run checkpoint.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const EvidenceReference = Schema.Struct({ recordId: RecordId });
+/**
+ * Decoded value of {@link EvidenceReference}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type EvidenceReference = typeof EvidenceReference.Type;
 
 /**
  * Receipt-free factual closure. The receiver's irreversible inbox seal precedes its exact-key
  * NotAdmitted observation; a refusal or an absent lookup alone cannot close reserved work.
  * Invocation and allocation charges remain with the original funding Run.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class WorkerInputRefused extends Schema.TaggedClass<WorkerInputRefused>()(
   "WorkerInputRefused",
@@ -1127,25 +1567,99 @@ export class WorkerInputRefused extends Schema.TaggedClass<WorkerInputRefused>()
   }).check(Schema.makeFilter((value) => value.receiver.threadId === value.workerThreadId)),
 ) {}
 
+/**
+ * Maximum encoded size of one active Run continuation record: 8 KiB.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RUN_CONTINUATION_BYTES = 8_192;
-/** Incremental record JSON per Turn, including progress and the first Turn's initial context. */
+/**
+ * Incremental record JSON per Turn, including progress and the first Turn's initial context.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_TURN_CANONICAL_BYTES = MAX_CANONICAL_RECORD_BYTES;
-/** Room retained for a bounded terminal failure and its atomic progress publication. */
+/**
+ * Room retained for a bounded terminal failure and its atomic progress publication.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const RUN_TERMINAL_RESERVE_BYTES = 256 * 1024;
-/** Bounded closing facts remain publishable even after dispatch capacity is exhausted. */
+/**
+ * Bounded closing facts remain publishable even after dispatch capacity is exhausted.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RUN_TERMINAL_BYTES = 2 * MAX_CANONICAL_RECORD_BYTES + RUN_TERMINAL_RESERVE_BYTES;
+/**
+ * Four record slots reserved so a Run can publish bounded terminal evidence after dispatch capacity
+ * is exhausted.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const RUN_TERMINAL_RESERVE_RECORDS = 4;
+/**
+ * Base record allowance for one Run's bounded execution evidence: 16,384, with separate terminal
+ * reserves.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RUN_EVIDENCE_RECORDS = 16_384;
+/**
+ * Base encoded-byte allowance for one Run's bounded execution evidence: 32 MiB, with separate
+ * terminal reserves.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RUN_EVIDENCE_BYTES = 32 * 1024 * 1024;
+/**
+ * Maximum record count in a Run recovery suffix: 64.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RUN_RECOVERY_SUFFIX_RECORDS = 64;
+/**
+ * Maximum encoded size of a Run recovery suffix: 2 MiB.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RUN_RECOVERY_SUFFIX_BYTES = 2 * 1024 * 1024;
+/**
+ * Maximum Tool Call identities in a bounded Run evidence selection: 4,096.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const MAX_RUN_TOOL_CALL_IDENTITIES = 4_096;
 
+/**
+ * Exact record identity and sequence of context evidence retained outside the current history
+ * range.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ContextEvidenceReference = Schema.Struct({
   ...EvidenceReference.fields,
   sequence: CanonicalSequence,
 });
 
+/**
+ * Original evaluated Run input and fixed prior-history references used to reconstruct and validate
+ * saved model context.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RunContextRecorded extends Schema.TaggedClass<RunContextRecorded>()(
   "RunContextRecorded",
   Schema.Struct({
@@ -1177,7 +1691,12 @@ export class RunContextRecorded extends Schema.TaggedClass<RunContextRecorded>()
   ),
 ) {}
 
-/** Accumulated charges; replacement Attempts never replenish or charge these again. */
+/**
+ * Accumulated charges; replacement Attempts never replenish or charge these again.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ContinuationAccounting = Schema.Struct({
   ...RunPolicyUsage.fields,
   modelRestarts: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2 })),
@@ -1192,9 +1711,20 @@ export const ContinuationAccounting = Schema.Struct({
   accountedToolTurn: Schema.Natural,
 });
 
+/**
+ * Decoded value of {@link ContinuationAccounting}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ContinuationAccounting = typeof ContinuationAccounting.Type;
 
-/** Semantic execution boundaries, never engine stacks, fibers, or program counters. */
+/**
+ * Semantic execution boundaries, never engine stacks, fibers, or program counters.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RunPosition = Schema.Literals([
   "starting",
   "awaiting-model",
@@ -1213,6 +1743,9 @@ export const RunPosition = Schema.Literals([
  * approvals and delivery obligations remain canonical; evaluated context and validated completion
  * belong to active state. Neither the checkpoint nor its revision grants execution authority.
  * Retired intermediate revisions are not historical verification evidence.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
   "RunContinuation",
@@ -1249,11 +1782,28 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
   }),
 ) {}
 
-/** Bump only when the meaning of an existing record changes, independently of SQL layout. */
+/**
+ * Bump only when the meaning of an existing record changes, independently of SQL layout.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const CURRENT_RECORD_VERSION = 6;
+/**
+ * Current semantic format identifier for persisted Thread records, independent of an adapter's
+ * storage layout.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const CURRENT_RECORD_FORMAT = "effect-agent/thread@6";
 
-/** Durable fact and execution-command schemas. Unsupported controls fail before execution. */
+/**
+ * Durable fact and execution-command schemas. Unsupported controls fail before execution.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const KnownRecordPayload = Schema.Union([
   ThreadCreated,
   UserInputRecorded,
@@ -1295,14 +1845,28 @@ export const KnownRecordPayload = Schema.Union([
   RunContinuation,
 ]);
 
-/** This format accepts only understood facts; unknown control cannot grant permission. */
+/**
+ * This format accepts only understood facts; unknown control cannot grant permission.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const CanonicalRecordPayload = KnownRecordPayload;
 
+/**
+ * Decoded value of {@link CanonicalRecordPayload}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CanonicalRecordPayload = typeof CanonicalRecordPayload.Type;
 
 /**
  * Versioned durable fact. Retained history acquires Thread ordering at its atomic commit;
  * active operational facts keep their identities without a canonical sequence.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class RecordEnvelope extends Schema.Class<RecordEnvelope>(
   "@effect-agent/thread/RecordEnvelope",
@@ -1315,11 +1879,27 @@ export class RecordEnvelope extends Schema.Class<RecordEnvelope>(
   payload: CanonicalRecordPayload,
 }) {}
 
-/** Backward-compatible domain name for a canonical record. */
+/**
+ * Backward-compatible domain name for a canonical record.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CanonicalRecord = RecordEnvelope;
+/**
+ * Type produced by {@link CanonicalRecord}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CanonicalRecord = RecordEnvelope;
 
-/** One non-empty, bounded, idempotent atomic append unit. */
+/**
+ * One non-empty, bounded, idempotent atomic append unit.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CanonicalBatch extends Schema.Class<CanonicalBatch>(
   "@effect-agent/thread/CanonicalBatch",
 )({
@@ -1330,6 +1910,9 @@ export class CanonicalBatch extends Schema.Class<CanonicalBatch>(
 
 /**
  * A committed record with its Thread ordering and opaque resumable observation cursor.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CanonicalRecordEnvelope extends Schema.Class<CanonicalRecordEnvelope>(
   "@effect-agent/thread/CanonicalRecordEnvelope",
@@ -1341,7 +1924,12 @@ export class CanonicalRecordEnvelope extends Schema.Class<CanonicalRecordEnvelop
   record: RecordEnvelope,
 }) {}
 
-/** Read-only history of validated facts. Original inputs establish Run view boundaries. */
+/**
+ * Read-only history of validated facts. Original inputs establish Run view boundaries.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PromptRecordPayload = Schema.TaggedUnion({
   UserInputRecorded: {
     runId: UserInputRecorded.fields.runId,
@@ -1375,20 +1963,54 @@ export const PromptRecordPayload = Schema.TaggedUnion({
   },
 });
 
-/** Native selections and the projection decoder share this single list of supported facts. */
+/**
+ * Native selections and the projection decoder share this single list of supported facts.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const PROMPT_EVIDENCE_TAGS: ReadonlyArray<keyof typeof PromptRecordPayload.cases> =
   Struct.keys(PromptRecordPayload.cases);
 
+/**
+ * The record identity and prompt-relevant fields needed for a bounded model-context projection.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PromptRecord = Schema.Struct({ recordId: RecordId, payload: PromptRecordPayload });
+/**
+ * Decoded value of {@link PromptRecord}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PromptRecord = typeof PromptRecord.Type;
 
-/** Not integrity evidence: omitted canonical wire must be read through the full record port. */
+/**
+ * Not integrity evidence: omitted canonical wire must be read through the full record port.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PromptRecordEnvelope = Schema.Struct({
   threadId: ThreadId,
   sequence: CanonicalSequence,
   record: PromptRecord,
 });
 
+/**
+ * Decoded value of {@link PromptRecordEnvelope}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PromptRecordEnvelope = typeof PromptRecordEnvelope.Type;
 
+/**
+ * Current version of the canonical record envelope schema.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const CURRENT_CANONICAL_SCHEMA_VERSION = 1 as const;

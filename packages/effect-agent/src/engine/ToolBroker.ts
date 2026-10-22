@@ -1,3 +1,10 @@
+/**
+ * Engine-owned programmatic Tool invocation for Code Mode, enforcing the current call’s authority,
+ * policy, accounting, and bounded outcomes.
+ *
+ * @since 0.1.0
+ */
+
 import type * as Tool from "effect/ai/Tool";
 import type * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
@@ -15,7 +22,12 @@ import * as Schema from "effect/Schema";
  * allocates every sequence index from its own monotonic per-pass state.
  */
 
-/** One programmatic invocation request. Data only: the broker owns identity. */
+/**
+ * One programmatic invocation request. Data only: the broker owns identity.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ProgrammaticToolInput {
   /** The exact Effect AI Tool name resolved by the capability's namespace map. */
   readonly toolName: string;
@@ -23,7 +35,12 @@ export interface ProgrammaticToolInput {
   readonly encodedArguments: unknown;
 }
 
-/** The handler ran and settled with an owned JSON snapshot of its encoded success value. */
+/**
+ * The handler ran and settled with an owned JSON snapshot of its encoded success value.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ProgrammaticCallSuccess {
   readonly _tag: "ProgrammaticCallSuccess";
   /** Broker-owned invocation index within the pass; rejected calls leave gaps. */
@@ -35,6 +52,9 @@ export interface ProgrammaticCallSuccess {
  * The handler settled with the Tool's declared, Schema-encoded typed failure
  * (an Effect AI `failureMode: "return"` result). The program may catch and
  * branch on it.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ProgrammaticCallFailure {
   readonly _tag: "ProgrammaticCallFailure";
@@ -50,6 +70,9 @@ export interface ProgrammaticCallFailure {
  * `message` are the same bounded projection the direct path uses for
  * `ToolCallFailed` events; `index` is present only when the handler was
  * actually started (preflight rejections consume no identity and no budget).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ProgrammaticCallError {
   readonly _tag: "ProgrammaticCallError";
@@ -63,6 +86,9 @@ export interface ProgrammaticCallError {
  * install `CurrentToolFailureObserver` to receive non-propagating failures before the outcome
  * returns, with the live Cause retained before projection. Neither Causes nor observation values
  * cross the broker boundary.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type ProgrammaticCallOutcome =
   | ProgrammaticCallSuccess
@@ -73,6 +99,9 @@ export type ProgrammaticCallOutcome =
  * Ephemeral execution evidence, ordered by invocation rather than completion. No arguments or
  * results are copied into this diagnostic. A started call without a confirmed result is uncertain;
  * a failed call is a confirmed failure, not a promise that external effects were rolled back.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ProgrammaticCallRecord = Schema.Struct({
   sequenceIndex: Schema.Natural,
@@ -81,9 +110,20 @@ export const ProgrammaticCallRecord = Schema.Struct({
   errorTag: Schema.optionalKey(Schema.String),
 });
 
+/**
+ * Decoded value of {@link ProgrammaticCallRecord}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ProgrammaticCallRecord = typeof ProgrammaticCallRecord.Type;
 
-/** Broker-owned per-pass policy for results crossing back into the sandbox. */
+/**
+ * Broker-owned per-pass policy for results crossing back into the sandbox.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ToolBrokerPassOptions {
   /** Maximum active invocations in this pass, from one through 64. Defaults to four. */
   readonly concurrency?: number | undefined;
@@ -105,6 +145,9 @@ export interface ToolBrokerPassOptions {
  * One open programmatic pass, bound to one outer Tool Call. A finite Effect Semaphore bounds
  * execution. The caller owns invocation fibers and must join or interrupt them before leaving
  * its Scope. Results return as soon as they settle, without waiting for unrelated earlier calls.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ToolBrokerPass {
   readonly invoke: (input: ProgrammaticToolInput) => Effect.Effect<ProgrammaticCallOutcome>;
@@ -112,7 +155,12 @@ export interface ToolBrokerPass {
   readonly snapshot: Effect.Effect<ReadonlyArray<ProgrammaticCallRecord>>;
 }
 
-/** The broker was used outside a live Tool batch; there is nothing to bind to. */
+/**
+ * The broker was used outside a live Tool batch; there is nothing to bind to.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ToolBrokerUnavailableError extends Schema.TaggedError<ToolBrokerUnavailableError>()(
   "ToolBrokerUnavailableError",
   {
@@ -123,6 +171,9 @@ export class ToolBrokerUnavailableError extends Schema.TaggedError<ToolBrokerUna
 /**
  * The pass options are invalid — for example a `maxResultBytes` that is not
  * a positive safe integer, which would make the size comparison fail open.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class ToolBrokerConfigurationError extends Schema.TaggedError<ToolBrokerConfigurationError>()(
   "ToolBrokerConfigurationError",
@@ -137,6 +188,9 @@ export class ToolBrokerConfigurationError extends Schema.TaggedError<ToolBrokerC
  * handler services present at the call site, so nothing inside business
  * execution — least of all generated code — can substitute handlers, policy,
  * or identity afterwards.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ToolBrokerService {
   readonly openPass: <Tools extends Record<string, Tool.Any>>(
@@ -153,6 +207,9 @@ export interface ToolBrokerService {
  * Engine-provided programmatic Tool broker (RUN-016, RUN-017). Declare it
  * with `.addDependency(ToolBroker)` on a Tool that performs programmatic
  * invocation; the interpreter supplies it, and an application Layer must not.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ToolBroker extends Context.Service<ToolBroker, ToolBrokerService>()(
   "@effect-agent/engine/ToolBroker",

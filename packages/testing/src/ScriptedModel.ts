@@ -1,3 +1,8 @@
+/**
+ * Finite scripted Effect AI responses with request inspection and stream lifecycle controls.
+ *
+ * @since 0.1.0
+ */
 import * as AiError from "effect/ai/AiError";
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Response from "effect/ai/Response";
@@ -40,6 +45,9 @@ const ScriptedToolResultPart = Schema.Struct({
  *
  * Generic Tool payloads remain explicitly unknown here. `LanguageModel.make`
  * performs the toolkit-specific decode when the scripted response is consumed.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ScriptedGeneratePart = Schema.Union([
   Schema.toEncoded(Response.Part(Toolkit.empty)),
@@ -50,10 +58,19 @@ export const ScriptedGeneratePart = Schema.Union([
   ScriptedToolResultPart,
 ]).annotate({ identifier: "ScriptedGeneratePart" });
 
+/**
+ * The decoded value of the ScriptedGeneratePart schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScriptedGeneratePart = typeof ScriptedGeneratePart.Type;
 
 /**
  * Schema for encoded Effect AI streaming response parts.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ScriptedStreamPart = Schema.Union([
   Schema.toEncoded(Response.StreamPart(Toolkit.empty)),
@@ -61,9 +78,20 @@ export const ScriptedStreamPart = Schema.Union([
   ScriptedToolResultPart,
 ]).annotate({ identifier: "ScriptedStreamPart" });
 
+/**
+ * The decoded value of the ScriptedStreamPart schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScriptedStreamPart = typeof ScriptedStreamPart.Type;
 
-/** Controls whether a scripted stream completes, fails, or waits for interruption. */
+/**
+ * Controls whether a scripted stream completes, fails, or waits for interruption.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ScriptedStreamTermination = Schema.Union([
   Schema.TaggedStruct("Complete", {}),
   Schema.TaggedStruct("Fail", {
@@ -72,41 +100,92 @@ export const ScriptedStreamTermination = Schema.Union([
   Schema.TaggedStruct("Hang", {}),
 ]);
 
+/**
+ * The decoded value of the ScriptedStreamTermination schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScriptedStreamTermination = typeof ScriptedStreamTermination.Type;
 
-/** One non-streaming invocation and the encoded response parts it returns. */
+/**
+ * One non-streaming invocation and the encoded response parts it returns.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ScriptedGenerateTurn = Schema.TaggedStruct("Generate", {
   parts: Schema.Array(ScriptedGeneratePart),
 });
 
+/**
+ * The decoded value of the ScriptedGenerateTurn schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScriptedGenerateTurn = typeof ScriptedGenerateTurn.Type;
 
-/** One streaming invocation with its encoded parts and terminal behavior. */
+/**
+ * One streaming invocation with its encoded parts and terminal behavior.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ScriptedStreamTurn = Schema.TaggedStruct("Stream", {
   parts: Schema.Array(ScriptedStreamPart),
   termination: ScriptedStreamTermination,
 });
 
+/**
+ * The decoded value of the ScriptedStreamTurn schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScriptedStreamTurn = typeof ScriptedStreamTurn.Type;
 
 /**
  * Serializable grammar for one finite scripted provider invocation.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ScriptedTurn = Schema.Union([ScriptedGenerateTurn, ScriptedStreamTurn]);
+/**
+ * The decoded value of the ScriptedTurn schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScriptedTurn = typeof ScriptedTurn.Type;
 
+/**
+ * Whether a captured provider invocation requested a complete response or a stream.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ScriptedRequestKind = "generate" | "stream";
 
 /**
  * A request after Effect AI has normalized its prompt, tools, response format,
  * tool choice, span, and incremental-response fields.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ScriptedRequest {
   readonly kind: ScriptedRequestKind;
   readonly options: LanguageModel.ProviderOptions;
 }
 
-/** Optional request assertions and stream lifecycle effects for one scripted turn. */
+/**
+ * Optional request assertions and stream lifecycle effects for one scripted turn.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ScriptedTurnHooks {
   /** Runs against the normalized provider request before producing the response. */
   readonly assertRequest?: (
@@ -120,6 +199,9 @@ export interface ScriptedTurnHooks {
 
 /**
  * Runtime hooks are deliberately separate from the serializable turn grammar.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type ScriptedTurnInput = ScriptedTurn & ScriptedTurnHooks;
 
@@ -228,7 +310,12 @@ const streamForTurn = (
   return stream;
 };
 
-/** Inspection service for a deterministic LanguageModel backed by finite scripted turns. */
+/**
+ * Inspection service for a deterministic LanguageModel backed by finite scripted turns.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ScriptedModel extends Context.Service<
   ScriptedModel,
   {
@@ -245,6 +332,9 @@ export class ScriptedModel extends Context.Service<
    * Supplying the extra inspection service does not add it to model-call
    * requirements. Each model invocation consumes one turn before assertion and
    * turn-kind validation.
+   *
+   * @category layers
+   * @since 0.1.0
    */
   static layer(
     turns: ReadonlyArray<ScriptedTurnInput>,

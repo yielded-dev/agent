@@ -12,7 +12,9 @@ import type * as SqlError from "effect/sql/SqlError";
 
 import { DoStorageCorruptionError, DoStorageError } from "../DoStorageError.ts";
 
-/** One disposable view per physical Object database, including separately acquired adapters. */
+/** One disposable view per physical Object database, including separately acquired adapters.
+ * @internal
+ */
 export class OwnedState {
   constructor(readonly owner: StorageOwner["Service"]) {}
   readonly invalidators = new Set<() => void>();
@@ -47,7 +49,9 @@ interface RetainedState {
 
 const states = new WeakMap<object, RetainedState>();
 
-/** Explicit invalidation for maintenance that writes private tables outside the adapters. */
+/** Explicit invalidation for maintenance that writes private tables outside the adapters.
+ * @internal
+ */
 export const invalidateOwnedState = (storage: DurableObjectStorage): Effect.Effect<void> =>
   Effect.suspend(() => {
     const state = states.get(storage);
@@ -61,6 +65,7 @@ const DoClient = Schema.declare<SqliteClient.SqliteClient>(
   (value): value is SqliteClient.SqliteClient => Predicate.hasProperty(value, SqliteClient.TypeId),
 );
 
+/** @internal */
 export const ownedState = (sql: SqlClient.SqlClient) =>
   Schema.decodeUnknownEffect(DoClient)(sql).pipe(
     Effect.mapError(() =>
@@ -129,6 +134,7 @@ export const ownedState = (sql: SqlClient.SqlClient) =>
  * Demand-loaded row views. Writes apply SQLite's RETURNING rows to affected retained views in
  * the same transaction; rollback discards them. Bounded views avoid loading a host's entire
  * retained submission history just to fence one live submission.
+ * @internal
  */
 export const ownedRows = <A, I>(
   schema: Schema.Codec<A, I>,

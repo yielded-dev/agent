@@ -1,3 +1,8 @@
+/**
+ * Cloudflare platform adapters for durable Threads, browsers, scheduling, and memory.
+ *
+ * @since 0.1.0
+ */
 export * as Alarm from "./Alarm.ts";
 export * as CloudflareBindings from "./CloudflareBindings.ts";
 export * as CloudflareBrowser from "./CloudflareBrowser.ts";

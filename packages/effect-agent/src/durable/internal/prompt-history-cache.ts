@@ -67,6 +67,7 @@ const decodePrompt = Schema.decodeUnknownEffect(
   ),
 );
 
+/** @internal */
 export interface PromptHistory {
   readonly prompt: Prompt.Prompt;
   encoded: string | undefined;
@@ -75,12 +76,16 @@ export interface PromptHistory {
   readonly runsSinceCheckpoint?: number | undefined;
 }
 
+/** @internal */
 export interface CachedPromptHistory extends PromptHistory {
   readonly threadId: ThreadId;
   readonly through: CanonicalSequence;
 }
 
-/** Internal canonical projection; ownership comes from the ThreadStore read contract. */
+/**
+ * Internal canonical projection; ownership comes from the ThreadStore read contract.
+ * @internal
+ */
 export const preparePromptHistory = (prompt: Prompt.Prompt): PromptHistory | undefined =>
   prompt.content.length > MAX_ENTRIES
     ? undefined
@@ -106,6 +111,7 @@ const encodeHistory = (prompt: Prompt.Prompt, allowance: number) =>
 
 // Finish parsing/decoding before suspending for suffix reads. Only the native prefix and its
 // canonical string leave this Effect; it does not keep a second parsed root in the outer Run.
+/** @internal */
 export const decodeCheckpointPrefix = Effect.fnUntraced(function* (
   encoded: string,
   length: number,
@@ -133,7 +139,10 @@ const appendedBytes = (
   suffix: { readonly bytes: number; readonly prompt: Prompt.Prompt },
 ) => prefix + suffix.bytes + 8 * suffix.prompt.content.length;
 
-/** The ordinary codec remains the oracle on canonical reconstruction and explicit verify. */
+/**
+ * The ordinary codec remains the oracle on canonical reconstruction and explicit verify.
+ * @internal
+ */
 export const digestPromptHistory = (prompt: Prompt.Prompt, history: PromptHistory | undefined) => {
   if (history === undefined) return digestRunHistory(prompt);
   if (
@@ -199,6 +208,7 @@ const suffixRecordFootprint = (entry: PromptRecordEnvelope, allowance: number) =
  * Attempt-local prompt facts, seeded by the original committed input and extended only by
  * acknowledged, consecutive appends. Never authority for writes or recovery; any uncertainty
  * discards this derivative and completion rereads canonical history.
+ * @internal
  */
 export const makeCommittedPromptSuffix = (
   original: Pick<CanonicalRecordEnvelope, "threadId" | "sequence" | "record">,
@@ -329,6 +339,7 @@ export const makeCommittedPromptSuffix = (
   };
 };
 
+/** @internal */
 export type CommittedPromptSuffix = ReturnType<typeof makeCommittedPromptSuffix>;
 
 /** Fold only complete, sequential Runs. Raw facts and encoded/native messages are bounded. */
@@ -441,7 +452,10 @@ const appendJson = (
   (prefix.prompt.content.length > 0 && suffix.prompt.content.length > 0 ? "," : "") +
   suffix.encoded.slice(JSON_PREFIX.length);
 
-/** Sequence anchors are unambiguous within one append-only Thread; import discards derivatives. */
+/**
+ * Sequence anchors are unambiguous within one append-only Thread; import discards derivatives.
+ * @internal
+ */
 export const makePromptHistoryCache = Effect.fnUntraced(function* () {
   let current: CachedPromptHistory | undefined;
   let closed = false;

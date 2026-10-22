@@ -1,3 +1,10 @@
+/**
+ * Bounded canonical Tool-result envelopes, including explicit truncation, serialization failure,
+ * and parameter-rejection evidence.
+ *
+ * @since 0.1.0
+ */
+
 import * as AiError from "effect/ai/AiError";
 import * as Schema from "effect/Schema";
 
@@ -9,6 +16,9 @@ import { ToolResultId, ToolResultStorageError } from "./ToolResultStorage.ts";
  * Engine-owned evidence that a fresh model call failed parameter validation.
  * Retain the exact JSON arguments beside the native error so recovery can distinguish
  * a rejected request from damaged executable parameters. This never authorizes execution.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const ToolParameterRejection = Schema.Struct({
   toolCallId: ToolCallId,
@@ -21,6 +31,12 @@ export const ToolParameterRejection = Schema.Struct({
   ),
 });
 
+/**
+ * Decoded value of {@link ToolParameterRejection}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ToolParameterRejection = typeof ToolParameterRejection.Type;
 
 /**
@@ -31,7 +47,12 @@ export type ToolParameterRejection = typeof ToolParameterRejection.Type;
  */
 const ENVELOPE_FLOOR_BYTES = 256;
 
-/** Byte bound applied to one encoded application Tool result before it enters history. */
+/**
+ * Byte bound applied to one encoded application Tool result before it enters history.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ToolResultBounds extends Schema.Class<ToolResultBounds>("ToolResultBounds")({
   maxBytes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(ENVELOPE_FLOOR_BYTES)),
 }) {}
@@ -41,6 +62,9 @@ export class ToolResultBounds extends Schema.Class<ToolResultBounds>("ToolResult
  * policy bounds. `head` and `tail` are an exact prefix and suffix of the
  * original encoded JSON text. When fullResultId is present, read_tool_result can
  * retrieve the complete result from the host store. Otherwise the middle is lost.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class TruncatedToolResult extends Schema.Class<TruncatedToolResult>("TruncatedToolResult")({
   truncatedToolResult: Schema.Literal(true),
@@ -57,6 +81,9 @@ export class TruncatedToolResult extends Schema.Class<TruncatedToolResult>("Trun
  * `toJSON`). The original value never enters history or durable records —
  * an unserializable value is unbounded by construction, so the bound seam
  * replaces it wholesale rather than passing it through (runtime spec §9).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class UnserializableToolResult extends Schema.Class<UnserializableToolResult>(
   "UnserializableToolResult",
@@ -72,6 +99,9 @@ export class UnserializableToolResult extends Schema.Class<UnserializableToolRes
  * path) — and byte-bound: the complete encoded sentinel stays within the
  * 256-byte `ToolResultBounds` schema floor, so it fits every accepted
  * policy without the caller re-applying bounds.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const unserializableToolResult = (
   cause: unknown,
@@ -158,6 +188,9 @@ const takeSuffixWithinBytes = (value: string, maxBytes: number): string => {
  * every accepted bound fits the minimal envelope, including retention metadata, so the
  * returned value never exceeds `maxBytes` for a decodable bound. The
  * minimal-envelope fallback below survives purely as defense in depth.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const applyToolResultBounds = (
   encodedJson: string,

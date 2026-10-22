@@ -32,6 +32,7 @@ const imageHeader = (data: Prompt.FilePart["data"]): Uint8Array | undefined => {
  * A generic context reservation, not provider billing: 1.5 tokens per 32px patch,
  * at least 1,024 tokens. Remote, unsupported, or unreadable images reserve 4,096.
  * Inspect only a bounded header; never fetch, decode pixels, or measure encoded payload size.
+ * @internal
  */
 export const estimateImageTokens = (part: Prompt.FilePart): number => {
   try {

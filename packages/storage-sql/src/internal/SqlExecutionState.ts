@@ -1,12 +1,14 @@
 import type { CanonicalSequence, RunContinuation } from "@yielded/agent/records";
 import type { ExecutionCheckpoint } from "@yielded/agent/thread-store";
 
+/** @internal */
 export interface ExecutionPredecessor {
   readonly progress: RunContinuation;
   readonly originalSequence: CanonicalSequence;
   readonly operational: ReadonlyArray<Pick<ExecutionCheckpoint["operational"][number], "recordId">>;
 }
 
+/** @internal */
 export type ExecutionState =
   | { readonly checkpoint: ExecutionPredecessor; readonly bytes: number }
   | {
@@ -18,11 +20,14 @@ export type ExecutionState =
 
 // Private predecessors belong to the physical owner's mutation gate. Failed transactions
 // and out-of-band maintenance discard them before readers can enter that gate again.
+/** @internal */
 export const executionStates = new WeakMap<object, Map<string, ExecutionState>>();
 
+/** @internal */
 export const executionStateKey = (namespace: string | undefined, threadId: string, runId: string) =>
   JSON.stringify([namespace, threadId, runId]);
 
+/** @internal */
 export const retainExecutionState = (
   states: Map<string, ExecutionState>,
   key: string,

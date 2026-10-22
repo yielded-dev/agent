@@ -266,6 +266,7 @@ const withinPolicy = (origin: WorkerOrigin, source: AgentPolicy, target: AgentPo
   );
 };
 
+/** @internal */
 export interface WorkerRuntimeOptions {
   readonly bindings: ReadonlyArray<ResolvedBinding>;
   readonly deploymentId: DeploymentId;
@@ -273,7 +274,10 @@ export interface WorkerRuntimeOptions {
   readonly settlementPollInterval: Duration.Duration;
 }
 
-/** Admission and cancellation enter the owning runtime, never the raw ledger. */
+/**
+ * Admission and cancellation enter the owning runtime, never the raw ledger.
+ * @internal
+ */
 export class WorkerInputControl extends Context.Service<
   WorkerInputControl,
   {
@@ -294,7 +298,10 @@ const CurrentStartDelivery = Context.Reference<
   | undefined
 >("@effect-agent/thread/internal/CurrentStartDelivery", { defaultValue: () => undefined });
 
-/** No in-memory ownership: every mutation is reserved in source canonical history with CAS. */
+/**
+ * No in-memory ownership: every mutation is reserved in source canonical history with CAS.
+ * @internal
+ */
 export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRuntimeOptions) {
   const control = yield* WorkerInputControl;
   // A routed read may belong to another owner; capture it before exposing worker operations.

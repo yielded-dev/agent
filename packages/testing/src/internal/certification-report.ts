@@ -1,6 +1,6 @@
 import { CertificationReport } from "@yielded/agent/testing/certification";
 
-/** Fold executed results without acquiring adapters or claiming coverage from citations. */
+/** @internal */
 export const makeCertificationReport = (
   results: Pick<CertificationReport, "adapter" | "generatedAt" | "tier1" | "tier2" | "tier3">,
 ): CertificationReport => {

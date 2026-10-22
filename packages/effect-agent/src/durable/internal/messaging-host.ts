@@ -68,6 +68,7 @@ import {
 } from "./agent-registration.ts";
 import { messageStatus } from "./message-status.ts";
 
+/** @internal */
 export interface MessagingRuntimeOptions {
   readonly bindings: ReadonlyArray<ResolvedBinding>;
   readonly deploymentId: DeploymentId;
@@ -81,7 +82,10 @@ const sameRef = Schema.toEquivalence(MessageRef);
 const sameAdmission = Schema.toEquivalence(MessageAdmission);
 const sameJson = Schema.toEquivalence(PersistedJson);
 
-/** Thread-owned durable peer delivery. Source proof and the independent due index survive Run settlement. */
+/**
+ * Thread-owned durable peer delivery. Source proof and the independent due index survive Run settlement.
+ * @internal
+ */
 export const makeMessagingRuntime = Effect.fnUntraced(function* (options: MessagingRuntimeOptions) {
   const deps = {
     ...options,

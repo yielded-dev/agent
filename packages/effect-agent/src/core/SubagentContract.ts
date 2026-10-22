@@ -1,3 +1,9 @@
+/**
+ * Shared delegation policy, grants, budget ceilings, and typed Subagent failure contracts.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
@@ -50,7 +56,12 @@ const SubagentPolicyFields = Schema.Struct({
 
 type SubagentPolicyFields = typeof SubagentPolicyFields.Type;
 
-/** Inputs normalized and validated by `SubagentPolicy.make`. */
+/**
+ * Inputs normalized and validated by `SubagentPolicy.make`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubagentPolicyInput = Readonly<
   Omit<SubagentPolicyFields, "maxDuration" | "parentReserveDuration"> & {
     /** Finite, positive wall-clock duration accepted in any Effect Duration input form. */
@@ -65,6 +76,9 @@ export type SubagentPolicyInput = Readonly<
  * Structural limits are hard limits; token
  * and cost caps are optional and enforced only as honestly as provider
  * reporting allows.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class SubagentPolicy extends Schema.Class<SubagentPolicy>(
   "@effect-agent/capabilities/SubagentPolicy",
@@ -83,7 +97,12 @@ export class SubagentPolicy extends Schema.Class<SubagentPolicy>(
   }
 }
 
-/** Tree authority ceiling. Each child exposes only its own Toolkit's permitted names. */
+/**
+ * Tree authority ceiling. Each child exposes only its own Toolkit's permitted names.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentGrant extends Schema.Class<SubagentGrant>(
   "@effect-agent/capabilities/SubagentGrant",
 )({
@@ -95,7 +114,12 @@ export class SubagentGrant extends Schema.Class<SubagentGrant>(
   ),
 }) {}
 
-/** Intersect inherited authority; another delegation can never restore a removed capability. */
+/**
+ * Intersect inherited authority; another delegation can never restore a removed capability.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const narrowSubagentGrant = (
   declared: SubagentGrant,
   inherited?: SubagentGrant,
@@ -112,7 +136,12 @@ export const narrowSubagentGrant = (
         ),
       });
 
-/** Finite delegable caps for one parent Run. Absent means not configured; present values are finite. */
+/**
+ * Finite delegable caps for one parent Run. Absent means not configured; present values are finite.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentDelegationCaps extends Schema.Class<SubagentDelegationCaps>(
   "@effect-agent/capabilities/SubagentDelegationCaps",
 )({
@@ -137,12 +166,22 @@ const AmountFields = {
   resultBytes: Natural,
 } as const;
 
-/** Exact amounts across every reservable delegation dimension. */
+/**
+ * Exact amounts across every reservable delegation dimension.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentReservationAmounts extends Schema.Class<SubagentReservationAmounts>(
   "@effect-agent/capabilities/SubagentReservationAmounts",
 )(AmountFields) {}
 
-/** One child reservation against the parent Run's shared delegation pool. */
+/**
+ * One child reservation against the parent Run's shared delegation pool.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SubagentBudgetReservation = Schema.Struct({
   caps: SubagentDelegationCaps,
   allocation: SubagentReservationAmounts,
@@ -150,18 +189,45 @@ export const SubagentBudgetReservation = Schema.Struct({
   descendantInvocations: Schema.optionalKey(Natural),
 });
 
+/**
+ * Decoded value of {@link SubagentBudgetReservation}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubagentBudgetReservation = typeof SubagentBudgetReservation.Type;
 
-/** Root-relative delegation depth; the direct child of a top-level run has depth 1. */
+/**
+ * Root-relative delegation depth; the direct child of a top-level run has depth 1.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const DelegationDepth = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
+/**
+ * Decoded value of {@link DelegationDepth}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DelegationDepth = typeof DelegationDepth.Type;
 
-/** Marks a Tool implementing the idempotent Subagent establishment protocol. */
+/**
+ * Marks a Tool implementing the idempotent Subagent establishment protocol.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const DelegationTool = Context.Reference<boolean>("@effect-agent/core/DelegationTool", {
   defaultValue: () => false,
 });
 
-/** Marks a host-managed idempotent worker operation, independently of its Tool name. */
+/**
+ * Marks a host-managed idempotent worker operation, independently of its Tool name.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const WorkerOperationTool = Context.Reference<boolean>(
   "@effect-agent/core/WorkerOperationTool",
   {
@@ -169,7 +235,12 @@ export const WorkerOperationTool = Context.Reference<boolean>(
   },
 );
 
-/** Identifies the background launch operation within a generated management Toolkit. */
+/**
+ * Identifies the background launch operation within a generated management Toolkit.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const BackgroundSpawnTool = Context.Reference<boolean>(
   "@effect-agent/core/BackgroundSpawnTool",
   {
@@ -177,7 +248,12 @@ export const BackgroundSpawnTool = Context.Reference<boolean>(
   },
 );
 
-/** Declaration metadata and inherited authority determine the effective visible Tool set. */
+/**
+ * Declaration metadata and inherited authority determine the effective visible Tool set.
+ *
+ * @category guards
+ * @since 0.1.0
+ */
 export const isSubagentToolAllowed = (
   grant: SubagentGrant | undefined,
   depth: number,
@@ -194,11 +270,27 @@ export const isSubagentToolAllowed = (
           (grant.childLifetimes ?? ["attached", "background"]).includes("attached")
         : true));
 
-/** Persisted preparation classification, checked against the resolved Tool before replay. */
+/**
+ * Persisted preparation classification, checked against the resolved Tool before replay.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ToolExecutionKind = Schema.Literals(["ordinary", "delegation", "orchestration"]);
+/**
+ * Decoded value of {@link ToolExecutionKind}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ToolExecutionKind = typeof ToolExecutionKind.Type;
 
-/** Resolve only trusted declaration metadata; names never authorize automatic replay. */
+/**
+ * Resolve only trusted declaration metadata; names never authorize automatic replay.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const getToolExecutionKind = (annotations: Context.Context<never>): ToolExecutionKind =>
   Context.get(annotations, WorkerOperationTool)
     ? "orchestration"
@@ -206,7 +298,12 @@ export const getToolExecutionKind = (annotations: Context.Context<never>): ToolE
       ? "delegation"
       : "ordinary";
 
-/** Immutable lineage from a child Thread to the parent identity that established it. */
+/**
+ * Immutable lineage from a child Thread to the parent identity that established it.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SubagentParentLink extends Schema.Class<SubagentParentLink>("SubagentParentLink")({
   delegationId: DelegationId,
   parentAgentId: AgentId,
@@ -226,6 +323,9 @@ export class SubagentParentLink extends Schema.Class<SubagentParentLink>("Subage
  * refusal (lineage/digest verification, divergent replay); and
  * `"declaration-unavailable"` is retained for decoding failures recorded by
  * versions that required an explicit durable digest declaration.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const SubagentExecutionFailureClassification = Schema.Literals([
   "child-failed",
@@ -235,9 +335,21 @@ export const SubagentExecutionFailureClassification = Schema.Literals([
   "declaration-unavailable",
 ]);
 
+/**
+ * Decoded value of {@link SubagentExecutionFailureClassification}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SubagentExecutionFailureClassification =
   typeof SubagentExecutionFailureClassification.Type;
 
+/**
+ * Maximum string length of a retained Subagent failure tag: 256 UTF-16 code units.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const maxErrorTagLength = 256;
 const BoundedErrorTag = Schema.NonEmptyString.check(Schema.isMaxLength(maxErrorTagLength));
 
@@ -251,6 +363,9 @@ const BoundedErrorTag = Schema.NonEmptyString.check(Schema.isMaxLength(maxErrorT
  * Settlement, so `mapChildFailure` remains the ephemeral-path contract;
  * Schema-declared durable domain-failure mapping is a recorded later
  * extension.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class SubagentExecutionFailure extends Schema.TaggedError<SubagentExecutionFailure>()(
   "SubagentExecutionFailure",

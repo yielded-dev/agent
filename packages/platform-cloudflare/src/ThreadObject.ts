@@ -1,3 +1,8 @@
+/**
+ * Compose and expose one durable Thread owner through Cloudflare native RPC and alarms.
+ *
+ * @since 0.1.0
+ */
 import {
   decodePortRequest,
   encodePortResponse,
@@ -125,6 +130,36 @@ import { LiveTextHub } from "./internal/live-text.ts";
 import { ProgressWaitRegistry } from "./internal/progress-wait.ts";
 
 export {
+  /**
+   * Owns provisional text drafts and subscriptions for one Thread Object incarnation.
+   *
+   * @category services
+   * @since 0.1.0
+   */
+  LiveTextHub,
+} from "./internal/live-text.ts";
+
+export {
+  /**
+   * Tracks cancellable progress waits within one Thread Object incarnation.
+   *
+   * @category services
+   * @since 0.1.0
+   */
+  ProgressWaitRegistry,
+} from "./internal/progress-wait.ts";
+
+export {
+  /**
+   * Schema for a provisional text stream and its native Cloudflare RPC lifetime.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
+  Observation as LiveTextObservation,
+} from "./internal/live-text-observation.ts";
+
+export {
   layer,
   layerConfig,
   layerHostConfig,
@@ -172,7 +207,12 @@ type ApplicationAlarmRegistration<ApplicationServices, EventServices, AlarmServi
     AlarmError
   >;
 
-/** Construction options for one deployed Thread Object class. */
+/**
+ * Construction options for one deployed Thread Object class.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type Options<
   ApplicationServices = never,
   EventServices = never,
@@ -483,6 +523,9 @@ const requirePortThread = (request: PortRequest) => {
  * Custom hosts validate local placement before calling this Effect and provide their same
  * runtime, maintenance and alarm instances. The native endpoint uses this path too: queue limits,
  * idempotent receipts and the pre-admission generation/alarm commit have one owner.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export const submit = Effect.fnUntraced(function* (threadId: ThreadId, request: SubmitRequest) {
   const placement = yield* ThreadObjectPlacement;
@@ -819,19 +862,34 @@ const resolveUnknownEndpoint = (
 // already exists as the `wake()` entry point.
 // ---------------------------------------------------------------------------
 
-/** Explain one Submission (`submissionId` present) or every nonterminal lane member. */
+/**
+ * Explain one Submission (`submissionId` present) or every nonterminal lane member.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class AdminExplainRequest extends Schema.Class<AdminExplainRequest>(
   "@effect-agent/platform-cloudflare/AdminExplainRequest",
 )({
   submissionId: Schema.optionalKey(SubmissionId),
 }) {}
 
-/** Verify carries no parameters — the addressed Object IS the lane. */
+/**
+ * Verify carries no parameters — the addressed Object IS the lane.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class AdminVerifyRequest extends Schema.Class<AdminVerifyRequest>(
   "@effect-agent/platform-cloudflare/AdminVerifyRequest",
 )({}) {}
 
-/** Every typed failure of the four admin entry points, plus the protocol's own errors. */
+/**
+ * Every typed failure of the four admin entry points, plus the protocol's own errors.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const AdminFailure = Schema.Union([
   AdmissionPolicyError,
   ApprovalSuspensionError,
@@ -852,40 +910,80 @@ export const AdminFailure = Schema.Union([
   WorkDiscoveryUnavailable,
 ]);
 
+/**
+ * Typed administrative failures returned by a Thread owner.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type AdminFailure = typeof AdminFailure.Type;
 
+/**
+ * A recovery explanation returned by the Thread owner.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ExplainedRecovery extends Schema.TaggedClass<ExplainedRecovery>(
   "@effect-agent/platform-cloudflare/ExplainedRecovery",
 )("ExplainedRecovery", {
   explanations: Schema.Array(RecoveryExplanation).check(Schema.isMaxLength(1_024)),
 }) {}
 
+/**
+ * Verification results for retained Thread history and active state.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class VerifiedIntegrity extends Schema.TaggedClass<VerifiedIntegrity>(
   "@effect-agent/platform-cloudflare/VerifiedIntegrity",
 )("VerifiedIntegrity", {
   report: IntegrityReport,
 }) {}
 
+/**
+ * Result of an administrative retry command.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class RetryExecuted extends Schema.TaggedClass<RetryExecuted>(
   "@effect-agent/platform-cloudflare/RetryExecuted",
 )("RetryExecuted", {
   report: RecoveryReport,
 }) {}
 
+/**
+ * Retained obligations selected by an administrative scan.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class ObligationsScanned extends Schema.TaggedClass<ObligationsScanned>(
   "@effect-agent/platform-cloudflare/ObligationsScanned",
 )("ObligationsScanned", {
   report: ObligationReport,
 }) {}
 
-/** The admin entry point failed TYPED on the Object; the failure re-decodes verbatim. */
+/**
+ * The admin entry point failed TYPED on the Object; the failure re-decodes verbatim.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export class AdminFailed extends Schema.TaggedClass<AdminFailed>(
   "@effect-agent/platform-cloudflare/AdminFailed",
 )("AdminFailed", {
   failure: AdminFailure,
 }) {}
 
-/** The uniform answer of one admin entry point. Callers narrow by the tag their call implies. */
+/**
+ * The uniform answer of one admin entry point. Callers narrow by the tag their call implies.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const AdminResponse = Schema.Union([
   ExplainedRecovery,
   VerifiedIntegrity,
@@ -894,17 +992,59 @@ export const AdminResponse = Schema.Union([
   AdminFailed,
 ]);
 
+/**
+ * Administrative RPC results and typed failures.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type AdminResponse = typeof AdminResponse.Type;
 
+/**
+ * Decode and validate admin explain request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeAdminExplainRequest = Schema.decodeUnknownEffect(AdminExplainRequest);
+/**
+ * Decode and validate admin verify request through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeAdminVerifyRequest = Schema.decodeUnknownEffect(AdminVerifyRequest);
+/**
+ * Decode and validate retry command through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeRetryCommand = Schema.decodeUnknownEffect(RetryCommand);
+/**
+ * Decode and validate obligation thresholds through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeObligationThresholds = Schema.decodeUnknownEffect(ObligationThresholds);
 
+/**
+ * Encode admin response through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const encodeAdminResponse: ReturnType<typeof Schema.encodeEffect<typeof AdminResponse>> = (
   ...args
 ) => Schema.encodeEffect(AdminResponse)(...args);
 
+/**
+ * Decode and validate admin response through its RPC schema.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const decodeAdminResponse = Schema.decodeUnknownEffect(AdminResponse);
 
 /** Fold one admin endpoint's typed failures into the uniform `AdminResponse` envelope. */
@@ -1022,6 +1162,12 @@ const portGuardFailure = (failure: LedgerError | HostProtocolError): PortFailed 
         : PortProtocolError.make({ message: "The port request is not for the addressed Thread" }),
   });
 
+/**
+ * Handle one encoded storage request for the addressed Thread owner.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const portCall = (
   encoded: unknown,
 ): Effect.Effect<
@@ -1104,7 +1250,12 @@ const wakeEndpoint: Effect.Effect<void, never, EndpointServices> = Effect.gen(fu
   yield* wake.notify(identity.threadId);
 });
 
-/** The per-Thread wire operations supported by native and application-owned endpoints. */
+/**
+ * The per-Thread wire operations supported by native and application-owned endpoints.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ThreadRpcOperation = Schema.Literals([
   "submitEncoded",
   "submissionStatusEncoded",
@@ -1121,6 +1272,12 @@ export const ThreadRpcOperation = Schema.Literals([
   "wake",
 ]);
 
+/**
+ * Decoded value of the ThreadRpcOperation schema.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadRpcOperation = typeof ThreadRpcOperation.Type;
 
 const threadRpc = {
@@ -1148,6 +1305,9 @@ const threadRpc = {
  * commands and port envelopes must match this identity; progress cancellation is Thread-scoped.
  * The producer comes from the actual runtime configuration, never from caller input. These
  * guards supplement the existing current model/Tool and operation authorization policies.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const handleRpc = Effect.fnUntraced(function* (
   threadId: ThreadId,
@@ -1165,7 +1325,12 @@ export const handleRpc = Effect.fnUntraced(function* (
   );
 });
 
-/** Compose with application registrations on a shared physical object. */
+/**
+ * Compose with application registrations on a shared physical object.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const alarms = ThreadMaintenanceAlarm.handlers({
   "@yielded/agent/thread-maintenance": () =>
     Effect.flatMap(ThreadMaintenance, (maintenance) => Effect.asVoid(maintenance.pass)),
@@ -1213,7 +1378,12 @@ const effectCfPlatformLayer = (
     }),
   );
 
-/** The public endpoints and effect-cf invocation hook of one Thread Object instance. */
+/**
+ * The public endpoints and effect-cf invocation hook of one Thread Object instance.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface Instance<EventServices = never> extends InstanceType<
   EffectCfDurableObject.DurableObjectClass<
     Record<never, never>,
@@ -1240,7 +1410,12 @@ export interface Instance<EventServices = never> extends InstanceType<
   alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> | void;
 }
 
-/** The constructor shape workerd instantiates for each Thread Object. */
+/**
+ * The constructor shape workerd instantiates for each Thread Object.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface Class<EventServices = never> {
   new (ctx: DurableObjectState, env: Cloudflare.Env): Instance<EventServices>;
 }
@@ -1255,6 +1430,9 @@ export interface Class<EventServices = never> {
  * cached ManagedRuntime, native RPC methods, event scopes, and telemetry flushing.
  * Initialization is local and bounded inside the constructor gate. Cloudflare eviction does not
  * guarantee finalizers; put resources requiring timely release in scoped operations or eventLayer.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const make = <
   ApplicationServices,

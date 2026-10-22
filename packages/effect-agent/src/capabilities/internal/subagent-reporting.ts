@@ -9,11 +9,26 @@ import {
   type WorkerRunReport,
   type WorkerReporting,
 } from "../../engine/SubagentHost.ts";
-import { type Declaration } from "./subagent-background.ts";
+import type { BackgroundDeclaration } from "../Subagent.ts";
 import { SubagentExecutionFailure } from "./subagent-contract.ts";
 
-export { WorkerReport } from "../../core/Worker.ts";
+export {
+  /**
+   * One projected canonical Run outcome. Joined receipts share this identity.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  WorkerReport,
+} from "../../core/Worker.ts";
 
+/**
+ * Select which child updates and completed Runs are reported to the parent. Accepted decisions are
+ * retained for recovery.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ReportingOptions {
   /**
    * Select canonical updates to notify the parent. Defaults to all. Decode the encoded value
@@ -37,7 +52,16 @@ const projectReport = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
 ) =>
   Effect.fnUntraced(function* (report: WorkerRunReport) {
     const { worker, observation } = report;
@@ -114,7 +138,12 @@ const projectReport = <
     return { projected, encodedResult };
   });
 
-/** Register this standard completion projection on the parent; registration captures its services. */
+/**
+ * Register this standard completion projection on the parent; registration captures its services.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const reporting = <
   const Name extends string,
   Input extends Schema.Top,
@@ -125,7 +154,16 @@ export const reporting = <
   Prepare,
   Project,
 >(
-  declaration: Declaration<Name, Input, Output, Parameters, Success, Failure, Prepare, Project>,
+  declaration: BackgroundDeclaration<
+    Name,
+    Input,
+    Output,
+    Parameters,
+    Success,
+    Failure,
+    Prepare,
+    Project
+  >,
   options: ReportingOptions = {},
 ) => ({
   delegationId: declaration.delegationId,

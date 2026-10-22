@@ -1,3 +1,8 @@
+/**
+ * Node host admission, recovery, worker supervision, and shutdown.
+ *
+ * @since 0.1.0
+ */
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   type IntegrityReport,
@@ -72,6 +77,9 @@ import {
 /**
  * Admission is not open on this host: it is shutting down (deployment §6 step 1, DEPLOY-005).
  * Accepted work is unaffected — only NEW admissions are refused.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class AdmissionClosed extends Schema.TaggedError<AdmissionClosed>()("AdmissionClosed", {
   message: Schema.String,
@@ -229,6 +237,9 @@ const makeHost = Effect.fnUntraced(function* (
  * Shutdown runs in reverse Layer order when the owning Scope closes: `submit` starts refusing
  * with `AdmissionClosed` first, then workers stop and local owner generations close before
  * SQLite resources. Accepted work remains recoverable after forced termination (DEPLOY-006).
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class NodeDurableHost extends Context.Service<
   NodeDurableHost,
@@ -310,6 +321,9 @@ export class NodeDurableHost extends Context.Service<
    * Node supplies Crypto; model, tool, instruction, and schema services remain required.
    * Startup recovery and shutdown gates are unchanged. Workers start only when the caller
    * runs runResolvedWorkers; this constructor never starts a background worker.
+   *
+   * @category layers
+   * @since 0.1.0
    */
   static layerRegistered<
     const Entries extends ReadonlyArray<AgentRegistration>,
@@ -338,6 +352,9 @@ export class NodeDurableHost extends Context.Service<
   /**
    * Host gates over an assembled `NodeDurableAgentRuntime` stack. The runtime Layer owns
    * executable registrations; omission registers no Agents, so resolved work fails closed.
+   *
+   * @category layers
+   * @since 0.1.0
    */
   static readonly layer: Layer.Layer<
     NodeDurableHost,
@@ -345,7 +362,12 @@ export class NodeDurableHost extends Context.Service<
     DurableAgentRuntime | NodeDurableAgentRuntimeConfig | MessageDeliveryStore
   > = Layer.effect(NodeDurableHost)(makeHost(false));
 
-  /** The complete DN host: `NodeDurableAgentRuntime.layer(options)` plus the host lifecycle gates. */
+  /**
+   * The complete DN host: `NodeDurableAgentRuntime.layer(options)` plus the host lifecycle gates.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static layerStack<
     ContextError = never,
     ContextRequirements = never,
@@ -379,6 +401,9 @@ export class NodeDurableHost extends Context.Service<
  * Provide model, tool, instruction, and schema dependencies to this Layer. Reusing the Layer
  * shares the same pool. A worker failure closes admission; observe it with `run` at the process
  * boundary so the application exits and releases the host instead of remaining idle.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = <
   const Entries extends ReadonlyArray<AgentRegistration>,
@@ -445,6 +470,9 @@ export const layer = <
  * Supervise the host's existing workers without starting another pool. Use with
  * `Effect.provide(HostLive)` and `NodeRuntime.runMain`; race it with a server Effect when
  * the same process also serves requests. Unlike `Layer.launch`, this observes worker failures.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const run = Effect.gen(function* () {
   const host = yield* NodeDurableHost;

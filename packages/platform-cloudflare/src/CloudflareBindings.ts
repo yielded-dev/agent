@@ -1,3 +1,8 @@
+/**
+ * Explicit Cloudflare bindings, Thread placement, and native RPC contracts.
+ *
+ * @since 0.1.0
+ */
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { type ProducerId } from "@yielded/agent/records";
 import { RpcTargets } from "effect-cf";
@@ -14,7 +19,12 @@ import * as Schema from "effect/Schema";
  * per incarnation and everything downstream consumes the services.
  */
 
-/** A Cloudflare platform binding was missing or carried the wrong shape (DEPLOY-003/010). */
+/**
+ * A Cloudflare platform binding was missing or carried the wrong shape (DEPLOY-003/010).
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CloudflareBindingError extends Schema.TaggedError<CloudflareBindingError>()(
   "CloudflareBindingError",
   {
@@ -33,6 +43,9 @@ export class CloudflareBindingError extends Schema.TaggedError<CloudflareBinding
  * a bounded byte stream with a disposable RPC lifetime. The optional trailing trace context is
  * transient native RPC metadata, stripped by an opted-in effect-cf receiver before decoding
  * the host or port envelope. It never enters durable state.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ThreadObjectRpc extends Rpc.DurableObjectBranded {
   /** Admission-limits gate + `DurableAgentRuntime.submit`; answers a `SubmitResponse`. */
@@ -66,7 +79,12 @@ export interface ThreadObjectRpc extends Rpc.DurableObjectBranded {
   wake(): Promise<void>;
 }
 
-/** A logical Thread endpoint may be bound to an application Object without forging its brand. */
+/**
+ * A logical Thread endpoint may be bound to an application Object without forging its brand.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadObjectClient = Omit<ThreadObjectRpc, keyof Rpc.DurableObjectBranded>;
 
 /**
@@ -74,6 +92,9 @@ export type ThreadObjectClient = Omit<ThreadObjectRpc, keyof Rpc.DurableObjectBr
  * a shared application owner can bind that logical identity into its RPC adapter instead.
  * Lookup performs no I/O and grants no authority. Calls reuse a native target within
  * one invocation; incoming requests and durable retries acquire their own targets.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ThreadObjectNamespace extends Context.Service<
   ThreadObjectNamespace,
@@ -94,7 +115,12 @@ export class ThreadObjectNamespace extends Context.Service<
   }
 }
 
-/** Invoke a placed Thread using the current invocation's native RPC channel. */
+/**
+ * Invoke a placed Thread using the current invocation's native RPC channel.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const callThreadObject = Effect.fnUntraced(function* <A, E>(
   threadId: ThreadId,
   invoke: (target: ThreadObjectClient) => Promise<A>,
@@ -116,6 +142,9 @@ export const callThreadObject = Effect.fnUntraced(function* <A, E>(
  * and a namespace binding is a host object no Schema can decode, so this is the documented
  * narrowest-boundary check (structural probe for the namespace surface the transport uses);
  * a missing or misshaped binding fails typed before any Layer is built.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const threadNamespaceFromEnv = Effect.fnUntraced(function* (
   env: unknown,
@@ -162,6 +191,9 @@ export const threadNamespaceFromEnv = Effect.fnUntraced(function* (
 /**
  * Build the namespace from Worker `env` (fails typed). Enable `rpcTracing` only when the
  * receiver also opts into the effect-cf native RPC trace-context contract.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const threadNamespaceLayer = (
   env: unknown,
@@ -179,6 +211,9 @@ export const threadNamespaceLayer = (
  * The live Durable Object execution context of THIS incarnation. Only Layer construction and
  * the alarm service consume it; important state never lives on it (`ctx.storage` is truth,
  * everything in memory is a cache — deployment spec §11).
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class DurableObjectContext extends Context.Service<
   DurableObjectContext,
@@ -196,6 +231,9 @@ export class DurableObjectContext extends Context.Service<
  * The Thread identity this Object serializes and the producer identity its Attempts
  * write with (`{producerPrefix}:{threadId}`, plan §1.4). Derived once per incarnation
  * from `ctx.id.name` — the Object identity rule guarantees the name IS the Thread ID.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class ThreadObjectIdentity extends Context.Service<
   ThreadObjectIdentity,
@@ -205,7 +243,12 @@ export class ThreadObjectIdentity extends Context.Service<
   }
 >()("@effect-agent/platform-cloudflare/ThreadObjectIdentity") {}
 
-/** Logical Threads whose canonical stores and admission ledger live in this physical Object. */
+/**
+ * Logical Threads whose canonical stores and admission ledger live in this physical Object.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadObjectPlacement extends Context.Service<
   ThreadObjectPlacement,
   {
@@ -215,7 +258,12 @@ export class ThreadObjectPlacement extends Context.Service<
   }
 >()("@effect-agent/platform-cloudflare/ThreadObjectPlacement") {}
 
-/** The Durable Object alarm API failed; surfaces on host entry points as a typed refusal. */
+/**
+ * The Durable Object alarm API failed; surfaces on host entry points as a typed refusal.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class DurableAlarmError extends Schema.TaggedError<DurableAlarmError>()(
   "DurableAlarmError",
   {

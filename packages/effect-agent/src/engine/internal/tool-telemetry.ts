@@ -64,6 +64,7 @@ export const annotateToolSpanTerminalOutcome = (
   });
 };
 
+/** @internal */
 export const stripToolSpanFailures = <E>(
   cause: Cause.Cause<E | ToolSpanFailure>,
   marker: ToolSpanFailure | undefined,
@@ -400,6 +401,7 @@ export const makeIsolatedToolTracer = (delegate: Tracer.Tracer): IsolatedToolTra
   return { tracer, reportLifecycleDefects };
 };
 
+/** @internal */
 export interface ToolSpanTelemetryService {
   /** Measure one Tool handler attempt while isolating every host span-lifecycle defect. */
   readonly isolateSpanLifecycle: <A, E, R>(

@@ -1,3 +1,8 @@
+/**
+ * PostgreSQL storage Layers for Thread history and durable work.
+ *
+ * @since 0.1.0
+ */
 import { makeSqlActivityStore } from "@yielded/agent-storage-sql/sql-activity-store";
 import { sqlStorageOwner } from "@yielded/agent-storage-sql/sql-journal";
 import {
@@ -52,8 +57,20 @@ import {
   type PostgresStorageFailpointLocation,
 } from "./PostgresStorageError.ts";
 
+/**
+ * Current PostgreSQL adapter layout version; record encoding is versioned independently.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export { CurrentPostgresStorageVersion } from "./internal/postgres-storage.ts";
 
+/**
+ * Handler invoked at an explicit PostgreSQL storage fault-injection boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PostgresStorageFailpointHandler = (
   location: PostgresStorageFailpointLocation,
 ) => Effect.Effect<void, PostgresStorageFailpointError>;
@@ -68,6 +85,12 @@ const Settings = Schema.Struct({
   ),
 });
 
+/**
+ * Namespace, polling, and transaction options for PostgreSQL storage.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface PostgresStorageOptions {
   /** Namespace for qualified storage tables, created under the owner gate when absent. Defaults to public. */
   readonly schema?: string | undefined;
@@ -140,6 +163,9 @@ const makeSubmissionLedger = ({ config, journal, hitFailpoint }: Journal) =>
 /**
  * Thread history and submissions over one scoped owner. The application must route each Thread
  * exclusively to this owner; Postgres does not provide distributed ownership or failover here.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layerWith = (options: PostgresStorageOptions) =>
   ThreadReader.layer().pipe(
@@ -165,10 +191,18 @@ export const layerWith = (options: PostgresStorageOptions) =>
  * Thread history and submissions with default settings. Requires SqlClient and Crypto.
  * SQL text parameters, including identities, must exclude NUL and unpaired UTF-16
  * surrogates. Canonical JSON payload strings remain intact through escaped encoding.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = layerWith({});
 
-/** Standalone thread history over the application's SqlClient and Crypto. */
+/**
+ * Standalone thread history over the application's SqlClient and Crypto.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
   ThreadReader.layer().pipe(
     Layer.provideMerge(
@@ -185,7 +219,12 @@ export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
     ),
   );
 
-/** Export a quiesced current-layout store through a read-only snapshot; never run DDL. */
+/**
+ * Export a quiesced current-layout store through a read-only snapshot; never run DDL.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const exportThread = Effect.fn("PostgresStorage.exportThread")(function* (
   request: ThreadExportRequest,
   options: PostgresStorageOptions = {},
@@ -229,7 +268,12 @@ export const exportThread = Effect.fn("PostgresStorage.exportThread")(function* 
   );
 });
 
-/** Submissions and canonical settlement publication over the application's SqlClient and Crypto. */
+/**
+ * Submissions and canonical settlement publication over the application's SqlClient and Crypto.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const submissionLedgerLayer = (options: PostgresStorageOptions = {}) =>
   Layer.effectContext(
     Effect.flatMap(openJournal(options), makeSubmissionLedger).pipe(
@@ -242,7 +286,12 @@ export const submissionLedgerLayer = (options: PostgresStorageOptions = {}) =>
     ),
   );
 
-/** Schedules over the application's SqlClient. */
+/**
+ * Schedules over the application's SqlClient.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const scheduleStoreLayer = (options: PostgresStorageOptions = {}) =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -256,7 +305,12 @@ export const scheduleStoreLayer = (options: PostgresStorageOptions = {}) =>
     }),
   );
 
-/** Message delivery over the application's SqlClient and Crypto, with optional live capacity and payload limits. */
+/**
+ * Message delivery over the application's SqlClient and Crypto, with optional live capacity and payload limits.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const messageDeliveryStoreLayer = (
   options: PostgresStorageOptions & {
     readonly limits?: MessageDeliveryStoreLimits | undefined;
@@ -281,7 +335,12 @@ export const messageDeliveryStoreLayer = (
     }),
   );
 
-/** Subscriptions owned by an explicit partition. Invalid partitions fail before accessing SQL. */
+/**
+ * Subscriptions owned by an explicit partition. Invalid partitions fail before accessing SQL.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const subscriptionStoreLayer = (
   owned: SourcePartition,
   options: PostgresStorageOptions = {},
@@ -315,6 +374,9 @@ export const subscriptionStoreLayer = (
 /**
  * Independent activity progress over one shared SqlClient; does not initialize the Thread journal.
  * Route each activity key to one process. Sessions are local and close with their owning Scope.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const activityStoreLayer = (options: PostgresStorageOptions = {}) =>
   Layer.effect(

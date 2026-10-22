@@ -1,3 +1,8 @@
+/**
+ * SQL schedule transitions using adapter-provided write transactions.
+ *
+ * @since 0.1.0
+ */
 import {
   ScheduleCapacityError,
   ScheduleDueCursor,
@@ -73,6 +78,9 @@ const decodeInput = <A, I>(
 /**
  * The adapter commits the mutation and any native wake update together. Unchanged results
  * represent replays and must not replace the wake; failed bodies must remain uncommitted.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SqlScheduleWriteTransaction extends Context.Service<
   SqlScheduleWriteTransaction,
@@ -84,7 +92,12 @@ export class SqlScheduleWriteTransaction extends Context.Service<
   }
 >()("@effect-agent/storage-sql/SqlScheduleWriteTransaction") {}
 
-/** Shared schedule operations over adapter-owned tables, transactions, and JSON length limits. */
+/**
+ * Shared schedule operations over adapter-owned tables, transactions, and JSON length limits.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlScheduleStore = Effect.fnUntraced(function* (
   namespace?: string,
   maxStoredJsonLength = 16 * 1024 * 1024,

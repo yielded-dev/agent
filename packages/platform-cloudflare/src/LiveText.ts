@@ -1,3 +1,8 @@
+/**
+ * Validate provisional Thread text streams independently of canonical history.
+ *
+ * @since 0.1.0
+ */
 import { type ThreadId } from "@yielded/agent/identifiers";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -21,6 +26,9 @@ const decodeLiveTextFrame = Schema.decodeUnknownSync(Schema.fromJsonString(LiveT
  * Validate untrusted NDJSON at the final consumer, including frame bounds, thread,
  * sequence and text lifecycle. Bounded blank keepalive lines are ignored.
  * Stream loss invalidates all provisional drafts.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const decodeLiveText = <E, R>(
   threadId: ThreadId,

@@ -1,3 +1,10 @@
+/**
+ * Native Effect AI conversation history with append-only messages, portable snapshots, and explicit
+ * ownership.
+ *
+ * @since 0.1.0
+ */
+
 import * as Prompt from "effect/ai/Prompt";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -11,13 +18,23 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import { ThreadId, RunId } from "./Identifiers.ts";
 import { utf8ByteLength } from "./internal/utf8.ts";
 
-/** Bound applied to one text projection before it can enter a model context. */
+/**
+ * Bound applied to one text projection before it can enter a model context.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ThreadText = Schema.String.check(Schema.isMaxLength(64 * 1024));
 const MAX_MESSAGE_CONTENT_BYTES = 4 * 1024 * 1024;
 const MAX_THREADS = 256;
 const MAX_STORE_CONTENT_BYTES = 64 * 1024 * 1024;
 
-/** One append-only native Effect AI message in a conversation. */
+/**
+ * One append-only native Effect AI message in a conversation.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ThreadMessage extends Schema.Class<ThreadMessage>(
   "@effect-agent/capabilities/ThreadMessage",
 )({
@@ -29,7 +46,12 @@ export class ThreadMessage extends Schema.Class<ThreadMessage>(
   timestamp: Schema.DateTimeUtcFromString,
 }) {}
 
-/** An identified, ordered conversation snapshot. Storage and execution recovery are separate concerns. */
+/**
+ * An identified, ordered conversation snapshot. Storage and execution recovery are separate concerns.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class Thread extends Schema.Class<Thread>("@effect-agent/capabilities/ThreadSnapshot")({
   version: Schema.Literal(1),
   threadId: ThreadId,
@@ -38,7 +60,12 @@ export class Thread extends Schema.Class<Thread>("@effect-agent/capabilities/Thr
   messages: Schema.Array(ThreadMessage),
 }) {}
 
-/** Portable conversation snapshot. Its format is independent of the durable execution journal. */
+/**
+ * Portable conversation snapshot. Its format is independent of the durable execution journal.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ThreadExport extends Schema.Class<ThreadExport>(
   "@effect-agent/capabilities/ThreadExport",
 )({
@@ -47,7 +74,12 @@ export class ThreadExport extends Schema.Class<ThreadExport>(
   snapshot: Thread,
 }) {}
 
-/** Native message accepted by the append-only thread. */
+/**
+ * Native message accepted by the append-only thread.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class ThreadAppend extends Schema.Class<ThreadAppend>(
   "@effect-agent/capabilities/ThreadAppend",
 )({
@@ -55,12 +87,22 @@ export class ThreadAppend extends Schema.Class<ThreadAppend>(
   message: Prompt.Message,
 }) {}
 
-/** The requested Thread has not been created in this store. */
+/**
+ * The requested Thread has not been created in this store.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadNotFound extends Schema.TaggedError<ThreadNotFound>()("ThreadNotFound", {
   threadId: ThreadId,
 }) {}
 
-/** A message or the process-local host exceeded capacity; no bound counts a Thread's lifetime. */
+/**
+ * A message or the process-local host exceeded capacity; no bound counts a Thread's lifetime.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadLimitExceeded extends Schema.TaggedError<ThreadLimitExceeded>()(
   "ThreadLimitExceeded",
   {
@@ -71,24 +113,46 @@ export class ThreadLimitExceeded extends Schema.TaggedError<ThreadLimitExceeded>
   },
 ) {}
 
-/** Engine history was not an append-only extension of the official snapshot. */
+/**
+ * Engine history was not an append-only extension of the official snapshot.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadHistoryDiverged extends Schema.TaggedError<ThreadHistoryDiverged>()(
   "ThreadHistoryDiverged",
   { threadId: ThreadId, message: Schema.String },
 ) {}
 
-/** Native Prompt encoding failed before a bounded state mutation. */
+/**
+ * Native Prompt encoding failed before a bounded state mutation.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadEncodingError extends Schema.TaggedError<ThreadEncodingError>()(
   "ThreadEncodingError",
   { threadId: ThreadId, message: Schema.String },
 ) {}
 
-/** A scoped view cannot access another owner's history or be used after closure. */
+/**
+ * A scoped view cannot access another owner's history or be used after closure.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadOwnershipError extends Schema.TaggedError<ThreadOwnershipError>()(
   "ThreadOwnershipError",
   { threadId: ThreadId, reason: Schema.Literals(["closed", "foreign"]), message: Schema.String },
 ) {}
 
+/**
+ * Expected lookup, capacity, append-only history, encoding, and ownership failures from a Thread
+ * store.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadError =
   | ThreadNotFound
   | ThreadLimitExceeded
@@ -96,7 +160,12 @@ export type ThreadError =
   | ThreadEncodingError
   | ThreadOwnershipError;
 
-/** Reconstruct exact Effect AI Prompt history, including tools, reasoning, files, and options. */
+/**
+ * Reconstruct exact Effect AI Prompt history, including tools, reasoning, files, and options.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toPrompt = (snapshot: Thread): Prompt.Prompt =>
   Prompt.fromMessages(snapshot.messages.map((entry) => entry.message));
 
@@ -147,7 +216,12 @@ interface StoreService {
   ) => Effect.Effect<ThreadExport, ThreadNotFound | ThreadOwnershipError>;
 }
 
-/** Process-local conversation store supplied by layerMemory. */
+/**
+ * Process-local conversation store supplied by layerMemory.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class Store extends Context.Service<Store, StoreService>()(
   "@effect-agent/capabilities/EphemeralThreads",
 ) {}
@@ -286,7 +360,12 @@ const appendEncoded = Effect.fnUntraced(function* (
   return [next, put(state, owner, next)] as const;
 });
 
-/** In-memory storage shared for the consumer's Scope; it does not survive process loss. */
+/**
+ * In-memory storage shared for the consumer's Scope; it does not survive process loss.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeMemoryStore = Effect.gen(function* () {
   const state = yield* SynchronizedRef.make<State>({ threads: new Map(), contentBytes: 0 });
   const root: Owner = { closed: false };
@@ -443,4 +522,10 @@ export const makeMemoryStore = Effect.gen(function* () {
   return view(root);
 });
 
+/**
+ * Provide an in-memory Thread store whose retained state belongs to the Layer’s Scope.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const layerMemory = Layer.effect(Store, makeMemoryStore);

@@ -1,3 +1,10 @@
+/**
+ * Retained conversation history for ordinary AgentRuntime execution. Successful Runs append
+ * atomically, while interrupted execution has no durable replay guarantee.
+ *
+ * @since 0.1.0
+ */
+
 import * as Prompt from "effect/ai/Prompt";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -73,6 +80,9 @@ const storageError = (threadId: ThreadId, cause: ThreadStoreFailure) =>
  * one three-record batch. Staging is private to that Run; interruption discards it. The scoped
  * storage owner and the loaded tail reject stale writes without replaying external execution. A storage failure
  * after append may leave the whole Run recorded. Adapter failpoints cover both durable mutations.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = Layer.effect(
   ThreadHistory,

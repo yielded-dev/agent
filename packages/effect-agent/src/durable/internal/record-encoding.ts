@@ -34,11 +34,13 @@ const recordLimits = {
   textUnits: MAX_CANONICAL_RECORD_BYTES,
 };
 
+/** @internal */
 export class RecordEncodingError extends Schema.TaggedError<RecordEncodingError>()(
   "RecordEncodingError",
   { message: Schema.String, cause: Schema.optionalKey(Schema.Defect()) },
 ) {}
 
+/** @internal */
 export interface RecordEncoding {
   readonly canonical: RecordEnvelope;
   readonly wire: RecordJson;
@@ -51,7 +53,12 @@ interface CapturedRecordEncoding extends RecordEncoding {
   readonly wire: typeof RecordEnvelope.Encoded;
 }
 
-/** Private capture metadata, never caller-supplied wire data or execution authority. */
+/**
+ * Private capture metadata, never caller-supplied wire data or execution authority.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ProgressAppendRecord {
   readonly recordId: RecordEnvelope["recordId"];
   readonly runIds: ReadonlyArray<RunId>;
@@ -169,7 +176,10 @@ const ownWire = <Wire extends RecordJson>(wire: Wire, copies: WeakMap<object, ob
   return wire;
 };
 
-/** Capture at the Schema boundary; only the privately owned result can reuse its encoding. */
+/**
+ * Capture at the Schema boundary; only the privately owned result can reuse its encoding.
+ * @internal
+ */
 export const captureRecord = (
   input: RecordEnvelope,
 ): Result.Result<CapturedRecordEncoding, RecordEncodingError> => {
@@ -226,7 +236,10 @@ export const captureRecord = (
   }
 };
 
-/** Read evidence retains its original wire; fresh writes use the captured Schema encoding. */
+/**
+ * Read evidence retains its original wire; fresh writes use the captured Schema encoding.
+ * @internal
+ */
 export const recordEncoding = (
   record: RecordEnvelope,
 ): Result.Result<RecordEncoding, RecordEncodingError> => {

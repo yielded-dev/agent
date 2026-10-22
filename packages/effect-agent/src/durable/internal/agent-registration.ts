@@ -36,17 +36,31 @@ import type { DefinitionDigestInput, Digest, PersistedJson } from "../Records.ts
 import { DefinitionDigests, ReplayContract } from "../Records.ts";
 import type { Claim, Settlement, SubmissionSnapshot } from "../SubmissionLedger.ts";
 
-/** No unique current Binding can execute the stable Agent identity or decode its accepted input. */
+/**
+ * No unique current Binding can execute the stable Agent identity or decode its accepted input.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BindingUnavailable extends Schema.TaggedError<BindingUnavailable>()(
   "BindingUnavailable",
   { agentId: AgentId, message: Schema.String },
 ) {}
 
+/**
+ * The current registration cannot uniquely supply the accepted Agent's executable binding.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableBindingFailure = BindingUnavailable;
 
 /**
  * Submission execution/recovery routing for stable identities shared by current Definitions.
  * Worker declarations and peer-messaging endpoints still require unique Agent identities.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface BindingSelection {
   /** Change when routing changes, so hosts can retry parked work without rewriting admission. */
@@ -61,13 +75,23 @@ export interface BindingSelection {
   ) => Effect.Effect<Agent.AnyDefinition | undefined, DurableWorkerFailure | BindingUnavailable>;
 }
 
-/** Captured at runtime construction; callers cannot replace routing during an Attempt. */
+/**
+ * Captured at runtime construction; callers cannot replace routing during an Attempt.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const CurrentBindingSelection = Context.Reference<BindingSelection | undefined>(
   "@effect-agent/thread/CurrentBindingSelection",
   { defaultValue: () => undefined },
 );
 
-/** Exact immutable admission, lineage and delivery evidence; never an executable-code gate. */
+/**
+ * Exact immutable admission, lineage and delivery evidence; never an executable-code gate.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const definitionDigestsEqual = (
   left: DefinitionDigests,
   right: DefinitionDigests,
@@ -81,6 +105,9 @@ export const definitionDigestsEqual = (
  * Explicit versions must cover every current Tool. Change a version when handler meaning,
  * durable Step names/codecs, external idempotency keys, authorization, completion projection,
  * or child/report protocols change. JSON Schema cannot detect handler or codec-transform changes.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ReplayVersions {
   readonly tools: Readonly<Record<string, PersistedJson>>;
@@ -98,7 +125,10 @@ type CachedFallbackContracts = {
 
 const fallbackContracts = new WeakMap<Crypto.Crypto, WeakMap<object, CachedFallbackContracts>>();
 
-/** Hash current operation contracts; no historical definitions or schemas are retained. */
+/**
+ * Hash current operation contracts; no historical definitions or schemas are retained.
+ * @internal
+ */
 export const toolReplayContracts = Effect.fnUntraced(function* (
   definition: Agent.AnyDefinition,
   versions?: ReplayVersions,
@@ -234,7 +264,12 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
   return contracts;
 });
 
-/** Compile current metadata without acquiring executable services. */
+/**
+ * Compile current metadata without acquiring executable services.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const compileBindingContracts = Effect.fnUntraced(function* (
   definition: Agent.AnyDefinition,
   definitions: DefinitionDigestInput,
@@ -256,7 +291,12 @@ type ExecutableDefinition = Agent.AnyDefinition & {
   readonly inputPrompt?: InputPromptSource<never, unknown, unknown> | undefined;
 };
 
-/** Executable model Binding accepted by durable registration descriptors. */
+/**
+ * Executable model Binding accepted by durable registration descriptors.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ExecutableAgentBinding = {
   readonly definition: ExecutableDefinition;
   readonly model: Layer.Layer<ModelServices, never, unknown>;
@@ -387,12 +427,22 @@ const captureReporting = <E, R>(reports: ReadonlyArray<WorkerReporting<E, R>>) =
       })),
   );
 
-/** One exact executable registration used by durable claim-time resolution. */
+/**
+ * One exact executable registration used by durable claim-time resolution.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface ResolvedBinding extends CapturedBinding {
   readonly digests: DefinitionDigests;
 }
 
-/** Trusted claim identity for resolving per-Attempt application services. Not model input. */
+/**
+ * Trusted claim identity for resolving per-Attempt application services. Not model input.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface AgentAttemptContext {
   readonly threadId: ThreadId;
   readonly submissionId: Claim["submissionId"];
@@ -453,6 +503,9 @@ const captureWithAttemptLayer = <A extends ExecutableAgentBinding, Provides, Req
  * Context at Layer/effect construction time. Hosts that start from application
  * version declarations should use `compileRegistrations`; low-level fixtures
  * may supply a previously computed digest triple directly.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const DurableWorkerBinding = {
   make: <A extends ExecutableAgentBinding, E = never, R = never>(
@@ -473,10 +526,14 @@ export const DurableWorkerBinding = {
     }),
 } as const;
 
-/** INTERNAL identity-only capture retained for the legacy direct worker path. */
+/**
+ * INTERNAL identity-only capture retained for the legacy direct worker path.
+ * @internal
+ */
 export const makeLegacyWorkerBinding = <A extends ExecutableAgentBinding>(agent: A) =>
   capture(agent, (execute) => execute);
 
+/** @internal */
 export const resolveWorkerBinding = Effect.fnUntraced(function* (
   bindings: ReadonlyArray<ResolvedBinding>,
   submission: SubmissionSnapshot,
@@ -501,7 +558,10 @@ export const resolveWorkerBinding = Effect.fnUntraced(function* (
   return binding;
 });
 
-/** Resolve authoring-time admission through exact host registration, never by identity alone. */
+/**
+ * Resolve authoring-time admission through exact host registration, never by identity alone.
+ * @internal
+ */
 export const resolveDefinitionBinding = (
   bindings: ReadonlyArray<ResolvedBinding>,
   definition: Pick<Agent.AnyDefinition, "id">,
@@ -523,7 +583,12 @@ export const resolveDefinitionBinding = (
       );
 };
 
-/** Application versions and a model Layer, supplied directly or through an existing Binding. */
+/**
+ * Application versions and a model Layer, supplied directly or through an existing Binding.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type AgentRegistration<A extends ExecutableAgentBinding = ExecutableAgentBinding> = (
   | { readonly agent: A; readonly model?: never; readonly definitions: DefinitionDigestInput }
   | {
@@ -702,7 +767,12 @@ function compileRegistration(entry: AgentRegistration) {
   );
 }
 
-/** Compile heterogeneous Agent descriptors into exact, dependency-closed worker registrations. */
+/**
+ * Compile heterogeneous Agent descriptors into exact, dependency-closed worker registrations.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const compileRegistrations = <const Entries extends ReadonlyArray<AgentRegistration>>(
   entries: Entries,
 ): Effect.Effect<

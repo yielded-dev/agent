@@ -1,3 +1,8 @@
+/**
+ * Stateless page capture through the Cloudflare Browser Run REST API.
+ *
+ * @since 0.1.0
+ */
 import {
   PageCapture,
   PageCaptureInferencePolicyError,
@@ -36,7 +41,12 @@ import {
   type BrowserQuickActionWorkersAiPolicy,
 } from "./CloudflareBrowser.ts";
 
-/** Node-safe REST PageCapture implementation; it never imports Worker runtime modules. */
+/**
+ * Node-safe REST PageCapture implementation; it never imports Worker runtime modules.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const browserRestCaptureImplementation = SandboxImplementation.make({
   isolation: "isolated",
   identity: "cloudflare-browser-rest",
@@ -46,7 +56,12 @@ const API_ORIGIN = "https://api.cloudflare.com";
 const MAX_DIAGNOSTIC_LENGTH = 8_000;
 const boundedDiagnostic = (message: string): string => message.slice(0, MAX_DIAGNOSTIC_LENGTH);
 
-/** Explicit construction inputs; credentials are only projected into the fixed-origin Authorization header. */
+/**
+ * Explicit construction inputs; credentials are only projected into the fixed-origin Authorization header.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface BrowserRestCaptureOptions {
   readonly accountId: string;
   readonly apiToken: Redacted.Redacted<string>;
@@ -432,7 +447,12 @@ const makeCapture = (
     });
   });
 
-/** REST PageCapture layer for Node and other non-Worker composition roots. */
+/**
+ * REST PageCapture layer for Node and other non-Worker composition roots.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const browserRestCaptureLayer = (
   options: BrowserRestCaptureOptions,
 ): Layer.Layer<PageCapture, never, HttpClient.HttpClient> =>
@@ -443,7 +463,12 @@ export const browserRestCaptureLayer = (
     ),
   );
 
-/** REST structured extraction additionally requires explicit Workers AI authorization/accounting. */
+/**
+ * REST structured extraction additionally requires explicit Workers AI authorization/accounting.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const browserRestWorkersAiCaptureLayer = (
   options: BrowserRestCaptureOptions,
 ): Layer.Layer<PageCapture, never, HttpClient.HttpClient | BrowserQuickActionWorkersAi> =>
@@ -457,12 +482,22 @@ export const browserRestWorkersAiCaptureLayer = (
     }),
   );
 
-/** Explicit REST credentials and optional authorization for separately billed extraction. */
+/**
+ * Explicit REST credentials and optional authorization for separately billed extraction.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export interface CloudflareBrowserRestOptions extends BrowserRestCaptureOptions {
   readonly workersAi?: BrowserQuickActionWorkersAiPolicy;
 }
 
-/** Node-safe WebCapture handler assembly; the application supplies its HttpClient. */
+/**
+ * Node-safe WebCapture handler assembly; the application supplies its HttpClient.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const CloudflareBrowserRest = {
   /**
    * Supports capture, scrape, and extraction definitions. Only PageCapture is supplied;

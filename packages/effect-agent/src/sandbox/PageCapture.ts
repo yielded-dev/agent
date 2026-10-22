@@ -1,3 +1,10 @@
+/**
+ * Stateless rendering of a page into one bounded content, extraction, or scrape result under
+ * explicit navigation and resource policy.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
@@ -67,22 +74,44 @@ const isCredentialFreeWebUrl = (value: string, allowHttp: boolean): boolean => {
   );
 };
 
-/** Absolute, bounded HTTPS navigation URL that never carries embedded credentials. */
+/**
+ * Absolute, bounded HTTPS navigation URL that never carries embedded credentials.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCaptureTargetUrl = BoundedUrl.check(
   Schema.makeFilter((value) => isCredentialFreeWebUrl(value, false), {
     title: "an absolute HTTPS URL without embedded credentials",
   }),
 );
 
+/**
+ * Decoded value of {@link PageCaptureTargetUrl}.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export type PageCaptureTargetUrl = typeof PageCaptureTargetUrl.Type;
 
-/** Discovered HTTP(S) links are data, never navigation authority, and carry no credentials. */
+/**
+ * Discovered HTTP(S) links are data, never navigation authority, and carry no credentials.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCaptureLinkUrl = BoundedUrl.check(
   Schema.makeFilter((value) => isCredentialFreeWebUrl(value, true), {
     title: "an absolute HTTP or HTTPS URL without embedded credentials",
   }),
 );
 
+/**
+ * Decoded value of {@link PageCaptureLinkUrl}.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export type PageCaptureLinkUrl = typeof PageCaptureLinkUrl.Type;
 
 const ResponseFormatPrimitive = Schema.Literals([
@@ -324,26 +353,58 @@ const isBoundedResponseFormat = (input: unknown): input is typeof ResponseFormat
   }
 };
 
-/** A platform-supported object JSON Schema with bounded depth, entries, nodes, and UTF-8 bytes. */
+/**
+ * A platform-supported object JSON Schema with bounded depth, entries, nodes, and UTF-8 bytes.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCaptureResponseFormat = Schema.declare(isBoundedResponseFormat, {
   identifier: "@effect-agent/sandbox/PageCaptureResponseFormat",
   description: "An object JSON Schema bounded to 64 KiB, depth 32, and 4096 nodes",
 });
 
+/**
+ * Decoded value of {@link PageCaptureResponseFormat}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCaptureResponseFormat = typeof PageCaptureResponseFormat.Type;
 
-/** Capture a URL after a full render, the common case. */
+/**
+ * Capture a URL after a full render, the common case.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageUrlTarget extends Schema.TaggedClass<PageUrlTarget>()("PageUrlTarget", {
   url: PageCaptureTargetUrl,
 }) {}
 
-/** Render caller-supplied HTML instead of navigating. */
+/**
+ * Render caller-supplied HTML instead of navigating.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageHtmlTarget extends Schema.TaggedClass<PageHtmlTarget>()("PageHtmlTarget", {
   html: BoundedHtml,
 }) {}
 
-/** What the pass renders: a navigated URL or raw HTML. */
+/**
+ * What the pass renders: a navigated URL or raw HTML.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCaptureTarget = Schema.Union([PageUrlTarget, PageHtmlTarget]);
+/**
+ * Decoded value of {@link PageCaptureTarget}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCaptureTarget = typeof PageCaptureTarget.Type;
 
 /**
@@ -351,28 +412,57 @@ export type PageCaptureTarget = typeof PageCaptureTarget.Type;
  * is a lightweight stateless engine an adapter may support for lower-cost
  * captures. An adapter that cannot honor the requested engine
  * rejects it typed rather than silently substituting the other.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const PageCaptureEngine = Schema.Literals(["chromium", "kitesurf"]);
+/**
+ * Decoded value of {@link PageCaptureEngine}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCaptureEngine = typeof PageCaptureEngine.Type;
 
-/** Return the fully rendered HTML document. */
+/**
+ * Return the fully rendered HTML document.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CapturePageContent extends Schema.TaggedClass<CapturePageContent>()(
   "CapturePageContent",
   {},
 ) {}
 
-/** Return the rendered page converted to Markdown. */
+/**
+ * Return the rendered page converted to Markdown.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CapturePageMarkdown extends Schema.TaggedClass<CapturePageMarkdown>()(
   "CapturePageMarkdown",
   {},
 ) {}
 
-/** Return the hyperlinks discovered on the rendered page. */
+/**
+ * Return the hyperlinks discovered on the rendered page.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CapturePageLinks extends Schema.TaggedClass<CapturePageLinks>()("CapturePageLinks", {
   visibleLinksOnly: Schema.optionalKey(Schema.Boolean),
 }) {}
 
-/** Return rendered element records grouped by their requested CSS selector. */
+/**
+ * Return rendered element records grouped by their requested CSS selector.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class CapturePageScrape extends Schema.TaggedClass<CapturePageScrape>()(
   "CapturePageScrape",
   {
@@ -388,6 +478,9 @@ export class CapturePageScrape extends Schema.TaggedClass<CapturePageScrape>()(
  * bounded, object-shaped JSON Schema document, typically derived from an
  * Effect Schema. The untrusted result must still be decoded by the caller
  * through the original Effect Schema.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CapturePageStructured extends Schema.TaggedClass<CapturePageStructured>()(
   "CapturePageStructured",
@@ -397,7 +490,12 @@ export class CapturePageStructured extends Schema.TaggedClass<CapturePageStructu
   },
 ) {}
 
-/** Exactly one bounded output per pass. */
+/**
+ * Exactly one bounded output per pass.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCaptureAction = Schema.Union([
   CapturePageContent,
   CapturePageMarkdown,
@@ -406,15 +504,31 @@ export const PageCaptureAction = Schema.Union([
   CapturePageStructured,
 ]);
 
+/**
+ * Decoded value of {@link PageCaptureAction}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCaptureAction = typeof PageCaptureAction.Type;
 
-/** Wait for one CSS selector to appear before capturing. */
+/**
+ * Wait for one CSS selector to appear before capturing.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageSelectorWait extends Schema.Class<PageSelectorWait>("PageSelectorWait")({
   selector: BoundedSelector,
   timeoutMillis: Schema.optionalKey(BoundedTimeoutMillis),
 }) {}
 
-/** Navigation and readiness options applied before the capture. */
+/**
+ * Navigation and readiness options applied before the capture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageNavigationOptions extends Schema.Class<PageNavigationOptions>(
   "PageNavigationOptions",
 )({
@@ -425,7 +539,12 @@ export class PageNavigationOptions extends Schema.Class<PageNavigationOptions>(
   waitForSelector: Schema.optionalKey(PageSelectorWait),
 }) {}
 
-/** The rendered viewport. */
+/**
+ * The rendered viewport.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageViewport extends Schema.Class<PageViewport>("PageViewport")({
   width: PositiveInt.check(Schema.isLessThanOrEqualTo(7_680)),
   height: PositiveInt.check(Schema.isLessThanOrEqualTo(7_680)),
@@ -437,6 +556,9 @@ export class PageViewport extends Schema.Class<PageViewport>("PageViewport")({
  * redirect, and subresource requests are allowed. Calling capabilities own
  * the capture-target allowlist and project it into this policy so rendered
  * JavaScript cannot escape the same construction-time authority.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class PageResourcePolicy extends Schema.Class<PageResourcePolicy>("PageResourcePolicy")({
   rejectResourceTypes: Schema.optionalKey(
@@ -463,12 +585,22 @@ export class PageResourcePolicy extends Schema.Class<PageResourcePolicy>("PageRe
   ),
 }) {}
 
-/** Limits an adapter must either enforce or reject. Bytes are UTF-8 encoded. */
+/**
+ * Limits an adapter must either enforce or reject. Bytes are UTF-8 encoded.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCaptureLimits extends Schema.Class<PageCaptureLimits>("PageCaptureLimits")({
   maxOutputBytes: PositiveInt.check(Schema.isLessThanOrEqualTo(MAX_OUTPUT_BYTES)),
 }) {}
 
-/** Schema-first page capture request: one target, one action, one output. */
+/**
+ * Schema-first page capture request: one target, one action, one output.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCaptureRequest extends Schema.Class<PageCaptureRequest>("PageCaptureRequest")({
   target: PageCaptureTarget,
   action: PageCaptureAction,
@@ -479,7 +611,12 @@ export class PageCaptureRequest extends Schema.Class<PageCaptureRequest>("PageCa
   resourcePolicy: Schema.optionalKey(PageResourcePolicy),
 }) {}
 
-/** The rendered HTML document. */
+/**
+ * The rendered HTML document.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageContentCaptured extends Schema.TaggedClass<PageContentCaptured>()(
   "PageContentCaptured",
   {
@@ -487,7 +624,12 @@ export class PageContentCaptured extends Schema.TaggedClass<PageContentCaptured>
   },
 ) {}
 
-/** The rendered page as Markdown. */
+/**
+ * The rendered page as Markdown.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageMarkdownCaptured extends Schema.TaggedClass<PageMarkdownCaptured>()(
   "PageMarkdownCaptured",
   {
@@ -495,7 +637,12 @@ export class PageMarkdownCaptured extends Schema.TaggedClass<PageMarkdownCapture
   },
 ) {}
 
-/** The hyperlinks discovered on the rendered page. */
+/**
+ * The hyperlinks discovered on the rendered page.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageLinksCaptured extends Schema.TaggedClass<PageLinksCaptured>()(
   "PageLinksCaptured",
   {
@@ -503,7 +650,12 @@ export class PageLinksCaptured extends Schema.TaggedClass<PageLinksCaptured>()(
   },
 ) {}
 
-/** The extracted structured value; untrusted until decoded by the caller. */
+/**
+ * The extracted structured value; untrusted until decoded by the caller.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageStructuredCaptured extends Schema.TaggedClass<PageStructuredCaptured>()(
   "PageStructuredCaptured",
   {
@@ -511,13 +663,23 @@ export class PageStructuredCaptured extends Schema.TaggedClass<PageStructuredCap
   },
 ) {}
 
-/** One bounded HTML attribute returned by a selector scrape. */
+/**
+ * One bounded HTML attribute returned by a selector scrape.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageScrapeAttribute extends Schema.Class<PageScrapeAttribute>("PageScrapeAttribute")({
   name: BoundedAttributeName,
   value: BoundedAttributeValue,
 }) {}
 
-/** One rendered element returned by a selector scrape. */
+/**
+ * One rendered element returned by a selector scrape.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageScrapeElement extends Schema.Class<PageScrapeElement>("PageScrapeElement")({
   // Individual fields share the page sanity bound; the adapter enforces the
   // caller's byte budget on the complete response before decoding it.
@@ -530,7 +692,12 @@ export class PageScrapeElement extends Schema.Class<PageScrapeElement>("PageScra
   height: Schema.Finite,
 }) {}
 
-/** All rendered elements matched by one requested selector. */
+/**
+ * All rendered elements matched by one requested selector.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageScrapeGroup extends Schema.Class<PageScrapeGroup>("PageScrapeGroup")({
   selector: BoundedSelector,
   results: Schema.Array(PageScrapeElement).check(Schema.isMaxLength(MAX_SCRAPE_ELEMENTS)),
@@ -545,7 +712,12 @@ const PageScrapeGroups = Schema.Array(PageScrapeGroup).check(
   ),
 );
 
-/** Bounded rendered element records, preserving selector grouping. */
+/**
+ * Bounded rendered element records, preserving selector grouping.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageScrapeCaptured extends Schema.TaggedClass<PageScrapeCaptured>()(
   "PageScrapeCaptured",
   {
@@ -553,7 +725,12 @@ export class PageScrapeCaptured extends Schema.TaggedClass<PageScrapeCaptured>()
   },
 ) {}
 
-/** Exactly one output kind per pass, matching the requested action. */
+/**
+ * Exactly one output kind per pass, matching the requested action.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCaptureOutput = Schema.Union([
   PageContentCaptured,
   PageMarkdownCaptured,
@@ -562,9 +739,20 @@ export const PageCaptureOutput = Schema.Union([
   PageStructuredCaptured,
 ]);
 
+/**
+ * Decoded value of {@link PageCaptureOutput}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCaptureOutput = typeof PageCaptureOutput.Type;
 
-/** Explicit accounting for model inference performed by a capture adapter. */
+/**
+ * Explicit accounting for model inference performed by a capture adapter.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCaptureInferenceUse extends Schema.Class<PageCaptureInferenceUse>(
   "PageCaptureInferenceUse",
 )({
@@ -572,7 +760,12 @@ export class PageCaptureInferenceUse extends Schema.Class<PageCaptureInferenceUs
   modelCalls: PositiveInt,
 }) {}
 
-/** Accounting an adapter observed for one capture. */
+/**
+ * Accounting an adapter observed for one capture.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCaptureResourceUse extends Schema.Class<PageCaptureResourceUse>(
   "PageCaptureResourceUse",
 )({
@@ -580,7 +773,12 @@ export class PageCaptureResourceUse extends Schema.Class<PageCaptureResourceUse>
   inference: Schema.optionalKey(PageCaptureInferenceUse),
 }) {}
 
-/** The bounded outcome of one capture pass. */
+/**
+ * The bounded outcome of one capture pass.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class PageCaptureResult extends Schema.Class<PageCaptureResult>("PageCaptureResult")({
   implementation: SandboxImplementation,
   output: PageCaptureOutput,
@@ -591,6 +789,9 @@ export class PageCaptureResult extends Schema.Class<PageCaptureResult>("PageCapt
  * The platform refused the pass for rate or quota reasons. `retryAfterMillis`
  * carries the platform's own backoff hint when one exists; retrying earlier
  * only re-fails.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class PageCaptureRateLimitedError extends Schema.TaggedError<PageCaptureRateLimitedError>()(
   "PageCaptureRateLimitedError",
@@ -603,7 +804,12 @@ export class PageCaptureRateLimitedError extends Schema.TaggedError<PageCaptureR
   },
 ) {}
 
-/** Navigation, readiness, or capture of the target page failed. */
+/**
+ * Navigation, readiness, or capture of the target page failed.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCaptureNavigationError extends Schema.TaggedError<PageCaptureNavigationError>()(
   "PageCaptureNavigationError",
   {
@@ -613,7 +819,12 @@ export class PageCaptureNavigationError extends Schema.TaggedError<PageCaptureNa
   },
 ) {}
 
-/** Host authorization or accounting blocked provider inference before capture. */
+/**
+ * Host authorization or accounting blocked provider inference before capture.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCaptureInferencePolicyError extends Schema.TaggedError<PageCaptureInferencePolicyError>()(
   "PageCaptureInferencePolicyError",
   {
@@ -625,7 +836,12 @@ export class PageCaptureInferencePolicyError extends Schema.TaggedError<PageCapt
   },
 ) {}
 
-/** The adapter cannot honestly honor one requested feature (CAP-010 idiom). */
+/**
+ * The adapter cannot honestly honor one requested feature (CAP-010 idiom).
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCaptureUnsupportedError extends Schema.TaggedError<PageCaptureUnsupportedError>()(
   "PageCaptureUnsupportedError",
   {
@@ -642,7 +858,12 @@ export class PageCaptureUnsupportedError extends Schema.TaggedError<PageCaptureU
   },
 ) {}
 
-/** The response exceeded the request's output byte budget. */
+/**
+ * The response exceeded the request's output byte budget.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCaptureOutputLimitError extends Schema.TaggedError<PageCaptureOutputLimitError>()(
   "PageCaptureOutputLimitError",
   {
@@ -652,7 +873,12 @@ export class PageCaptureOutputLimitError extends Schema.TaggedError<PageCaptureO
   },
 ) {}
 
-/** The platform or transport produced a value outside the capture protocol. */
+/**
+ * The platform or transport produced a value outside the capture protocol.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class PageCaptureProtocolError extends Schema.TaggedError<PageCaptureProtocolError>()(
   "PageCaptureProtocolError",
   {
@@ -662,7 +888,12 @@ export class PageCaptureProtocolError extends Schema.TaggedError<PageCaptureProt
   },
 ) {}
 
-/** Expected capture failures. Interruption stays an Effect interruption. */
+/**
+ * Expected capture failures. Interruption stays an Effect interruption.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const PageCaptureError = Schema.Union([
   PageCaptureRateLimitedError,
   PageCaptureNavigationError,
@@ -672,6 +903,12 @@ export const PageCaptureError = Schema.Union([
   PageCaptureProtocolError,
 ]);
 
+/**
+ * Decoded value of {@link PageCaptureError}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCaptureError = typeof PageCaptureError.Type;
 
 /**
@@ -680,6 +917,9 @@ export type PageCaptureError = typeof PageCaptureError.Type;
  * isolation posture honestly (CAP-010), enforces or rejects every requested
  * limit and policy, and returns exactly one bounded output. Capture results
  * are untrusted input to whatever reads them.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class PageCapture extends Context.Service<
   PageCapture,
@@ -690,7 +930,12 @@ export class PageCapture extends Context.Service<
   }
 >()("@effect-agent/sandbox/PageCapture") {}
 
-/** Type helper for implementations that preserve the public PageCapture contract. */
+/**
+ * Type helper for implementations that preserve the public PageCapture contract.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type PageCaptureCapture = (
   request: PageCaptureRequest,
 ) => Effect.Effect<PageCaptureResult, PageCaptureError>;

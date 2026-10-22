@@ -1,11 +1,8 @@
-import {
-  executionStates,
-  executionStateKey,
-  retainExecutionState,
-  type ExecutionPredecessor,
-} from "./internal/SqlExecutionState.ts";
-import { sqlStorageOwner } from "./internal/SqlOwner.ts";
-export { sqlStorageOwner } from "./internal/SqlOwner.ts";
+/**
+ * Canonical SQL journal primitives for adapter-owned layouts and transactions.
+ *
+ * @since 0.1.0
+ */
 import { type RunId, ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import type { MessageDeliveryRecord } from "@yielded/agent/message-delivery";
@@ -29,6 +26,13 @@ import * as SqlClient from "effect/sql/SqlClient";
 import type * as SqlError from "effect/sql/SqlError";
 import type * as Statement from "effect/sql/Statement";
 
+import {
+  executionStates,
+  executionStateKey,
+  retainExecutionState,
+  type ExecutionPredecessor,
+} from "./internal/SqlExecutionState.ts";
+import { sqlStorageOwner } from "./internal/SqlOwner.ts";
 import {
   makeCanonicalStorage,
   recordBatchId,
@@ -60,6 +64,20 @@ import {
 } from "./SqlThreadNativeReads.ts";
 import { makeSqlThreadWork } from "./SqlThreadWork.ts";
 
+/**
+ * Retains the shared owner for a physical SQL client and namespace in the caller's Scope.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
+export { sqlStorageOwner } from "./internal/SqlOwner.ts";
+
+/**
+ * Adapter-owned namespace, diagnostics, transaction boundaries, and injected failures.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlJournalOptions<
   S extends Diagnostic,
   C extends Diagnostic,
@@ -77,12 +95,24 @@ const BoundedIdentifier = Schema.NonEmptyString.check(Schema.isMaxLength(1024));
 const MAX_STORED_TEXT_BYTES = 16 * 1024 * 1024;
 const MAX_IDENTIFIER_LENGTH = 1_024;
 
+/**
+ * Validated SQL Thread identity, creation time, and committed tail.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
   created_at: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
   tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
 }) {}
 
+/**
+ * Validated SQL canonical batch identity, encoded payload, and sequence range.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
   batch_id: Schema.fromJsonString(BoundedIdentifier),
   batch_json: BoundedStoredText,
@@ -91,6 +121,12 @@ export class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
   last_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
 }) {}
 
+/**
+ * Validated SQL canonical record payload and its owning batch and sequence.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export class RecordRow extends Schema.Class<RecordRow>("RecordRow")({
   batch_id: Schema.fromJsonString(BoundedIdentifier),
   thread_id: BoundedIdentifier,
@@ -114,6 +150,9 @@ const isLifecyclePublicationFact = Schema.is(Schema.toType(LifecyclePublicationF
  * Trusted adapter SPI produced by prepareSqlAppend, never a wire or caller-data boundary.
  * Canonical values, encoded strings and UTF-8 sizes remain paired; ThreadStore owns capture
  * and validation before entering this journal, whose caller already holds SQL storage authority.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface RawAppendRequest {
   readonly batchId: PreparedAppend["batch"]["batchId"];
@@ -136,6 +175,12 @@ export interface RawAppendRequest {
   readonly commitDigest: Digest;
 }
 
+/**
+ * Committed sequence range and replay status returned by the native journal.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export class RawAppendResult extends Schema.Class<RawAppendResult>(
   "@effect-agent/storage-sql/RawAppendResult",
 )({
@@ -144,7 +189,12 @@ export class RawAppendResult extends Schema.Class<RawAppendResult>(
   replayed: Schema.Boolean,
 }) {}
 
-/** Shared native transaction body; callers own the local capability check and mutation transaction. */
+/**
+ * Shared native transaction body; callers own the local capability check and mutation transaction.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
@@ -413,6 +463,12 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
   return { read, replay, checkCommitIntent, rejectSuperseded, validate, commit, prepareCommit };
 });
 
+/**
+ * Bounded native journal read after an exclusive canonical sequence cursor.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export class RawReadRequest extends Schema.Class<RawReadRequest>(
   "@effect-agent/storage-sql/RawReadRequest",
 )({
@@ -421,7 +477,12 @@ export class RawReadRequest extends Schema.Class<RawReadRequest>(
   limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1_024)),
 }) {}
 
-/** Construct journal operations over an already initialized database. */
+/**
+ * Construct journal operations over an already initialized database.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   S extends Diagnostic,
   C extends Diagnostic,
@@ -957,7 +1018,12 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   };
 });
 
-/** All journals use the physical owner gate and transactionally read tail CAS. */
+/**
+ * All journals use the physical owner gate and transactionally read tail CAS.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlJournal = <
   S extends Diagnostic,
   C extends Diagnostic,
@@ -967,6 +1033,12 @@ export const makeSqlJournal = <
   options: SqlJournalOptions<S, C, W, F>,
 ) => Effect.map(makeSqlJournalKernel(options), (kernel) => kernel.journal);
 
+/**
+ * Shared native journal operations with the adapter's concrete diagnostic channels.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SqlJournal<
   S extends Diagnostic,
   C extends Diagnostic,

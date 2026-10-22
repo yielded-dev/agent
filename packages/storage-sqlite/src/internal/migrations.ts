@@ -22,6 +22,12 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
+/**
+ * Current SQLite adapter layout version; record encoding is versioned independently.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const CurrentSqliteStorageVersion = 30;
 
 /** Exact released layout, retained for predecessor validation. */
@@ -128,6 +134,7 @@ const layoutObjects = (statements: ReadonlyArray<string>) =>
 
 const Legacy = Schema.Tuple([Schema.Struct({ user_version: Schema.Int })]);
 
+/** @internal */
 export interface SqliteStorageHeader {
   readonly layoutVersion: number;
   readonly recordFormat: string;
@@ -248,14 +255,22 @@ const inspectStorage = Effect.fnUntraced(function* (
   return yield* readHeader(objects, version);
 });
 
-/** The caller holds the dedicated client's exclusive lock across validation and ownership retirement. */
+/**
+ * The caller holds the dedicated client's exclusive lock across validation and ownership retirement.
+ *
+ * @internal
+ */
 export const inspectManagedSqliteStorage = Effect.fnUntraced(function* () {
   const header = yield* inspectStorage(true);
 
   yield* readManagedTriggers(header !== undefined);
 });
 
-/** Read-only inspection. The caller owns a snapshot covering this check and its export reads. */
+/**
+ * Read-only inspection. The caller owns a snapshot covering this check and its export reads.
+ *
+ * @internal
+ */
 export const readSqliteStorageHeader = Effect.fnUntraced(function* () {
   const header = yield* inspectStorage();
 
@@ -265,7 +280,11 @@ export const readSqliteStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layouts 25–29. */
+/**
+ * Initialize fresh storage or atomically upgrade the exact released layouts 25–29.
+ *
+ * @internal
+ */
 export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 

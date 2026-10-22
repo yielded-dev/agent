@@ -1,3 +1,10 @@
+/**
+ * Engine-owned publication of capability events into the current Run stream with authoritative
+ * identity and sequence fields.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -9,7 +16,7 @@ import {
   type RunId,
   type ToolCallId,
 } from "../core/Identifiers.ts";
-import type { CompletionMetadata } from "../core/internal/completion.ts";
+import type { CompletionMetadata } from "../core/RunEvent.ts";
 import { type DelegationDepth } from "../core/SubagentContract.ts";
 import { type RunTotals } from "../core/Usage.ts";
 
@@ -20,6 +27,9 @@ import { type RunTotals } from "../core/Usage.ts";
  * (`eventVersion`, `runId`, `threadId`, `agentId`, `sequence`,
  * `timestamp`, and the emitting batch's `turnId`) when the payload is woven
  * into the parent stream.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface SubagentEventBasePayload {
   readonly toolCallId: ToolCallId;
@@ -30,23 +40,43 @@ export interface SubagentEventBasePayload {
   readonly depth: DelegationDepth;
 }
 
-/** Pre-base payload for the core `SubagentRequested` event. */
+/**
+ * Pre-base payload for the core `SubagentRequested` event.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentRequestedPayload extends SubagentEventBasePayload {
   readonly _tag: "SubagentRequested";
 }
 
-/** Pre-base payload for the core `SubagentStarted` event. */
+/**
+ * Pre-base payload for the core `SubagentStarted` event.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentStartedPayload extends SubagentEventBasePayload {
   readonly _tag: "SubagentStarted";
 }
 
-/** Pre-base payload for the core `SubagentProgress` event; `summary` is at most 4096 characters. */
+/**
+ * Pre-base payload for the core `SubagentProgress` event; `summary` is at most 4096 characters.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentProgressPayload extends SubagentEventBasePayload {
   readonly _tag: "SubagentProgress";
   readonly summary: string;
 }
 
-/** Pre-base payload for the core `SubagentCompleted` event; `turns` is a positive integer. */
+/**
+ * Pre-base payload for the core `SubagentCompleted` event; `turns` is a positive integer.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentCompletedPayload extends SubagentEventBasePayload, CompletionMetadata {
   readonly _tag: "SubagentCompleted";
   readonly turns: number;
@@ -55,7 +85,12 @@ export interface SubagentCompletedPayload extends SubagentEventBasePayload, Comp
   readonly delegatedUsage?: RunTotals | undefined;
 }
 
-/** Pre-base payload for the core `SubagentFailed` event; `message` is at most 4096 characters. */
+/**
+ * Pre-base payload for the core `SubagentFailed` event; `message` is at most 4096 characters.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentFailedPayload extends SubagentEventBasePayload {
   readonly _tag: "SubagentFailed";
   readonly usage?: RunTotals | undefined;
@@ -64,7 +99,12 @@ export interface SubagentFailedPayload extends SubagentEventBasePayload {
   readonly message: string;
 }
 
-/** Pre-base payload for the core `SubagentInterrupted` event; `reason` is at most 4096 characters. */
+/**
+ * Pre-base payload for the core `SubagentInterrupted` event; `reason` is at most 4096 characters.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentInterruptedPayload extends SubagentEventBasePayload {
   readonly _tag: "SubagentInterrupted";
   readonly usage?: RunTotals | undefined;
@@ -72,7 +112,12 @@ export interface SubagentInterruptedPayload extends SubagentEventBasePayload {
   readonly reason: string;
 }
 
-/** Pre-base payload for the core `SubagentJoined` event. */
+/**
+ * Pre-base payload for the core `SubagentJoined` event.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SubagentJoinedPayload extends SubagentEventBasePayload {
   readonly _tag: "SubagentJoined";
   readonly usage?: RunTotals | undefined;
@@ -86,6 +131,9 @@ export interface SubagentJoinedPayload extends SubagentEventBasePayload {
  * constructed through the core Schema class, so core field checks (bounded
  * text, positive turns) still apply; violating them is a defect of the
  * emitting handler, not an expected failure.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type SubagentEventPayload =
   | SubagentRequestedPayload
@@ -96,7 +144,12 @@ export type SubagentEventPayload =
   | SubagentInterruptedPayload
   | SubagentJoinedPayload;
 
-/** A handler emitted a Subagent event after its Tool batch had already settled. */
+/**
+ * A handler emitted a Subagent event after its Tool batch had already settled.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class RunEventSinkClosedError extends Schema.TaggedError<RunEventSinkClosedError>()(
   "RunEventSinkClosedError",
   {
@@ -112,6 +165,9 @@ export class RunEventSinkClosedError extends Schema.TaggedError<RunEventSinkClos
  * Public stream backpressure may suspend the emitting handler; headless runs
  * validate without buffering events. Emitting after the owning Tool batch has
  * settled — or outside any Tool batch — fails closed with `RunEventSinkClosedError`.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface RunEventSinkService {
   readonly emit: (payload: SubagentEventPayload) => Effect.Effect<void, RunEventSinkClosedError>;
@@ -124,6 +180,9 @@ export interface RunEventSinkService {
  * The engine provides this service locally to every Tool batch, bound to that
  * batch's Run identity and Turn; it is never satisfied from an application
  * Layer and is excluded from the runtime's public requirements.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class RunEventSink extends Context.Service<RunEventSink, RunEventSinkService>()(
   "@effect-agent/engine/RunEventSink",

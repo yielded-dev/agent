@@ -2,16 +2,22 @@ import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Schema from "effect/Schema";
 
-import { Emitter, UpdateError } from "../AgentUpdates.ts";
+import { Emitter, UpdateError, type UpdateTool } from "../AgentUpdates.ts";
 import type { RunId } from "../Identifiers.ts";
 import { ToolExecutionClass } from "./tool-execution.ts";
 
-/** Stable native acceptance identity, shared by execution and recovery. */
+/**
+ * Stable native acceptance identity, shared by execution and recovery.
+ * @internal
+ */
 export const nativeUpdateId = (runId: RunId, toolCallId: string): string =>
   `tool:${runId}:${toolCallId}`;
 
-/** Definition-owned native Tool. Runtime supplies its handler under the same identity. */
-export const updateTool = <S extends Schema.Top>(schema: S) =>
+/**
+ * Definition-owned native Tool. Runtime supplies its handler under the same identity.
+ * @internal
+ */
+export const updateTool = <S extends Schema.Top>(schema: S): UpdateTool<S> =>
   Tool.make("emit_update", {
     description:
       "Emit a structured intermediate update. Success acknowledges acceptance by this Run; " +
@@ -24,13 +30,7 @@ export const updateTool = <S extends Schema.Top>(schema: S) =>
     .addDependency(Emitter)
     .annotate(ToolExecutionClass, "idempotent");
 
-export type UpdateToolkit<
-  T extends Toolkit.Any,
-  S extends Schema.Top | undefined,
-> = S extends Schema.Top
-  ? Toolkit.Toolkit<T["tools"] & { readonly emit_update: ReturnType<typeof updateTool<S>> }>
-  : T;
-
+/** @internal */
 export const withUpdateTool = (
   toolkit: Toolkit.Any,
   schema: Schema.Top | undefined,

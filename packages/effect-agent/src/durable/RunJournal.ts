@@ -1,3 +1,10 @@
+/**
+ * Deterministic identities and projections that reconstruct one Run's prompt, committed Turns, and
+ * accounting from retained evidence.
+ *
+ * @since 0.1.0
+ */
+
 import * as Prompt from "effect/ai/Prompt";
 import * as Brand from "effect/Brand";
 import type * as DateTime from "effect/DateTime";
@@ -19,13 +26,13 @@ import { type Selection, type Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
 import { type ModelCallUsage, summarizeModelUsage, type RunUsageSummary } from "../core/Usage.ts";
 import type { WorkerRef } from "../core/Worker.ts";
+import type { RunTurnToolResult } from "../engine/AgentRuntime.ts";
 import {
   CLEARED_TOOL_RESULT,
   COMPACTION_SUMMARY_PREFIX,
   contextWindowId,
   contextWindowMessage,
 } from "../engine/Compaction.ts";
-import { type RunTurnToolResult } from "../engine/internal/interpreter-options.ts";
 import { digestJson } from "./Digest.ts";
 import {
   makeJournalMetadata,
@@ -52,7 +59,12 @@ import {
 } from "./Records.ts";
 import { IdempotencyKey } from "./SubmissionLedger.ts";
 
-/** A canonical record could not be projected into Run/Prompt state. */
+/**
+ * A canonical record could not be projected into Run/Prompt state.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class RunJournalError extends Schema.TaggedError<RunJournalError>()("RunJournalError", {
   message: Schema.String,
   cause: Schema.optionalKey(Schema.Defect()),
@@ -74,25 +86,61 @@ const makeRecordId = Brand.nominal<RecordId>();
  * Deterministic Run identity pinned per Submission (plan §Coordinator flow). Every Attempt of one
  * Submission shares this Run identity, so canonical per-Turn records from different Attempts
  * belong to one logical Run.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const runIdForSubmission = (submissionId: SubmissionId): RunId =>
   makeRunId(`run:${submissionId}`);
 
-/** Stable canonical clock identity shared by every Attempt of one Run. */
+/**
+ * Stable canonical clock identity shared by every Attempt of one Run.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const runStartedRecordId = (runId: RunId): RecordId => makeRecordId(`run-start:${runId}`);
 
+/**
+ * Derives the stable start-batch identity shared by every Attempt of one Run.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const runStartedBatchId = (runId: RunId): BatchId => makeBatchId(`run-start:${runId}`);
 
+/**
+ * Derives the stable canonical duration-exhaustion record identity for one Run.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const runDurationRecordId = (runId: RunId): RecordId =>
   makeRecordId(`run-duration:${runId}`);
 
+/**
+ * Derives the stable duration-exhaustion batch identity for one Run.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const runDurationBatchId = (runId: RunId): BatchId => makeBatchId(`run-duration:${runId}`);
 
-/** Deterministic Turn identity: Attempt-independent for one (Run, canonical turn) pair. */
+/**
+ * Deterministic Turn identity: Attempt-independent for one (Run, canonical turn) pair.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const turnIdForRun = (runId: RunId, turn: number): TurnId =>
   makeTurnId(`turn:${runId}:${turn}`);
 
-/** Deterministic batch identity of a response committed atomically with its closed Turn outcomes. */
+/**
+ * Deterministic batch identity of a response committed atomically with its closed Turn outcomes.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const turnBatchId = (runId: RunId, turn: number): BatchId =>
   makeBatchId(`turn:${runId}:${turn}`);
 
@@ -101,6 +149,9 @@ export const turnBatchId = (runId: RunId, turn: number): BatchId =>
  * the assistant response plus pending steering becomes canonical before approval preflight and
  * dispatch fencing, or when readonly execution first requires a persisted call-scoped capability.
  * Unsettled declarations conservatively record possible execution.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const turnResponseBatchId = (runId: RunId, turn: number): BatchId =>
   makeBatchId(`turn-response:${runId}:${turn}`);
@@ -108,6 +159,9 @@ export const turnResponseBatchId = (runId: RunId, turn: number): BatchId =>
 /**
  * Deterministic batch identity of a tool-declaring Turn's RESULTS commit (plan §2.1 commit 5):
  * every `ToolCallSettled` record of the Turn, in declaration order, model-visible atomically.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const turnResultsBatchId = (runId: RunId, turn: number): BatchId =>
   makeBatchId(`turn-results:${runId}:${turn}`);
@@ -116,6 +170,9 @@ export const turnResultsBatchId = (runId: RunId, turn: number): BatchId =>
  * Deterministic per-call late-settle batch identity used by the resolution path when one
  * recovered/resolved call settles outside its Turn's results batch. Record identity
  * (`tool-settled:{runId}:{turn}:{toolCallId}`) dedupes double-settles across both paths.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const toolCallResultBatchId = (
   runId: RunId,
@@ -129,6 +186,9 @@ export const toolCallResultBatchId = (
  * threshold compaction per Turn plus at most one overflow-forced summarize,
  * so a superseding Attempt that re-decides the same compaction replays the
  * batch identity instead of duplicating the record.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const compactionRecordId = (
   runId: RunId,
@@ -136,38 +196,86 @@ export const compactionRecordId = (
   kind: "clear-tool-results" | "summarize" | "rollover",
 ): RecordId => makeRecordId(`compaction:${runId}:${turn}:${kind}`);
 
-/** Deterministic batch identity of one compaction append (same string as its record id). */
+/**
+ * Deterministic batch identity of one compaction append (same string as its record id).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const compactionBatchId = (
   runId: RunId,
   turn: number,
   kind: "clear-tool-results" | "summarize" | "rollover",
 ): BatchId => makeBatchId(`compaction:${runId}:${turn}:${kind}`);
 
-/** Deterministic canonical record identity of one Turn's `ModelResponseRecorded` record. */
+/**
+ * Deterministic canonical record identity of one Turn's `ModelResponseRecorded` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const modelResponseRecordId = (runId: RunId, turn: number): RecordId =>
   makeRecordId(`model-response:${runId}:${turn}`);
 
-/** Terminal Tool completion marker committed atomically with its settled Tool result. */
+/**
+ * Terminal Tool completion marker committed atomically with its settled Tool result.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const runCompletedRecordId = (runId: RunId): RecordId =>
   makeRecordId(`run-completed:${runId}`);
 
-/** Native source reservation locator, including the first admission of a continuing worker. */
+/**
+ * Native source reservation locator, including the first admission of a continuing worker.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const workerInputRecordId = (messageId: IdempotencyKey): RecordId =>
   makeRecordId(`worker-input:${messageId}`);
 
-/** Source-owned first reservation; native worker identity is minted from its first message. */
+/**
+ * Source-owned first reservation; native worker identity is minted from its first message.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const firstWorkerInputRecordId = (worker: WorkerRef): RecordId =>
   makeRecordId(`worker-input:${worker.threadId}`);
 
+/**
+ * Derives the canonical origin-record identity for a background worker Thread.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const workerOriginRecordId = (threadId: ThreadId): RecordId =>
   makeRecordId(`worker-origin:${threadId}`);
 
+/**
+ * Derives the canonical worker-report record identity from its retained message identity.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const workerReportRecordId = (messageId: IdempotencyKey): RecordId =>
   makeRecordId(`worker-report:${messageId}`);
 
+/**
+ * Uses the retained peer-message identity as its canonical record identity.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const peerMessageRecordId = (messageId: IdempotencyKey): RecordId => makeRecordId(messageId);
 
-/** Same immutable tuple used by native update admission; callers never parse its hash. */
+/**
+ * Same immutable tuple used by native update admission; callers never parse its hash.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const agentUpdateRecordId = Effect.fnUntraced(function* (
   threadId: ThreadId,
   runId: RunId,
@@ -176,27 +284,54 @@ export const agentUpdateRecordId = Effect.fnUntraced(function* (
   return makeRecordId(`agent-update:${yield* digestJson([threadId, runId, updateId])}`);
 });
 
-/** Deterministic canonical record identity of one Turn's `ToolCallSettled` record. */
-export { toolCallSettledRecordId };
+export {
+  /**
+   * Deterministic canonical record identity of one Turn's Tool result.
+   *
+   * @category constructors
+   * @since 0.1.0
+   */
+  toolCallSettledRecordId,
+};
 
-/** Deterministic batch identity of one Turn's `ToolCallUnknown` marking append. */
+/**
+ * Deterministic batch identity of one Turn's `ToolCallUnknown` marking append.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const markUnknownBatchId = (submissionId: SubmissionId, turn: number): BatchId =>
   makeBatchId(`mark-unknown:${submissionId}:${turn}`);
 
-/** Deterministic canonical record identity of one Tool Call's `ToolCallUnknown` record. */
+/**
+ * Deterministic canonical record identity of one Tool Call's `ToolCallUnknown` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toolCallUnknownRecordId = (
   runId: RunId,
   turn: number,
   toolCallId: ToolCallId,
 ): RecordId => makeRecordId(`tool-unknown:${runId}:${turn}:${toolCallId}`);
 
-/** Deterministic batch identity of one Tool Call's resolution append (DUR-017). */
+/**
+ * Deterministic batch identity of one Tool Call's resolution append (DUR-017).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toolCallResolutionBatchId = (
   submissionId: SubmissionId,
   toolCallId: ToolCallId,
 ): BatchId => makeBatchId(`resolve:${submissionId}:${toolCallId}`);
 
-/** Deterministic canonical record identity of one Tool Call's `ToolCallResolved` record. */
+/**
+ * Deterministic canonical record identity of one Tool Call's `ToolCallResolved` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toolCallResolvedRecordId = (
   runId: RunId,
   turn: number,
@@ -209,6 +344,9 @@ export const toolCallResolvedRecordId = (
  * racing-writers rule: only the fenced winner's record commits; the loser replays it.
  * A versioned JSON tuple keeps separator characters in each identity component distinct.
  * Replay derives this key from the structured payload, including records with legacy IDs.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const toolStepSettledRecordId = (
   runId: RunId,
@@ -216,31 +354,56 @@ export const toolStepSettledRecordId = (
   stepName: string,
 ): RecordId => makeRecordId(JSON.stringify(["step@2", runId, toolCallId, stepName]));
 
-/** Deterministic batch identity of one Durable Step commit (same string as its record id). */
+/**
+ * Deterministic batch identity of one Durable Step commit (same string as its record id).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toolStepSettledBatchId = (
   runId: RunId,
   toolCallId: ToolCallId,
   stepName: string,
 ): BatchId => makeBatchId(toolStepSettledRecordId(runId, toolCallId, stepName));
 
-/** Deterministic batch identity of one Turn's canonical approval-request append (plan §2.6). */
+/**
+ * Deterministic batch identity of one Turn's canonical approval-request append (plan §2.6).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const turnApprovalsBatchId = (runId: RunId, turn: number): BatchId =>
   makeBatchId(`turn-approvals:${runId}:${turn}`);
 
-/** Deterministic canonical record identity of one Tool Call's `ToolApprovalRequested` record. */
+/**
+ * Deterministic canonical record identity of one Tool Call's `ToolApprovalRequested` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toolApprovalRequestRecordId = (
   runId: RunId,
   turn: number,
   toolCallId: ToolCallId,
 ): RecordId => makeRecordId(`approval-request:${runId}:${turn}:${toolCallId}`);
 
-/** Deterministic batch identity of one Tool Call's canonical approval-decision append. */
+/**
+ * Deterministic batch identity of one Tool Call's canonical approval-decision append.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const approvalDecisionBatchId = (
   submissionId: SubmissionId,
   toolCallId: ToolCallId,
 ): BatchId => makeBatchId(`approval-decision:${submissionId}:${toolCallId}`);
 
-/** Deterministic canonical record identity of one Tool Call's `ToolApprovalDecided` record. */
+/**
+ * Deterministic canonical record identity of one Tool Call's `ToolApprovalDecided` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const toolApprovalDecisionRecordId = (
   runId: RunId,
   turn: number,
@@ -249,11 +412,19 @@ export const toolApprovalDecisionRecordId = (
 
 /**
  * One conservative incomplete-usage marker per Run, regardless of how often recovery occurs.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const modelResponseInterruptedRecordId = (runId: RunId): RecordId =>
   makeRecordId(`interrupted:${runId}`);
 
-/** Deterministic batch identity of one `ModelResponseInterrupted` append (same string). */
+/**
+ * Deterministic batch identity of one `ModelResponseInterrupted` append (same string).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const modelResponseInterruptedBatchId = (runId: RunId): BatchId =>
   makeBatchId(`interrupted:${runId}`);
 
@@ -264,11 +435,19 @@ const decodeIdempotencyKey = Schema.decodeSync(IdempotencyKey);
  * Deterministic canonical record identity of one parent Tool Call's `SubagentRequested` record.
  * The one-record batch reuses the same string, so batch
  * idempotency plus the parent epoch fence make the request append exactly-once-canonical.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const subagentRequestedRecordId = (runId: RunId, toolCallId: ToolCallId): RecordId =>
   makeRecordId(`subagent-requested:${runId}:${toolCallId}`);
 
-/** Deterministic batch identity of one `SubagentRequested` append (same string). */
+/**
+ * Deterministic batch identity of one `SubagentRequested` append (same string).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subagentRequestedBatchId = (runId: RunId, toolCallId: ToolCallId): BatchId =>
   makeBatchId(`subagent-requested:${runId}:${toolCallId}`);
 
@@ -276,11 +455,19 @@ export const subagentRequestedBatchId = (runId: RunId, toolCallId: ToolCallId): 
  * Deterministic canonical record identity of one parent Tool Call's `SubagentStarted` record.
  * Recovery's start-link repair appends the EXACT same record
  * under this identity, so a raced repair replays instead of duplicating (SUB-016/SUB-017).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const subagentStartedRecordId = (runId: RunId, toolCallId: ToolCallId): RecordId =>
   makeRecordId(`subagent-started:${runId}:${toolCallId}`);
 
-/** Deterministic batch identity of one `SubagentStarted` append (same string). */
+/**
+ * Deterministic batch identity of one `SubagentStarted` append (same string).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subagentStartedBatchId = (runId: RunId, toolCallId: ToolCallId): BatchId =>
   makeBatchId(`subagent-started:${runId}:${toolCallId}`);
 
@@ -288,11 +475,19 @@ export const subagentStartedBatchId = (runId: RunId, toolCallId: ToolCallId): Ba
  * Deterministic batch identity of one parent Tool Call's atomic settlement join: the
  * `SubagentJoined` record plus the parent's `ToolCallSettled` record (its existing
  * `tool-settled:{runId}:{turn}:{toolCallId}` identity) commit as ONE canonical batch (SUB-019).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const subagentJoinBatchId = (runId: RunId, toolCallId: ToolCallId): BatchId =>
   makeBatchId(`subagent-join:${runId}:${toolCallId}`);
 
-/** Deterministic canonical record identity of one parent Tool Call's `SubagentJoined` record. */
+/**
+ * Deterministic canonical record identity of one parent Tool Call's `SubagentJoined` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subagentJoinedRecordId = (runId: RunId, toolCallId: ToolCallId): RecordId =>
   makeRecordId(`subagent-joined:${runId}:${toolCallId}`);
 
@@ -300,11 +495,19 @@ export const subagentJoinedRecordId = (runId: RunId, toolCallId: ToolCallId): Re
  * Deterministic identity of one child Thread's `SubagentLineageRecorded` record.
  * Its own single-record batch reuses the same string so the generic
  * `thread-created:{cid}` batch identity is never contradicted.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const subagentLineageRecordId = (threadId: ThreadId): RecordId =>
   makeRecordId(`subagent-lineage:${threadId}`);
 
-/** Deterministic batch identity of one `SubagentLineageRecorded` append (same string). */
+/**
+ * Deterministic batch identity of one `SubagentLineageRecorded` append (same string).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const subagentLineageBatchId = (threadId: ThreadId): BatchId =>
   makeBatchId(`subagent-lineage:${threadId}`);
 
@@ -312,6 +515,9 @@ export const subagentLineageBatchId = (threadId: ThreadId): BatchId =>
  * Deterministic intended child Thread identity: the
  * parent Submission and Tool Call pair addresses exactly one child Thread, so a replayed
  * establishment converges on the one existing child (SUB-016).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const childThreadIdFor = (
   parentSubmissionId: SubmissionId,
@@ -323,6 +529,9 @@ export const childThreadIdFor = (
  * the parent Run and Tool Call identity, so duplicate admission attempts resolve through the
  * ledger's idempotency contract to one child Receipt (SUB-016, SUB-031). The ledger key is
  * bounded (256); coordinator-minted Run and Tool Call identities stay far below that bound.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const childIdempotencyKeyFor = (
   parentRunId: RunId,
@@ -402,7 +611,12 @@ const toolMessageFromSettled = (
  *   snapshot. Its `messages` separately preserve the successful Run's exact source contribution
  *   for recall. It has no resumable Turn state.
  */
-/** Cumulative committed usage of the projected Run (RUN-023 resume re-seed). */
+/**
+ * Cumulative committed usage of the projected Run (RUN-023 resume re-seed).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface RunJournalUsage {
   readonly modelCalls: number;
   /** Known accounting gaps retained across Attempts without changing numeric usage totals. */
@@ -419,6 +633,13 @@ export interface RunJournalUsage {
   readonly summarizedModelUsage?: RunUsageSummary | undefined;
 }
 
+/**
+ * Reconstructed model context and execution accounting for one Run, including committed Turns and
+ * protected original input.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface RunJournalProjection {
   readonly toolSelection?: Selection | undefined;
   readonly policyUsage: RunPolicyUsage;
@@ -459,8 +680,13 @@ const initialUsage = (modelUsage: Array<ModelCallUsage>) => ({
   modelUsage,
 });
 
-/** Internal first-Run projection after exact input/checkpoint-absence verification. The
- * new UserInputRecorded contributes no model message; the engine evaluates it later. */
+/**
+ * Internal first-Run projection after exact input/checkpoint-absence verification. The
+ * new UserInputRecorded contributes no model message; the engine evaluates it later.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const initialRunJournal = (history: Prompt.Prompt): RunJournalProjection => ({
   policyUsage: RunPolicyUsage.make(initialPolicyUsage()),
   usage: initialUsage([]),
@@ -630,7 +856,11 @@ export interface JournalBoundary {
   readonly terminalPriorRun?: true | undefined;
 }
 
-/** Resolved immutable context. Persistence keeps a canonical range and digest, not this Prompt. */
+/**
+ * Resolved immutable context. Persistence keeps a canonical range and digest, not this Prompt.
+ *
+ * @internal
+ */
 export interface RunJournalContext {
   readonly runId: RunId;
   readonly prompt: Prompt.Prompt;
@@ -1638,7 +1868,12 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
   };
 });
 
-/** Pure projection of one Run's durable recovery state from canonical records. */
+/**
+ * Pure projection of one Run's durable recovery state from canonical records.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const projectRunJournal = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
   runId: RunId,
@@ -1649,6 +1884,9 @@ export const projectRunJournal = (
  * Pure valid-prompt projection from canonical records: `UserInputRecorded` +
  * `ModelResponseRecorded` + complete `ToolCallSettled` batches → the deterministic model-visible
  * Prompt (plan §Coordinator flow step 3).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const promptFromCanonicalRecords = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
@@ -1657,7 +1895,12 @@ export const promptFromCanonicalRecords = (
     Effect.map((projection) => projection.prompt),
   );
 
-/** Everything one committed Turn contributes to its canonical batch. */
+/**
+ * Everything one committed Turn contributes to its canonical batch.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface TurnCommitInput {
   readonly toolResultMaxBytes?: number | undefined;
   readonly toolSelectionMaxBytes?: number | undefined;
@@ -1872,6 +2115,9 @@ const runCompletionRecord = (input: TurnCommitInput) => {
  * No-tool Turns and eligible readonly Turns use this shape; a terminal `RunCompleted` marker
  * joins the response in the same atomic batch. Other application Turns split into
  * `turnResponseBatch` + `turnResultsBatch` before execution.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const turnCanonicalBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
@@ -1897,6 +2143,9 @@ export const turnCanonicalBatch = Effect.fnUntraced(function* (
  * An unsettled application declaration is conservative uncertainty after ownership
  * loss; approvals and the dispatch fence remain separate execution requirements. Provider
  * results stay in assistant content. Application outcomes belong to the results commit.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const turnResponseBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
@@ -1916,6 +2165,9 @@ export const turnResponseBatch = Effect.fnUntraced(function* (
  * declaration order under batch identity `turn-results:{runId}:{turn}` — the batch becomes
  * model-visible atomically. A completion after already committed Tool results gets its own
  * terminal batch; it never rewrites or repeats the earlier Tool outcomes.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const turnResultsBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,

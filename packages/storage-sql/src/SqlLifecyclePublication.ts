@@ -1,3 +1,8 @@
+/**
+ * Retention and acknowledgement of lifecycle publications inside SQL source transactions.
+ *
+ * @since 0.1.0
+ */
 import { digestJson } from "@yielded/agent/digest";
 import type { ThreadId } from "@yielded/agent/identifiers";
 import {
@@ -25,21 +30,43 @@ import { SqlStorageProgress } from "./SqlStorageProgress.ts";
 const codec = Schema.fromJsonString(LifecyclePublication);
 const maxPendingPayloadBytes = 4 * 1024 * 1024;
 
+/**
+ * Lifecycle fact awaiting an assigned ordinal and, optionally, a generated identity.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SqlLifecyclePublicationInput = Omit<LifecyclePublication, "ordinal" | "id"> & {
   readonly id?: string;
 };
 
+/**
+ * Retains lifecycle facts atomically inside the caller's source transaction.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SqlLifecycleRetainMany = (
   publications: ReadonlyArray<SqlLifecyclePublicationInput>,
 ) => Effect.Effect<void, LifecyclePublicationError>;
 
-/** Retain source facts in the source owner's current transaction, without invoking its hooks. */
+/**
+ * Retain source facts in the source owner's current transaction, without invoking its hooks.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class SqlLifecycleRetainer extends Context.Service<
   SqlLifecycleRetainer,
   { readonly retainMany: SqlLifecycleRetainMany }
 >()("@effect-agent/storage-sql/SqlLifecycleRetainer") {}
 
-/** Adapter-owned journal intent materialization, independent of publication dispatch. */
+/**
+ * Adapter-owned journal intent materialization, independent of publication dispatch.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlLifecycleSource {
   /** Retain the earlier canonical prefix before assigning a noncanonical fact's ordinal. */
   readonly beforeRetain: (
@@ -49,6 +76,12 @@ export interface SqlLifecycleSource {
   readonly beforePending: Effect.Effect<void, LifecyclePublicationError, SqlLifecycleRetainer>;
 }
 
+/**
+ * Optional adapter hooks that materialize canonical intent before publication selection.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const SqlLifecycleSource = Context.Reference<SqlLifecycleSource | undefined>(
   "@effect-agent/storage-sql/SqlLifecycleSource",
   { defaultValue: () => undefined },
@@ -110,6 +143,9 @@ const failure = (cause: unknown) =>
  * future and parked heads. Other SQL dialects keep their database's ordering and reads.
  * Acknowledgement enrolls maintenance unless a complete summary proves no timed head remains.
  * Producer retention continues to enroll newly committed source facts.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
   namespace?: string,

@@ -21,6 +21,12 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
+/**
+ * Current PostgreSQL adapter layout version; record encoding is versioned independently.
+ *
+ * @category constants
+ * @since 0.1.0
+ */
 export const CurrentPostgresStorageVersion = 30;
 
 /** The released layout 25 already has observe_settlement; only these indexes are new. */
@@ -1067,12 +1073,17 @@ const decode = <A, I>(schema: Schema.Codec<A, I>, value: unknown, table: string)
     ),
   );
 
+/** @internal */
 export interface PostgresStorageHeader {
   readonly layoutVersion: number;
   readonly recordFormat: string;
 }
 
-/** No DDL or transaction acquisition. The caller owns the snapshot/writer lock across subsequent work. */
+/**
+ * No DDL or transaction acquisition. The caller owns the snapshot/writer lock across subsequent work.
+ *
+ * @internal
+ */
 export const inspectPostgresStorage = Effect.fnUntraced(function* (
   namespace: string,
   allowReleasedUpgrade = false,
@@ -1433,7 +1444,11 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
   return header;
 });
 
-/** Export opening never creates a schema, runs layout steps, or initializes a journal. */
+/**
+ * Export opening never creates a schema, runs layout steps, or initializes a journal.
+ *
+ * @internal
+ */
 export const readPostgresStorageHeader = Effect.fnUntraced(function* (namespace: string) {
   const header = yield* inspectPostgresStorage(namespace);
 
@@ -1443,7 +1458,11 @@ export const readPostgresStorageHeader = Effect.fnUntraced(function* (namespace:
   return header;
 });
 
-/** The caller owns one writer transaction encompassing inspection, DDL, backfill, and both headers. */
+/**
+ * The caller owns one writer transaction encompassing inspection, DDL, backfill, and both headers.
+ *
+ * @internal
+ */
 export const applyPostgresLayout = Effect.fnUntraced(function* (
   namespace: string,
   header: PostgresStorageHeader | undefined,

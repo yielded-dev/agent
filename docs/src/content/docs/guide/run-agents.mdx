@@ -35,7 +35,8 @@ Schema-validated completion before presenting a final answer.
 A slow consumer backpressures the bounded event queue. Interrupting an ephemeral stream closes
 its execution Scope and interrupts the Run. To observe the same local Run more than once, use
 `AgentRuntime.start` inside `Effect.scoped`; its handle exposes `await`, `observe`, `events`, and
-`usageReport`. Slow detached observers can fail with a lag error without blocking execution.
+`usageReport`. Detached observers replay the Run's bounded event history without blocking
+execution; the caller's Scope owns both execution and replay.
 
 <a id="turn-boundaries"></a>
 

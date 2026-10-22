@@ -1,3 +1,8 @@
+/**
+ * Persist oversized tool results in a host-supplied Cloudflare R2 bucket.
+ *
+ * @since 0.1.0
+ */
 import type { ThreadId } from "@yielded/agent/identifiers";
 import {
   MAX_STORED_TOOL_RESULT_BYTES,
@@ -10,7 +15,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-/** Native R2 surface used here, independent of Worker/DOM Headers type differences. */
+/**
+ * Native R2 surface used here, independent of Worker/DOM Headers type differences.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface R2ToolResultBucket {
   readonly put: (
     key: string,
@@ -49,6 +59,9 @@ const missing = () =>
  * Private, immutable output objects scoped to one host-authorized Thread. The bucket
  * owner controls retention and cleanup of `tool-results/`, including orphan writes.
  * Keep the bucket private; an ID alone grants no authority to another Thread.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = (bucket: R2ToolResultBucket, threadId: ThreadId): Layer.Layer<never> => {
   const key = (id: string) => `tool-results/${encodeURIComponent(threadId)}/${id}.json`;

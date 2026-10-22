@@ -1,6 +1,9 @@
 import type { RecordEnvelope, RecordId } from "../Records.ts";
 
-/** Exact references outside one complete canonical batch. */
+/**
+ * Exact references outside one complete canonical batch.
+ * @internal
+ */
 export const transferRecordDependencies = (
   records: ReadonlyArray<RecordEnvelope>,
 ): ReadonlyArray<RecordId> => {

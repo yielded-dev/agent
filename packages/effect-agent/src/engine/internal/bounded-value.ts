@@ -145,6 +145,7 @@ const isCanonicalArrayIndex = (key: string): boolean => {
  * construct such values; application and provider code must preserve native prototypes.
  * Object and property overheads deliberately make the estimate larger than the visible primitive
  * payload for ordinary response values.
+ * @internal
  */
 export const boundedValueFootprint = (
   root: unknown,

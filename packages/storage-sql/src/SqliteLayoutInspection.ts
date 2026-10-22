@@ -1,3 +1,8 @@
+/**
+ * Inspection of adapter-owned SQLite layouts before storage operations begin.
+ *
+ * @since 0.1.0
+ */
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -18,11 +23,23 @@ const Objects = Schema.Array(
   }),
 );
 
+/**
+ * Validated layout version and canonical record format declared by a SQLite database.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqliteLayoutHeader {
   readonly layoutVersion: number;
   readonly recordFormat: string;
 }
 
+/**
+ * Expected SQLite objects and adapter diagnostics used during layout inspection.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqliteLayoutInspectionOptions<C, K, S> {
   readonly version: number;
   readonly statements: ReadonlyArray<string>;
@@ -43,13 +60,21 @@ const normalize = (statement: string) =>
         : "",
   );
 
-/** Compare declared SQLite DDL without weakening constraints, expressions or predicates. */
+/**
+ * Compare declared SQLite DDL without weakening constraints, expressions or predicates.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const sameSqliteLayoutStatement = (left: string, right: string): boolean =>
   normalize(left) === normalize(right);
 
 /**
  * Inspect an adapter's current SQLite layout. The adapter owns version discovery,
  * empty-store detection, the surrounding snapshot/transaction, and every layout statement.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeSqliteLayoutInspection = <C, K, S>(
   options: SqliteLayoutInspectionOptions<C, K, S>,

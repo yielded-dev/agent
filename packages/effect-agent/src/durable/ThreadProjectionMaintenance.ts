@@ -1,3 +1,10 @@
+/**
+ * Optional host hooks for disposable projections of committed Thread history. Each invocation
+ * performs bounded work; the host owns scheduling and wakeups.
+ *
+ * @since 0.1.0
+ */
+
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -7,7 +14,12 @@ import * as Schema from "effect/Schema";
 
 import type { AppendResult, AppendRequest } from "./ThreadStore.ts";
 
-/** A derived projection failed; the canonical source remains authoritative. */
+/**
+ * A derived projection failed; the canonical source remains authoritative.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ThreadProjectionError extends Schema.TaggedError<ThreadProjectionError>()(
   "ThreadProjectionError",
   {
@@ -25,6 +37,9 @@ export class ThreadProjectionError extends Schema.TaggedError<ThreadProjectionEr
  *
  * No method owns a scheduler. The platform owns wakeups, durable scheduling metadata and
  * source-producer fencing. Per-call resources belong to Scope; interruption remains interruption.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface ThreadProjectionMaintenanceService {
   /**
@@ -49,6 +64,13 @@ export interface ThreadProjectionMaintenanceService {
   readonly pendingDeadline: Effect.Effect<Option.Option<number>, ThreadProjectionError>;
 }
 
+/**
+ * Optional host projection hooks for committed ranges and bounded backfill; the default layer
+ * performs no maintenance.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadProjectionMaintenance extends Context.Service<
   ThreadProjectionMaintenance,
   ThreadProjectionMaintenanceService
@@ -60,7 +82,12 @@ export class ThreadProjectionMaintenance extends Context.Service<
   });
 }
 
-/** Run at most one due backfill batch, preserving typed failures, defects and interruption. */
+/**
+ * Run at most one due backfill batch, preserving typed failures, defects and interruption.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const drainDue = Effect.gen(function* () {
   const projection = yield* ThreadProjectionMaintenance;
   const deadline = yield* projection.pendingDeadline;

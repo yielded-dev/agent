@@ -1,3 +1,10 @@
+/**
+ * Host authorization, funding policy, and capacity bounds for background worker operations. Worker
+ * references identify retained work and do not grant access.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -23,6 +30,9 @@ import type { Principal, SubmissionSnapshot } from "./SubmissionLedger.ts";
  * available only during that start's preparation and synchronous admission; it is never
  * persisted or transported. Hooks may reuse their admission decision, but must retain
  * current access checks at commit boundaries. A retry or changed tail gets no old grant.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface WorkerStartAdmission {
   readonly sourceThreadId: ThreadId;
@@ -35,7 +45,12 @@ export interface WorkerStartAdmission {
   readonly tailSequence: CanonicalSequence;
 }
 
-/** Host-verified source input; absence never means the latest input in the Thread. */
+/**
+ * Host-verified source input; absence never means the latest input in the Thread.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface WorkerPolicySource {
   readonly threadId: ThreadId;
   readonly definition: Agent.AnyDefinition;
@@ -43,7 +58,12 @@ export interface WorkerPolicySource {
   readonly submission?: SubmissionSnapshot;
 }
 
-/** Initial input is validated again at destination admission, including idempotent replay. */
+/**
+ * Initial input is validated again at destination admission, including idempotent replay.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerPolicyTarget = {
   readonly definition: Agent.AnyDefinition;
   readonly definitions: DefinitionDigests;
@@ -72,6 +92,9 @@ export type WorkerPolicyTarget = {
  * RetainedWorker may affirm only origin.policy, never replace a continuing worker's allowance.
  * Return WorkerError(unavailable) for temporarily unavailable authority so delivery can retry.
  * Implementations are acquired through Effect Layers; capture their dependencies in Layer R.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const WorkerPolicyResolver = Context.Reference<{
   readonly resolveSource: (
@@ -89,11 +112,22 @@ export const WorkerPolicyResolver = Context.Reference<{
 
 const Positive = Schema.Int.check(Schema.isGreaterThan(0));
 
-/** A host-authorized ceiling on active background workers, not retained workers or Run usage. */
+/**
+ * A host-authorized ceiling on active background workers, not retained workers or Run usage.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerConcurrencyLimit = Schema.Struct({
   maxActiveWorkersPerSource: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 
+/**
+ * Decoded value of {@link WorkerConcurrencyLimit}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerConcurrencyLimit = typeof WorkerConcurrencyLimit.Type;
 
 /**
@@ -106,6 +140,9 @@ export type WorkerConcurrencyLimit = typeof WorkerConcurrencyLimit.Type;
  * One worker occupies a slot while any of its inputs remain unacknowledged. Steering an active
  * worker does not acquire another slot. Decreases (including zero) do not cancel incumbents;
  * an idle worker needs a slot again. Idempotent retained reservations do not reacquire slots.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const WorkerConcurrencyResolver = Context.Reference<{
   readonly resolve: (request: {
@@ -119,7 +156,12 @@ export const WorkerConcurrencyResolver = Context.Reference<{
   defaultValue: () => ({ resolve: () => Effect.succeed(Option.none()) }),
 });
 
-/** Host ceilings apply across all declarations owned by one source Thread. */
+/**
+ * Host ceilings apply across all declarations owned by one source Thread.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkerHostLimits = Schema.Struct({
   /** Active background workers across declarations; omission retains source Tool concurrency. */
   maxActiveWorkersPerSource: Schema.optionalKey(Positive.check(Schema.isLessThanOrEqualTo(100))),
@@ -134,8 +176,20 @@ export const WorkerHostLimits = Schema.Struct({
   ),
 });
 
+/**
+ * Decoded value of {@link WorkerHostLimits}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkerHostLimits = typeof WorkerHostLimits.Type;
 
+/**
+ * Host worker ceilings; defaults allow eight pending inputs per worker and a one-day lifetime.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const WorkerHostConfig = Context.Reference<WorkerHostLimits>(
   "@effect-agent/thread/WorkerHostConfig",
   {
@@ -151,6 +205,9 @@ export const WorkerHostConfig = Context.Reference<WorkerHostLimits>(
  * Principal is host-owned admission identity. Context access authenticates source metadata;
  * read, send and control remain separate grants. WorkerRefs and caller-supplied Thread
  * identifiers alone never confer any of them.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface WorkerHostAuthorizationRequest {
   readonly admission?: WorkerStartAdmission;
@@ -166,6 +223,13 @@ export interface WorkerHostAuthorizationRequest {
   readonly continuationOf?: WorkerContinuation;
 }
 
+/**
+ * Authenticates and authorizes each worker operation against its exact source Thread; the default
+ * denies access.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const WorkerHostAuthorizer = Context.Reference<{
   readonly authorize: (
     request: WorkerHostAuthorizationRequest,
@@ -184,6 +248,9 @@ export const WorkerHostAuthorizer = Context.Reference<{
  * Deployment-owned permission to fund a root's background worker independently. The decision
  * covers the exact immutable origin and is checked again before each input admission. It never
  * changes delegation depth or Tool authority. Omission denies independent funding.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const WorkerBudgetAuthorizer = Context.Reference<{
   readonly authorize: (request: {

@@ -1,3 +1,10 @@
+/**
+ * Scoped in-memory history and attached Subagent support for conversations that need no recovery
+ * after process loss.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -22,10 +29,18 @@ import { ThreadHistory, layer as historyLayer } from "./engine/ThreadHistory.ts"
  * IDs need no Layer; enclosing ID and context-preparation overrides are preserved.
  * For storage-backed history, provide PersistentHistory.layer and a shared
  * SubagentReservationsMemoryLive instead. Durable hosts own their own assembly.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = Layer.merge(historyLayer, SubagentReservationsMemoryLive);
 
-/** Disposable lifetime requires an in-memory store and its incremental history adapter. */
+/**
+ * Disposable lifetime requires an in-memory store and its incremental history adapter.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class InMemoryScopeError extends Schema.TaggedError<InMemoryScopeError>()(
   "InMemoryScopeError",
   { message: Schema.String },
@@ -43,6 +58,9 @@ export class InMemoryScopeError extends Schema.TaggedError<InMemoryScopeError>()
  * This wrapper is for ordinary Runs; durable hosts retain their own journal history.
  * Construct store-capturing hooks inside the workflow. The workflow's child fibers finish
  * cleanup before history is released. Default application retention remains unchanged.
+ *
+ * @category resource management
+ * @since 0.1.0
  */
 export const scoped = <A, E, R>(
   effect: Effect.Effect<A, E, R>,

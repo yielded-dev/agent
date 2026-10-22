@@ -1,3 +1,10 @@
+/**
+ * SQLite-backed memory reader, writer, and atomic batch writer with versioned rows, capacity
+ * bounds, and idempotent operation receipts.
+ *
+ * @since 0.1.0
+ */
+
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -23,7 +30,17 @@ import {
 } from "../core/MemoryStore.ts";
 import { SqlStorageOwner } from "./SqlStorageOwner.ts";
 
-export { SqlStorageOwner } from "./SqlStorageOwner.ts";
+export {
+  /**
+   * An exclusive database owner's transaction gate. All cached services over that database
+   * must share this identity, and every failed transaction must run its invalidators before
+   * releasing readers. Hosts with independent database writers must leave this unset.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  SqlStorageOwner,
+} from "./SqlStorageOwner.ts";
 
 const STORAGE_VERSION = 2 as const;
 const METADATA_COMPONENT = "memory";
@@ -48,7 +65,12 @@ let equivalentContent: ReturnType<typeof makeEquivalentContent> | undefined;
 const makeEquivalentScopes = () => Schema.toEquivalence(MemoryWrite.Wire.members[0].fields.scopes);
 let equivalentScopes: ReturnType<typeof makeEquivalentScopes> | undefined;
 
-/** Ordered commands committed atomically by the SQL memory adapter. */
+/**
+ * Ordered commands committed atomically by the SQL memory adapter.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SqlMemoryWriteBatch = Schema.Array(MemoryWrite.Wire).check(Schema.isMaxLength(128));
 
 /**
@@ -56,6 +78,9 @@ export const SqlMemoryWriteBatch = Schema.Array(MemoryWrite.Wire).check(Schema.i
  * Commands see earlier staged revisions; any refusal rolls back the entire batch. Storage
  * limits apply to every intermediate transition. Empty batches succeed without mutation.
  * Supplied by the memory store Layers alongside MemoryWriter's single-command API.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SqlMemoryBatchWriter extends Context.Service<
   SqlMemoryBatchWriter,
@@ -73,6 +98,9 @@ export class SqlMemoryBatchWriter extends Context.Service<
  * Optional reserves (default zero) withhold capacity from Put, within the hard totals.
  * They require exclusive upgraded writer ownership: older writers count toward usage
  * but do not honor reserves. Limits are captured when the writer Layer is built.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const SqlMemoryLimits = Context.Reference<{
   readonly maxRowBytes: number;
@@ -270,6 +298,13 @@ class StoredMemoryResult extends Schema.Class<StoredMemoryResult>(
 
 const StoredVersionHeader = Schema.Struct({ version: Schema.Int });
 
+/**
+ * Memory storage validation or injected mutation failure during SQLite-backed memory
+ * initialization.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SqliteMemoryInitializationError = MemoryStorageError | MemoryMutationFailure;
 
 const storageError = (
@@ -976,21 +1011,36 @@ const makeMemoryServices = Effect.fnUntraced(function* () {
   );
 });
 
-/** SQLite memory ports with the mutation failpoint kept injectable for recovery tests. */
+/**
+ * SQLite memory ports with the mutation failpoint kept injectable for recovery tests.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const memoryStoreLayerWithFailpoints: Layer.Layer<
   MemoryReader | MemoryWriter | SqlMemoryBatchWriter,
   SqliteMemoryInitializationError,
   SqlClientService.SqlClient | MemoryMutationFailpoint
 > = Layer.effectContext(makeMemoryServices());
 
-/** SQLite memory reader, single writer and batch writer with the production no-op failpoint. */
+/**
+ * SQLite memory reader, single writer and batch writer with the production no-op failpoint.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const memoryStoreLayer: Layer.Layer<
   MemoryReader | MemoryWriter | SqlMemoryBatchWriter,
   SqliteMemoryInitializationError,
   SqlClientService.SqlClient
 > = memoryStoreLayerWithFailpoints.pipe(Layer.provide(MemoryMutationFailpoint.layer));
 
-/** Reads an existing memory schema without writes, transactions, or mutation failpoints. */
+/**
+ * Reads an existing memory schema without writes, transactions, or mutation failpoints.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const memoryReaderLayer: Layer.Layer<
   MemoryReader,
   MemoryStorageError,

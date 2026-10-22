@@ -1,3 +1,10 @@
+/**
+ * Run bounded JavaScript through an isolated executor with an explicit allowlist of native Tools.
+ * The engine broker retains authorization and accounting for each inner invocation.
+ *
+ * @since 0.1.0
+ */
+
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Cause from "effect/Cause";
@@ -12,6 +19,7 @@ import type * as Scope from "effect/Scope";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { AdditionalToolCatalog, IncludesCatalogDocumentation } from "../core/ToolExposure.ts";
+import { ToolExecutionClass as ToolExecutionClassAnnotation } from "../engine/DurableStep.ts";
 import {
   type ToolBrokerConfigurationError,
   type ToolBrokerUnavailableError,
@@ -35,17 +43,6 @@ import {
 } from "../sandbox/CodeExecutor.ts";
 import { NetworkDisabled } from "../sandbox/Sandbox.ts";
 
-/**
- * Code Mode (D-035, ADR-0017; capability spec §9.1): one native Effect AI
- * Tool whose input is bounded JavaScript source, executed in one isolated
- * `CodeExecutor` pass that may call an explicit construction-time allowlist
- * of existing Tools through typed sandbox globals and the engine-owned
- * `ToolBroker`. The builder follows the Delegation pattern: an explicit
- * record of selected Tools plus namespace mapping fixed at construction,
- * returning an ordinary Tool and a handler Layer, with no ambient registry
- * (CAP-014). Deployment class `E` only.
- */
-
 const maxFailureTextLength = 4 * 1024;
 const BoundedFailureText = Schema.String.check(Schema.isMaxLength(maxFailureTextLength));
 const BoundedErrorTag = Schema.NonEmptyString.check(Schema.isMaxLength(256));
@@ -53,12 +50,23 @@ const BoundedLogLine = Schema.String.check(Schema.isMaxLength(16 * 1024));
 const BoundedLogs = Schema.Array(BoundedLogLine).check(Schema.isMaxLength(4_096));
 const BoundedCode = Schema.NonEmptyString.check(Schema.isMaxLength(512 * 1024));
 
-/** A pass-local report, available to the host even when the caller interrupts execution. */
+/**
+ * A pass-local report, available to the host even when the caller interrupts execution.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CodeModePassReport = Schema.Struct({
   status: Schema.Literals(["completed", "failed", "interrupted", "defect"]),
   calls: Schema.Array(ProgrammaticCallRecord),
 });
 
+/**
+ * Decoded value of {@link CodeModePassReport}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CodeModePassReport = typeof CodeModePassReport.Type;
 
 const encodedJsonByteLength = (value: unknown): number | undefined => {
@@ -71,7 +79,12 @@ const encodedJsonByteLength = (value: unknown): number | undefined => {
   }
 };
 
-/** Model-decoded Code Mode parameters: one async function expression. */
+/**
+ * Model-decoded Code Mode parameters: one async function expression.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CodeModeParameters = Schema.Struct({
   code: BoundedCode,
 });
@@ -79,6 +92,9 @@ export const CodeModeParameters = Schema.Struct({
 /**
  * The bounded model-visible success: the program's JSON result plus captured
  * logs, both already passed through the aggregate egress budget (CAP-016).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export class CodeModeSuccess extends Schema.Class<CodeModeSuccess>(
   "@effect-agent/capabilities/CodeModeSuccess",
@@ -93,6 +109,9 @@ export class CodeModeSuccess extends Schema.Class<CodeModeSuccess>(
  * without a blind retry; it carries the same bounded log capture as success
  * plus the bounded thrown value where one exists, all inside the same
  * aggregate egress budget (CAP-016).
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class CodeModeFailure extends Schema.TaggedError<CodeModeFailure>()("CodeModeFailure", {
   errorTag: BoundedErrorTag,
@@ -104,7 +123,12 @@ export class CodeModeFailure extends Schema.TaggedError<CodeModeFailure>()("Code
   omittedCalls: Schema.optionalKey(Schema.Natural),
 }) {}
 
-/** A selective documentation request is invalid or cannot fit its declared byte budget. */
+/**
+ * A selective documentation request is invalid or cannot fit its declared byte budget.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CodeModeDescriptionError extends Schema.TaggedError<CodeModeDescriptionError>()(
   "CodeModeDescriptionError",
   {
@@ -129,19 +153,32 @@ const DescriptionByteLimit = Schema.Int.check(
   Schema.isBetween({ minimum: 1, maximum: 256 * 1024 }),
 );
 
-/** The namespace-record shape accepted by `CodeMode.make`. */
+/**
+ * The namespace-record shape accepted by `CodeMode.make`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CodeModeNamespaces = Record<string, Record<string, Tool.Any>>;
 
 /**
  * Union of every Tool selected across all namespaces, computed distributively
  * per namespace: indexing the namespace union with the INTERSECTION of method
  * keys would erase every Tool once two namespaces have disjoint methods.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type CodeModeSelectedTool<Namespaces extends CodeModeNamespaces> = {
   [Namespace in keyof Namespaces]: Namespaces[Namespace][keyof Namespaces[Namespace]];
 }[keyof Namespaces];
 
-/** The selected Tools re-keyed by their own Tool names. */
+/**
+ * The selected Tools re-keyed by their own Tool names.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type CodeModeSelectedRecord<Namespaces extends CodeModeNamespaces> = {
   readonly [T in CodeModeSelectedTool<Namespaces> as T["name"]]: T;
 };
@@ -151,6 +188,9 @@ export type CodeModeSelectedRecord<Namespaces extends CodeModeNamespaces> = {
  * per-call dependency is the engine-provided `ToolBroker`; the `CodeExecutor`
  * and every selected handler and redaction service are construction requirements of the handler
  * Layer instead, so they stay visible in the composed `R`.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type CodeModeTool<Name extends string> = Tool.Tool<
   Name,
@@ -163,12 +203,22 @@ export type CodeModeTool<Name extends string> = Tool.Tool<
   ToolBroker
 >;
 
-/** Singleton Tool record provided by one Code Mode handler Layer. */
+/**
+ * Singleton Tool record provided by one Code Mode handler Layer.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type CodeModeTools<Name extends string> = {
   readonly [Key in Name]: CodeModeTool<Name>;
 };
 
-/** Construction requirements of the Code Mode handler Layer. */
+/**
+ * Construction requirements of the Code Mode handler Layer.
+ *
+ * @category utility types
+ * @since 0.1.0
+ */
 export type CodeModeLayerRequirements<
   Namespaces extends CodeModeNamespaces,
   RedactionRequirements = never,
@@ -178,6 +228,13 @@ export type CodeModeLayerRequirements<
   | Tool.HandlersFor<CodeModeSelectedRecord<Namespaces>>
   | Tool.HandlerServices<CodeModeSelectedTool<Namespaces>>;
 
+/**
+ * Construction options for a Code Mode Tool, including its explicit Tool allowlist, execution
+ * limits, and bounded model-visible output.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface CodeModeOptions<
   Namespaces extends CodeModeNamespaces,
   RedactionRequirements = never,
@@ -232,6 +289,9 @@ export interface CodeModeOptions<
  * allowlist, plus the handler Layer that runs generated programs through the
  * `CodeExecutor` port and the engine-owned broker. It owns no acquired
  * resources.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export interface CodeModeDefinition<
   Name extends string,
@@ -572,7 +632,14 @@ type EgressRedactor<Requirements = never> = NonNullable<
 // Builder
 // ---------------------------------------------------------------------------
 
-const make = <
+/**
+ * Create a Code Mode Tool and handler Layer from an explicit allowlist of native Tools.
+ * Throws when names, approval requirements, or output bounds violate the construction contract.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
+export const make = <
   const Name extends string,
   Namespaces extends CodeModeNamespaces,
   RedactionRequirements = never,
@@ -1127,10 +1194,3 @@ const brokerProtocolEnvelope: Schema.Json = {
   _tag: "CodeModeProtocolError",
   message: "The broker returned a value outside the JSON surface",
 };
-
-// The engine annotation is imported under a local alias to keep the builder
-// readable next to Effect AI's own `Tool.Readonly` annotation.
-import { ToolExecutionClass as ToolExecutionClassAnnotation } from "../engine/DurableStep.ts";
-
-/** Code Mode builder namespace (capability spec §9.1). */
-export { make };

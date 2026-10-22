@@ -1,3 +1,9 @@
+/**
+ * An in-process CodeExecutor substitute for deterministic contract checks. It executes host
+ * JavaScript and provides no security isolation.
+ *
+ * @since 0.1.0
+ */
 import {
   CodeExecutionHost,
   CodeExecutionProtocolError,
@@ -34,6 +40,9 @@ import * as Schema from "effect/Schema";
  * shadowing only, so it self-identifies as `unisolated` and is never a
  * security boundary (CAP-010, CAP-015). It exists to prove the public
  * `CodeExecutor` contract and to drive deterministic capability tests.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export const inProcessCodeExecutorImplementation = SandboxImplementation.make({
   isolation: "unisolated",
@@ -564,6 +573,9 @@ const executeInProcess: CodeExecutorExecute = Effect.fnUntraced(function* (reque
  * Layer providing the unisolated in-process `CodeExecutor` substitute. The
  * per-pass `CodeExecutionHost` stays in the caller's requirement channel, the
  * same as every real adapter.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const inProcessCodeExecutorLayer: Layer.Layer<CodeExecutor> = Layer.succeed(CodeExecutor)(
   CodeExecutor.of({ execute: executeInProcess }),

@@ -1,3 +1,8 @@
+/**
+ * Durable admission and execution ownership backed by Durable Object SQLite.
+ *
+ * @since 0.1.0
+ */
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
@@ -3924,6 +3929,9 @@ const makeServices = Effect.fnUntraced(function* () {
  * Durable Object SubmissionLedger implementation sharing the journal's private SQLite
  * database, storage-backed transactions, and scoped local owner.
  * Configuration, failpoint, SQL, and Crypto authority stay visible in the input channel.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const submissionLedgerLayer: Layer.Layer<
   SubmissionLedger | SettlementPublisher | StorageOwner,
@@ -3934,6 +3942,9 @@ export const submissionLedgerLayer: Layer.Layer<
 /**
  * A composition-root convenience Layer for the durable Submission Ledger. Point it at the
  * same `ctx.storage` as the ThreadStore so both share the same scoped storage owner.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const ledgerLayer = (
   options: DoStorageOptions,

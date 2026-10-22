@@ -1,3 +1,8 @@
+/**
+ * Validated limits and defaults for Cloudflare durable Thread runtimes.
+ *
+ * @since 0.1.0
+ */
 import { DEFAULT_MAX_STORED_VALUE_BYTES } from "@yielded/agent-storage-cloudflare/do-storage-config";
 import { DeploymentId } from "@yielded/agent/records";
 import * as Context from "effect/Context";
@@ -11,14 +16,29 @@ import * as Schema from "effect/Schema";
 
 const PositiveMillis = Schema.Int.check(Schema.isGreaterThan(0));
 
-/** Maximum supported auxiliary wave equals the native message policy's five-minute ceiling. */
+/**
+ * Maximum supported auxiliary wave equals the native message policy's five-minute ceiling.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const AuxiliaryDispatchMillis = PositiveMillis.check(Schema.isLessThanOrEqualTo(300_000));
 const NonNegativeMillis = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
-/** Recovery coverage retained after activity; independent of work-start and retry deadlines. */
+/**
+ * Recovery coverage retained after activity; independent of work-start and retry deadlines.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const DEFAULT_RECOVERY_WINDOW_MILLIS = 60_000;
 
-/** The supplied Cloudflare durable runtime configuration failed validation (DEPLOY-003). */
+/**
+ * The supplied Cloudflare durable runtime configuration failed validation (DEPLOY-003).
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class CloudflarePlatformConfigError extends Schema.TaggedError<CloudflarePlatformConfigError>()(
   "CloudflarePlatformConfigError",
   {
@@ -34,6 +54,9 @@ export class CloudflarePlatformConfigError extends Schema.TaggedError<Cloudflare
  * `AdmissionClosed` host gate: the port surface stays untouched, the refusal happens in the
  * Thread Object's submit entry point before `DurableAgentRuntime.submit` runs, and
  * nothing was admitted or written.
+ *
+ * @category errors
+ * @since 0.1.0
  */
 export class AdmissionLimitExceeded extends Schema.TaggedError<AdmissionLimitExceeded>()(
   "AdmissionLimitExceeded",
@@ -52,15 +75,28 @@ export class AdmissionLimitExceeded extends Schema.TaggedError<AdmissionLimitExc
   }
 }
 
-/** The platform's hard per-Object database cap (10 GB, developers.cloudflare.com limits). */
+/**
+ * The platform's hard per-Object database cap (10 GB, developers.cloudflare.com limits).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const CLOUDFLARE_DATABASE_CAP_BYTES = 10_000_000_000;
 
-/** Default database-size admission ceiling: a 1 GB safety margin under the platform cap. */
+/**
+ * Default database-size admission ceiling: a 1 GB safety margin under the platform cap.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const DEFAULT_MAX_DATABASE_BYTES = 9_000_000_000;
 
 /**
  * Explicit bounded admission quotas checked by the Thread Object BEFORE admission
  * (exit gate "resource limits are checked before admission").
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export class CloudflareAdmissionLimitsValue extends Schema.Class<CloudflareAdmissionLimitsValue>(
   "@effect-agent/platform-cloudflare/CloudflareAdmissionLimitsValue",
@@ -84,6 +120,9 @@ export class CloudflareAdmissionLimitsValue extends Schema.Class<CloudflareAdmis
  * Thread Object is `{producerPrefix}:{threadId}` — stable across incarnations of
  * the same deployment, distinct across deployments. The Object owns its Thread exclusively;
  * scoped local generations reject callbacks from an earlier Run owner.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export class CloudflareDurableRuntimeConfigValue extends Schema.Class<CloudflareDurableRuntimeConfigValue>(
   "@effect-agent/platform-cloudflare/CloudflareDurableRuntimeConfigValue",
@@ -119,13 +158,23 @@ export class CloudflareDurableRuntimeConfigValue extends Schema.Class<Cloudflare
   limits: CloudflareAdmissionLimitsValue,
 }) {}
 
-/** Explicit configuration authority for the assembled Cloudflare durable runtime. */
+/**
+ * Explicit configuration authority for the assembled Cloudflare durable runtime.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class CloudflareDurableRuntimeConfig extends Context.Service<
   CloudflareDurableRuntimeConfig,
   CloudflareDurableRuntimeConfigValue
 >()("@effect-agent/platform-cloudflare/CloudflareDurableRuntimeConfig") {}
 
-/** Documented production defaults applied by `ThreadObject.layer`. */
+/**
+ * Documented production defaults applied by `ThreadObject.layer`.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export const CLOUDFLARE_RUNTIME_DEFAULTS = {
   recoveryWindowMillis: DEFAULT_RECOVERY_WINDOW_MILLIS,
   alarmBackoffBase: 100,

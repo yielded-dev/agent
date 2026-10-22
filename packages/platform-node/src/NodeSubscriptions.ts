@@ -1,3 +1,8 @@
+/**
+ * Scoped Node subscription intake and recovery polling.
+ *
+ * @since 0.1.0
+ */
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { type EventSources } from "@yielded/agent/event-source";
 import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
@@ -25,7 +30,12 @@ import * as Option from "effect/Option";
 import { makeNodePreparedInputAdmission, NodeAdmission } from "./internal/prepared-admission.ts";
 import { NodeDurableHost } from "./NodeDurableHost.ts";
 
-/** Ordinary prepared admission through the Scope-owned Node host gate. */
+/**
+ * Ordinary prepared admission through the Scope-owned Node host gate.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const nodePreparedInputAdmissionLayer: Layer.Layer<
   PreparedInputAdmission,
   never,
@@ -90,6 +100,12 @@ const nodeSubscriptionDriverLayer = (
     }),
   );
 
+/**
+ * Limits for the Node subscription services and their driver.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface NodeSubscriptionsOptions {
   readonly limits?: SubscriptionLimits | undefined;
 }
@@ -97,8 +113,17 @@ export interface NodeSubscriptionsOptions {
 /**
  * One Scope-owned subscription partition in the sole process owning its SQLite database.
  * Indexed polling repairs restart and lost wake state; closing the Scope interrupts the driver.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class NodeSubscriptions {
+  /**
+   * Provide subscription intake and start recovery polling for the owned partition.
+   *
+   * @category layers
+   * @since 0.1.0
+   */
   static layer(
     options: NodeSubscriptionsOptions = {},
   ): Layer.Layer<

@@ -1,3 +1,8 @@
+/**
+ * Canonical Thread storage, export, and shared SQLite ownership for Durable Objects.
+ *
+ * @since 0.1.0
+ */
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
@@ -71,6 +76,9 @@ import { isAppendContention, withStorageSpan } from "./internal/storage-span.ts"
  * Convenience-layer construction options. `storage` is the Durable Object's own
  * `ctx.storage` handle, injected as a value (DEPLOY-010: platform bindings enter only
  * through Layers; this package never imports `cloudflare:workers`).
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export interface DoStorageOptions {
   readonly storage: DurableObjectStorage;
@@ -89,6 +97,12 @@ export interface DoStorageOptions {
   readonly failpoint?: DoStorageFailpointHandler | undefined;
 }
 
+/**
+ * Typed configuration, layout, corruption, and infrastructure failures during storage initialization.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export type DoStorageInitializationError =
   | DoStorageCompatibilityError
   | DoStorageCorruptionError
@@ -484,6 +498,9 @@ const makeServices = Effect.fnUntraced(function* () {
 /**
  * Durable Object Thread Store implementation with configuration, failpoint, SQL, and
  * Crypto authority kept visible in its input channel.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const threadStoreLayer: Layer.Layer<
   ThreadStore | ThreadReader | ThreadImport | StorageOwner,
@@ -502,6 +519,9 @@ export { initializedDoJournalLayer as journalLayer } from "./internal/do-journal
  * Validated Durable Object storage configuration Layer with the documented defaults applied.
  * Shared by the ThreadStore and SubmissionLedger convenience layers so their defaults
  * cannot drift.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const storageConfigLayer = (
   options: DoStorageOptions,
@@ -522,7 +542,12 @@ export const storageConfigLayer = (
     ),
   );
 
-/** The failpoint Layer selected by convenience options: explicit handler or the no-op default. */
+/**
+ * The failpoint Layer selected by convenience options: explicit handler or the no-op default.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const storageFailpointLayer = (
   options: DoStorageOptions,
 ): Layer.Layer<DoStorageFailpoint> =>
@@ -535,6 +560,9 @@ export const storageFailpointLayer = (
  * built over `ctx.storage`. Durable accepted work is served by the separate SubmissionLedger
  * port; point both at the SAME `ctx.storage` so both share the same scoped storage owner
  * (ADR-0011 D7's "same file" rule, transposed to one object's private database).
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = (
   options: DoStorageOptions,
@@ -557,7 +585,12 @@ export const layer = (
     ),
   ).pipe(Layer.provide(storageConfigLayer(options)));
 
-/** Read a quiesced current-layout Object without initializing its layout or ownership. */
+/**
+ * Read a quiesced current-layout Object without initializing its layout or ownership.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
   options: Pick<DoStorageOptions, "storage">,
   request: ThreadExportRequest,
@@ -603,10 +636,19 @@ export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
  * Discard the Object's derived thread and ledger state after direct SQL maintenance.
  * Quiesce port operations during the raw write and invalidation, and enroll the write with
  * the host mutation gate. Ordinary ThreadStore/SubmissionLedger writes maintain this view.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
-export const invalidate = invalidateOwnedState;
+export const invalidate: (storage: DurableObjectStorage) => Effect.Effect<void> =
+  invalidateOwnedState;
 
-/** Share the Object's transaction gate with owner-local SQL Memory compositions. */
+/**
+ * Share the Object's transaction gate with owner-local SQL Memory compositions.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const sqlOwnerLayer = Layer.effectContext(
   Effect.flatMap(SqlClientService.SqlClient, ownedState).pipe(
     Effect.map((state) =>

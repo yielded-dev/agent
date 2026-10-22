@@ -1,3 +1,10 @@
+/**
+ * Bounded private failure diagnostics with explicit correlation and redaction. Diagnostics do not
+ * reconstruct executable errors or replace model-visible outcomes.
+ *
+ * @since 0.1.0
+ */
+
 import * as EffectCause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import * as Predicate from "effect/Predicate";
@@ -13,7 +20,12 @@ const Text = Schema.String.check(Schema.isMaxLength(16 * 1024));
 const Name = Schema.String.check(Schema.isMaxLength(1_024));
 const Scalar = Schema.Union([Text, Schema.Finite, Schema.Boolean, Schema.Null]);
 
-/** Correlation only: never include inputs, tool parameters, request bodies, or credentials. */
+/**
+ * Correlation only: never include inputs, tool parameters, request bodies, or credentials.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const Context = Schema.Struct({
   agentId: Schema.optionalKey(Name),
   threadId: Schema.optionalKey(Name),
@@ -28,6 +40,12 @@ export const Context = Schema.Struct({
   operation: Schema.optionalKey(Name),
 }).pipe(strictSchema);
 
+/**
+ * Decoded value of {@link Context}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type Context = typeof Context.Type;
 
 type CauseReason =
@@ -35,7 +53,12 @@ type CauseReason =
   | { readonly _tag: "Die"; readonly defect: Diagnostic }
   | { readonly _tag: "Interrupt"; readonly fiberId?: number };
 
-/** A private diagnostic projection, not a JavaScript error reconstruction or model response. */
+/**
+ * A private diagnostic projection, not a JavaScript error reconstruction or model response.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type Diagnostic =
   | {
       readonly _tag: "Error";
@@ -96,7 +119,12 @@ const diagnosticSchema = <Nested extends Schema.Top>(nested: Nested) =>
     }),
   ]);
 
-/** Structured, allowlisted Error fields and ordered Effect Fail/Die/Interrupt reasons. */
+/**
+ * Structured, allowlisted Error fields and ordered Effect Fail/Die/Interrupt reasons.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const Diagnostic: Schema.Codec<Diagnostic> = Schema.suspend(() =>
   diagnosticSchema(Diagnostic),
 ).pipe(strictSchema);
@@ -106,7 +134,12 @@ const decodeDiagnosticNode = Schema.decodeUnknownExit(
   diagnosticSchema(Schema.Unknown).pipe(strictSchema),
 );
 
-/** Remove common credential forms; hosts must keep arbitrary private payloads out of error text. */
+/**
+ * Remove common credential forms; hosts must keep arbitrary private payloads out of error text.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const redactText = (text: string): string =>
   text
     .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [REDACTED]")
@@ -126,6 +159,9 @@ export const redactText = (text: string): string =>
  * and 128 KiB text. Inner causes have priority over outer stacks when the text budget is exhausted.
  * Text remains operator-private. No generic serializer can identify secrets embedded in arbitrary
  * prose: application error messages must exclude payloads, and hosts may supply stricter redaction.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const capture = (
   value: unknown,
@@ -304,7 +340,12 @@ export const capture = (
   return visit(value, 0);
 };
 
-/** Bound and redact a diagnostic copy; canonical identities stay in their owning records. */
+/**
+ * Bound and redact a diagnostic copy; canonical identities stay in their owning records.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const captureContext = (context: Context): Context => {
   const diagnostic = capture(context);
 
@@ -314,6 +355,9 @@ export const captureContext = (context: Context): Context => {
 /**
  * Preserve the original value in-process; across JSON retain its structured diagnostic projection.
  * Decoding returns Diagnostic data, never claims to reconstruct an application error class.
+ *
+ * @category schemas
+ * @since 0.1.0
  */
 export const Value = Diagnostic.pipe(
   Schema.decodeTo(
@@ -325,7 +369,12 @@ export const Value = Diagnostic.pipe(
   ),
 );
 
-/** Original local Effect Cause; its JSON codec preserves ordered typed, defect and interrupt reasons. */
+/**
+ * Original local Effect Cause; its JSON codec preserves ordered typed, defect and interrupt reasons.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const Cause = Schema.Cause(Value, Value).pipe(
   Schema.decodeTo(
     Schema.declare<EffectCause.Cause<unknown>>(EffectCause.isCause),
@@ -333,7 +382,12 @@ export const Cause = Schema.Cause(Value, Value).pipe(
   ),
 );
 
-/** Safe summary plus optional operator-private causal evidence retained at a terminal boundary. */
+/**
+ * Safe summary plus optional operator-private causal evidence retained at a terminal boundary.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const Failure = Schema.Struct({
   errorTag: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
   message: Text,
@@ -341,6 +395,12 @@ export const Failure = Schema.Struct({
   context: Schema.optionalKey(Context),
 }).pipe(strictSchema);
 
+/**
+ * Decoded value of {@link Failure}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type Failure = typeof Failure.Type;
 
 /**

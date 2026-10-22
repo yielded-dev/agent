@@ -1,3 +1,10 @@
+/**
+ * Typed peer messages through fixed host-authorized routes, with retained delivery status, inbox
+ * provenance, and explicit retry controls.
+ *
+ * @since 0.1.0
+ */
+
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
@@ -22,12 +29,24 @@ import { MessagingHost } from "../engine/MessagingHost.ts";
 
 export * from "../core/Messaging.ts";
 
-/** A fixed host route and its destination-owned input Schema. Construction acquires no resources. */
+/**
+ * A fixed host route and its destination-owned input Schema. Construction acquires no resources.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface Peer<Name extends string, Input extends Schema.Top> {
   readonly name: Name;
   readonly target: AnyDefinition & { readonly input: Input };
 }
 
+/**
+ * Declare a named peer route and its destination Agent input Schema without acquiring resources or
+ * granting send authority.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const peer = <const Name extends string, Input extends Schema.Top>(
   name: Name,
   options: { readonly target: AnyDefinition & { readonly input: Input } },
@@ -87,14 +106,24 @@ const dispatch = Effect.fnUntraced(function* <Name extends string, Input extends
   );
 });
 
-/** Retain a durable message. Its status distinguishes outbound retention from destination acceptance. */
+/**
+ * Retain a durable message. Its status distinguishes outbound retention from destination acceptance.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const send = <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   input: Input["Type"],
   options: { readonly idempotencyKey: IdempotencyKey; readonly inReplyTo?: MessageRef },
 ) => dispatch(declaration, input, options, "send");
 
-/** Reply to an authenticated inbound message; return routing still requires independent send authority. */
+/**
+ * Reply to an authenticated inbound message; return routing still requires independent send authority.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const reply = <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   inReplyTo: MessageRef,
@@ -102,7 +131,12 @@ export const reply = <Name extends string, Input extends Schema.Top>(
   options: { readonly idempotencyKey: IdempotencyKey },
 ) => dispatch(declaration, input, { ...options, inReplyTo }, "reply");
 
-/** Return bounded provenance for messages from this peer, without granting permission to reply. */
+/**
+ * Return bounded provenance for messages from this peer, without granting permission to reply.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const inbox = Effect.fnUntraced(function* <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   options: { readonly after?: number; readonly limit?: number } = {},
@@ -112,6 +146,12 @@ export const inbox = Effect.fnUntraced(function* <Name extends string, Input ext
   return yield* service.inbox({ ...declaration, ...options, limit: options.limit ?? 20 });
 });
 
+/**
+ * Inspect the retained delivery status of one message sent through the declared peer route.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const inspect = Effect.fnUntraced(function* <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   message: MessageRef,
@@ -121,7 +161,12 @@ export const inspect = Effect.fnUntraced(function* <Name extends string, Input e
   return yield* service.inspect({ ...declaration, message });
 });
 
-/** Explicitly renew a parked delivery's bounded retry budget, retaining its complete frozen envelope. */
+/**
+ * Explicitly renew a parked delivery's bounded retry budget, retaining its complete frozen envelope.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const retry = Effect.fnUntraced(function* <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   message: MessageRef,
@@ -184,7 +229,12 @@ const native = <
   return { tool, toolkit, layer: toolkit.toLayer(build) };
 };
 
-/** Install only the native operations chosen by the host; schemas come from the Peer declaration. */
+/**
+ * Install only the native operations chosen by the host; schemas come from the Peer declaration.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const sendTool = <const Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
 ) =>
@@ -200,6 +250,13 @@ export const sendTool = <const Name extends string, Input extends Schema.Top>(
       }),
   );
 
+/**
+ * Build a Tool that replies to a recorded inbound message through an independently authorized peer
+ * route.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const replyTool = <const Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
 ) => {
@@ -223,6 +280,12 @@ export const replyTool = <const Name extends string, Input extends Schema.Top>(
   );
 };
 
+/**
+ * Build a Tool that reads bounded pages of authenticated message provenance from the declared peer.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const inboxTool = <const Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
 ) =>
@@ -240,6 +303,12 @@ export const inboxTool = <const Name extends string, Input extends Schema.Top>(
     (options) => inbox(declaration, options),
   );
 
+/**
+ * Build a Tool that inspects delivery status for one message sent through the declared peer.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const inspectTool = <const Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
 ) =>
@@ -252,6 +321,13 @@ export const inspectTool = <const Name extends string, Input extends Schema.Top>
     ({ message }) => inspect(declaration, message),
   );
 
+/**
+ * Build a Tool that renews the bounded retry allowance of a parked peer message while retaining its
+ * frozen envelope.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const retryTool = <const Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
 ) =>

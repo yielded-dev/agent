@@ -55,8 +55,10 @@ const isNativeParameters = Schema.is(nativeParameters);
 const definitionDigestsEqual = Schema.toEquivalence(DefinitionDigests);
 const updateValuesEqual = Schema.toEquivalence(Schema.Json);
 
-/** Canonical native acceptance proves only this exact update call, never an external effect.
+/**
+ * Canonical native acceptance proves only this exact update call, never an external effect.
  * Its frozen delivery remains independently recoverable even when its Tool acknowledgement is lost.
+ * @internal
  */
 export const nativeUpdateAccepted = (
   submission: SubmissionSnapshot,
@@ -78,7 +80,10 @@ export const nativeUpdateAccepted = (
   );
 };
 
-/** The emitting Attempt fences acceptance; native storage publishes its optional outbox row atomically. */
+/**
+ * The emitting Attempt fences acceptance; native storage publishes its optional outbox row atomically.
+ * @internal
+ */
 export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   readonly deploymentId: DeploymentId;
   readonly producerId: ProducerId;

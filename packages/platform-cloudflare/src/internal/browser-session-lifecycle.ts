@@ -9,8 +9,15 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import type { BrowserRunLifecycleOptions } from "../BrowserSession.ts";
 import { browserFailure } from "./browser-failure.ts";
 
+/**
+ * The provider did not confirm cleanup of the exact browser session.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class BrowserRunCleanupError extends Schema.TaggedError<BrowserRunCleanupError>()(
   "BrowserRunCleanupError",
   {
@@ -28,11 +35,6 @@ export class BrowserRunCleanupError extends Schema.TaggedError<BrowserRunCleanup
   },
 ) {}
 
-export interface BrowserRunLifecycleOptions {
-  readonly accountId: string;
-  readonly apiToken: Redacted.Redacted<string>;
-}
-
 const Identity = Schema.String.check(Schema.isUUID());
 const Account = Schema.String.check(Schema.isPattern(/^[a-f0-9]{32}$/));
 const Closed = Schema.Struct({ status: Schema.Literals(["closing", "closed"]) });
@@ -41,6 +43,12 @@ const Metadata = Schema.Struct({ sessionId: Identity, endTime: Schema.optionalKe
 // exact-session request. An arbitrary 404 or a listing omission is never absence.
 const Absent = Schema.Struct({ error: Schema.Literal("Session not found") });
 
+/**
+ * Host-authorized cleanup of an exact Cloudflare browser session.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class BrowserRunSessionLifecycle extends Context.Service<
   BrowserRunSessionLifecycle,
   {

@@ -1,14 +1,13 @@
+/**
+ * Explicit thread-owned selection and restoration of application-approved native models.
+ *
+ * @since 0.1.0
+ */
 import * as AiError from "effect/ai/AiError";
 import * as Decision from "effect/ai/Decision";
 import * as DecisionModel from "effect/ai/DecisionModel";
 import type * as LanguageModel from "effect/ai/LanguageModel";
 import type * as Model from "effect/ai/Model";
-/**
- * Choose a native model when a thread is created, then restore that choice for
- * later runs. Selection uses the existing DecisionModel service.
- *
- * @since 0.1.0
- */
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -32,7 +31,10 @@ export interface Candidate<Requirements = never> {
   >;
 }
 
-/** @category models
+/**
+ * Named application-approved model profiles.
+ *
+ * @category models
  * @since 0.1.0
  */
 export type Candidates = Readonly<Record<string, Candidate<unknown>>>;
@@ -71,7 +73,10 @@ export const SelectionRecord = Schema.Struct({
   }),
 });
 
-/** @category models
+/**
+ * A retained model choice and its native decision evidence.
+ *
+ * @category models
  * @since 0.1.0
  */
 export type SelectionRecord = typeof SelectionRecord.Type;
@@ -152,8 +157,8 @@ const invalidRequest = (method: string, description: string) =>
 /**
  * Retain choices for one application Scope. Provide this Layer once around all
  * parent and child Thread resolutions. Independent threads may select concurrently;
- * overlapping requests for the same Thread
- * share its committed choice. Failed or interrupted selections can be retried.
+ * overlapping requests for the same Thread share its committed choice. Failed or
+ * interrupted selections can be retried.
  *
  * Capacity counts distinct attempted Thread IDs (default 10,000). Entries never
  * expire or evict: reaching capacity fails instead of silently changing a live

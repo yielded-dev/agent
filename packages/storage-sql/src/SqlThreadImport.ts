@@ -1,3 +1,8 @@
+/**
+ * Paged canonical export and atomic import over an adapter-owned SQL layout.
+ *
+ * @since 0.1.0
+ */
 import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import { RunId, SubmissionId, ThreadId } from "@yielded/agent/identifiers";
 import {
@@ -129,6 +134,12 @@ import {
 } from "./SqlThreadNativeReads.ts";
 import { makeSqlThreadWork } from "./SqlThreadWork.ts";
 
+/**
+ * Adapter namespace, offline import transaction, snapshot reads, and import hooks.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SqlThreadImportOptions<E extends { readonly message: string }> {
   readonly namespace?: string;
   readonly owner: StorageOwner["Service"];
@@ -247,7 +258,12 @@ const encode = <A, I>(schema: Schema.Codec<A, I>, value: A) =>
     Effect.mapError((cause) => failure("encode imported facts", cause)),
   );
 
-/** A page read transaction and one offline atomic import transaction; no visible prefix writes. */
+/**
+ * A page read transaction and one offline atomic import transaction; no visible prefix writes.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlThreadImport = Effect.fnUntraced(function* <
   E extends { readonly message: string },
 >(options: SqlThreadImportOptions<E>) {

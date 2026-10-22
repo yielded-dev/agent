@@ -2,7 +2,10 @@ import * as Effect from "effect/Effect";
 
 import { summarizeModelUsage, type ModelCallUsage } from "../../core/Usage.ts";
 
-/** Captured calls are additive and nonnegative; progress does not need attribution groups. */
+/**
+ * Captured calls are additive and nonnegative; progress does not need attribution groups.
+ * @internal
+ */
 export const continuationUsage = (calls: ReadonlyArray<ModelCallUsage>) =>
   Effect.suspend(() => {
     let inputTokens = 0;

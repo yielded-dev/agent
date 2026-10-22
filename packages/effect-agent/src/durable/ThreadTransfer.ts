@@ -1,3 +1,10 @@
+/**
+ * Bounded, batch-aligned export of canonical history and retained Thread-local facts. All pages
+ * share one manifest and require the source to remain quiescent.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -22,6 +29,12 @@ import {
   ThreadStoreError,
 } from "./ThreadStore.ts";
 
+/**
+ * Ordered retained fact sections that follow canonical batches in a Thread transfer stream.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const transferSections = [
   "admissions",
   "aborts",
@@ -30,16 +43,39 @@ export const transferSections = [
   "deliveries",
 ] as const;
 
+/**
+ * One retained noncanonical fact section in the ordered Thread transfer stream.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type TransferSection = (typeof transferSections)[number];
 
+/**
+ * Transferred admission, accepted-command, and delivery facts accompanying canonical history.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type TransferFacts = Pick<ThreadExport, "admissions" | "commands" | "deliveries">;
 
+/**
+ * Type produced by {@link TransferManifest}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type TransferManifest = Pick<
   ThreadExport,
   "threadId" | "format" | "tailSequence" | "snapshot" | "workerSeal"
 >;
 
-/** Reads share the adapter's single page transaction. Batch reads hydrate archives. */
+/**
+ * Reads share the adapter's single page transaction. Batch reads hydrate archives.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadExporterReader extends Context.Service<
   ThreadExporterReader,
   {
@@ -72,6 +108,12 @@ export class ThreadExporterReader extends Context.Service<
   }
 >()("@effect-agent/thread/ThreadExporterReader") {}
 
+/**
+ * Fixed Thread identity, format, tail, fact counts, and worker seal shared by every transfer page.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const TransferManifest = Schema.Struct({
   threadId: ThreadExport.fields.threadId,
   format: ThreadExport.fields.format,
@@ -101,10 +143,20 @@ const nextSection = (position: typeof Position.Type) => {
   return { ...retained, section: position.section + 1, consumed: 0 };
 };
 
-/** Exact manifest equality replaces a redundant stored snapshot fingerprint. */
+/**
+ * Exact manifest equality replaces a redundant stored snapshot fingerprint.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const sameTransferManifest = Schema.toEquivalence(TransferManifest);
 
-/** Must run BEFORE a source gate, transaction or routed RPC is acquired. */
+/**
+ * Must run BEFORE a source gate, transaction or routed RPC is acquired.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const checkExportSource = (threadId: ThreadId) =>
   Effect.flatMap(ImportSourcePhase, (phase) =>
     phase?.writing
@@ -112,7 +164,12 @@ export const checkExportSource = (threadId: ThreadId) =>
       : Effect.void,
   );
 
-/** Exact evidence references outside this canonical page. */
+/**
+ * Exact evidence references outside this canonical page.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const transferDependencies = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
 ): ReadonlyArray<RecordId> =>
@@ -125,6 +182,12 @@ const factCount = (facts: TransferFacts, section: TransferSection): number =>
       ? facts.deliveries.length
       : facts.commands[section].length;
 
+/**
+ * Validates that a transfer page encodes successfully and fits its 32 MiB canonical wire limit.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const checkTransferPageBytes = (page: ThreadExport) =>
   Schema.encodeEffect(ThreadExport)(page).pipe(
     Effect.mapError(() => failure("Transfer page does not encode its canonical wire")),
@@ -135,7 +198,12 @@ export const checkTransferPageBytes = (page: ThreadExport) =>
     ),
   );
 
-/** Stateless pages require application quiescence; no transfer counter is maintained on writes. */
+/**
+ * Stateless pages require application quiescence; no transfer counter is maintained on writes.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExportRequest) {
   const reader = yield* ThreadExporterReader;
 

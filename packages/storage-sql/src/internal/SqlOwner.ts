@@ -16,7 +16,13 @@ interface RetainedOwner {
 
 const owners = new WeakMap<object, Map<string, RetainedOwner>>();
 
-/** Each live facet co-owns the root Scope; closing one facet cannot revoke another. */
+/**
+ * Retains the shared storage owner for this physical client and namespace in the caller's Scope.
+ * Each live facet co-owns the root Scope; closing one facet cannot revoke another.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const sqlStorageOwner = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   namespace = "",

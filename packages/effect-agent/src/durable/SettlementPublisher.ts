@@ -1,3 +1,10 @@
+/**
+ * Atomic canonical settlement publication under the storage owner's current authority checks.
+ * Authorized replays return the retained winner and current tail.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -20,16 +27,32 @@ import {
 } from "./SubmissionLedger.ts";
 import { AppendRequest, PreparedAppend, type ThreadStoreFailure } from "./ThreadStore.ts";
 
-/** Authority rechecked atomically on every publication attempt, including canonical replay. */
+/**
+ * Authority rechecked atomically on every publication attempt, including canonical replay.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const SettlementPublicationAuthority = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("Owned") }),
   Schema.Struct({ _tag: Schema.Literal("Joined"), hostSubmissionId: SubmissionId }),
   Schema.Struct({ _tag: Schema.Literal("QueuedAbort") }),
 ]);
 
+/**
+ * Decoded value of {@link SettlementPublicationAuthority}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SettlementPublicationAuthority = typeof SettlementPublicationAuthority.Type;
 
-/** The deterministic settlement fact followed by its atomically published Run progress. */
+/**
+ * The deterministic settlement fact followed by its atomically published Run progress.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SettlementPublication extends Schema.Class<SettlementPublication>(
   "@effect-agent/thread/SettlementPublication",
 )({
@@ -38,7 +61,12 @@ export class SettlementPublication extends Schema.Class<SettlementPublication>(
   append: AppendRequest,
 }) {}
 
-/** The actual immutable winner and CURRENT tail, including a replay of an earlier publication. */
+/**
+ * The actual immutable winner and CURRENT tail, including a replay of an earlier publication.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class SettlementPublicationResult extends Schema.Class<SettlementPublicationResult>(
   "@effect-agent/thread/SettlementPublicationResult",
 )({
@@ -48,6 +76,13 @@ export class SettlementPublicationResult extends Schema.Class<SettlementPublicat
   replayed: Schema.Boolean,
 }) {}
 
+/**
+ * Ledger, ownership, settlement-conflict, or Thread storage failures during atomic terminal
+ * publication.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type SettlementPublicationFailure =
   | LedgerError
   | OwnershipLost
@@ -62,6 +97,9 @@ export type SettlementPublicationFailure =
  * already settled publication from canonical proof. Joined and queued-abort replay retain their recorded authority.
  * Adapters may finalize in this transaction when no recoverable delivery remains; external
  * notification runs outside the transaction.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class SettlementPublisher extends Context.Service<
   SettlementPublisher,
@@ -79,7 +117,12 @@ const PublicationHeader = SettlementPublication.mapFields((fields) => ({
 
 const decodePublicationHeader = Schema.decodeEffect(PublicationHeader);
 
-/** Own the bounded request before Crypto, callbacks, or mutation authority can suspend it. */
+/**
+ * Own the bounded request before Crypto, callbacks, or mutation authority can suspend it.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validatePublication = Effect.fnUntraced(function* (input: SettlementPublication) {
   const invalid = (cause: { readonly message: string }) =>
     LedgerError.make({ operation: "publish settlement", message: cause.message, cause });
@@ -120,7 +163,12 @@ export const validatePublication = Effect.fnUntraced(function* (input: Settlemen
   return { request, record, settlement: record.payload };
 });
 
-/** The caller selects the canonical row from the expected Thread before invoking this check. */
+/**
+ * The caller selects the canonical row from the expected Thread before invoking this check.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateCanonicalSettlement = Effect.fnUntraced(function* (
   input: RecordEnvelope,
   expected: {
@@ -153,7 +201,12 @@ export const validateCanonicalSettlement = Effect.fnUntraced(function* (
   return settlement;
 });
 
-/** Joined receipts inherit the host outcome and failed diagnostic, with the host Run identity. */
+/**
+ * Joined receipts inherit the host outcome and failed diagnostic, with the host Run identity.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateJoinedSettlement = Effect.fnUntraced(function* (
   settlement: SubmissionSettledRecord,
   host: SubmissionSettledRecord,

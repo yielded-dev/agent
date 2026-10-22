@@ -10,6 +10,7 @@ interface JsonLimits {
   readonly textUnits: number;
 }
 
+/** @internal */
 export class CanonicalJsonLimitError extends Schema.TaggedError<CanonicalJsonLimitError>()(
   "CanonicalJsonLimitError",
   { message: Schema.String },
@@ -89,8 +90,10 @@ const serialize = (value: Schema.Json, limits?: JsonLimits): string => {
   return visit(value, 0);
 };
 
+/** @internal */
 export const canonicalJson = (value: Schema.Json): string => serialize(value);
 
+/** @internal */
 export const boundedCanonicalJson = (
   value: Schema.Json,
   limits: JsonLimits,

@@ -31,14 +31,18 @@ const Version = Schema.Struct({
   protocolVersion: Schema.NonEmptyString,
 });
 
-/** Private attachment ownership is available before asynchronous SDK initialization completes. */
+/** Private attachment ownership is available before asynchronous SDK initialization completes.
+ * @internal
+ */
 export interface BrowserRunAttachment {
   readonly browser: Promise<Browser>;
   /** Fence SDK dispatch/callbacks and await local socket closure; never terminate the provider. */
   readonly retire: Effect.Effect<void, BrowserRunFailure>;
 }
 
-/** Native transport port shared by both scoped adapters; the Layer owns the foreign binding. */
+/** Native transport port shared by both scoped adapters; the Layer owns the foreign binding.
+ * @internal
+ */
 export class BrowserRunBinding extends Context.Service<
   BrowserRunBinding,
   {

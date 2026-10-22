@@ -34,10 +34,21 @@ interface InitializationConfig {
   readonly deploymentId: DeploymentId;
 }
 
-/** Stable identities retained across admission retries and recovery. */
+/**
+ * Stable identities retained across admission retries and recovery.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const threadCreatedBatchId = (threadId: ThreadId): BatchId =>
   Schema.decodeSync(BatchId)(`thread-created:${threadId}`);
 
+/**
+ * Derives the stable Thread-created record identity reused across admission retries and recovery.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const threadCreatedRecordId = (threadId: ThreadId): RecordId =>
   Schema.decodeSync(RecordId)(`thread-created:${threadId}`);
 
@@ -45,6 +56,7 @@ export const threadCreatedRecordId = (threadId: ThreadId): RecordId =>
  * Coordinator invariant: every Thread's first canonical record is `ThreadCreated`,
  * so `tailSequence >= 1` is the deterministic already-created check. Concurrent admissions
  * re-read this invariant after a tail conflict before considering initialization complete.
+ * @internal
  */
 export const ensureThreadCreated = Effect.fnUntraced(
   function* (
@@ -111,6 +123,7 @@ export const ensureThreadCreated = Effect.fnUntraced(
 
 const sameOrigin = Schema.toEquivalence(WorkerOrigin);
 
+/** @internal */
 export const ensureWorkerOrigin = Effect.fnUntraced(
   function* (config: InitializationConfig, origin: WorkerOrigin) {
     const store = yield* ThreadStore;

@@ -1,3 +1,10 @@
+/**
+ * Scoped Run writers and ledger commands sharing one physical storage owner's mutation gate. Claims
+ * grant local execution authority and settlement publication preserves its atomic boundary.
+ *
+ * @since 0.1.0
+ */
+
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -52,13 +59,50 @@ import {
 } from "./ThreadStore.ts";
 
 export {
+  /**
+   * Provides the shared local ownership capability used to fence claims and storage mutations.
+   *
+   * @category services
+   * @since 0.1.0
+   */
   StorageOwner,
+  /**
+   * Reuse the physical owner's gate; reentrant calls remain in the same mutation.
+   *
+   * @category constructors
+   * @since 0.1.0
+   */
   makeStorageOwner,
+  /**
+   * Runs an Effect under the physical storage owner's shared mutation serialization.
+   *
+   * @category models
+   * @since 0.1.0
+   */
   type MutationGate,
+  /**
+   * Local capability only. It is never encoded, persisted, or reconstructed from an Attempt ID.
+   *
+   * @category models
+   * @since 0.1.0
+   */
   type OwnerGeneration,
+  /**
+   * Shared process-local ownership registry and mutation/progress gates for all facets of one
+   * physical storage owner.
+   *
+   * @category models
+   * @since 0.1.0
+   */
   type StorageOwnerService,
 } from "./internal/StorageOwner.ts";
 
+/**
+ * A child-budget allocation bound to the parent Tool Call and its stable reservation identity.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RunChildBudgetReservation = Schema.Struct({
   reservationId: ChildBudgetReservationRequest.fields.reservationId,
   parentToolCallId: ChildBudgetReservationRequest.fields.parentToolCallId,
@@ -66,16 +110,39 @@ export const RunChildBudgetReservation = Schema.Struct({
   allocationDigest: ChildBudgetReservationRequest.fields.allocationDigest,
 });
 
+/**
+ * Decoded value of {@link RunChildBudgetReservation}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RunChildBudgetReservation = typeof RunChildBudgetReservation.Type;
 
+/**
+ * Binds an admitted child Submission to the parent's existing budget reservation.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const RunChildAttachment = Schema.Struct({
   reservationId: AttachChildToReservationRequest.fields.reservationId,
   childSubmissionId: AttachChildToReservationRequest.fields.childSubmissionId,
 });
 
+/**
+ * Decoded value of {@link RunChildAttachment}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type RunChildAttachment = typeof RunChildAttachment.Type;
 
-/** Commands bound to one local scoped owner. No authority is transported in their values. */
+/**
+ * Commands bound to one local scoped owner. No authority is transported in their values.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface RunOwnership {
   readonly release: Effect.Effect<void>;
   readonly markInputApplied: (
@@ -102,6 +169,13 @@ export interface RunOwnership {
   ) => ReturnType<SubmissionLedger["Service"]["attachChildToReservation"]>;
 }
 
+/**
+ * Scoped canonical writer that tracks the committed tail and rejects appends after local ownership
+ * closes.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface RunWriter {
   readonly threadId: ThreadId;
   /** Opaque cache identity for this local writer lifetime; never portable authority. */
@@ -120,11 +194,19 @@ export interface RunWriter {
   readonly checkActive: Effect.Effect<void, ThreadStoreFailure>;
 }
 
+/**
+ * One claimed Submission's scoped writer and ledger commands, including atomic settlement
+ * publication.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface RunStorageSession extends RunWriter, RunOwnership {
   readonly claim: Claim;
   /** Atomic original input/context plus the ledger marker, when the adapter supports it. */
   readonly appendInput?: RunWriter["append"];
-  /** Read current controls, root identity and empty-Run evidence under this owner.
+  /**
+   * Read current controls, root identity and empty-Run evidence under this owner.
    * Its tail is adopted by the writer; append still checks the tail and revision. */
   readonly prepareStart?: Effect.Effect<
     { readonly snapshot: RecoverySnapshot; readonly identity: ThreadIdentity } | undefined,
@@ -137,6 +219,13 @@ export interface RunStorageSession extends RunWriter, RunOwnership {
   ) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
 }
 
+/**
+ * Claims accepted work into scoped storage sessions and publishes settlements through the shared
+ * owner.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class RunStorage extends Context.Service<
   RunStorage,
   {
@@ -277,7 +366,12 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
   };
 });
 
-/** Trusted administrative writer sharing the physical owner's gate and lifetime. */
+/**
+ * Trusted administrative writer sharing the physical owner's gate and lifetime.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeRunWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
   const owner = yield* StorageOwner;
 
@@ -299,7 +393,12 @@ export const makeRunWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
   )).writer;
 });
 
-/** The same scoped single-owner protocol is used by every adapter. */
+/**
+ * The same scoped single-owner protocol is used by every adapter.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const make = Effect.gen(function* () {
   const ledger = yield* SubmissionLedger;
   const store = yield* ThreadStore;
@@ -533,4 +632,11 @@ export const make = Effect.gen(function* () {
   return RunStorage.of({ claim, publishSettlement: publisher.publish });
 });
 
+/**
+ * Provides RunStorage from the assembled ledger, Thread store, settlement publisher, and local
+ * storage owner.
+ *
+ * @category layers
+ * @since 0.1.0
+ */
 export const layer = () => Layer.effect(RunStorage, make);

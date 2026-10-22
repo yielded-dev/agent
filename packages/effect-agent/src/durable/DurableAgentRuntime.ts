@@ -1,3 +1,10 @@
+/**
+ * Submission admission, scoped Attempts, recovery, observation, and settlement for durable Agent
+ * Threads. Accepted input remains owed a terminal outcome under one process owner per Thread.
+ *
+ * @since 0.1.0
+ */
+
 import * as Prompt from "effect/ai/Prompt";
 import type * as Tool from "effect/ai/Tool";
 import * as Cause from "effect/Cause";
@@ -84,6 +91,9 @@ import {
 import { FrameworkMessage } from "../core/Worker.ts";
 import type { WorkerError } from "../core/Worker.ts";
 import {
+  type ChildEstablishStatus,
+  type RunSubagentEstablishRequest,
+  type RunSubagentJoinRequest,
   AgentChildPending,
   renderInputPrompt,
   type AgentRuntimeRequirements,
@@ -97,11 +107,8 @@ import { executeWithUsageAccountingUnknown } from "../engine/internal/agent-runt
 import {
   AgentUpdateAcceptance,
   ModelUsageAccounting,
-  type ChildEstablishStatus,
   type RunDurabilityHook,
-  type RunSubagentEstablishRequest,
   type RunSubagentHook,
-  type RunSubagentJoinRequest,
   type InterpreterOptions as RunOptions,
 } from "../engine/internal/interpreter-options.ts";
 import { MessagingHost } from "../engine/MessagingHost.ts";
@@ -498,6 +505,9 @@ const decodeBatchIdSync = Schema.decodeSync(BatchId);
  * Deterministic parent-owned child budget reservation identity (spec
  * §12 step 2, D4): one reservation per (parent Run, parent Tool Call) pair,
  * so a replayed establishment converges on the one existing row (SUB-016).
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const childReservationIdFor = (runId: RunId, toolCallId: ToolCallId): ChildReservationId =>
   decodeChildReservationIdSync(`subagent-reservation:${runId}:${toolCallId}`);
@@ -586,9 +596,29 @@ const childUsageReportsOf = (state: SubagentCallRecords): ReadonlyArray<ChildRun
     });
   });
 
-export { threadCreatedBatchId, threadCreatedRecordId } from "./internal/thread-initialization.ts";
+export {
+  /**
+   * Stable identities retained across admission retries and recovery.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  threadCreatedBatchId,
+  /**
+   * Derives the stable Thread-created record identity reused across admission retries and recovery.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  threadCreatedRecordId,
+} from "./internal/thread-initialization.ts";
 
-/** Deterministic batch identity of one executed recovery decision's audit append (DUR-013). */
+/**
+ * Deterministic batch identity of one executed recovery decision's audit append (DUR-013).
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const recoveryRepairBatchId = (submissionId: SubmissionId, decisionTag: string): BatchId =>
   decodeBatchId(`repair:${submissionId}:${decisionTag}`);
 
@@ -597,16 +627,25 @@ const isOriginalInputRecord = (
 ): record is RecordEnvelope & { readonly payload: UserInputRecorded } =>
   record.payload._tag === "UserInputRecorded";
 
-/** Deterministic record identity of one executed recovery decision's `RepairAnnotated` record. */
+/**
+ * Deterministic record identity of one executed recovery decision's `RepairAnnotated` record.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const recoveryRepairRecordId = (submissionId: SubmissionId, decisionTag: string): RecordId =>
   decodeRecordId(`repair:${submissionId}:${decisionTag}`);
 
-/**
- * The durable identity returned once ledger admission, Thread materialization, and
- * readiness are committed (DUR-001). It is an identifier for observation and reattachment, not
- * an authorization capability.
- */
-export { Receipt } from "../core/Receipt.ts";
+export {
+  /**
+   * One accepted input whose admission, Thread materialization and readiness are committed.
+   * A Receipt identifies an observation target; possession grants no authorization.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  Receipt,
+} from "../core/Receipt.ts";
 
 // Foreign names and tags may contain payloads. Retain only these static classifications.
 const RecoveryCauseTag = Schema.Literals([
@@ -636,7 +675,12 @@ const RecoveryCauseTag = Schema.Literals([
 
 const isRecoveryCauseTag = Schema.is(RecoveryCauseTag);
 
-/** Recovery could not establish execution authority. This is never a Settlement or replay grant. */
+/**
+ * Recovery could not establish execution authority. This is never a Settlement or replay grant.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class RecoveryFailure extends Schema.Class<RecoveryFailure>(
   "@effect-agent/thread/RecoveryFailure",
 )({
@@ -779,13 +823,23 @@ export const isolateRecovery = Effect.fnUntraced(function* <A, E extends Durable
   );
 });
 
-/** One failed Thread remains pending; the host must not claim it before recovery succeeds. */
+/**
+ * One failed Thread remains pending; the host must not claim it before recovery succeeds.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class RecoveryBlocked extends Schema.TaggedError<RecoveryBlocked>()("RecoveryBlocked", {
   threadId: ThreadId,
   failure: RecoveryFailure,
 }) {}
 
-/** One executed (or deliberately deferred) recovery decision (durability §14, DUR-013). */
+/**
+ * One executed (or deliberately deferred) recovery decision (durability §14, DUR-013).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RecoveryReport extends Schema.Class<RecoveryReport>(
   "@effect-agent/thread/RecoveryReport",
 )({
@@ -801,7 +855,12 @@ export class RecoveryReport extends Schema.Class<RecoveryReport>(
   disposition: Schema.Literals(["repaired", "deferred", "none", "unknown"]),
 }) {}
 
-/** A selected owner was checked against its original evidence; this grants no execution lease. */
+/**
+ * A selected owner was checked against its original evidence; this grants no execution lease.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class WorkRecoveryReport extends Schema.Class<WorkRecoveryReport>("WorkRecoveryReport")({
   threadId: ThreadId,
   workId: Schema.NonEmptyString.check(Schema.isMaxLength(4096)),
@@ -814,7 +873,19 @@ export class WorkRecoveryReport extends Schema.Class<WorkRecoveryReport>("WorkRe
   retryAtMillis: Schema.optionalKey(Schema.Natural),
 }) {}
 
+/**
+ * One Thread-owned work entry selected for a bounded recovery attempt.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const WorkRecoveryRequest = Schema.Struct({ threadId: ThreadId, work: ThreadWorkEntry });
+/**
+ * Decoded value of {@link WorkRecoveryRequest}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type WorkRecoveryRequest = typeof WorkRecoveryRequest.Type;
 
 // Global scans must retain one routing identity; scoped scans reuse their native work cursor.
@@ -832,7 +903,12 @@ const RecoverySweepCursor = Schema.Struct({
 
 const encodeRecoveryCursor = Schema.encodeSync(Schema.fromJsonString(RecoverySweepCursor));
 
-/** Submission decisions and operational faults have different ownership and settlement semantics. */
+/**
+ * Submission decisions and operational faults have different ownership and settlement semantics.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export class RecoverySweepResult extends Schema.Class<RecoverySweepResult>("RecoverySweepResult")({
   reports: Schema.Array(RecoveryReport),
   /** Exactly one fault per failed Thread, regardless of its queued Submission count. */
@@ -848,10 +924,16 @@ export class RecoverySweepResult extends Schema.Class<RecoverySweepResult>("Reco
   cursor: Schema.optionalKey(RecoveryCursor),
 }) {}
 
-/** Recover one bounded page of native work, optionally confined to one Thread. */
+/**
+ * Recover one bounded page of native work, optionally confined to one Thread.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface RecoverySweepOptions {
   readonly threadId?: ThreadId;
-  /** Leave this incarnation's untouched root admissions to their first actual claim.
+  /**
+   * Leave this incarnation's untouched root admissions to their first actual claim.
    * A verified sole admission needs no recovery inventory; other owners retain bounded
    * discovery and deferred reports. Neither case supplies ownership or a recovery decision:
    * the Attempt still verifies current controls, journal, fencing and historyDigest. */
@@ -860,7 +942,12 @@ export interface RecoverySweepOptions {
   readonly cursor?: string;
 }
 
-/** Per-submission options accepted by `DurableAgentRuntime.submit` (D2). */
+/**
+ * Per-submission options accepted by `DurableAgentRuntime.submit` (D2).
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DurableSubmitOptions {
   readonly threadId: ThreadId;
   readonly principal: Principal;
@@ -875,12 +962,23 @@ export interface DurableSubmitOptions {
   readonly definitions: DefinitionDigests;
 }
 
+/**
+ * Optional observation cursor for resuming after a previously returned adapter-owned offset.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DurableObserveOptions {
   /** Resume the observation after an adapter-owned offset previously returned by `observe`. */
   readonly after?: CanonicalRecordEnvelope["offset"] | undefined;
 }
 
-/** The structural slice of an Agent Binding that `submit` needs. */
+/**
+ * The structural slice of an Agent Binding that `submit` needs.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DurableSubmitAgent<InputSchema extends Schema.Top> {
   readonly definition: {
     readonly id: AgentId;
@@ -888,6 +986,13 @@ export interface DurableSubmitAgent<InputSchema extends Schema.Top> {
   };
 }
 
+/**
+ * Expected validation, admission, ownership, storage, and injected failures while accepting durable
+ * input.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableSubmitFailure =
   | AgentInputError
   | DigestError
@@ -900,12 +1005,23 @@ export type DurableSubmitFailure =
   | AppendConflict
   | DurableRuntimeFailpointError;
 
-/** Attempt resources could not be retained before deliberate approval suspension. */
+/**
+ * Attempt resources could not be retained before deliberate approval suspension.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
 export class ApprovalSuspensionError extends Schema.TaggedError<ApprovalSuspensionError>()(
   "ApprovalSuspensionError",
   { cause: Schema.Defect() },
 ) {}
 
+/**
+ * Expected failures while claiming, recovering, or advancing accepted durable work.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableWorkerFailure =
   | AdmissionPolicyError
   | ApprovalSuspensionError
@@ -921,11 +1037,28 @@ export type DurableWorkerFailure =
   | RecoveryBlocked
   | DurableRuntimeFailpointError;
 
+/**
+ * Authorization or ledger failures while waiting for an accepted submission's settlement.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableAwaitFailure = LedgerError | SettlementConflict | OperationDenied;
 
-/** Typed failures from the public canonical progress boundary. */
+/**
+ * Typed failures from the public canonical progress boundary.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableProgressFailure = ThreadStoreError | ThreadNotMaterialized | OperationDenied;
 
+/**
+ * Authorization, ledger, joined-submission, or injected failures while recording abort intent.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableAbortFailure =
   | OperationDenied
   | LedgerError
@@ -938,6 +1071,9 @@ export type DurableAbortFailure =
  * with a divergent prior resolution, the Submission may already be settled, an `AbortSubmission`
  * resolution routes through the abort path (whose `JoinedToHost` conflict stays visible), and the
  * failpoint after the intent write is armable like every other durable mutation.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type DurableResolveFailure =
   | LedgerError
@@ -950,6 +1086,9 @@ export type DurableResolveFailure =
  * Failure family of `resolveApproval` (plan §2.6, abort-shaped): the durable intent may conflict
  * with a divergent prior decision, and the Submission may already be settled. The ledger adapter
  * owns the crash boundaries of the intent write (`ledger:approval-decision:{before,after}`).
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type DurableApprovalFailure = LedgerError | SettlementConflict | ApprovalConflict;
 
@@ -957,6 +1096,9 @@ export type DurableApprovalFailure = LedgerError | SettlementConflict | Approval
  * Failure family of the read-only `explain`/`explainThread` operations (P7 WP1): pure
  * observation over the two ports plus the evidence assembler's typed failures, and the
  * fail-closed `OperationDenied` when a host-supplied authorizer refuses.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type DurableExplainFailure =
   | LedgerError
@@ -968,6 +1110,9 @@ export type DurableExplainFailure =
  * Failure family of the read-only `verify` operation (P7 WP1). `ThreadNotMaterialized`
  * stays visible: verifying a Thread that does not exist is a caller error, not an empty
  * report.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type DurableVerifyFailure =
   | LedgerError
@@ -979,10 +1124,18 @@ export type DurableVerifyFailure =
  * Failure family of `retry` (P7 WP1): the scoped recovery execution carries the worker failure
  * family, refusals are typed (`RetryRefused` — settled work and lanes owned by the
  * resolveUnknown/resolveApproval paths), and denial is fail-closed.
+ *
+ * @category models
+ * @since 0.1.0
  */
 export type DurableRetryFailure = DurableWorkerFailure | RetryRefused | OperationDenied;
 
-/** Failure family of `scanObligations` (P7 WP1): ledger scan + canonical unknown-age reads. */
+/**
+ * Failure family of `scanObligations` (P7 WP1): ledger scan + canonical unknown-age reads.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type DurableObligationFailure = LedgerError | ThreadStoreError | OperationDenied;
 
 /**
@@ -992,6 +1145,9 @@ export type DurableObligationFailure = LedgerError | ThreadStoreError | Operatio
  * honored; `unresolved` falls through to the durable suspension path. The default (`undefined`)
  * suspends every undecided approval durably until `resolveApproval` decides it — the fail-closed
  * posture. Supply a native `RunApprovalHook`; return `unresolved` when policy cannot decide.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const DurableApprovalResolver: Context.Reference<RunApprovalHook<never, never> | undefined> =
   Context.Reference<RunApprovalHook<never, never> | undefined>(
@@ -1008,6 +1164,9 @@ export const DurableApprovalResolver: Context.Reference<RunApprovalHook<never, n
  *
  * A decision racing with successful retention resumes the pending batch in a fresh Attempt,
  * after the old services and claim finalize. The default leaves existing suspension unchanged.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const DurableApprovalSuspension: Context.Reference<
   Effect.Effect<void, ApprovalSuspensionError> | undefined
@@ -1021,6 +1180,9 @@ export const DurableApprovalSuspension: Context.Reference<
  * requirements minus its supplied identity and history services. The coordinator provides
  * deterministic Run/Turn identity and journal-owned history because its coordinator owns all
  * durable reads and commits across Attempts.
+ *
+ * @category utility types
+ * @since 0.1.0
  */
 export type DurableWorkerRequirements<
   AgentValue extends Agent.Any,
@@ -1032,6 +1194,13 @@ export type DurableWorkerRequirements<
     >
   | AgentCompletionProjectionRequirements<AgentValue>;
 
+/**
+ * Deployment identity, producer identity, polling cadences, recovery timeout, and optional
+ * model-cost authority for a durable coordinator.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface DurableRuntimeConfigOptions {
   /**
    * Deployment identity and the conservative operation version for direct execution without
@@ -1049,7 +1218,12 @@ export interface DurableRuntimeConfigOptions {
   readonly estimateCostMicrousd?: RunCostEstimator | undefined;
 }
 
-/** Deployment-scoped identity and liveness cadences for the durable coordinator. */
+/**
+ * Deployment-scoped identity and liveness cadences for the durable coordinator.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class DurableRuntimeConfig extends Context.Service<
   DurableRuntimeConfig,
   {
@@ -12426,6 +12600,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
  *   `resolveUnknown`, `resolveApproval`) consults the `OperationAuthorizer` reference
  *   fail-closed — the default Layer preserves the service-possession behavior, and a
  *   host-supplied authorizer turns denials into the typed `OperationDenied`.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export class DurableAgentRuntime extends Context.Service<
   DurableAgentRuntime,

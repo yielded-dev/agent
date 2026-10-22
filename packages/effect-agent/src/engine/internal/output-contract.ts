@@ -17,11 +17,15 @@ const outputFormatAnnotation = "@effect-agent/engine/Output/format";
  * ```ts
  * output: Output.text(Schema.String.check(Schema.isMaxLength(20_000)))
  * ```
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const textOutput = <S extends Schema.Top & { readonly Encoded: string }>(
   schema: S,
 ): S["Rebuild"] => schema.annotate({ [outputFormatAnnotation]: "text" });
 
+/** @internal */
 export const isTextOutput = (schema: Schema.Top): boolean =>
   Schema.resolveAnnotations(schema)?.[outputFormatAnnotation] === "text";
 
@@ -109,6 +113,7 @@ const renderOutputSchemaContract = (definition: Agent.AnyDefinition): OutputCont
 // Weak keys retain neither discarded definitions nor their Schema graphs.
 const outputContracts = new WeakMap<Agent.AnyDefinition, OutputContract>();
 
+/** @internal */
 export const outputSchemaContract = (definition: Agent.AnyDefinition): OutputContract => {
   const cached = outputContracts.get(definition);
 
@@ -135,6 +140,7 @@ const sameSystemMessage = Schema.toEquivalence(Prompt.SystemMessage);
  * Adapters without this capability retain the grouped-system projection: keep the
  * last equivalent instruction with its native options, then the contract and
  * conversation. This prevents older Anthropic adapters from discarding system groups.
+ * @internal
  */
 export const prepareModelPrompt = (
   prompt: Prompt.Prompt,

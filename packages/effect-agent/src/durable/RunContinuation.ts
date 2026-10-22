@@ -1,3 +1,10 @@
+/**
+ * Bounded active Run checkpoints, evidence validation, and progress publication through the current
+ * storage owner. Current checkpoints retire at settlement while canonical facts remain append-only.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -13,7 +20,24 @@ import { ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { resolveEvidence } from "./internal/evidence.ts";
 import { continuationUsage } from "./internal/usage-totals.ts";
-export { reference, resolveEvidence } from "./internal/evidence.ts";
+
+export {
+  /**
+   * References identify immutable facts; schema and owning readers validate their meaning.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  reference,
+  /**
+   * Resolve an immutable fact by Thread and record identity. A failed reference leaves the original work owed.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  resolveEvidence,
+} from "./internal/evidence.ts";
+
 import {
   captureRecord,
   recordEncoding,
@@ -25,7 +49,17 @@ import {
   isPreContinuationFact,
   isTerminalBudgetFact,
 } from "./internal/record-ownership.ts";
-export { terminalUsageCharge } from "./internal/record-ownership.ts";
+
+export {
+  /**
+   * Grouped usage is no larger than its original identities/components plus bounded counters.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
+  terminalUsageCharge,
+} from "./internal/record-ownership.ts";
+
 import { readRunContext, validateContextBoundary } from "./internal/run-context.ts";
 import {
   type CanonicalRecordEnvelope,
@@ -75,21 +109,64 @@ import {
   ThreadStoreError,
 } from "./ThreadStore.ts";
 
-export { RunContinuation, RunContextRecorded, EvidenceReference } from "./Records.ts";
+export {
+  /**
+   * Current interpreter progress, replaced atomically with lastFact under the Thread fence.
+   * lastFact is the exact accounted frontier of the same commit. References resolve within this
+   * Thread's history or its authoritative active checkpoint. Results, operation declarations,
+   * approvals and delivery obligations remain canonical; evaluated context and validated completion
+   * belong to active state. Neither the checkpoint nor its revision grants execution authority.
+   * Retired intermediate revisions are not historical verification evidence.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  RunContinuation,
+  /**
+   * Original evaluated Run input and fixed prior-history references used to reconstruct and
+   * validate saved model context.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  RunContextRecorded,
+  /**
+   * Fact identity; active-only references resolve inside their Run checkpoint.
+   *
+   * @category schemas
+   * @since 0.1.0
+   */
+  EvidenceReference,
+} from "./Records.ts";
 
-/** Writer and progress sequencer selected at the local owner's resource boundary. */
+/**
+ * Writer and progress sequencer selected at the local owner's resource boundary.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class CurrentRunWriter extends Context.Service<
   CurrentRunWriter,
   Pick<RunStorageSession, "threadId" | "tail" | "append" | "appendInput" | "withProgress">
 >()("@effect-agent/thread/CurrentRunWriter") {}
 
-/** Settlement publication keeps its original atomic authority and claim-scoped implementation. */
+/**
+ * Settlement publication keeps its original atomic authority and claim-scoped implementation.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class CurrentRunSettlement extends Context.Service<
   CurrentRunSettlement,
   Pick<RunStorageSession, "threadId" | "tail" | "publishSettlement" | "withProgress">
 >()("@effect-agent/thread/CurrentRunSettlement") {}
 
-/** Canonical reads pinned to the append owner's current transaction or mutation gate. */
+/**
+ * Canonical reads pinned to the append owner's current transaction or mutation gate.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ProgressAppendReader extends Context.Service<
   ProgressAppendReader,
   {
@@ -103,9 +180,36 @@ export class ProgressAppendReader extends Context.Service<
 >()("@effect-agent/thread/ProgressAppendReader") {}
 
 export {
+  /**
+   * Index membership comes from canonical owner fields, never parsing opaque identities.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   canonicalRunIds,
+  /**
+   * A joined Receipt's closure is discoverable from its host, but owns no host execution charge.
+   *
+   * @category operations
+   * @since 0.1.0
+   */
   executionRunIds,
+  /**
+   * These immutable preparations are durable handoff intents before a destination row exists.
+   * Their canonical tag/identity index is published with the preparation and survives Run
+   * settlement. WorkerInputCompleted closes capacity only with factual effectsResolved evidence;
+   * ToolCallSettled/Resolved close operations, and destination delivery state owns transport closure.
+   *
+   * @category guards
+   * @since 0.1.0
+   */
   isWorkHandoff,
+  /**
+   * A host can prepare independent work before the source admission ever starts a Run.
+   *
+   * @category guards
+   * @since 0.1.0
+   */
   isPreContinuationFact,
 } from "./internal/record-ownership.ts";
 
@@ -179,7 +283,12 @@ const captureFacts = (batch: CommitBatch) =>
     ),
   );
 
-/** Exact UTF-8 wire accounting reuses the append's privately captured Schema encoding. */
+/**
+ * Exact UTF-8 wire accounting reuses the append's privately captured Schema encoding.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const canonicalRecordBytes = (record: RecordEnvelope): number => {
   const encoded = recordEncoding(record);
 
@@ -191,9 +300,22 @@ export const canonicalRecordBytes = (record: RecordEnvelope): number => {
   return encoded.success.bytes;
 };
 
-export type { ProgressAppendRecord } from "./internal/record-encoding.ts";
+export type {
+  /**
+   * Private capture metadata, never caller-supplied wire data or execution authority.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  ProgressAppendRecord,
+} from "./internal/record-encoding.ts";
 
-/** Capture before acquiring the mutation owner; summaries never cross a wire boundary. */
+/**
+ * Capture before acquiring the mutation owner; summaries never cross a wire boundary.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const prepareProgressAppend = (
   records: ReadonlyArray<RecordEnvelope>,
 ): ReadonlyArray<ProgressAppendRecord> => {
@@ -207,12 +329,24 @@ export const prepareProgressAppend = (
   return Object.freeze(encodings.success.map((record) => record.progress));
 };
 
-/** These values belong to the active Run, not its permanent conversation history. */
+/**
+ * These values belong to the active Run, not its permanent conversation history.
+ *
+ * @category guards
+ * @since 0.1.0
+ */
 export const isOperationalRecord = ({ payload }: RecordEnvelope): boolean =>
   payload._tag === "RunStarted" ||
   payload._tag === "RunContextRecorded" ||
   payload._tag === "RunCompleted";
 
+/**
+ * Loads and validates the active Run checkpoint against the requested Run identity and captured
+ * canonical tail.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const readContinuation = Effect.fnUntraced(function* (
   threadId: ThreadId,
   runId: RunId,
@@ -255,7 +389,12 @@ export const readContinuation = Effect.fnUntraced(function* (
   });
 });
 
-/** Resolve an active-only fact without presenting it as a canonical envelope or sequence. */
+/**
+ * Resolve an active-only fact without presenting it as a canonical envelope or sequence.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const resolveExecutionEvidence = Effect.fnUntraced(function* (
   threadId: ThreadId,
   checkpoint: ExecutionCheckpoint,
@@ -267,7 +406,12 @@ export const resolveExecutionEvidence = Effect.fnUntraced(function* (
   return record;
 });
 
-/** Each selected page is at most eight records; total resident encoded evidence is bounded. */
+/**
+ * Each selected page is at most eight records; total resident encoded evidence is bounded.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const runEvidence = (
   threadId: ThreadId,
   submissionId: SubmissionId,
@@ -342,7 +486,12 @@ export const runEvidence = (
     ),
   );
 
-/** A bounded selected-Run suffix, never a Thread-wide tail or an implicit replay fallback. */
+/**
+ * A bounded selected-Run suffix, never a Thread-wide tail or an implicit replay fallback.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateSuffix = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
   through: CanonicalSequence,
@@ -359,6 +508,9 @@ export const validateSuffix = (
 /**
  * Selected semantic evidence without expanding model context. Worker acknowledgements and
  * delivery repair must validate locator completeness before treating missing effects as closed.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const readRunEvidenceSnapshot = Effect.fnUntraced(function* (
   threadId: ThreadId,
@@ -445,7 +597,12 @@ export const readRunEvidenceSnapshot = Effect.fnUntraced(function* (
   return records;
 });
 
-/** Called inside the adapter's existing mutation, before publishing any fact or index. */
+/**
+ * Called inside the adapter's existing mutation, before publishing any fact or index.
+ *
+ * @category operations
+ * @since 0.1.0
+ */
 export const validateProgressAppend = Effect.fnUntraced(function* (
   records: ReadonlyArray<ProgressAppendRecord>,
   updates: ReadonlyArray<ExecutionUpdate> = [],
@@ -914,6 +1071,9 @@ const advanceFacts = Effect.fnUntraced(function* (
 /**
  * Verify retained history. Mutable checkpoint revisions are deliberately not historical proof.
  * Active original context is still checked against its exact retained historyDigest.
+ *
+ * @category operations
+ * @since 0.1.0
  */
 export const verifyRunContinuations = Effect.fnUntraced(function* (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
@@ -979,6 +1139,9 @@ export const verifyRunContinuations = Effect.fnUntraced(function* (
  * Prepare progress for the existing atomic append/publication. Accept the returned state only
  * after that append commits; a failed or stale producer cannot publish speculative progress.
  * One writer retains bounded metadata for its active Run, not its historical results or IDs.
+ *
+ * @category constructors
+ * @since 0.1.0
  */
 export const makeProgressWriter = Effect.fnUntraced(function* (
   threadId: ThreadId,
@@ -1901,7 +2064,8 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     reserve,
     defer,
     check,
-    /** Scope a verified empty execution/evidence view to one owned initialization body.
+    /**
+     * Scope a verified empty execution/evidence view to one owned initialization body.
      * The caller holds progress+mutation gates; a changed writer or tail never reuses it. */
     withVerifiedEmptyRun: <A, E, R>(
       runId: RunId,

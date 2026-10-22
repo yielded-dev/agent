@@ -2,6 +2,7 @@ import type * as Schema from "effect/Schema";
 
 const MAX_JSON_DEPTH = 128;
 
+/** @internal */
 export interface BoundedJsonSnapshot {
   readonly value: Schema.Json;
   readonly bytes: number;
@@ -192,6 +193,7 @@ const snapshotJson = (
  * Normalize provider-owned JSON using JSON serialization's `NaN`/infinity to
  * `null` behavior. Provider events use this form so byte accounting matches
  * their eventual JSON representation.
+ * @internal
  */
 export const boundedJsonSnapshot = (
   root: unknown,
@@ -203,6 +205,7 @@ export const boundedJsonSnapshot = (
  * Validate canonical JSON without repairing non-finite numbers. Recovery
  * inputs use this form because changing a recorded value would fabricate
  * history.
+ * @internal
  */
 export const boundedCanonicalJsonSnapshot = (
   root: unknown,

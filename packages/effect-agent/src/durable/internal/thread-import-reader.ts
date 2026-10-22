@@ -16,7 +16,12 @@ import type {
 } from "../ThreadStore.ts";
 import { RunContextReader } from "./run-context-reader.ts";
 
-/** Exact indexes for one captured Thread transaction. Run records and commands enforce count and byte bounds. */
+/**
+ * Exact indexes for one captured Thread transaction. Run records and commands enforce count and byte bounds.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadImportReader extends Context.Service<
   ThreadImportReader,
   {
@@ -69,7 +74,12 @@ export class ThreadImportReader extends Context.Service<
   }
 }
 
-/** Delivery evidence reads: the importing Thread uses staged facts; foreign Threads use retained facts. */
+/**
+ * Delivery evidence reads: the importing Thread uses staged facts; foreign Threads use retained facts.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class ThreadDeliveryImportReader extends Context.Service<
   ThreadDeliveryImportReader,
   {

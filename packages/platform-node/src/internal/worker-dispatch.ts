@@ -18,6 +18,8 @@ type DispatchState = "pending" | "active" | "dirty";
  * One discovery path feeds bounded concurrent Thread drains. Hints carry no authority:
  * the runtime still claims, fences, parks and releases every Attempt. Concurrency has
  * already been validated by the host configuration.
+ *
+ * @internal
  */
 export const runNodeWorkerDispatch = (
   concurrency: number,

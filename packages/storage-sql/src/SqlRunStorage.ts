@@ -1,3 +1,8 @@
+/**
+ * Composition of SQL journal, Thread store, and submission ledger under one storage owner.
+ *
+ * @since 0.1.0
+ */
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { make as makeRunStorage, StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
@@ -26,7 +31,12 @@ import {
 } from "./SqlSubmissionLedger.ts";
 import { makeSqlThreadStoreKernel, type SqlThreadStoreOptions } from "./SqlThreadStore.ts";
 
-/** Bind all ports to the physical client's root, retaining caller Scope, Clock and diagnostics. */
+/**
+ * Bind all ports to the physical client's root, retaining caller Scope, Clock and diagnostics.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeSqlRunStorage = Effect.fnUntraced(function* <
   S extends Diagnostic,
   C extends Diagnostic,

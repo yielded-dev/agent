@@ -1,3 +1,10 @@
+/**
+ * Host-owned routing and authorization for peer messages, bound to the current invocation’s trusted
+ * identity.
+ *
+ * @since 0.1.0
+ */
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
@@ -13,12 +20,23 @@ import {
 import type { IdempotencyKey, Principal } from "../core/Receipt.ts";
 import type { WorkerSource } from "../core/Worker.ts";
 
+/**
+ * A named peer declaration paired with the destination Agent definition.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface PeerTarget {
   readonly name: string;
   readonly target: AnyDefinition;
 }
 
-/** A fixed declaration chooses the route. Caller input never selects a destination Thread. */
+/**
+ * A fixed declaration chooses the route. Caller input never selects a destination Thread.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface SendPeerMessage extends PeerTarget {
   readonly encodedInput: unknown;
   readonly idempotencyKey: IdempotencyKey;
@@ -26,7 +44,12 @@ export interface SendPeerMessage extends PeerTarget {
   readonly inReplyTo?: MessageRef;
 }
 
-/** Trusted per-invocation facet. It carries caller authority without exposing it in Tool schemas. */
+/**
+ * Trusted per-invocation facet. It carries caller authority without exposing it in Tool schemas.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export class MessagingHost extends Context.Service<
   MessagingHost,
   {
@@ -65,7 +88,12 @@ export class MessagingHost extends Context.Service<
   });
 }
 
-/** Separate context, history, send and management grants; incoming messages grant none of them. */
+/**
+ * Separate context, history, send and management grants; incoming messages grant none of them.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export interface PeerAuthorizationRequest {
   readonly source: MessageAddress;
   readonly principal: Principal;
@@ -75,6 +103,13 @@ export interface PeerAuthorizationRequest {
   readonly destination?: MessageAddress;
 }
 
+/**
+ * Host authority for peer operations, denying every request by default. Authorized sends return the
+ * principal retained with their frozen envelope.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const PeerAuthorizer = Context.Reference<{
   /** Return the stable delivery principal for sends. It is retained with the frozen envelope. */
   readonly authorize: (
@@ -86,7 +121,12 @@ export const PeerAuthorizer = Context.Reference<{
   }),
 });
 
-/** Application-owned routing; the target Agent is resolved from the existing exact registrations. */
+/**
+ * Application-owned routing; the target Agent is resolved from the existing exact registrations.
+ *
+ * @category services
+ * @since 0.1.0
+ */
 export const PeerRoutes = Context.Reference<{
   readonly resolve: (request: {
     readonly source: MessageAddress;
@@ -103,6 +143,9 @@ export const PeerRoutes = Context.Reference<{
 /**
  * Finite delivery and retained-send window in milliseconds (default one day, maximum seven days).
  * Exhaustion parks outstanding work; terminal sends stop consuming capacity at this deadline.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const PeerDeliveryLifetime = Context.Reference<number>(
   "@effect-agent/thread/PeerDeliveryLifetime",
@@ -113,6 +156,9 @@ export const PeerDeliveryLifetime = Context.Reference<number>(
  * Bound outstanding sends plus terminal sends still inside their delivery window, across all peers
  * and principals in one source Thread (default 256, maximum 1,000). Canonical history and exact
  * idempotent receipts remain retained after expiry without consuming this capacity.
+ *
+ * @category services
+ * @since 0.1.0
  */
 export const PeerMessageCapacity = Context.Reference<number>(
   "@effect-agent/thread/PeerMessageCapacity",

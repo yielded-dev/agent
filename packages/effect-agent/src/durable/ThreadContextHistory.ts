@@ -1,3 +1,10 @@
+/**
+ * Bounded lexical search and paged recall over retained canonical transcript evidence. Each
+ * operation captures one Thread tail and requires an already authorized ThreadStore.
+ *
+ * @since 0.1.0
+ */
+
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -31,7 +38,12 @@ import {
   ThreadTailRequest,
 } from "./ThreadStore.ts";
 
-/** Per-search work and deadline bounds; exact archived reads are independent of Thread age. */
+/**
+ * Per-search work and deadline bounds; exact archived reads are independent of Thread age.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const ThreadContextHistoryOptions = Schema.Struct({
   maxRecords: Schema.optionalKey(
     Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_536 })),
@@ -41,6 +53,12 @@ export const ThreadContextHistoryOptions = Schema.Struct({
   ),
 });
 
+/**
+ * Decoded value of {@link ThreadContextHistoryOptions}.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type ThreadContextHistoryOptions = typeof ThreadContextHistoryOptions.Type;
 
 const unavailable = () =>
@@ -68,6 +86,9 @@ const invalid = (message: string) => ContextHistoryError.make({ reason: "invalid
  *
  * The host must supply an authorized ThreadStore. This adapter does not grant access based on a
  * Thread ID. Context Tools select the current Run's Thread, never a model-selected Thread.
+ *
+ * @category layers
+ * @since 0.1.0
  */
 export const layer = (
   options: ThreadContextHistoryOptions = {},

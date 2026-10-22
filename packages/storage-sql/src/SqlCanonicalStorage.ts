@@ -1,3 +1,8 @@
+/**
+ * Canonical record encoding and SQL fragments shared by storage adapters.
+ *
+ * @since 0.1.0
+ */
 import { canonicalJson, digestCanonicalJson } from "@yielded/agent/digest";
 import { Digest, RecordJson, type CanonicalRecordPayload } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
@@ -15,7 +20,12 @@ import type { CanonicalRecordMetadata } from "./SqlThreadNativeReads.ts";
 const Text = Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024));
 const Key = SqlInteger.pipe(Schema.decodeTo(Schema.Int.check(Schema.isGreaterThan(0))));
 
-/** Literal canonical JSON between createdAt, payload and recordId, in lexical key order. */
+/**
+ * Literal canonical JSON between createdAt, payload and recordId, in lexical key order.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const EnvelopeFragments = Schema.Struct({
   prefix: Text,
   before_payload: Text,
@@ -23,6 +33,12 @@ export const EnvelopeFragments = Schema.Struct({
   suffix: Text,
 });
 
+/**
+ * Canonical record fragments and payload retained for exact SQL reconstruction.
+ *
+ * @category schemas
+ * @since 0.1.0
+ */
 export const CapturedRecordStorage = Schema.Struct({
   created_at_json: Text,
   record_id_json: Text,
@@ -31,9 +47,20 @@ export const CapturedRecordStorage = Schema.Struct({
   envelope_digest: Digest,
 });
 
+/**
+ * Canonical record fragments and payload retained for exact SQL reconstruction.
+ *
+ * @category models
+ * @since 0.1.0
+ */
 export type CapturedRecordStorage = typeof CapturedRecordStorage.Type;
 
-/** Codes belong to this fresh physical layout, not the public record format. */
+/**
+ * Codes belong to this fresh physical layout, not the public record format.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const RECORD_TAGS: Readonly<Record<CanonicalRecordPayload["_tag"], number>> = Object.freeze({
   AbortRequested: 1,
   AgentUpdateEmitted: 2,
@@ -185,7 +212,11 @@ const captureValidatedStorage = Effect.fnUntraced(
   Effect.mapError((cause) => failure("capture canonical storage", cause)),
 );
 
-/** Capture imported wire, including additive envelope members, through the complete codec. */
+/**
+ * Capture imported wire, including additive envelope members, through the complete codec.
+ *
+ * @internal
+ */
 export const captureRecordStorage = Effect.fnUntraced(
   function* (wire: RecordJson, json: string) {
     const object = yield* decodeWire(wire);
@@ -201,6 +232,8 @@ export const captureRecordStorage = Effect.fnUntraced(
 /**
  * Authenticate capture before reusing its native wire type and bounds. Structural lookalikes
  * undergo normal capture; physical reconstruction and fragment bounds remain checked below.
+ *
+ * @internal
  */
 export const capturePreparedRecordStorage = Effect.fnUntraced(function* (input: AppendRequest) {
   const captured = yield* PreparedAppend.capture(input);
@@ -222,7 +255,11 @@ export const capturePreparedRecordStorage = Effect.fnUntraced(function* (input: 
   return records;
 });
 
-/** SQL concatenation preserves additive envelope members and original scalar spelling. */
+/**
+ * SQL concatenation preserves additive envelope members and original scalar spelling.
+ *
+ * @internal
+ */
 export const hotRecordJson = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) => {
   const owner = sql(alias ?? "effect_agent_canonical_records");
 
@@ -235,7 +272,12 @@ export const hotRecordJson = (sql: SqlClient.SqlClient, namespace?: string, alia
     FROM ${envelopes} e WHERE e.envelope_key=${owner}.envelope_key)`;
 };
 
-/** A sequence belongs to the nearest preceding commit only when that commit covers it. */
+/**
+ * A sequence belongs to the nearest preceding commit only when that commit covers it.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const recordBatchId = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) => {
   const owner = sql(alias ?? "effect_agent_canonical_records");
 
@@ -250,12 +292,23 @@ export const recordBatchId = (sql: SqlClient.SqlClient, namespace?: string, alia
     ORDER BY b.first_sequence DESC LIMIT 1)`;
 };
 
+/**
+ * Builds a SQL expression for the stored canonical batch header.
+ *
+ * @internal
+ */
 export const storedBatchHeader = (sql: SqlClient.SqlClient, alias?: string) => {
   const owner = sql(alias ?? "effect_agent_canonical_batches");
 
   return sql`('{"batchId":' || ${owner}.batch_id || ',"producerId":' || ${owner}.producer_id_json || '}')`;
 };
 
+/**
+ * Builds the stored run identity used by canonical SQL metadata.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const runKey = (
   sql: SqlClient.SqlClient,
   thread: Statement.Fragment,
@@ -269,6 +322,11 @@ export const runKey = (
   return sql`(SELECT run_key FROM ${table} WHERE thread_id=${thread} AND run_id=${run})`;
 };
 
+/**
+ * Builds a SQL expression for a record's run identity.
+ *
+ * @internal
+ */
 export const runIdentity = (
   sql: SqlClient.SqlClient,
   key: Statement.Fragment,
@@ -281,6 +339,12 @@ export const runIdentity = (
   return sql`(SELECT run_id FROM ${table} WHERE run_key=${key})`;
 };
 
+/**
+ * Builds a SQL expression for the canonical Agent Definition associated with a run.
+ *
+ * @category utilities
+ * @since 0.1.0
+ */
 export const definitionJson = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) => {
   const owner = sql(alias ?? "effect_agent_submissions");
 
@@ -321,7 +385,12 @@ interface DictionaryKeys {
 // maintenance invalidate these immutable dictionary lookups before reopening the gate.
 const dictionaryKeys = new WeakMap<object, DictionaryKeys>();
 
-/** These writes run only inside the caller's existing fenced/admission/import transaction. */
+/**
+ * These writes run only inside the caller's existing fenced/admission/import transaction.
+ *
+ * @category constructors
+ * @since 0.1.0
+ */
 export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
