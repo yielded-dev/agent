@@ -97,7 +97,6 @@
     "./subscription-input": "./src/durable/SubscriptionInput.ts",
     "./subscription-transition": "./src/durable/SubscriptionTransition.ts",
     "./subscriptions": "./src/durable/Subscriptions.ts",
-    "./testing/certification": "./src/durable/Certification.ts",
     "./testing/durable-failpoint-test-control": "./src/durable/DurableFailpointTestControl.ts",
     "./testing/message-delivery-store-conformance": "./src/durable/MessageDeliveryStoreConformance.ts",
     "./testing/schedule-store-conformance": "./src/durable/ScheduleStoreConformance.ts",

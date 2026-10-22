@@ -1,25 +1,13 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as PgClient from "@effect/sql-pg/PgClient";
-import { expect, it } from "@effect/vitest";
+import { it } from "@effect/vitest";
 import * as PostgresStorage from "@yielded/agent-storage-postgres/postgres-storage";
-import {
-  CERTIFICATION_SCENARIOS,
-  TIER2_UNREACHED_LOCATIONS,
-  certifyDurableAdapters,
-  tier2NeverFiredLocations,
-} from "@yielded/agent-testing/certification";
-import { DurableRuntimeFailpointLocation } from "@yielded/agent/durable-failpoint";
-import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
-import { threadStoreConformanceCases } from "@yielded/agent/testing/thread-store-conformance";
+import { durableCoordinatorConformance } from "@yielded/agent-testing/durable-coordinator-conformance";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 
-/**
- * Keep certification outside the adapter package to avoid a storage-postgres -> testing cycle.
- * Both ports share one client over one temporary database. No process-kill suite drives this
- * adapter yet, so Tier 3 must remain not exercised.
- */
+/** Keep coordinator checks outside the adapter package to avoid a storage-postgres -> testing cycle. */
 const adminUrl =
   process.env.EFFECT_AGENT_TEST_POSTGRES_URL ??
   "postgres://postgres:postgres@localhost:55432/effect_agent";
@@ -59,44 +47,10 @@ const combinedAdapters = (url: string) =>
   );
 
 it.effect(
-  "certifies PostgreSQL contracts and recovery without claiming process-kill coverage",
+  "converges PostgreSQL coordinator recovery after injected faults",
   () =>
     withTemporaryDatabase((url) =>
-      Effect.gen(function* () {
-        const adapters = combinedAdapters(url);
-
-        const report = yield* certifyDurableAdapters({
-          adapter: { name: "@effect-agent/storage-postgres" },
-          submissionLedger: adapters,
-          threadStore: adapters,
-        });
-
-        const ledgerCases = report.tier1.filter((result) => result.suite === "submission-ledger");
-        const storeCases = report.tier1.filter((result) => result.suite === "thread-store");
-
-        expect(ledgerCases).toHaveLength(submissionLedgerConformanceCases.length);
-        expect(storeCases).toHaveLength(threadStoreConformanceCases.length);
-        expect(report.tier1.filter((result) => result.status !== "passed")).toEqual([]);
-        expect(report.tier2.map(({ scenario, location }) => [scenario, location])).toEqual(
-          CERTIFICATION_SCENARIOS.flatMap((scenario) =>
-            DurableRuntimeFailpointLocation.literals.map((location) => [scenario, location]),
-          ),
-        );
-        expect(report.tier2.filter((row) => row.status === "failed")).toEqual([]);
-        for (const scenario of CERTIFICATION_SCENARIOS) {
-          expect(report.tier2.some((row) => row.scenario === scenario && row.failpointFired)).toBe(
-            true,
-          );
-        }
-        expect(tier2NeverFiredLocations(report.tier2)).toEqual(
-          [...TIER2_UNREACHED_LOCATIONS].sort(),
-        );
-        expect(report.adapter.name).toBe("@effect-agent/storage-postgres");
-        expect(report.adapter.durability).toBe("durable-node");
-        expect(report.ok).toBe(true);
-        expect(report.tier3).toMatchObject({ status: "not-exercised", evidence: [], cases: [] });
-        expect(report.fullyCertified).toBe(false);
-      }).pipe(Effect.provide(NodeCrypto.layer)),
+      durableCoordinatorConformance.pipe(Effect.provide(combinedAdapters(url))),
     ),
   300_000,
 );

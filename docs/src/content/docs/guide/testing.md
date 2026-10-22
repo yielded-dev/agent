@@ -1,6 +1,6 @@
 ---
 title: Deterministic testing
-description: Exercise the real agent runtime with scripted model responses and certify custom storage adapters.
+description: Exercise agent integrations with scripted models and check custom storage and executor behavior.
 ---
 
 <a id="deterministic-testing"></a>
@@ -54,20 +54,22 @@ The [testing package](https://github.com/yielded-dev/agent/tree/main/packages/te
 executable travel-planner and researcher fixtures. Use live evaluation separately when the question
 is model quality.
 
-## Certify storage adapters
+## Check storage and coordinator behavior
 
-Run `certifyDurableAdapters` from `@yielded/agent-testing/certification` against your combined
-`SubmissionLedger` and `ThreadStore` Layers in a TestClock-backed environment with Crypto.
-Use disposable storage. If both ports share a connection root, pass the same combined Layer instance.
+Run the shared storage-port cases against disposable storage to check each adapter's contract.
+The `@yielded/agent/testing/*-store-conformance` modules and
+`@yielded/agent/testing/submission-ledger-conformance` expose those cases independently.
 
-| Evidence | What it exercises                             |
-| -------- | --------------------------------------------- |
-| Tier 1   | Shared storage-port contracts                 |
-| Tier 2   | Coordinator recovery across injected failures |
-| Tier 3   | Real process loss or eviction                 |
+For coordinator recovery, run `durableCoordinatorConformance` from
+`@yielded/agent-testing/durable-coordinator-conformance` in a TestClock-backed environment such
+as `it.effect`. Provide one combined Layer containing `SubmissionLedger`, `ThreadStore`,
+`SettlementPublisher`, `StorageOwner`, and `Crypto`. Use pristine disposable storage with native
+Thread verification. The helper discovers six scenario paths, injects faults, and checks bounded
+recovery through settled history; violations fail with `DurableCoordinatorConformanceViolation`.
+See the [coordinator conformance module](https://github.com/yielded-dev/agent/blob/main/packages/testing/src/DurableCoordinatorConformance.ts)
+for its contract.
 
-Inspect the full report. Tier 3 distinguishes execution in this run, cited evidence, and
-`not-exercised`; a passing in-process suite does not establish crash durability. Custom subscription
-stores have separate conformance cases. See the
-[certification entry point](https://github.com/yielded-dev/agent/blob/main/packages/testing/src/Certification.ts)
-for adapter requirements and the report contract.
+Injected faults do not establish recovery after process loss or eviction. Exercise actual restarts
+separately against the host and storage you deploy. Likewise, the reusable
+`@yielded/agent-testing/code-executor-conformance` checks executor behavior and declared metadata;
+verify isolation against the actual executor.

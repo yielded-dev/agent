@@ -4,7 +4,7 @@ export default defineConfig({
   run: {
     tasks: {
       test: {
-        // Postgres certification requires a live database and its configured URL.
+        // Postgres coordinator conformance requires a live database and its configured URL.
         cache: false,
         command: "vp test --passWithNoTests",
       },
@@ -13,7 +13,7 @@ export default defineConfig({
   pack: {
     entry: [
       "src/index.ts",
-      "src/Certification.ts",
+      "src/DurableCoordinatorConformance.ts",
       "src/CodeExecutorConformance.ts",
       "src/CodeExecutorSubstitute.ts",
       "src/DocsResearcher.ts",
