@@ -48,7 +48,6 @@ export default defineConfig({
       "src/core/ProvisionalText.ts",
       "src/core/Receipt.ts",
       "src/capabilities/Redaction.ts",
-      "src/capabilities/Remembering.ts",
       "src/core/RememberingStore.ts",
       "src/core/RunEvent.ts",
       "src/engine/RunEventSink.ts",

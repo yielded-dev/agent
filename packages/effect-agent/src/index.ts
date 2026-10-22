@@ -38,7 +38,6 @@ export * as PageScreenshot from "./sandbox/PageScreenshot.ts";
 export * as ProvisionalText from "./core/ProvisionalText.ts";
 export * as Receipt from "./core/Receipt.ts";
 export * as Redaction from "./capabilities/Redaction.ts";
-export * as Remembering from "./capabilities/Remembering.ts";
 export * as RememberingStore from "./core/RememberingStore.ts";
 export * as RunEvent from "./core/RunEvent.ts";
 export * as RunEventSink from "./engine/RunEventSink.ts";

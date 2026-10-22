@@ -43,11 +43,6 @@ export const capabilityCases: ReadonlyArray<DiagnosticCase> = [
     parameters: { enabled },
   })),
   ...[0, 1].map((enabled) => ({
-    name: `remembering-run-${enabled ? "on" : "off"}`,
-    family: "memory" as const,
-    parameters: { enabled },
-  })),
-  ...[0, 1].map((enabled) => ({
     name: `subagent-run-${enabled ? "on" : "off"}`,
     family: "subagent" as const,
     parameters: { enabled },
