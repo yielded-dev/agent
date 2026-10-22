@@ -1,8 +1,8 @@
 import * as AiError from "effect/ai/AiError";
 import * as Decision from "effect/ai/Decision";
 import * as DecisionModel from "effect/ai/DecisionModel";
-import * as LanguageModel from "effect/ai/LanguageModel";
-import * as Model from "effect/ai/Model";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import type * as Model from "effect/ai/Model";
 /**
  * Choose a native model when a thread is created, then restore that choice for
  * later runs. Selection uses the existing DecisionModel service.
@@ -14,7 +14,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import * as Stream from "effect/Stream";
 
 /**
  * An application-approved model profile. Configure effort, provider options,
@@ -110,21 +109,18 @@ export interface Selection<Requirements> {
 }
 
 /**
- * A native Model Layer that satisfies the runtime's model requirement. Building
- * it captures dependencies without selecting or acquiring a candidate. The runtime
- * resolves it from each Thread's first task and restores that choice on follow-ups.
+ * Explicit thread-owned selection over approved native model Layers. Construction
+ * acquires no resources. The host validates and authorizes input before resolving
+ * a model, then binds the returned native Layer for execution.
  *
  * @category models
  * @since 0.1.0
  */
-export interface AutoModel<Requirements> extends Model.Model<
-  "auto",
-  LanguageModel.LanguageModel,
-  DecisionModel.DecisionModel | SelectionStore | Requirements
-> {
+export interface AutoModel<Requirements> {
   /**
-   * Resolve explicitly for hosts that own thread admission. The shared
-   * SelectionStore retains the Thread's original choice.
+   * Return the Thread's retained choice, selecting and committing only when
+   * absent. Captures provider requirements; use the returned Layer within the
+   * Scope that owns those services.
    */
   readonly resolve: (options: {
     readonly threadId: string;
@@ -155,8 +151,8 @@ const invalidRequest = (method: string, description: string) =>
 
 /**
  * Retain choices for one application Scope. Provide this Layer once around all
- * parent Runs and child handler Layers, alongside InMemory.layer. Independent
- * threads may select concurrently; overlapping requests for the same Thread
+ * parent and child Thread resolutions. Independent threads may select concurrently;
+ * overlapping requests for the same Thread
  * share its committed choice. Failed or interrupted selections can be retried.
  *
  * Capacity counts distinct attempted Thread IDs (default 10,000). Entries never
@@ -239,20 +235,20 @@ export const layerMemory = (options?: { readonly capacity?: number }) =>
  * only include information the decision provider may receive. The application
  * must filter candidates for authorization and required capabilities first.
  *
- * Provide this Model with Effect.provide (or Layer.provide for subagent handlers).
- * The runtime resolves it on each Thread's first Turn. Supply DecisionModel, native
- * provider clients, and a shared SelectionStore. Direct LanguageModel calls lack
- * thread context and fail with InvalidRequestError; select/restore/resolve remain
- * available for hosts that own selection at admission instead.
+ * Call resolve at host admission, then bind or provide its returned native Layer.
+ * Supply DecisionModel, native provider clients, and a shared SelectionStore.
+ * Keep selection and execution under the caller's Scope and deadline: the agent's
+ * generation budget does not bound the preceding selection request.
  *
- * Persist record before generation and reuse selection.model for all turns and later runs.
- * Restore rejects a different thread, catalog version, or missing profile; it
- * never silently reselects. Store ownership, authorization, atomic creation, and
- * recovery belong to the host's SelectionStore.
+ * For manual select/restore composition, persist the full record before generation
+ * and reuse selection.model for all turns and later runs. Restore rejects a
+ * different thread, catalog version, or missing profile; it never silently
+ * reselects. Store ownership, authorization, atomic creation, and recovery belong
+ * to the host's SelectionStore.
  *
  * There are no implicit retries, deadlines, fallbacks, confidence thresholds,
- * or mid-thread switches. Defects and interruption propagate. The
- * AutoModel.select span records only the selected profile ID, not task content.
+ * or mid-thread switches. Defects and interruption propagate. Selection annotates
+ * the current span with the selected profile ID, not task content.
  *
  * @category constructors
  * @since 0.1.0
@@ -399,35 +395,5 @@ export const make = <const Requirements extends Readonly<Record<string, unknown>
     );
   });
 
-  const layer = Layer.effect(
-    LanguageModel.LanguageModel,
-    Effect.gen(function* () {
-      const services = yield* Effect.context<
-        DecisionModel.DecisionModel | SelectionStore | Services
-      >();
-
-      const unresolved = invalidRequest(
-        "generate",
-        "AutoModel requires an agent thread; resolve a thread before direct LanguageModel calls",
-      );
-
-      const languageModel = yield* LanguageModel.make({
-        generateText: () => Effect.fail(unresolved),
-        streamText: () => Stream.fail(unresolved),
-      });
-
-      // Structural ModelResolver capability: the runtime installs the selected
-      // native Layer (including its identity) around the entire Run. Keeping the
-      // port on the provided service preserves normal Effect requirement capture
-      // without a dependency from this package to the agent runtime.
-      return Object.assign(languageModel, {
-        resolve: (request: Parameters<typeof resolve>[0]) =>
-          resolve(request).pipe(Effect.provide(services)),
-      });
-    }),
-  );
-
-  return Object.freeze(
-    Object.assign(Model.make("auto", version, layer), { select, restore, resolve }),
-  );
+  return Object.freeze({ select, restore, resolve });
 };

@@ -100,14 +100,16 @@ it("preserves client requirements and selector errors when composing different p
   });
 
   const selected = auto.select({ threadId: "thread", state: "task" });
+  const resolved = auto.resolve({ threadId: "thread", state: "task" });
 
   const generate = Effect.flatMap(selected, ({ model }) =>
     LanguageModel.generateText({ prompt: "task" }).pipe(Effect.provide(model)),
   );
 
-  expectTypeOf<Layer.Services<typeof auto>>().toEqualTypeOf<
+  expectTypeOf<Effect.Services<typeof resolved>>().toEqualTypeOf<
     ClientA | ClientB | DecisionModel.DecisionModel | AutoModel.SelectionStore
   >();
+  expectTypeOf<Effect.Error<typeof resolved>>().toEqualTypeOf<AiError.AiError>();
   type Selected = Effect.Success<typeof selected>["model"];
   expectTypeOf<Layer.Services<Selected>>().toEqualTypeOf<ClientA | ClientB>();
   expectTypeOf<Effect.Services<typeof generate>>().toEqualTypeOf<

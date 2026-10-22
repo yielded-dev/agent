@@ -104,8 +104,18 @@ const catalog = (small = nativeModel("small"), large = nativeModel("large")) =>
     },
   });
 
+const runSelected = Effect.fnUntraced(function* <Requirements>(
+  models: AutoModel.AutoModel<Requirements>,
+  input: string,
+  threadId: Identifiers.ThreadId,
+) {
+  const model = yield* models.resolve({ threadId, state: { task: input } });
+
+  return yield* AgentRuntime.run(Agent.withModel(definition, model), input, { threadId });
+});
+
 it.effect(
-  "interrupts selection in the run lifetime, releases resources, and allows retry of an unselected thread",
+  "interrupts explicit selection, releases resources, and allows retry of an unselected thread",
   () =>
     Effect.gen(function* () {
       const entered = yield* Deferred.make<void>();
@@ -130,7 +140,7 @@ it.effect(
 
       yield* Effect.gen(function* () {
         const options = { threadId: Identifiers.ThreadId.make("retry-interruption") };
-        const fiber = yield* AgentRuntime.run(definition, "task", options).pipe(Effect.forkChild);
+        const fiber = yield* runSelected(models, "task", options.threadId).pipe(Effect.forkChild);
 
         yield* Deferred.await(entered);
         yield* Fiber.interrupt(fiber);
@@ -142,15 +152,9 @@ it.effect(
         expect(finalized).toBe(true);
         expect(lifecycle).toEqual([]);
         retry = true;
-        expect((yield* AgentRuntime.run(definition, "retry", options)).output).toBe("small");
+        expect((yield* runSelected(models, "retry", options.threadId)).output).toBe("small");
         expect(lifecycle).toEqual(["open:small", "close:small"]);
-      }).pipe(
-        Effect.provide(
-          models.pipe(
-            Layer.provideMerge(Layer.mergeAll(live, AutoModel.layerMemory(), InMemory.layer)),
-          ),
-        ),
-      );
+      }).pipe(Effect.provide(Layer.mergeAll(live, AutoModel.layerMemory(), InMemory.layer)));
     }),
 );
 
@@ -179,7 +183,10 @@ const verifyCatalogCompositionRequirements = () => {
   const required = AgentRuntime.run(definition, "task").pipe(Effect.provide(InMemory.layer));
 
   expectTypeOf<Effect.Services<typeof required>>().toEqualTypeOf<Agent.ModelServices>();
-  const operation = required.pipe(Effect.provide(models));
+
+  const operation = runSelected(models, "task", Identifiers.ThreadId.make("typed-parent")).pipe(
+    Effect.provide(InMemory.layer),
+  );
 
   expectTypeOf<Effect.Services<typeof operation>>().toEqualTypeOf<
     SmallClient | LargeClient | DecisionModel.DecisionModel | AutoModel.SelectionStore
@@ -188,7 +195,12 @@ const verifyCatalogCompositionRequirements = () => {
   const requiredHandlers = Subagent.layer(child).pipe(Layer.provide(InMemory.layer));
 
   expectTypeOf<Layer.Services<typeof requiredHandlers>>().toEqualTypeOf<Agent.ModelServices>();
-  const handlers = requiredHandlers.pipe(Layer.provide(models));
+
+  const handlers = Layer.unwrap(
+    models
+      .resolve({ threadId: "typed-child", state: { task: "child task" } })
+      .pipe(Effect.map((model) => Subagent.layer(child, model))),
+  ).pipe(Layer.provide(InMemory.layer));
 
   expectTypeOf<Layer.Services<typeof handlers>>().toEqualTypeOf<
     SmallClient | LargeClient | DecisionModel.DecisionModel | AutoModel.SelectionStore
@@ -233,28 +245,24 @@ it.effect(
       const options = { threadId: Identifiers.ThreadId.make("generation-retry") };
 
       yield* Effect.gen(function* () {
-        expect(yield* AgentRuntime.run(definition, "initial task", options).pipe(Effect.flip)).toBe(
+        expect(yield* runSelected(models, "initial task", options.threadId).pipe(Effect.flip)).toBe(
           failure,
         );
-        expect((yield* AgentRuntime.run(definition, "different task", options)).output).toBe(
+        expect((yield* runSelected(models, "different task", options.threadId)).output).toBe(
           "small",
         );
         expect(selections).toBe(1);
       }).pipe(
         Effect.provide(
-          models.pipe(
-            Layer.provideMerge(
-              Layer.mergeAll(
-                InMemory.layer,
-                AutoModel.layerMemory(),
-                decisionLayer(() =>
-                  Effect.sync(() => {
-                    selections++;
+          Layer.mergeAll(
+            InMemory.layer,
+            AutoModel.layerMemory(),
+            decisionLayer(() =>
+              Effect.sync(() => {
+                selections++;
 
-                    return answer(selections === 1 ? "routine" : "difficult");
-                  }),
-                ),
-              ),
+                return answer(selections === 1 ? "routine" : "difficult");
+              }),
             ),
           ),
         ),
