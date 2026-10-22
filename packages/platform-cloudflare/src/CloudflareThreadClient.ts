@@ -1,49 +1,26 @@
 import { AgentInputError } from "@yielded/agent/agent-error";
-import { DigestError } from "@yielded/agent/digest";
 import {
   type DurableSubmitAgent,
   type DurableSubmitOptions,
 } from "@yielded/agent/durable-agent-runtime";
-import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
-import { AgentId, type ThreadId } from "@yielded/agent/identifiers";
-import { InputMessage } from "@yielded/agent/messaging";
-import { OperationDenied } from "@yielded/agent/operation-authorizer";
-import { Receipt } from "@yielded/agent/receipt";
+import { type ThreadId } from "@yielded/agent/identifiers";
+import { type Receipt } from "@yielded/agent/receipt";
 import {
-  CanonicalRecordEnvelope,
-  CanonicalSequence,
-  DefinitionDigests,
+  type CanonicalRecordEnvelope,
+  type CanonicalSequence,
   PersistedJson,
-  SubmissionSettledRecord,
-  WorkerAdmission,
+  type SubmissionSettledRecord,
 } from "@yielded/agent/records";
 import {
-  AdmissionFence,
-  AdmissionGroup,
-  AbortCommand,
-  AbortIntent,
-  AdmissionConflict,
-  AdmissionPolicyError,
-  ApprovalConflict,
-  ApprovalDecisionCommand,
-  ApprovalDecisionIntent,
-  IdempotencyKey,
-  JoinedToHost,
-  LedgerError,
-  OwnershipLost,
-  Principal,
-  Settlement,
-  SettlementConflict,
-  UnknownResolutionCommand,
-  UnknownResolutionConflict,
-  UnknownResolutionIntent,
+  type AbortCommand,
+  type AbortIntent,
+  type ApprovalDecisionCommand,
+  type ApprovalDecisionIntent,
+  type Settlement,
+  type UnknownResolutionCommand,
+  type UnknownResolutionIntent,
 } from "@yielded/agent/submission-ledger";
-import { SubmissionStatus } from "@yielded/agent/submission-status";
-import {
-  AppendConflict,
-  ThreadNotMaterialized,
-  ThreadStoreError,
-} from "@yielded/agent/thread-store";
+import { type SubmissionStatus } from "@yielded/agent/submission-status";
 import { RpcTargets, RpcTracing } from "effect-cf";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -56,14 +33,26 @@ import * as Stream from "effect/Stream";
 
 import {
   callThreadObject,
-  DurableAlarmError,
   ThreadObjectNamespace,
   type ThreadObjectRpc,
 } from "./CloudflareBindings.ts";
-import { AdmissionLimitExceeded } from "./CloudflareConfig.ts";
 import { cloudflareFailureSignals, safeCauseMessage } from "./internal/boundary.ts";
 import { cloudflareCryptoLayer } from "./internal/crypto.ts";
 import { boundHostDiagnostic, HostProtocolError } from "./internal/host-protocol-error.ts";
+import {
+  AwaitSettlementRequest,
+  AwaitProgressRequest,
+  CancelProgressRequest,
+  ObservePageRequest,
+  decodeHostResponse,
+  hostOperations,
+  type HostFailure,
+  type HostSuccess,
+  type HostOperation,
+  type ProgressCancelled,
+  type SettlementReached,
+  type SettlementRecordReached,
+} from "./internal/host-protocol.ts";
 import { Observation as LiveTextObservation } from "./internal/live-text-observation.ts";
 import {
   liveTextProtocolFailure,
@@ -72,6 +61,48 @@ import {
 import { decodeLiveText, type LiveTextFrame } from "./LiveText.ts";
 
 export { boundHostDiagnostic, HostProtocolError } from "./internal/host-protocol-error.ts";
+
+export {
+  SubmitRequest,
+  ObservePageRequest,
+  AwaitSettlementRequest,
+  AwaitProgressRequest,
+  CancelProgressRequest,
+  HostFailure,
+  SubmitSucceeded,
+  SubmissionStatusResponse,
+  SettlementReached,
+  SettlementRecordReached,
+  ObservedPage,
+  ProgressObserved,
+  ProgressCancelled,
+  AbortRecorded,
+  ApprovalRecorded,
+  UnknownResolutionRecorded,
+  HostFailed,
+  HostResponse,
+  decodeSubmitRequest,
+  encodeSubmitRequest,
+  decodeReceipt,
+  encodeReceipt,
+  decodeAwaitSettlementRequest,
+  encodeAwaitSettlementRequest,
+  decodeObservePageRequest,
+  encodeObservePageRequest,
+  decodeAwaitProgressRequest,
+  encodeAwaitProgressRequest,
+  decodeCancelProgressRequest,
+  encodeCancelProgressRequest,
+  decodeAbortCommand,
+  encodeAbortCommand,
+  decodeApprovalDecisionCommand,
+  encodeApprovalDecisionCommand,
+  decodeUnknownResolutionCommand,
+  encodeUnknownResolutionCommand,
+  encodeHostResponse,
+  decodeHostResponse,
+} from "./internal/host-protocol.ts";
+
 export { decodeLiveText, LiveTextFrame } from "./LiveText.ts";
 
 /**
@@ -99,276 +130,26 @@ export class ThreadClientError extends Schema.TaggedError<ThreadClientError>()(
   },
 ) {}
 
-// ---------------------------------------------------------------------------
-// Requests
-// ---------------------------------------------------------------------------
+export type ClientSubmitFailure = typeof hostOperations.submit.failure.Type | ThreadClientError;
 
-/**
- * One durable submission, input ALREADY encoded by the caller through the Agent Binding's
- * input schema (the Worker bundles the same Agent definitions as the Object, so schema
- * validation happens client-side; the resolved Binding re-validates at claim time). The
- * Thread identity is deliberately absent — the addressed Object IS the lane.
- */
-export class SubmitRequest extends Schema.Class<SubmitRequest>(
-  "@effect-agent/platform-cloudflare/SubmitRequest",
-)({
-  agentId: AgentId,
-  principal: Principal,
-  idempotencyKey: IdempotencyKey,
-  admissionGroup: Schema.optionalKey(AdmissionGroup),
-  admissionFence: Schema.optionalKey(AdmissionFence),
-  workerAdmission: Schema.optionalKey(WorkerAdmission),
-  messageAdmission: Schema.optionalKey(InputMessage),
-  definitions: DefinitionDigests,
-  inputPayload: PersistedJson,
-}) {}
+export type ClientAwaitFailure =
+  | typeof hostOperations.awaitSettlement.failure.Type
+  | ThreadClientError;
 
-/** One bounded page of canonical records after an optional sequence. */
-export class ObservePageRequest extends Schema.Class<ObservePageRequest>(
-  "@effect-agent/platform-cloudflare/ObservePageRequest",
-)({
-  afterSequence: Schema.optionalKey(CanonicalSequence),
-  limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1_024)),
-}) {}
+export type ClientObserveFailure =
+  | typeof hostOperations.observePage.failure.Type
+  | ThreadClientError;
 
-/** Receipt-shaped observation request; the optional identity owns only the remote wait. */
-export class AwaitSettlementRequest extends Receipt.extend<AwaitSettlementRequest>(
-  "@effect-agent/platform-cloudflare/AwaitSettlementRequest",
-)({
-  waiterId: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256))),
-}) {}
-
-/** One event-driven wait for canonical progress strictly after this sequence. */
-export class AwaitProgressRequest extends Schema.Class<AwaitProgressRequest>(
-  "@effect-agent/platform-cloudflare/AwaitProgressRequest",
-)({
-  afterSequence: CanonicalSequence,
-  waiterId: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256)),
-}) {}
-
-/** Best-effort cancellation of one in-flight progress or settlement observation. */
-export class CancelProgressRequest extends Schema.Class<CancelProgressRequest>(
-  "@effect-agent/platform-cloudflare/CancelProgressRequest",
-)({
-  waiterId: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256)),
-}) {}
-
-// ---------------------------------------------------------------------------
-// Responses
-// ---------------------------------------------------------------------------
-
-/**
- * Every typed failure a host entry point can produce, plus the protocol's own errors. Same
- * closed-union discipline as the WP2 `PortFailure`: members re-decode to the SAME tagged
- * classes on the Worker side; `cause` chains travel as Schema defects without instance
- * fidelity (plan §2.8).
- */
-export const HostFailure = Schema.Union([
-  AgentInputError,
-  DigestError,
-  AdmissionConflict,
-  AdmissionPolicyError,
-  SettlementConflict,
-  ApprovalConflict,
-  UnknownResolutionConflict,
-  JoinedToHost,
-  LedgerError,
-  OwnershipLost,
-  ThreadStoreError,
-  ThreadNotMaterialized,
-  AppendConflict,
-  DurableRuntimeFailpointError,
-  AdmissionLimitExceeded,
-  DurableAlarmError,
-  OperationDenied,
-  HostProtocolError,
-]);
-
-export type HostFailure = typeof HostFailure.Type;
-
-export class SubmitSucceeded extends Schema.TaggedClass<SubmitSucceeded>(
-  "@effect-agent/platform-cloudflare/SubmitSucceeded",
-)("SubmitSucceeded", {
-  receipt: Receipt,
-}) {}
-
-export class SubmissionStatusResponse extends Schema.TaggedClass<SubmissionStatusResponse>(
-  "@effect-agent/platform-cloudflare/SubmissionStatusResponse",
-)("SubmissionStatusResponse", { status: SubmissionStatus }) {}
-
-export class SettlementReached extends Schema.TaggedClass<SettlementReached>(
-  "@effect-agent/platform-cloudflare/SettlementReached",
-)("SettlementReached", {
-  settlement: Settlement,
-}) {}
-
-/** The exact canonical record of an operationally finalized Submission. */
-export class SettlementRecordReached extends Schema.TaggedClass<SettlementRecordReached>(
-  "@effect-agent/platform-cloudflare/SettlementRecordReached",
-)("SettlementRecordReached", {
-  record: SubmissionSettledRecord,
-}) {}
-
-export class ObservedPage extends Schema.TaggedClass<ObservedPage>(
-  "@effect-agent/platform-cloudflare/ObservedPage",
-)("ObservedPage", {
-  records: Schema.Array(CanonicalRecordEnvelope).check(Schema.isMaxLength(1_024)),
-}) {}
-
-/** A record was already committed or an incarnation-local hint says the caller should re-read. */
-export class ProgressObserved extends Schema.TaggedClass<ProgressObserved>(
-  "@effect-agent/platform-cloudflare/ProgressObserved",
-)("ProgressObserved", {}) {}
-
-export class ProgressCancelled extends Schema.TaggedClass<ProgressCancelled>(
-  "@effect-agent/platform-cloudflare/ProgressCancelled",
-)("ProgressCancelled", {}) {}
-
-export class AbortRecorded extends Schema.TaggedClass<AbortRecorded>(
-  "@effect-agent/platform-cloudflare/AbortRecorded",
-)("AbortRecorded", {
-  intent: AbortIntent,
-}) {}
-
-export class ApprovalRecorded extends Schema.TaggedClass<ApprovalRecorded>(
-  "@effect-agent/platform-cloudflare/ApprovalRecorded",
-)("ApprovalRecorded", {
-  intent: ApprovalDecisionIntent,
-}) {}
-
-export class UnknownResolutionRecorded extends Schema.TaggedClass<UnknownResolutionRecorded>(
-  "@effect-agent/platform-cloudflare/UnknownResolutionRecorded",
-)("UnknownResolutionRecorded", {
-  intent: UnknownResolutionIntent,
-}) {}
-
-/** The entry point failed TYPED on the Object; the failure re-decodes verbatim. */
-export class HostFailed extends Schema.TaggedClass<HostFailed>(
-  "@effect-agent/platform-cloudflare/HostFailed",
-)("HostFailed", {
-  failure: HostFailure,
-}) {}
-
-/** The uniform answer of one host entry point. Callers narrow by the tag their call implies. */
-export const HostResponse = Schema.Union([
-  SubmitSucceeded,
-  SettlementReached,
-  SettlementRecordReached,
-  SubmissionStatusResponse,
-  ObservedPage,
-  ProgressObserved,
-  ProgressCancelled,
-  AbortRecorded,
-  ApprovalRecorded,
-  UnknownResolutionRecorded,
-  HostFailed,
-]);
-
-export type HostResponse = typeof HostResponse.Type;
-
-// ---------------------------------------------------------------------------
-// Codecs (shared by the Object endpoints and the Worker client)
-// ---------------------------------------------------------------------------
-
-export const decodeSubmitRequest = Schema.decodeUnknownEffect(SubmitRequest);
-// Encode the caller's fields directly: constructing a Class first would validate the
-// same envelope twice. The Object still decodes its untrusted request independently.
-export const encodeSubmitRequest = Schema.encodeEffect(Schema.Struct(SubmitRequest.fields));
-export const decodeReceipt = Schema.decodeUnknownEffect(Receipt);
-export const encodeReceipt = Schema.encodeEffect(Receipt);
-export const decodeAwaitSettlementRequest = Schema.decodeUnknownEffect(AwaitSettlementRequest);
-export const encodeAwaitSettlementRequest = Schema.encodeEffect(AwaitSettlementRequest);
-export const decodeObservePageRequest = Schema.decodeUnknownEffect(ObservePageRequest);
-export const encodeObservePageRequest = Schema.encodeEffect(ObservePageRequest);
-export const decodeAwaitProgressRequest = Schema.decodeUnknownEffect(AwaitProgressRequest);
-export const encodeAwaitProgressRequest = Schema.encodeEffect(AwaitProgressRequest);
-export const decodeCancelProgressRequest = Schema.decodeUnknownEffect(CancelProgressRequest);
-export const encodeCancelProgressRequest = Schema.encodeEffect(CancelProgressRequest);
-export const decodeAbortCommand = Schema.decodeUnknownEffect(AbortCommand);
-export const encodeAbortCommand = Schema.encodeEffect(AbortCommand);
-export const decodeApprovalDecisionCommand = Schema.decodeUnknownEffect(ApprovalDecisionCommand);
-export const encodeApprovalDecisionCommand = Schema.encodeEffect(ApprovalDecisionCommand);
-export const decodeUnknownResolutionCommand = Schema.decodeUnknownEffect(UnknownResolutionCommand);
-export const encodeUnknownResolutionCommand = Schema.encodeEffect(UnknownResolutionCommand);
-export const encodeHostResponse = Schema.encodeEffect(HostResponse);
-export const decodeHostResponse = Schema.decodeUnknownEffect(HostResponse);
-
-// ---------------------------------------------------------------------------
-// Worker-side client
-// ---------------------------------------------------------------------------
-
-/** Failure surface of `CloudflareThreadClient.submit`. */
-const ClientSubmitHostFailure = Schema.Union([
-  AgentInputError,
-  DigestError,
-  AdmissionConflict,
-  AdmissionPolicyError,
-  LedgerError,
-  OwnershipLost,
-  ThreadStoreError,
-  ThreadNotMaterialized,
-  AppendConflict,
-  DurableRuntimeFailpointError,
-  AdmissionLimitExceeded,
-  DurableAlarmError,
-  HostProtocolError,
-]);
-
-const ClientAwaitHostFailure = Schema.Union([
-  LedgerError,
-  OwnershipLost,
-  SettlementConflict,
-  OperationDenied,
-  HostProtocolError,
-]);
-
-const ClientObserveHostFailure = Schema.Union([
-  ThreadStoreError,
-  ThreadNotMaterialized,
-  OperationDenied,
-  HostProtocolError,
-]);
-
-const ClientAbortHostFailure = Schema.Union([
-  OperationDenied,
-  LedgerError,
-  OwnershipLost,
-  SettlementConflict,
-  JoinedToHost,
-  DurableRuntimeFailpointError,
-  DurableAlarmError,
-  HostProtocolError,
-]);
-
-const ClientApprovalHostFailure = Schema.Union([
-  LedgerError,
-  OwnershipLost,
-  SettlementConflict,
-  ApprovalConflict,
-  OperationDenied,
-  DurableAlarmError,
-  HostProtocolError,
-]);
-
-const ClientUnknownHostFailure = Schema.Union([
-  LedgerError,
-  OwnershipLost,
-  SettlementConflict,
-  UnknownResolutionConflict,
-  JoinedToHost,
-  DurableRuntimeFailpointError,
-  OperationDenied,
-  DurableAlarmError,
-  HostProtocolError,
-]);
-
-export type ClientSubmitFailure = typeof ClientSubmitHostFailure.Type | ThreadClientError;
-export type ClientAwaitFailure = typeof ClientAwaitHostFailure.Type | ThreadClientError;
-export type ClientObserveFailure = typeof ClientObserveHostFailure.Type | ThreadClientError;
 export type ClientProgressFailure = ClientObserveFailure;
-export type ClientAbortFailure = typeof ClientAbortHostFailure.Type | ThreadClientError;
-export type ClientApprovalFailure = typeof ClientApprovalHostFailure.Type | ThreadClientError;
-export type ClientUnknownFailure = typeof ClientUnknownHostFailure.Type | ThreadClientError;
+export type ClientAbortFailure = typeof hostOperations.abort.failure.Type | ThreadClientError;
+
+export type ClientApprovalFailure =
+  | typeof hostOperations.resolveApproval.failure.Type
+  | ThreadClientError;
+
+export type ClientUnknownFailure =
+  | typeof hostOperations.resolveUnknown.failure.Type
+  | ThreadClientError;
 
 const outOfContract = (threadId: string, operation: string, observed: string): ThreadClientError =>
   ThreadClientError.make({
@@ -377,19 +158,6 @@ const outOfContract = (threadId: string, operation: string, observed: string): T
       `The Thread Object answered ${operation} with the out-of-contract ${observed}.`,
     ),
   });
-
-const hostRpcMethods = {
-  submit: "submitEncoded",
-  awaitSettlement: "awaitSettlementEncoded",
-  awaitSettlementRecord: "awaitSettlementRecordEncoded",
-  submissionStatus: "submissionStatusEncoded",
-  awaitProgress: "awaitProgressEncoded",
-  cancelProgress: "cancelProgressEncoded",
-  observePage: "observePage",
-  abort: "abortEncoded",
-  resolveApproval: "resolveApprovalEncoded",
-  resolveUnknown: "resolveUnknownEncoded",
-} as const satisfies Record<string, keyof ThreadObjectRpc>;
 
 /** Worker-side client over the Thread Object namespace (DEPLOY-010). */
 export class CloudflareThreadClient extends Context.Service<
@@ -508,18 +276,30 @@ export class CloudflareThreadClient extends Context.Service<
       const crypto = yield* Crypto.Crypto;
 
       const call = Effect.fnUntraced(
-        function* (
+        function* <Request, Success extends HostSuccess, Failure extends HostFailure>(
           threadId: ThreadId,
-          operation: keyof typeof hostRpcMethods,
-          encoded: unknown,
-        ): Effect.fn.Return<HostResponse, ThreadClientError | HostProtocolError> {
+          contract: HostOperation<Request, Success, Failure>,
+          request: Request,
+        ): Effect.fn.Return<Success, Failure | ThreadClientError | HostProtocolError> {
+          const operation = contract.name;
+
+          const encoded = yield* contract.encodeRequest(request).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(
+                  `${operation} request encode failed: ${error.message}`,
+                ),
+              }),
+            ),
+          );
+
           // Empty arguments preserve native arity. Passing `undefined` still adds an argument.
           const traceArgs =
             rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);
 
           const raw = yield* callThreadObject(
             threadId,
-            (stub) => stub[hostRpcMethods[operation]](encoded, ...traceArgs),
+            (stub) => stub[contract.method](encoded, ...traceArgs),
             (cause) =>
               ThreadClientError.make({
                 threadId,
@@ -534,50 +314,44 @@ export class CloudflareThreadClient extends Context.Service<
               }),
           ).pipe(Effect.provideService(ThreadObjectNamespace, namespace));
 
-          return yield* decodeHostResponse(raw).pipe(
-            Effect.mapError((error): HostProtocolError =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(
-                  `The ${operation} answer could not be decoded: ${error.message}`,
+          const response = yield* contract.decodeResponse(raw).pipe(
+            // Valid replies take one decode. The broad fallback only distinguishes malformed
+            // envelopes from a valid result/failure belonging to another host operation.
+            Effect.catch(() =>
+              decodeHostResponse(raw).pipe(
+                Effect.mapError((error) =>
+                  HostProtocolError.make({
+                    message: boundHostDiagnostic(
+                      `The ${operation} answer could not be decoded: ${error.message}`,
+                    ),
+                  }),
                 ),
-              }),
+                Effect.flatMap((observed) =>
+                  Effect.fail(
+                    outOfContract(
+                      threadId,
+                      operation,
+                      observed._tag === "HostFailed"
+                        ? `failure ${observed.failure._tag}`
+                        : `result ${observed._tag}`,
+                    ),
+                  ),
+                ),
+              ),
             ),
           );
+
+          if (response._tag === "HostFailed") return yield* Effect.fail(response.failure);
+
+          return response;
         },
-        (effect, threadId, operation) =>
+        (effect, threadId, contract) =>
           rpcTracing === undefined
             ? Effect.withSpan(effect, "CloudflareThreadClient.call", {
-                attributes: { threadId, operation },
+                attributes: { threadId, operation: contract.name },
               })
-            : RpcTracing.withRpcClientSpan(effect, rpcTracing, hostRpcMethods[operation]),
+            : RpcTracing.withRpcClientSpan(effect, rpcTracing, contract.method),
       );
-
-      const expect = <ResultSchema extends Schema.Top, FailureSchema extends Schema.Top>(
-        threadId: string,
-        operation: string,
-        resultSchema: ResultSchema,
-        failureSchema: FailureSchema,
-      ) => {
-        const isExpectedResult = Schema.is(resultSchema);
-        const isExpectedFailure = Schema.is(failureSchema);
-
-        return (
-          response: HostResponse,
-        ): Effect.Effect<ResultSchema["Type"], FailureSchema["Type"] | ThreadClientError> => {
-          if (response._tag === "HostFailed") {
-            const failure = response.failure;
-
-            return isExpectedFailure(failure)
-              ? Effect.fail(failure)
-              : Effect.fail(outOfContract(threadId, operation, `failure ${failure._tag}`));
-          }
-          if (!isExpectedResult(response)) {
-            return Effect.fail(outOfContract(threadId, operation, `result ${response._tag}`));
-          }
-
-          return Effect.succeed(response);
-        };
-      };
 
       const readPage = Effect.fnUntraced(function* (
         threadId: ThreadId,
@@ -591,30 +365,17 @@ export class CloudflareThreadClient extends Context.Service<
           limit: options?.limit ?? 256,
         });
 
-        const encoded = yield* encodeObservePageRequest(request).pipe(
-          Effect.mapError((error) =>
-            HostProtocolError.make({
-              message: boundHostDiagnostic(`observePage request encode failed: ${error.message}`),
-            }),
-          ),
-        );
-
-        const response = yield* call(threadId, "observePage", encoded);
-
-        const page = yield* expect(
-          threadId,
-          "observePage",
-          ObservedPage,
-          ClientObserveHostFailure,
-        )(response);
+        const page = yield* call(threadId, hostOperations.observePage, request);
 
         return page.records;
       });
 
       const cancelProgress = (threadId: ThreadId, waiterId: string): Effect.Effect<void> =>
-        encodeCancelProgressRequest(CancelProgressRequest.make({ waiterId })).pipe(
-          Effect.mapError(() => undefined),
-          Effect.flatMap((encoded) => call(threadId, "cancelProgress", encoded)),
+        call<CancelProgressRequest, ProgressCancelled, HostProtocolError>(
+          threadId,
+          hostOperations.cancelProgress,
+          CancelProgressRequest.make({ waiterId }),
+        ).pipe(
           // Finalizers are uninterruptible; only the foreign RPC branch must remain
           // interruptible so a lost cancellation reply cannot prevent local shutdown.
           Effect.interruptible,
@@ -623,33 +384,36 @@ export class CloudflareThreadClient extends Context.Service<
           Effect.ignore,
         );
 
-      const awaitSettlementCall = Effect.fnUntraced(function* (
+      const awaitSettlementCall = Effect.fnUntraced(function* <
+        Success extends SettlementReached | SettlementRecordReached,
+      >(
         receipt: Receipt,
-        operation: "awaitSettlement" | "awaitSettlementRecord",
-      ): Effect.fn.Return<HostResponse, ClientAwaitFailure> {
+        contract: HostOperation<
+          AwaitSettlementRequest,
+          Success | ProgressCancelled,
+          typeof hostOperations.awaitSettlement.failure.Type
+        >,
+      ): Effect.fn.Return<Success, ClientAwaitFailure> {
         const waiterId = yield* crypto.randomUUIDv4().pipe(
           Effect.mapError((error) =>
             HostProtocolError.make({
               message: boundHostDiagnostic(
-                `${operation} cancellation identity generation failed: ${error.message}`,
+                `${contract.name} cancellation identity generation failed: ${error.message}`,
               ),
             }),
           ),
         );
 
-        const encoded = yield* encodeAwaitSettlementRequest(
+        const response = yield* call(
+          receipt.threadId,
+          contract,
           AwaitSettlementRequest.make({ ...receipt, waiterId }),
-        ).pipe(
-          Effect.mapError((error) =>
-            HostProtocolError.make({
-              message: boundHostDiagnostic(`${operation} request encode failed: ${error.message}`),
-            }),
-          ),
-        );
+        ).pipe(Effect.onInterrupt(() => cancelProgress(receipt.threadId, waiterId)));
 
-        return yield* call(receipt.threadId, operation, encoded).pipe(
-          Effect.onInterrupt(() => cancelProgress(receipt.threadId, waiterId)),
-        );
+        if (response._tag === "ProgressCancelled")
+          return yield* outOfContract(receipt.threadId, contract.name, "result ProgressCancelled");
+
+        return response;
       });
 
       const watchTextBytes = (
@@ -766,7 +530,7 @@ export class CloudflareThreadClient extends Context.Service<
 
             if (
               response._tag === "HostFailed" &&
-              Schema.is(ClientObserveHostFailure)(response.failure)
+              Schema.is(hostOperations.observePage.failure)(response.failure)
             )
               return yield* response.failure;
 
@@ -816,64 +580,24 @@ export class CloudflareThreadClient extends Context.Service<
             inputPayload,
           };
 
-          const encoded = yield* encodeSubmitRequest(request).pipe(
-            Effect.mapError((error) =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(`submit request encode failed: ${error.message}`),
-              }),
-            ),
-          );
-
-          const response = yield* call(options.threadId, "submit", encoded);
-
-          const succeeded = yield* expect(
-            options.threadId,
-            "submit",
-            SubmitSucceeded,
-            ClientSubmitHostFailure,
-          )(response);
+          const succeeded = yield* call(options.threadId, hostOperations.submit, request);
 
           return succeeded.receipt;
         }),
 
         submissionStatus: Effect.fnUntraced(function* (receipt) {
-          const encoded = yield* encodeReceipt(receipt).pipe(
-            Effect.mapError(() => HostProtocolError.make({ message: "Invalid receipt" })),
-          );
-
-          const response = yield* call(receipt.threadId, "submissionStatus", encoded);
-
-          const result = yield* expect(
-            receipt.threadId,
-            "submissionStatus",
-            SubmissionStatusResponse,
-            ClientAwaitHostFailure,
-          )(response);
+          const result = yield* call(receipt.threadId, hostOperations.submissionStatus, receipt);
 
           return result.status;
         }),
         awaitSettlement: Effect.fnUntraced(function* (receipt) {
-          const response = yield* awaitSettlementCall(receipt, "awaitSettlement");
-
-          const settled = yield* expect(
-            receipt.threadId,
-            "awaitSettlement",
-            SettlementReached,
-            ClientAwaitHostFailure,
-          )(response);
+          const settled = yield* awaitSettlementCall(receipt, hostOperations.awaitSettlement);
 
           return settled.settlement;
         }),
 
         awaitSettlementRecord: Effect.fnUntraced(function* (receipt) {
-          const response = yield* awaitSettlementCall(receipt, "awaitSettlementRecord");
-
-          const settled = yield* expect(
-            receipt.threadId,
-            "awaitSettlementRecord",
-            SettlementRecordReached,
-            ClientAwaitHostFailure,
-          )(response);
+          const settled = yield* awaitSettlementCall(receipt, hostOperations.awaitSettlementRecord);
 
           return settled.record;
         }),
@@ -891,21 +615,8 @@ export class CloudflareThreadClient extends Context.Service<
 
           const request = AwaitProgressRequest.make({ afterSequence, waiterId });
 
-          const encoded = yield* encodeAwaitProgressRequest(request).pipe(
-            Effect.mapError((error) =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(
-                  `awaitProgress request encode failed: ${error.message}`,
-                ),
-              }),
-            ),
-          );
-
           const attempt = (retry: number): Effect.Effect<void, ClientProgressFailure> =>
-            call(threadId, "awaitProgress", encoded).pipe(
-              Effect.flatMap(
-                expect(threadId, "awaitProgress", ProgressObserved, ClientObserveHostFailure),
-              ),
+            call(threadId, hostOperations.awaitProgress, request).pipe(
               Effect.asVoid,
               Effect.catchTag("ThreadClientError", (error) =>
                 error.retryable === true && error.overloaded !== true && retry < 5
@@ -940,64 +651,19 @@ export class CloudflareThreadClient extends Context.Service<
         }),
 
         abort: Effect.fnUntraced(function* (threadId, command) {
-          const encoded = yield* encodeAbortCommand(command).pipe(
-            Effect.mapError((error) =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(`abort command encode failed: ${error.message}`),
-              }),
-            ),
-          );
-
-          const response = yield* call(threadId, "abort", encoded);
-
-          const recorded = yield* expect(
-            threadId,
-            "abort",
-            AbortRecorded,
-            ClientAbortHostFailure,
-          )(response);
+          const recorded = yield* call(threadId, hostOperations.abort, command);
 
           return recorded.intent;
         }),
 
         resolveApproval: Effect.fnUntraced(function* (threadId, command) {
-          const encoded = yield* encodeApprovalDecisionCommand(command).pipe(
-            Effect.mapError((error) =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(`approval command encode failed: ${error.message}`),
-              }),
-            ),
-          );
-
-          const response = yield* call(threadId, "resolveApproval", encoded);
-
-          const recorded = yield* expect(
-            threadId,
-            "resolveApproval",
-            ApprovalRecorded,
-            ClientApprovalHostFailure,
-          )(response);
+          const recorded = yield* call(threadId, hostOperations.resolveApproval, command);
 
           return recorded.intent;
         }),
 
         resolveUnknown: Effect.fnUntraced(function* (threadId, command) {
-          const encoded = yield* encodeUnknownResolutionCommand(command).pipe(
-            Effect.mapError((error) =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(`resolution command encode failed: ${error.message}`),
-              }),
-            ),
-          );
-
-          const response = yield* call(threadId, "resolveUnknown", encoded);
-
-          const recorded = yield* expect(
-            threadId,
-            "resolveUnknown",
-            UnknownResolutionRecorded,
-            ClientUnknownHostFailure,
-          )(response);
+          const recorded = yield* call(threadId, hostOperations.resolveUnknown, command);
 
           return recorded.intent;
         }),
