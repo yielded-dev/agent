@@ -54,7 +54,6 @@ const makeClient = (
   markdown: () => Effect.fail(unusedRpcError),
   links: () => Effect.fail(unusedRpcError),
   scrape: () => Effect.fail(unusedRpcError),
-  json: () => Effect.fail(unusedRpcError),
 });
 
 const screenshotLayer = (client: BrowserQuickActionClient): Layer.Layer<PageScreenshot> =>

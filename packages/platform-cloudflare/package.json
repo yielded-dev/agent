@@ -18,7 +18,6 @@
     ".": "./src/index.ts",
     "./alarm": "./src/Alarm.ts",
     "./browser-rest-capture": "./src/BrowserRestCapture.ts",
-    "./browser-rest-crawl": "./src/BrowserRestCrawl.ts",
     "./cloudflare-bindings": "./src/CloudflareBindings.ts",
     "./cloudflare-browser": "./src/CloudflareBrowser.ts",
     "./cloudflare-code-mode": "./src/CloudflareCodeMode.ts",

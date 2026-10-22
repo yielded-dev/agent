@@ -60,7 +60,6 @@
     "./operation-authorizer": "./src/durable/OperationAuthorizer.ts",
     "./output": "./src/engine/Output.ts",
     "./page-capture": "./src/sandbox/PageCapture.ts",
-    "./page-crawl": "./src/sandbox/PageCrawl.ts",
     "./page-screenshot": "./src/sandbox/PageScreenshot.ts",
     "./persistent-history": "./src/durable/PersistentHistory.ts",
     "./prepared-input-admission": "./src/durable/PreparedInputAdmission.ts",

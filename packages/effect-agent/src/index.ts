@@ -33,7 +33,6 @@ export * as Messaging from "./capabilities/Messaging.ts";
 export * as MessagingHost from "./engine/MessagingHost.ts";
 export * as Output from "./engine/Output.ts";
 export * as PageCapture from "./sandbox/PageCapture.ts";
-export * as PageCrawl from "./sandbox/PageCrawl.ts";
 export * as PageScreenshot from "./sandbox/PageScreenshot.ts";
 export * as ProvisionalText from "./core/ProvisionalText.ts";
 export * as Receipt from "./core/Receipt.ts";

@@ -274,18 +274,10 @@ generic bag of provider SDK methods.
 **Page Capture**
 
 A stateless render of one page in a managed headless browser returning exactly one bounded
-output, including rendered content, links, structured extraction, or grouped selector scrape.
-Its host allowlist, action set, and byte budget are immutable; the host policy governs
-navigation, redirects, and subrequests. Capture results are untrusted, browser JavaScript makes
-execution uncertain rather than read-only, and separately billed model inference requires
-explicit host authorization and accounting.
-
-**Page Crawl**
-
-A scoped stream of rendered Markdown records discovered from one credential-free HTTPS URL. The
-starting host and page-count, depth, byte, and deadline limits are fixed before execution; provider
-job identity and pagination remain adapter-private, and a known-running job is cancelled when the
-consumer's Scope exits.
+output: rendered HTML, Markdown, links, or grouped selector scrape. The host fixes the target,
+action, engine, resource policy, and byte budget before dispatch. Its policy governs navigation,
+redirects, and subrequests. Capture results are untrusted, and browser JavaScript makes execution
+uncertain rather than read-only. Applications own traversal across multiple pages and its limits.
 
 **Interactive Browser**
 

@@ -2,8 +2,9 @@ import type { Agent } from "@yielded/agent";
 import { ThreadMaintenance } from "@yielded/agent-platform-cloudflare/alarm";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import {
-  CloudflareBrowser,
-  type CloudflareBrowserOptions,
+  BrowserQuickActionBrowserBinding,
+  browserQuickActionCaptureLayer,
+  type BrowserQuickActionCaptureOptions,
 } from "@yielded/agent-platform-cloudflare/cloudflare-browser";
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
@@ -78,7 +79,7 @@ import { plannerWorker, workerStatus, WorkerLocator, WorkerStatusRequest } from 
 declare global {
   namespace Cloudflare {
     interface Env {
-      BROWSER?: CloudflareBrowserOptions["browser"];
+      BROWSER?: BrowserQuickActionCaptureOptions["browser"];
     }
   }
 }
@@ -458,7 +459,13 @@ const PlannerLive = Layer.unwrap(
       liveModel.pipe(Layer.provide(credentials)),
       "openai-selectable-v1",
       defaultPlannerSettings.model,
-      CloudflareBrowser.layer({ handlers: ReadTravelPageLive }, { browser: env.BROWSER }),
+      ReadTravelPageLive.pipe(
+        Layer.provide(
+          browserQuickActionCaptureLayer().pipe(
+            Layer.provide(BrowserQuickActionBrowserBinding.layer({ browser: env.BROWSER })),
+          ),
+        ),
+      ),
     );
   }),
 );

@@ -1,59 +1,79 @@
 ---
 title: Browser tools
-description: Choose page capture, bounded crawling, or a host-owned interactive browser.
+description: Choose native search, stateless page capture, or a host-owned browser session.
 ---
 
 <a id="browser-tools"></a>
 
-Choose the smallest browser capability the task needs. A capture returns one page result; a crawl
-collects a bounded set of pages; an interactive session keeps a live page for navigation and input.
-Your application owns destination access, credentials, and cleanup.
+Use `WebSearch.native({ tool })` to put a provider's hosted search tool in the agent's own model
+call. For a known page, a capture returns one bounded result; a browser session keeps a live page
+for navigation and input. Your application owns destination access, credentials, and cleanup.
 
 ## Choose an adapter
 
-| Need                                               | Capability                                | Host setup                                                    |
-| -------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| Render Markdown, scrape, or take a PNG in a Worker | Quick Actions                             | Cloudflare browser binding                                    |
-| Capture a page from Node or a Worker               | REST capture                              | Account ID, redacted token, Effect HttpClient                 |
-| Crawl one HTTPS host into Markdown                 | REST crawl                                | REST credentials and a Scope                                  |
-| Let an agent navigate and interact with websites   | BrowserUse + Code Mode + Browser Sessions | Worker Loader, browser binding, private lifecycle credentials |
+| Need                                             | Capability                                | Host setup                                                    |
+| ------------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------- |
+| Render content, links, or selector groups        | PageCapture with Quick Actions            | Cloudflare browser binding                                    |
+| Capture a page from Node or a Worker             | PageCapture with REST                     | Account ID, redacted token, Effect HttpClient                 |
+| Take an ephemeral PNG screenshot                 | PageScreenshot with Quick Actions         | Cloudflare browser binding                                    |
+| Let an agent navigate and interact with websites | BrowserUse + Code Mode + Browser Sessions | Worker Loader, browser binding, private lifecycle credentials |
 
-## Give an agent a capture Tool
+## Capture a page
 
 ```ts twoslash
-import { WebCapture } from "@yielded/agent";
-import { Toolkit } from "effect/ai";
+import {
+  CapturePageMarkdown,
+  PageCapture,
+  PageCaptureLimits,
+  PageCaptureRequest,
+  PageResourcePolicy,
+  PageUrlTarget,
+} from "@yielded/agent/page-capture";
+import { Effect } from "effect";
 
-const ReadPage = WebCapture.make("read_page", {
-  description: "Read example.com as rendered Markdown.",
-  urls: ["example.com"],
-  actions: ["markdown"],
+const readPage = Effect.gen(function* () {
+  const capture = yield* PageCapture;
+  return yield* capture.capture(
+    PageCaptureRequest.make({
+      target: PageUrlTarget.make({ url: "https://example.com/" }),
+      action: CapturePageMarkdown.make({}),
+      engine: "chromium",
+      limits: PageCaptureLimits.make({ maxOutputBytes: 256 * 1024 }),
+      resourcePolicy: PageResourcePolicy.make({
+        allowRequestPatterns: ["^https://example\\.com(?:[/?#]|$)"],
+      }),
+    }),
+  );
 });
-
-const BrowserTools = Toolkit.make(ReadPage.tool);
 ```
 
-Use `BrowserTools` on the Agent. `CloudflareBrowser.layer(ReadPage, { browser })` supplies Worker
-handlers; `CloudflareBrowserRest.layer` supplies REST capture with an HTTP client. Set `urls: "*"`
-when the host permits arbitrary HTTPS pages and subresources. This opts out of the host allowlist;
-it does not provide private-network isolation. URL policy and actions are fixed before execution.
-Structured extraction additionally needs explicit authorization and
-accounting for model inference.
+Supply `browserQuickActionCaptureLayer()` with `BrowserQuickActionBrowserBinding.layer({ browser })`
+in a Worker, or use `browserRestCaptureLayer({ accountId, apiToken })` with an Effect HTTP client.
+Applications compose their own native Effect AI tools over this port; the
+[sandbox example](https://github.com/yielded-dev/agent/blob/main/examples/sandbox/src/web.ts)
+shows read, scrape, and screenshot tools.
 
-Capture tools accept up to 5 MiB of response data by default. Set `maxResponseBytes` to
-lower that limit. This is separate from the Agent's 50 KiB default
-[tool-result budget](/concepts/budgets/), which limits what enters model context and history.
-Use [saved tool outputs](/guide/context-management/#limit-tool-output) for follow-up reads of larger captures.
+Set the target, action, engine, resource policy, and response byte limit before dispatch.
+`PageCapture` returns rendered HTML, Markdown, links, or grouped selector scrape results.
+Choose an engine per operation; unsupported choices fail explicitly. There is no automatic engine
+fallback. A resource URL allowlist does not provide connection-time private-network isolation.
+For already approved HTML, use `PageHtmlTarget` and deny browser subrequests when the workload
+requires no further egress.
 
-## Capture and crawl
+The capture byte limit is separate from the Agent's 50 KiB default
+[tool-result budget](/concepts/budgets/). Use
+[saved tool outputs](/guide/context-management/#limit-tool-output) for follow-up reads of larger captures.
+For multiple pages, the application owns traversal and its host authorization, page/depth limits,
+total bytes, and deadline.
 
 For rendered pages, use a finite `waitForSelector` for the content you need. Navigation completion
 alone may return only a loading shell. Treat rendered text as untrusted, and distinguish missing
 content from evidence that something is absent.
 
-`PageCrawl` fixes the starting host, purposes, page/depth limits, bytes, and deadline. Scope closure
-cancels a known-running crawl. Quick Actions have a different limit: interrupting local waiting
-does not confirm termination of an unresolved remote browser request.
+`PageScreenshot` returns PNG bytes from a separate ephemeral pass. Its request fixes the engine,
+viewport, resource policy, navigation options, and byte limit. Authorize the URL before capture
+and recheck authority before publishing the result. Interrupting local waiting for a Quick Action
+does not confirm termination of its unresolved remote browser request.
 
 ## Interact with a browser
 

@@ -1,7 +1,5 @@
 import {
   PageCapture,
-  PageCaptureInferencePolicyError,
-  PageCaptureInferenceUse,
   PageCaptureNavigationError,
   PageCaptureOutputLimitError,
   PageCaptureProtocolError,
@@ -12,8 +10,6 @@ import {
   PageLinksCaptured,
   PageMarkdownCaptured,
   PageScrapeCaptured,
-  PageStructuredCaptured,
-  PageCaptureUnsupportedError,
   type PageCaptureAction,
   type PageCaptureCapture,
   type PageCaptureError,
@@ -30,11 +26,6 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-
-import {
-  BrowserQuickActionWorkersAi,
-  type BrowserQuickActionWorkersAiPolicy,
-} from "./CloudflareBrowser.ts";
 
 /** Node-safe REST PageCapture implementation; it never imports Worker runtime modules. */
 export const browserRestCaptureImplementation = SandboxImplementation.make({
@@ -133,9 +124,7 @@ const requestBody = (request: PageCaptureRequest): Record<string, unknown> => {
   return body;
 };
 
-const actionName = (
-  action: PageCaptureAction,
-): "content" | "markdown" | "links" | "scrape" | "json" => {
+const actionName = (action: PageCaptureAction): "content" | "markdown" | "links" | "scrape" => {
   switch (action._tag) {
     case "CapturePageContent":
       return "content";
@@ -145,8 +134,6 @@ const actionName = (
       return "links";
     case "CapturePageScrape":
       return "scrape";
-    case "CapturePageStructured":
-      return "json";
   }
 };
 
@@ -168,12 +155,6 @@ const actionBody = (request: PageCaptureRequest): Record<string, unknown> => {
       return {
         ...body,
         elements: request.action.selectors.map((selector) => ({ selector })),
-      };
-    case "CapturePageStructured":
-      return {
-        ...body,
-        response_format: { type: "json_schema", json_schema: request.action.responseFormat },
-        ...(request.action.prompt === undefined ? {} : { prompt: request.action.prompt }),
       };
   }
 };
@@ -304,8 +285,6 @@ const parseOutput = (
         ? decoded.value
         : protocolError("Browser Run scrape did not return bounded grouped element records");
     }
-    case "CapturePageStructured":
-      return PageStructuredCaptured.make({ value: envelope.value.result });
   }
 };
 
@@ -314,37 +293,10 @@ const isQuotaMessage = (text: string): boolean => /time limit|daily|quota/i.test
 const makeCapture = (
   client: HttpClient.HttpClient,
   options: BrowserRestCaptureOptions,
-  workersAi?: BrowserQuickActionWorkersAiPolicy,
 ): PageCaptureCapture =>
   Effect.fnUntraced(function* (
     request: PageCaptureRequest,
   ): Effect.fn.Return<PageCaptureResult, PageCaptureError> {
-    const usesWorkersAi = request.action._tag === "CapturePageStructured";
-
-    if (usesWorkersAi) {
-      if (workersAi === undefined) {
-        return yield* PageCaptureUnsupportedError.make({
-          implementation: browserRestCaptureImplementation,
-          feature: "action",
-          message:
-            "Structured capture invokes separately billed Workers AI and requires an explicit authorization and accounting policy",
-        });
-      }
-      yield* workersAi.authorizeAndAccount(request).pipe(
-        Effect.mapError((cause) =>
-          PageCaptureInferencePolicyError.make({
-            implementation: browserRestCaptureImplementation,
-            provider: "cloudflare-workers-ai",
-            reason: cause.reason,
-            message:
-              cause.reason === "authorization"
-                ? "Workers AI extraction was not authorized"
-                : "Workers AI extraction could not be accounted for",
-            cause,
-          }),
-        ),
-      );
-    }
     const action = actionName(request.action);
     const path = `${API_ORIGIN}/client/v4/accounts/${encodeURIComponent(options.accountId)}/browser-rendering/${action}`;
 
@@ -412,23 +364,14 @@ const makeCapture = (
     ) {
       return yield* output;
     }
+    const millis = browserMillis(response.headers);
 
     return PageCaptureResult.make({
       implementation: browserRestCaptureImplementation,
       output,
-      resourceUse: PageCaptureResourceUse.make({
-        ...(browserMillis(response.headers) === undefined
-          ? {}
-          : { browserMillis: browserMillis(response.headers) }),
-        ...(usesWorkersAi
-          ? {
-              inference: PageCaptureInferenceUse.make({
-                provider: "cloudflare-workers-ai",
-                modelCalls: 1,
-              }),
-            }
-          : {}),
-      }),
+      resourceUse: PageCaptureResourceUse.make(
+        millis === undefined ? {} : { browserMillis: millis },
+      ),
     });
   });
 
@@ -442,44 +385,3 @@ export const browserRestCaptureLayer = (
       PageCapture.of({ capture: makeCapture(client, options) }),
     ),
   );
-
-/** REST structured extraction additionally requires explicit Workers AI authorization/accounting. */
-export const browserRestWorkersAiCaptureLayer = (
-  options: BrowserRestCaptureOptions,
-): Layer.Layer<PageCapture, never, HttpClient.HttpClient | BrowserQuickActionWorkersAi> =>
-  Layer.effect(
-    PageCapture,
-    Effect.gen(function* () {
-      const client = yield* HttpClient.HttpClient;
-      const workersAi = yield* BrowserQuickActionWorkersAi;
-
-      return PageCapture.of({ capture: makeCapture(client, options, workersAi) });
-    }),
-  );
-
-/** Explicit REST credentials and optional authorization for separately billed extraction. */
-export interface CloudflareBrowserRestOptions extends BrowserRestCaptureOptions {
-  readonly workersAi?: BrowserQuickActionWorkersAiPolicy;
-}
-
-/** Node-safe WebCapture handler assembly; the application supplies its HttpClient. */
-export const CloudflareBrowserRest = {
-  /**
-   * Supports capture, scrape, and extraction definitions. Only PageCapture is supplied;
-   * handler errors and other services remain visible. Extraction fails closed without
-   * workersAi. Existing host policies, response limits, and scoped cleanup are unchanged.
-   */
-  layer: <A, E, R>(
-    definition: { readonly handlers: Layer.Layer<A, E, R> },
-    options: CloudflareBrowserRestOptions,
-  ): Layer.Layer<A, E, Exclude<R, PageCapture> | HttpClient.HttpClient> => {
-    const capture =
-      options.workersAi === undefined
-        ? browserRestCaptureLayer(options)
-        : browserRestWorkersAiCaptureLayer(options).pipe(
-            Layer.provide(BrowserQuickActionWorkersAi.layer(options.workersAi)),
-          );
-
-    return definition.handlers.pipe(Layer.provide(capture));
-  },
-};
