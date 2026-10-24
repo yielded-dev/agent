@@ -211,9 +211,7 @@ const command = Command.make(
       const elapsed = Number((yield* Clock.currentTimeNanos) - monotonic) / 1_000_000;
 
       const data = yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Json))(text).pipe(
-        Effect.orElseSucceed(() => {
-          unparsedResponse: text.slice(0, 2000);
-        }),
+        Effect.orElseSucceed(() => ({ unparsedResponse: text.slice(0, 2000) })),
       );
 
       yield* writeReplayCpuJson(file, {
