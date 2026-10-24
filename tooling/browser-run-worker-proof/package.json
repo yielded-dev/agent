@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "tsc --noEmit -p tsconfig.json",
+    "check": "effect-tsrs diagnostics --strict --project tsconfig.json",
     "prove:live": "vp test run --config vite.live.config.ts"
   },
   "dependencies": {

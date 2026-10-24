@@ -30,10 +30,6 @@ runs:
         retry-errors: "true"
         command: vp install --frozen-lockfile --ignore-scripts
 
-    - name: Patch Effect TypeScript-Go
-      shell: bash
-      run: vp run patch:tsgo
-
     # Installation can recreate node_modules. Restore task results afterwards;
     # Vite Task, rather than the Actions key, fingerprints source and lockfiles.
     - name: Restore Vite Task cache

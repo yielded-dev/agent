@@ -10,7 +10,7 @@
   ],
   "type": "module",
   "scripts": {
-    "prepare": "vp run patch:tsgo && vp config --no-agent --hooks-dir .vite-hooks",
+    "prepare": "vp config --no-agent --hooks-dir .vite-hooks",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "ci:version": "changeset version && vp install --ignore-scripts",
@@ -25,9 +25,9 @@
     "build": "vp run -r build && vp run action:build",
     "ready": "vp run check && vp run test && vp run build",
     "check:record-format": "bun scripts/verify-record-format.ts",
-    "typecheck": "vp run patch:tsgo && vp run -F './packages/*' -F './examples/*' -F './tooling/*' -F './docs' --concurrency-limit 1 check && vp run check:scripts",
-    "check:scripts": "tsc --noEmit -p scripts/tsconfig.json",
-    "check:docs": "tsc --noEmit -p docs/tsconfig.json"
+    "typecheck": "vp run -F './packages/*' -F './examples/*' -F './tooling/*' -F './docs' --concurrency-limit 1 check && vp run check:scripts",
+    "check:scripts": "effect-tsrs diagnostics --strict --project scripts/tsconfig.json",
+    "check:docs": "tsrs --noEmit -p docs/tsconfig.json"
   },
   "devDependencies": {
     "@changesets/changelog-github": "1.0.1",
@@ -55,12 +55,14 @@
     "@yielded/agent-storage-sql": "workspace:*",
     "@yielded/agent-storage-sqlite": "workspace:*",
     "@yielded/agent-testing": "workspace:*",
+    "@yielded/effect-tsrs": "catalog:",
     "alchemy": "catalog:",
     "effect": "catalog:",
     "effect-cf": "catalog:",
     "esbuild": "catalog:",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
+    "tsrs": "catalog:",
     "typescript": "catalog:",
     "typescript-twoslash": "catalog:",
     "vite": "catalog:",
@@ -151,7 +153,9 @@
     "@yielded/crypto": "0.1.0-beta.43",
     "@yielded/jose": "0.1.0-beta.43",
     "drizzle-orm": "1.0.0-rc.4",
-    "drizzle-kit": "1.0.0-rc.4"
+    "drizzle-kit": "1.0.0-rc.4",
+    "@yielded/effect-tsrs": "0.2.1",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929"
   },
   "catalogs": {
     "docs": {

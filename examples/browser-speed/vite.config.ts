@@ -33,7 +33,7 @@ export default defineConfig({
   run: {
     tasks: {
       check: {
-        command: "tsc --noEmit -p tsconfig.json",
+        command: "effect-tsrs diagnostics --strict --project tsconfig.json",
         cache: {
           input: [{ auto: true }, "src/**", "test/**", "tsconfig.json"],
           output: [],

@@ -101,14 +101,12 @@ jobs:
         run: ../node_modules/.bin/vp install --frozen-lockfile --ignore-scripts
 
       - name: Build candidate public packages
-        run: |
-          ./node_modules/.bin/vp run patch:tsgo
-          ./node_modules/.bin/vp run --no-cache -F './packages/*' build
+        run: ./node_modules/.bin/vp run --no-cache -F './packages/*' build
 
       - name: Build base public packages
         working-directory: .performance-base
         run: |
-          ./node_modules/.bin/vp run patch:tsgo
+          if grep -q '"patch:tsgo"' vite.config.ts; then ./node_modules/.bin/vp run patch:tsgo; fi
           ./node_modules/.bin/vp run --no-cache -F './packages/*' build
 
       - name: Compare sequential cohorts

@@ -186,9 +186,6 @@ jobs:
       - name: Install dependencies (frozen, scripts suppressed)
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Patch Effect TypeScript-Go
-        run: ./node_modules/.bin/vp run patch:tsgo
-
       # 12.2.0 is the first npm that can manage dist-tags through trusted publishing.
       - name: Upgrade npm for trusted publishing
         run: npm install --global npm@12.2.0

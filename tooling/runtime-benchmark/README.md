@@ -10,11 +10,9 @@ checkouts, install each checkout's own lockfile, and build before measuring:
 ```sh
 git worktree add --detach /tmp/effect-agent-base <exact-base-sha>
 vp install --frozen-lockfile
-vp run patch:tsgo
 vp run -F './packages/*' build
 cd /tmp/effect-agent-base
 vp install --frozen-lockfile
-vp run patch:tsgo
 vp run -F './packages/*' build
 rm -f test/fixtures/checkpoints.d.ts test/fixtures/storage-upgrade.d.ts test/fixtures/storage-v2.d.ts
 cd <candidate-checkout>

@@ -43,7 +43,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "check": "tsc --noEmit -p tsconfig.json",
+    "check": "effect-tsrs diagnostics --strict --project tsconfig.json",
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {

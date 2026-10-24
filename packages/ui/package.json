@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "check": "tsc --noEmit -p tsconfig.json"
+    "check": "effect-tsrs diagnostics --strict --project tsconfig.json"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
