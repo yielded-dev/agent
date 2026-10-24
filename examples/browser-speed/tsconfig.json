@@ -5,5 +5,13 @@
     "jsx": "react-jsx",
     "types": ["node", "vite/client", "@cloudflare/workers-types"]
   },
-  "include": ["src", "test", "vite.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "vite.config.ts",
+    "../shared/src/client.ts",
+    "../shared/src/cloudflare.ts",
+    "../shared/src/contract.ts",
+    "../shared/src/server.ts"
+  ]
 }

@@ -9,6 +9,7 @@
     "../alchemy.run.ts",
     "../docs/legacy-redirect.ts",
     "../docs/worker.ts",
-    "../oxlint/*.ts"
+    "../oxlint/*.ts",
+    "internal/comparison-exports.ts"
   ]
 }
