@@ -42,7 +42,7 @@ export const reviewWebSearch = Config.Boolean("PR_REVIEW_WEB_SEARCH").pipe(
 /** Bound hosted actions while allowing search, page opens, and finds in one response. */
 export const REVIEW_WEB_SEARCH_MAX_TOOL_CALLS = 8;
 
-const ReviewCostUsd = Schema.Number.check(Schema.isBetween({ minimum: 0.01, maximum: 100 }));
+const ReviewCostUsd = Schema.Finite.check(Schema.isBetween({ minimum: 0.01, maximum: 100 }));
 
 export const reviewBaseCostUsd = Config.schema(ReviewCostUsd, "PR_REVIEW_BASE_COST_USD").pipe(
   Config.withDefault(1),

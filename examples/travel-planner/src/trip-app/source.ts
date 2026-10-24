@@ -289,7 +289,7 @@ export const appSourceLayer = (
       }).pipe(
         Effect.scoped,
         Effect.timeoutOrElse({ duration: "1 second", orElse: () => Effect.void }),
-        Effect.catch(() => Effect.void),
+        Effect.ignore(),
       ),
     );
 

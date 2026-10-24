@@ -135,8 +135,8 @@ const Result = Schema.Struct({
     value: Schema.optionalKey(Schema.Unknown),
   }),
   app: TripApp,
-  compiles: Schema.Number,
-  reads: Schema.Number,
+  compiles: Schema.Finite,
+  reads: Schema.Finite,
   manifest: Schema.NullOr(
     Schema.Struct({
       commitId: Schema.String,

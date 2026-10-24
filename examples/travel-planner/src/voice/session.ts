@@ -1,4 +1,6 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { Clock, Context, Deferred, Effect, Schema, Stream } from "effect";
+import * as Crypto from "effect/Crypto";
 
 import {
   SendMessageRequest,
@@ -23,6 +25,11 @@ import {
   type Caption,
   type LiveEvent,
 } from "./protocol.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 export interface VoiceView {
   readonly status: "idle" | "connecting" | "listening" | "ending" | "disconnected";
@@ -148,7 +155,7 @@ export const runVoiceSession = Effect.fn("runVoiceSession")(function* (
     text: string,
     delegation: string | null,
   ) {
-    const id = crypto.randomUUID();
+    const id = yield* randomUUID;
 
     append = { id, at: yield* Clock.currentTimeMillis };
     yield* connection.send({
@@ -265,7 +272,7 @@ export const runVoiceSession = Effect.fn("runVoiceSession")(function* (
           ...envelope,
           message,
           voice: { input: true, messages: backend.speech() },
-          requestId: crypto.randomUUID(),
+          requestId: yield* randomUUID,
         }).pipe(
           Effect.mapError(() =>
             VoiceError.make({

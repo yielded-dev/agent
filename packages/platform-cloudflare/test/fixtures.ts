@@ -466,15 +466,17 @@ export const scheduleFailpoint = (ctx: DurableObjectState) => ({
       if (scheduleEvictions.get(name) === point) {
         scheduleEvictions.delete(name);
 
-        return Effect.sync((): never => {
+        return Effect.gen(function* () {
           if (point === "schedule:prepare:after") {
             const rows = ctx.storage.sql
               .exec("SELECT record_json FROM effect_agent_schedules")
               .toArray();
 
-            const decodedRows = Schema.decodeUnknownSync(Schema.Array(ScheduleRecordJsonRow))(rows);
+            const decodedRows = yield* Schema.decodeUnknownEffect(
+              Schema.Array(ScheduleRecordJsonRow),
+            )(rows);
 
-            const record = Schema.decodeSync(Schema.fromJsonString(ScheduleRecord))(
+            const record = yield* Schema.decodeEffect(Schema.fromJsonString(ScheduleRecord))(
               decodedRows[0]?.record_json,
             );
 
@@ -482,9 +484,9 @@ export const scheduleFailpoint = (ctx: DurableObjectState) => ({
               .exec("SELECT COUNT(*) AS alarm_count FROM effect_cf_scheduled_alarms")
               .toArray();
 
-            const alarmCount = Schema.decodeUnknownSync(Schema.Array(ScheduleAlarmCountRow))(
-              alarmRows,
-            )[0]?.alarm_count;
+            const alarmCount = (yield* Schema.decodeUnknownEffect(
+              Schema.Array(ScheduleAlarmCountRow),
+            )(alarmRows))[0]?.alarm_count;
 
             if (record.pending !== null && alarmCount === 1) {
               schedulePrepareEvictionEvidence.add(name);
@@ -492,7 +494,7 @@ export const scheduleFailpoint = (ctx: DurableObjectState) => ({
           }
           ctx.abort("armed Schedule Owner eviction");
           throw new Error("Schedule Owner eviction did not interrupt the failpoint");
-        });
+        }).pipe(Effect.orDie);
       }
       const failures = scheduleFailures.get(name);
 

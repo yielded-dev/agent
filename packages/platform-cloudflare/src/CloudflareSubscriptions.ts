@@ -211,7 +211,7 @@ const SubscribeRequest = Schema.TaggedStruct("Subscribe", {
     parameters: PersistedJson,
     context: PersistedJson,
     mode: Schema.Literals(["once", "continuous"]),
-    expiresAtMillis: Schema.NullOr(Schema.Number),
+    expiresAtMillis: Schema.NullOr(Schema.Finite),
     destination: SubscriptionConfiguration.fields.destination,
     deliveryPrincipal: SubscriptionConfiguration.fields.deliveryPrincipal,
     admissionGroup: SubscriptionConfiguration.fields.admissionGroup,
@@ -317,7 +317,7 @@ const IntakeStatus = Schema.Struct({
   ...EventAcknowledgement.fields,
   routingComplete: Schema.Boolean,
   routingFailure: Schema.NullOr(Schema.String),
-  nextAttemptAtMillis: Schema.Number,
+  nextAttemptAtMillis: Schema.Finite,
 });
 
 const SubscriptionPartitionFailure = Schema.Union([
@@ -414,8 +414,8 @@ export class CloudflareSubscriptionsClient {
           corruptFailure("subscription-partition-protocol");
 
         const changeState = Effect.fnUntraced(function* (
-          scope: typeof SubscriptionScope.Type,
-          key: typeof SubscriptionKey.Type,
+          scope: SubscriptionScope,
+          key: SubscriptionKey,
           expectedRevision: number,
           _tag: "PauseSubscription" | "ResumeSubscription" | "RecoverSubscription",
         ) {

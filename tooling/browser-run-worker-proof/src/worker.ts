@@ -1,4 +1,5 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { Agent, AgentRuntime, BrowserUse, InMemory } from "@yielded/agent";
 import {
   BrowserSessionError,
@@ -31,6 +32,7 @@ import {
   Schema,
 } from "effect";
 import { Tool, Toolkit } from "effect/ai";
+import * as Crypto from "effect/Crypto";
 import { FetchHttpClient } from "effect/http";
 
 import {
@@ -44,6 +46,11 @@ import {
   WorkerFailure,
   workerRunHeader,
 } from "./proof.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 type Env = Cloudflare.Env;
 const buyer = "buyer@example.test";
@@ -218,7 +225,7 @@ export class CheckoutRun extends DurableObject<Env> {
     this.ctx.storage.kv.put("started", true);
     this.phase("scrape");
 
-    const capture = browserQuickActionCaptureLayer().pipe(
+    const capture = browserQuickActionCaptureLayer.pipe(
       Layer.provide(BrowserQuickActionBrowserBinding.layer({ browser: this.env.BROWSER })),
     );
 
@@ -295,7 +302,11 @@ export class CheckoutRun extends DurableObject<Env> {
               cause.reasons.every(
                 (reason) =>
                   Cause.isFailReason(reason) &&
-                  reason.error instanceof BrowserSessionError &&
+                  Schema.is(BrowserSessionError)(reason.error) &&
+                  Object.prototype.isPrototypeOf.call(
+                    BrowserSessionError.prototype,
+                    reason.error,
+                  ) &&
                   reason.error.cleanup === "confirmed",
               )
             )
@@ -488,7 +499,7 @@ export class CheckoutRun extends DurableObject<Env> {
         form.get("password") !== this.env.CHECKOUT_PASSWORD
       )
         return new Response("Denied", { status: 403 });
-      const cookie = crypto.randomUUID();
+      const cookie = yield* randomUUID;
 
       this.ctx.storage.kv.put("cookie", cookie);
 

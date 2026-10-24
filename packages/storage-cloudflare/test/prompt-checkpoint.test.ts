@@ -132,7 +132,7 @@ it("reopens a projected prefix with an identical prompt and rebuilds damaged der
 
         const services = yield* Layer.build(
           DurableAgentRuntime.layer.pipe(
-            Layer.provide(runStorageLayer()),
+            Layer.provide(runStorageLayer),
             Layer.provide(Layer.succeed(ThreadStore, counted)),
           ),
         );

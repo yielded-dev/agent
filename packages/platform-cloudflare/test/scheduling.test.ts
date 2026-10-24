@@ -29,7 +29,7 @@ import {
 } from "./fixtures.ts";
 import { laneRows, runScheduleClient, scheduleStubFor } from "./harness.ts";
 
-const AlarmRow = Schema.Struct({ run_at: Schema.Number, payload: Schema.String });
+const AlarmRow = Schema.Struct({ run_at: Schema.Finite, payload: Schema.String });
 
 const StoreProbe = Schema.Struct({
   schedule_count: Schema.Natural,

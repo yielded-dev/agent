@@ -57,7 +57,7 @@ const makeClient = (
 });
 
 const screenshotLayer = (client: BrowserQuickActionClient): Layer.Layer<PageScreenshot> =>
-  browserQuickActionScreenshotLayer().pipe(
+  browserQuickActionScreenshotLayer.pipe(
     Layer.provide(Layer.succeed(BrowserQuickActionBrowserBinding)(client)),
   );
 

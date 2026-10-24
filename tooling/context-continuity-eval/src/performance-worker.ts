@@ -461,9 +461,7 @@ export default {
           ),
         ),
         Effect.scoped,
-        Effect.catch(() =>
-          Effect.succeed(new Response("Performance host failed", { status: 500 })),
-        ),
+        Effect.orElseSucceed(() => new Response("Performance host failed", { status: 500 })),
       ),
     );
   },

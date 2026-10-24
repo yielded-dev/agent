@@ -25,8 +25,8 @@ import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 let threadSequence = 0;
 
 const identifiers = Layer.succeed(IdGenerator, {
-  nextThreadId: Effect.sync(() =>
-    Schema.decodeSync(ThreadId)(`transient-thread-${++threadSequence}`),
+  nextThreadId: Effect.suspend(() =>
+    Schema.decodeEffect(ThreadId)(`transient-thread-${++threadSequence}`).pipe(Effect.orDie),
   ),
   nextRunId: Effect.succeed(Schema.decodeSync(RunId)("transient-run")),
   nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("transient-turn")),

@@ -523,11 +523,12 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
 
       if (previous !== undefined) {
         const recovered = yield* continuationEvidence(threadId, runId);
-        const encode = Schema.encodeSync(Schema.fromJsonString(ExecutionCheckpoint));
+        const encode = Schema.encodeEffect(Schema.fromJsonString(ExecutionCheckpoint));
 
         if (
           recovered.status !== "present" ||
-          encode(recovered.checkpoint) !== encode(previous.execution)
+          (yield* encode(recovered.checkpoint).pipe(Effect.orDie)) !==
+            (yield* encode(previous.execution).pipe(Effect.orDie))
         )
           return yield* EvaluationError.make({
             stage: "restart",

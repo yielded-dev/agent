@@ -340,10 +340,10 @@ it.effect(
           let armed = true;
           let alive = transition === "closed" || transition === "released";
 
-          let encoded = Schema.encodeSync(Schema.fromJsonString(Control))({
+          let encoded = yield* Schema.encodeEffect(Schema.fromJsonString(Control))({
             ...emptyControl,
             reference: alive ? reference : null,
-          });
+          }).pipe(Effect.orDie);
 
           let acquisitions = 0;
 

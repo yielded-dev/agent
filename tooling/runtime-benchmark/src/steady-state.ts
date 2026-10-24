@@ -130,7 +130,7 @@ export const runSteadyState = Effect.fn("benchmark.steadyState")(function* (
 
   const tool = Tool.make("bench", {
     description: "Return the fixed benchmark result.",
-    parameters: Schema.Struct({ index: Schema.Number }),
+    parameters: Schema.Struct({ index: Schema.Finite }),
     success: Schema.Struct({ value: Schema.String }),
   });
 

@@ -95,7 +95,7 @@ const captureError = (
   );
 
 const captureLayer = (binding: BrowserQuickActionClient): Layer.Layer<PageCapture> =>
-  browserQuickActionCaptureLayer().pipe(
+  browserQuickActionCaptureLayer.pipe(
     Layer.provide(Layer.succeed(BrowserQuickActionBrowserBinding)(binding)),
   );
 

@@ -191,9 +191,10 @@ const baseLayer = Layer.mergeAll(
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
 /** Fail-closed default: no `DurableApprovalResolver` — undecided approvals suspend durably. */
-const testLayer = DurableAgentRuntime.layer
-  .pipe(Layer.provide(runStorageLayer()))
-  .pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layer.pipe(
+  Layer.provide(runStorageLayer),
+  Layer.provideMerge(baseLayer),
+);
 
 const readLog = Effect.fnUntraced(function* (threadId: string) {
   const store = yield* ThreadStore;
@@ -366,9 +367,10 @@ const makeRetentionCase = Effect.fnUntraced(function* (
 
   const runtime = yield* DurableAgentRuntime.pipe(
     Effect.provide(
-      DurableAgentRuntime.layerWithBindings(bindings)
-        .pipe(Layer.provide(runStorageLayer()))
-        .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+      DurableAgentRuntime.layerWithBindings(bindings).pipe(
+        Layer.provide(runStorageLayer),
+        Layer.provide(RunToolAuthorization.allowAll),
+      ),
     ),
   );
 

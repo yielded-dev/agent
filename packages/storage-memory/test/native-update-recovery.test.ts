@@ -127,7 +127,7 @@ for (const scenario of [
 
       const tools = Toolkit.make(
         Tool.make("read_page", {
-          parameters: Schema.Struct({ page: Schema.Number }),
+          parameters: Schema.Struct({ page: Schema.Finite }),
           success: Schema.String,
           failure: DurableStepError,
           dependencies: [DurableStep],
@@ -231,7 +231,7 @@ for (const scenario of [
         return yield* DurableAgentRuntime.pipe(
           Effect.provide(
             DurableAgentRuntime.layerWithBindings([binding]).pipe(
-              Layer.provide(runStorageLayer()),
+              Layer.provide(runStorageLayer),
               Layer.provide(
                 Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
               ),
@@ -325,7 +325,7 @@ for (const scenario of [
               }),
             );
           }).pipe(
-            Effect.provide(runStorageLayer()),
+            Effect.provide(runStorageLayer),
             Effect.provideService(ThreadReader, ThreadReader.fromStore(store)),
           ),
         );

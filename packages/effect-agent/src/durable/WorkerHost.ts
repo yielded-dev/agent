@@ -82,8 +82,8 @@ export const WorkerPolicyResolver = Context.Reference<{
   ) => Effect.Effect<Option.Option<AgentPolicy>, WorkerError>;
 }>("@effect-agent/thread/WorkerPolicyResolver", {
   defaultValue: () => ({
-    resolveSource: () => Effect.succeed(Option.none()),
-    resolveTarget: () => Effect.succeed(Option.none()),
+    resolveSource: () => Effect.succeedNone,
+    resolveTarget: () => Effect.succeedNone,
   }),
 });
 
@@ -116,7 +116,7 @@ export const WorkerConcurrencyResolver = Context.Reference<{
     readonly principal: Principal;
   }) => Effect.Effect<Option.Option<WorkerConcurrencyLimit>, WorkerError>;
 }>("@effect-agent/thread/WorkerConcurrencyResolver", {
-  defaultValue: () => ({ resolve: () => Effect.succeed(Option.none()) }),
+  defaultValue: () => ({ resolve: () => Effect.succeedNone }),
 });
 
 /** Host ceilings apply across all declarations owned by one source Thread. */

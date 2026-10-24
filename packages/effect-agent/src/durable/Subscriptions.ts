@@ -705,8 +705,10 @@ const makeDriver = Effect.fnUntraced(function* (requested: SubscriptionLimits) {
       threadId:
         subscription.configuration.destination._tag === "ExistingThread"
           ? subscription.configuration.destination.threadId
-          : Schema.decodeSync(ThreadId)(`subscription:${deliveryId}`),
-      admissionKey: Schema.decodeSync(IdempotencyKey)(`subscription:${deliveryId}`),
+          : yield* Schema.decodeEffect(ThreadId)(`subscription:${deliveryId}`).pipe(Effect.orDie),
+      admissionKey: yield* Schema.decodeEffect(IdempotencyKey)(`subscription:${deliveryId}`).pipe(
+        Effect.orDie,
+      ),
       selectedAtMillis: time,
       ...(limits.retention === undefined ? {} : { observeSettlement: true }),
       state: "selected",
@@ -995,18 +997,18 @@ const makeDriver = Effect.fnUntraced(function* (requested: SubscriptionLimits) {
 
       delivery = yield* prepare(original).pipe(
         Effect.timeout(limits.operationTimeoutMillis),
-        Effect.catchTag("SubscriptionSourceError", (error) =>
-          (error.retryable
-            ? retry(original, "transport")
-            : refuse(original, "preparation", error.code)
-          ).pipe(Effect.as(null)),
-        ),
-        Effect.catchTag("SubscriptionError", (error) =>
-          error.reason === "unauthorized"
-            ? refuse(original, "preparation", error.code).pipe(Effect.as(null))
-            : Effect.fail(error),
-        ),
-        Effect.catchTag("TimeoutError", () => retry(original, "timeout").pipe(Effect.as(null))),
+        Effect.catchTags({
+          SubscriptionSourceError: (error) =>
+            (error.retryable
+              ? retry(original, "transport")
+              : refuse(original, "preparation", error.code)
+            ).pipe(Effect.as(null)),
+          SubscriptionError: (error) =>
+            error.reason === "unauthorized"
+              ? refuse(original, "preparation", error.code).pipe(Effect.as(null))
+              : Effect.fail(error),
+          TimeoutError: () => retry(original, "timeout").pipe(Effect.as(null)),
+        }),
       );
     }
     if (delivery === null || delivery.state === "refused" || delivery.state === "delivered") return;
@@ -1121,7 +1123,7 @@ const makeDriver = Effect.fnUntraced(function* (requested: SubscriptionLimits) {
             ? error.reason
             : Schema.is(SubscriptionSourceError)(error)
               ? error.code
-              : Schema.is(Schema.Struct({ _tag: Schema.Literal("TimeoutError") }))(error)
+              : Schema.is(Schema.TaggedStruct("TimeoutError", {}))(error)
                 ? "timeout"
                 : "interrupted-work",
       });

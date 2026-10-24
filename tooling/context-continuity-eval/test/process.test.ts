@@ -113,13 +113,11 @@ it("does not respawn after an interruption", async () => {
       ).pipe(Effect.exit);
 
       const pid = Number(yield* fs.readFileString(pidPath));
-      let running = true;
 
-      try {
-        process.kill(pid, 0);
-      } catch {
-        running = false;
-      }
+      const running = yield* Effect.try(() => process.kill(pid, 0)).pipe(
+        Effect.as(true),
+        Effect.orElseSucceed(() => false),
+      );
 
       return {
         failed: exit._tag === "Failure",

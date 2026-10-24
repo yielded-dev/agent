@@ -147,7 +147,7 @@ describe("Cloudflare replaceable compaction", () => {
 
           const runtime = yield* Layer.build(
             DurableAgentRuntime.layerWithBindings([binding]).pipe(
-              Layer.provide(runStorageLayer()),
+              Layer.provide(runStorageLayer),
               Layer.provide(
                 Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
               ),
@@ -289,7 +289,7 @@ describe("Cloudflare replaceable compaction", () => {
 
           const runtime = yield* Layer.build(
             DurableAgentRuntime.layerWithBindings([binding]).pipe(
-              Layer.provide(runStorageLayer()),
+              Layer.provide(runStorageLayer),
               Layer.provide(RunToolAuthorization.allowAll),
               Layer.provide(
                 Layer.succeed(ContextCompactor, {

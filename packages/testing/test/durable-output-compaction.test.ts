@@ -37,7 +37,8 @@ import * as Stream from "effect/Stream";
 const digest = Digest.make("a".repeat(64));
 const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });
 
-const testLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer())).pipe(
+const testLayer = DurableAgentRuntime.layer.pipe(
+  Layer.provide(runStorageLayer),
   Layer.provideMerge(
     Layer.mergeAll(
       MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),

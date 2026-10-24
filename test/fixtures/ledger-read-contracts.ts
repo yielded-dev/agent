@@ -53,7 +53,7 @@ export const withSubmissionOwner =
         const row = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
         if (Option.isNone(row)) return yield* OwnershipLost.make({ submissionId });
-        const storage = yield* RunStorage.pipe(Effect.provide(runStorageLayer()));
+        const storage = yield* RunStorage.pipe(Effect.provide(runStorageLayer));
         const acquired = yield* storage.claim(ClaimRequest.make({ threadId: row.value.threadId }));
 
         if (Option.isNone(acquired) || acquired.value.claim.submissionId !== submissionId)

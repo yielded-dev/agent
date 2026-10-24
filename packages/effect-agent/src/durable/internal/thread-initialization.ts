@@ -151,7 +151,7 @@ export const ensureWorkerOrigin = Effect.fnUntraced(
             expectedTailSequence: current.tailSequence,
 
             batch: CanonicalBatch.make({
-              batchId: Schema.decodeSync(BatchId)(id),
+              batchId: yield* Schema.decodeEffect(BatchId)(id).pipe(Effect.orDie),
               producerId: config.producerId,
               records: [
                 RecordEnvelope.make({

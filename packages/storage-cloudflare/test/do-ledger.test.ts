@@ -62,8 +62,8 @@ describe("DoSubmissionLedger", () => {
 
       return Effect.gen(function* () {
         const ledger = yield* SubmissionLedger;
-        const first = yield* RunStorage.pipe(Effect.provide(runStorageLayer()));
-        const second = yield* RunStorage.pipe(Effect.provide(runStorageLayer()));
+        const first = yield* RunStorage.pipe(Effect.provide(runStorageLayer));
+        const second = yield* RunStorage.pipe(Effect.provide(runStorageLayer));
         const threadId = thread("local-owner-shared");
         const accepted = yield* ledger.admit(yield* admission("local-owner-shared", "first", {}));
 

@@ -140,9 +140,9 @@ const Snapshot = Schema.Struct({
   }),
   app: Schema.NullOr(TripApp),
   trip: Trip,
-  forks: Schema.Number,
-  commits: Schema.Number,
-  creates: Schema.Number,
+  forks: Schema.Finite,
+  commits: Schema.Finite,
+  creates: Schema.Finite,
   workflows: Schema.Array(
     Schema.Struct({
       params: Schema.Struct({

@@ -73,8 +73,7 @@ export type Diagnostic =
 
 const diagnosticSchema = <Nested extends Schema.Top>(nested: Nested) =>
   Schema.Union([
-    Schema.Struct({
-      _tag: Schema.Literal("Error"),
+    Schema.TaggedStruct("Error", {
       errorTag: Schema.optionalKey(Name),
       name: Schema.optionalKey(Name),
       message: Schema.optionalKey(Text),
@@ -90,23 +89,20 @@ const diagnosticSchema = <Nested extends Schema.Top>(nested: Nested) =>
       omittedFields: Schema.optionalKey(Schema.Array(Name).check(Schema.isMaxLength(32))),
       truncated: Schema.optionalKey(Schema.Literal(true)),
     }),
-    Schema.Struct({
-      _tag: Schema.Literal("Cause"),
+    Schema.TaggedStruct("Cause", {
       reasons: Schema.Array(
         Schema.Union([
-          Schema.Struct({ _tag: Schema.Literal("Fail"), error: nested }),
-          Schema.Struct({ _tag: Schema.Literal("Die"), defect: nested }),
-          Schema.Struct({
-            _tag: Schema.Literal("Interrupt"),
+          Schema.TaggedStruct("Fail", { error: nested }),
+          Schema.TaggedStruct("Die", { defect: nested }),
+          Schema.TaggedStruct("Interrupt", {
             fiberId: Schema.optionalKey(Schema.Finite),
           }),
         ]),
       ).check(Schema.isMaxLength(128)),
       truncated: Schema.optionalKey(Schema.Literal(true)),
     }),
-    Schema.Struct({ _tag: Schema.Literal("Value"), value: Scalar }),
-    Schema.Struct({
-      _tag: Schema.Literal("Omitted"),
+    Schema.TaggedStruct("Value", { value: Scalar }),
+    Schema.TaggedStruct("Omitted", {
       reason: Schema.Literals(["redacted", "cycle", "limit", "unsupported"]),
     }),
   ]);

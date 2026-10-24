@@ -680,7 +680,7 @@ const validateInputs = Effect.fn("PrReviewEval.validateReportInputs")(function* 
     runnerVersions.add(observation.runnerVersion);
 
     const encoded = JSON.stringify(
-      Schema.encodeSync(EvalVariantConfiguration)(observation.variant),
+      yield* Schema.encodeEffect(EvalVariantConfiguration)(observation.variant).pipe(Effect.orDie),
     );
 
     const existing = encodedConfigurations.get(observation.variant.id);

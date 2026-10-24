@@ -87,9 +87,9 @@ const initial = Effect.fn("test.initial")(function* (name = "message", text = "h
     envelope: {
       schemaVersion: 1,
       threadId,
-      admissionKey: Schema.decodeSync(IdempotencyKey)(`admit:${name}`),
-      deliveryPrincipal: Schema.decodeSync(Principal)("principal"),
-      agentId: Schema.decodeSync(AgentId)("agent"),
+      admissionKey: yield* Schema.decodeEffect(IdempotencyKey)(`admit:${name}`).pipe(Effect.orDie),
+      deliveryPrincipal: yield* Schema.decodeEffect(Principal)("principal").pipe(Effect.orDie),
+      agentId: yield* Schema.decodeEffect(AgentId)("agent").pipe(Effect.orDie),
       definitions: DefinitionDigests.make({ agent: digest, model: digest, tools: digest }),
       input,
       inputDigest: yield* digestJson(input),
@@ -179,12 +179,14 @@ describe("direct message delivery", () => {
           },
         };
 
-        const originalEnvelope = Schema.decodeSync(Schema.fromJsonString(PreparedInput))(
-          Schema.encodeSync(Schema.fromJsonString(PreparedInput))(options.envelope),
-        );
+        const originalEnvelope = yield* Schema.decodeEffect(Schema.fromJsonString(PreparedInput))(
+          yield* Schema.encodeEffect(Schema.fromJsonString(PreparedInput))(options.envelope).pipe(
+            Effect.orDie,
+          ),
+        ).pipe(Effect.orDie);
 
         const originalEnvelopeDigest = yield* digestJson(
-          Schema.encodeSync(PreparedInput)(originalEnvelope),
+          yield* Schema.encodeEffect(PreparedInput)(originalEnvelope).pipe(Effect.orDie),
         );
 
         let calls = 0;

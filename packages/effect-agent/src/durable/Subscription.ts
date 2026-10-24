@@ -316,9 +316,8 @@ export const defaultSubscriptionLimits: SubscriptionLimits = {
 };
 
 export const SubscriptionChange = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("Recover"), nowMillis: ScheduleInstant }),
-  Schema.Struct({
-    _tag: Schema.Literal("Update"),
+  Schema.TaggedStruct("Recover", { nowMillis: ScheduleInstant }),
+  Schema.TaggedStruct("Update", {
     configuration: SubscriptionConfiguration,
     configurationFingerprint: Digest,
     recovery: Schema.NullOr(SourceRecovery),
@@ -329,32 +328,27 @@ export const SubscriptionChange = Schema.Union([
 export type SubscriptionChange = typeof SubscriptionChange.Type;
 
 export const DeliveryChange = Schema.Union([
-  Schema.Struct({
-    _tag: Schema.Literal("ObserveSettlement"),
+  Schema.TaggedStruct("ObserveSettlement", {
     receipt: Receipt,
     settled: Schema.Boolean,
     nowMillis: ScheduleInstant,
     nextAttemptAtMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Recover"),
+  Schema.TaggedStruct("Recover", {
     expectedGeneration: Schema.Natural,
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Prepare"),
+  Schema.TaggedStruct("Prepare", {
     envelope: PreparedInput,
     envelopeDigest: Digest,
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({ _tag: Schema.Literal("Complete"), receipt: Receipt, nowMillis: ScheduleInstant }),
-  Schema.Struct({
-    _tag: Schema.Literal("Refuse"),
+  Schema.TaggedStruct("Complete", { receipt: Receipt, nowMillis: ScheduleInstant }),
+  Schema.TaggedStruct("Refuse", {
     refusal: SubscriptionRefusal,
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Retry"),
+  Schema.TaggedStruct("Retry", {
     retry: ScheduleRetry,
     nowMillis: ScheduleInstant,
   }),
@@ -522,7 +516,7 @@ export class SubscriptionAuthorizer extends Context.Service<
     readonly prepare: (
       subscription: SubscriptionRecord,
       event: AcceptedEvent,
-    ) => Effect.Effect<typeof PreparedInputAuthorizationDecision.Type, SubscriptionError>;
+    ) => Effect.Effect<PreparedInputAuthorizationDecision, SubscriptionError>;
   }
 >()("@effect-agent/thread/SubscriptionAuthorizer") {}
 

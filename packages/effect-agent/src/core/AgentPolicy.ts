@@ -6,11 +6,17 @@ import { ToolResultBounds } from "./ToolResult.ts";
 
 const PositiveInt = Schema.Int.check(Schema.isGreaterThan(0));
 
+// Unbounded counts use Infinity only in memory; their wire representation is null.
+const ResolvedCountLimit = Schema.Union([
+  PositiveInt,
+  Schema.declare((limit): limit is number => limit === Infinity, {
+    identifier: "UnboundedCount",
+  }),
+]);
+
 const CountLimit = Schema.NullOr(PositiveInt).pipe(
   Schema.decodeTo(
-    Schema.Number.check(
-      Schema.makeFilter((limit) => limit === Infinity || (Number.isInteger(limit) && limit > 0)),
-    ),
+    ResolvedCountLimit,
     SchemaTransformation.transform({
       decode: (limit) => limit ?? Infinity,
       encode: (limit) => (limit === Infinity ? null : limit),

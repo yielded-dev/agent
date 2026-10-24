@@ -1,6 +1,8 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { authenticatedHttpClient } from "@yielded/agent-example-auth/client";
 import type { Redacted } from "effect";
 import { Data, Effect, Exit, Layer, Option, Schedule, Schema, Semaphore, Stream } from "effect";
+import * as Crypto from "effect/Crypto";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { AsyncResult, Atom, AtomRpc, Reactivity } from "effect/reactivity";
 import { RpcClient, RpcSerialization } from "effect/rpc";
@@ -24,6 +26,11 @@ import {
   type SendMessageRequest,
   type SpokenMessage,
 } from "./domain";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 // Seeded once from auth.session in Auth's current account registry. Disposing that
 // registry cancels every request/stream and drops all cached state, including drafts.
@@ -777,9 +784,9 @@ export const sendMessageAtom = PlannerClient.runtime.fn<string | void>()(
     const message = retry?.text ?? get(draftAtom).trim();
 
     if (!message) return;
-    const conversationId = retry?.conversationId ?? selection.conversationId ?? crypto.randomUUID();
+    const conversationId = retry?.conversationId ?? selection.conversationId ?? (yield* randomUUID);
     const selectedTripId = retry ? retry.tripId : (get(activeTripAtom)?.id ?? null);
-    const requestId = retry?.id ?? crypto.randomUUID();
+    const requestId = retry?.id ?? (yield* randomUUID);
     const spoken = get(spokenConversationAtom);
 
     const voice = retry

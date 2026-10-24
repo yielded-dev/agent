@@ -191,28 +191,25 @@ const sourceAllowed = (threadId: string, principal: string) => {
 /** Native caller identity and canonical lineage, never a model-supplied account, confer access. */
 export const EditorHostLive = Layer.mergeAll(
   Layer.succeed(WorkerPolicyResolver, {
-    resolveSource: () => Effect.succeed(Option.none()),
+    resolveSource: () => Effect.succeedNone,
     resolveTarget: (request) => {
       if (
         request.definition.id !== appEditor.id &&
         request.definition.id !== updatingResearchScout.id
       )
-        return Effect.succeed(Option.none());
+        return Effect.succeedNone;
       // A worker's allowance is immutable. Follow-ups and recovery retain it, including
       // after a host policy change.
-      if (request._tag === "RetainedWorker")
-        return Effect.succeed(Option.some(request.origin.policy));
-      if (request.source.agentId !== researchCoordinatorId) return Effect.succeed(Option.none());
+      if (request._tag === "RetainedWorker") return Effect.succeedSome(request.origin.policy);
+      if (request.source.agentId !== researchCoordinatorId) return Effect.succeedNone;
       if (
         request.sourceSubmission?.agentId !== request.source.agentId ||
         request.sourceSubmission.threadId !== request.source.threadId
       )
         return Effect.fail(WorkerError.make({ operation: "start", reason: "unavailable" }));
 
-      return Effect.succeed(
-        Option.some(
-          request.definition.id === updatingResearchScout.id ? scoutPolicy : editorPolicy,
-        ),
+      return Effect.succeedSome(
+        request.definition.id === updatingResearchScout.id ? scoutPolicy : editorPolicy,
       );
     },
   }),

@@ -74,22 +74,32 @@ export const makeTraceStore = (sql: SqlStorage, ownerId: string, bucket: R2Bucke
     catch: () => LabError.make({ code: "storage", message: "Could not load saved reports." }),
   });
 
-  const report = (id: string) =>
-    Effect.try({
-      try: () => {
-        const row = sql
-          .exec<{ report: string }>("SELECT report FROM lab_traces WHERE id=?", id)
-          .toArray()[0];
-
-        return row === undefined ? null : Schema.decodeSync(reportCodec)(row.report);
-      },
+  const report = Effect.fnUntraced(function* (id: string) {
+    const row = yield* Effect.try({
+      try: () =>
+        sql.exec<{ report: string }>("SELECT report FROM lab_traces WHERE id=?", id).toArray()[0],
       catch: () =>
         LabError.make({ code: "storage", message: "Could not load the latest trace checkpoint." }),
     });
 
+    return row === undefined
+      ? null
+      : yield* Schema.decodeEffect(reportCodec)(row.report).pipe(
+          Effect.mapError(() =>
+            LabError.make({
+              code: "storage",
+              message: "Could not load the latest trace checkpoint.",
+            }),
+          ),
+        );
+  });
+
   const read = Effect.fnUntraced(function* (id: string) {
-    return yield* Effect.try({
-      try: (): TraceArchive | null => {
+    const failed = () => LabError.make({ code: "storage", message: "Could not read this trace." });
+
+    // Read the row and its events together before any Effect decoder can yield.
+    const snapshot = yield* Effect.try({
+      try: () => {
         const row = sql
           .exec<{ report: string; dropped: number; archived: number }>(
             "SELECT report, dropped, archived FROM lab_traces WHERE id=?",
@@ -98,34 +108,43 @@ export const makeTraceStore = (sql: SqlStorage, ownerId: string, bucket: R2Bucke
           .toArray()[0];
 
         if (row === undefined) return null;
-        const report = Schema.decodeSync(reportCodec)(row.report);
 
         const events = sql
           .exec<{ value: string }>(
             "SELECT value FROM lab_trace_events WHERE run_id=? ORDER BY sequence",
             id,
           )
-          .toArray()
-          .map((entry) => Schema.decodeSync(eventCodec)(entry.value));
+          .toArray();
 
-        return {
-          version: 1,
-          runId: id,
-          conversationId: report.input.chatId ?? id,
-          report,
-          events: events.filter((event) => event.kind !== "otlp"),
-          otlp: events.filter((event) => event.kind === "otlp").map((event) => event.data),
-          droppedEvents: row.dropped,
-          storage: row.archived ? "r2" : "durable-object",
-        };
+        return { row, events };
       },
-      catch: () => LabError.make({ code: "storage", message: "Could not read this trace." }),
-    }).pipe(
-      Effect.filterOrFail(
-        (archive) => archive !== null,
-        () => LabError.make({ code: "invalid", message: "This session does not own that trace." }),
-      ),
+      catch: failed,
+    });
+
+    if (snapshot === null)
+      return yield* LabError.make({
+        code: "invalid",
+        message: "This session does not own that trace.",
+      });
+
+    const report = yield* Schema.decodeEffect(reportCodec)(snapshot.row.report).pipe(
+      Effect.mapError(failed),
     );
+
+    const events = yield* Effect.forEach(snapshot.events, (entry) =>
+      Schema.decodeEffect(eventCodec)(entry.value),
+    ).pipe(Effect.mapError(failed));
+
+    return {
+      version: 1 as const,
+      runId: id,
+      conversationId: report.input.chatId ?? id,
+      report,
+      events: events.filter((event) => event.kind !== "otlp"),
+      otlp: events.filter((event) => event.kind === "otlp").map((event) => event.data),
+      droppedEvents: snapshot.row.dropped,
+      storage: snapshot.row.archived ? ("r2" as const) : ("durable-object" as const),
+    };
   });
 
   const archive = Effect.fnUntraced(function* (id: string) {
@@ -147,13 +166,20 @@ export const makeTraceStore = (sql: SqlStorage, ownerId: string, bucket: R2Bucke
       return value;
     const saved: TraceArchive = { ...value, storage: "r2" };
 
+    const encoded = yield* Schema.encodeEffect(archiveCodec)(saved).pipe(
+      Effect.mapError(() =>
+        LabError.make({
+          code: "storage",
+          message: "R2 upload failed. The trace is retained in this session; download it to retry.",
+        }),
+      ),
+    );
+
     yield* Effect.tryPromise({
       try: () =>
-        bucket.put(
-          `browser-use/v1/${ownerId}/${value.conversationId}/${id}.json`,
-          Schema.encodeSync(archiveCodec)(saved),
-          { httpMetadata: { contentType: "application/json" } },
-        ),
+        bucket.put(`browser-use/v1/${ownerId}/${value.conversationId}/${id}.json`, encoded, {
+          httpMetadata: { contentType: "application/json" },
+        }),
       catch: () =>
         LabError.make({
           code: "storage",

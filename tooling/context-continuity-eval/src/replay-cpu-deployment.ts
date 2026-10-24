@@ -304,7 +304,9 @@ export const openReplayCpuDeployment = Effect.fn("ReplayCpu.openDeployment")(fun
       const target = ReplayCpuTarget.make({
         block,
         role,
-        stage: Schema.decodeSync(ReplayCpuStage)(`${resources.run}-b${block}-${role}`),
+        stage: yield* Schema.decodeEffect(ReplayCpuStage)(
+          `${resources.run}-b${block}-${role}`,
+        ).pipe(Effect.orDie),
         cleanupRequired: true,
         cleanupComplete: false,
       });

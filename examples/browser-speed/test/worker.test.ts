@@ -1,11 +1,18 @@
 import { fileURLToPath } from "node:url";
 
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { assert, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
+import * as Crypto from "effect/Crypto";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 
 import { Report, Snapshot } from "../src/contract.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 it.live(
   "connects without a token and refuses cross-origin and malformed requests before browser acquisition",
@@ -69,7 +76,7 @@ it.live(
         (value) => Effect.promise(() => value.dispose()),
       );
 
-      const headers = { "x-lab-session": crypto.randomUUID() };
+      const headers = { "x-lab-session": yield* randomUUID };
 
       const status = (path: string, init?: Parameters<Miniflare["dispatchFetch"]>[1]) =>
         Effect.promise(() => runtime.dispatchFetch(`https://lab.test${path}`, init));
@@ -121,7 +128,7 @@ it.live(
           method: "POST",
           headers: { ...headers, "content-type": "application/json" },
           body: JSON.stringify({
-            id: crypto.randomUUID(),
+            id: yield* randomUUID,
             scenario: "coffee",
             prompt: "",
             screenshots: false,
@@ -146,7 +153,7 @@ it.live(
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          id: crypto.randomUUID(),
+          id: yield* randomUUID,
           engine: "kitesurf",
           scenario: "coffee",
           prompt: "",

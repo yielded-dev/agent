@@ -709,7 +709,7 @@ const offsetSequence = Effect.fnUntraced(function* (
   const encodedSequence = offset.startsWith(prefix) ? offset.slice(prefix.length) : "";
 
   if (!/^\d+$/.test(encodedSequence)) {
-    return yield* Effect.fail(storeError("observe", "Malformed observation offset"));
+    return yield* storeError("observe", "Malformed observation offset");
   }
   const sequence = Number(encodedSequence);
 
@@ -1773,7 +1773,10 @@ const makeThreadStore = Effect.gen(function* () {
           if (entry.sequence > request.throughSequence) break;
 
           const record = yield* decodePromptRecord(
-            entry.record instanceof ExportedRecord ? entry.record.wire : entry.record,
+            Schema.is(ExportedRecord)(entry.record) &&
+              Object.prototype.isPrototypeOf.call(ExportedRecord.prototype, entry.record)
+              ? entry.record.wire
+              : entry.record,
           ).pipe(
             Effect.mapError((cause) => storeError("readPrompt", "Invalid prompt record", cause)),
           );
@@ -1859,7 +1862,10 @@ const makeThreadStore = Effect.gen(function* () {
           if (captured === undefined && thread !== undefined) {
             yield* Effect.gen(function* () {
               for (const runId of thread.runRecords.keys())
-                yield* validateClosedRun(threadId, Schema.decodeSync(RunId)(runId));
+                yield* validateClosedRun(
+                  threadId,
+                  yield* Schema.decodeEffect(RunId)(runId).pipe(Effect.orDie),
+                );
               if (ledgerTransfer !== undefined) {
                 const ledger = ledgerTransfer;
 
@@ -2005,16 +2011,17 @@ const makeThreadStore = Effect.gen(function* () {
 
   const importReader = (id: ThreadId, thread: StoredThread): ThreadImportReader["Service"] => ({
     ...exactRecordReader(id, thread),
-    admission: (sid) => ledgerTransfer?.admission(id, sid) ?? Effect.succeed(undefined),
+    admission: (sid) => ledgerTransfer?.admission(id, sid) ?? Effect.as(Effect.void, undefined),
     runOwner: (runId) =>
       runId.startsWith("run:")
         ? (ledgerTransfer?.admission(id, Schema.decodeSync(importSubmissionId)(runId.slice(4))) ??
-          Effect.succeed(undefined))
-        : Effect.succeed(undefined),
+          Effect.as(Effect.void, undefined))
+        : Effect.as(Effect.void, undefined),
     commands: (sid) =>
       ledgerTransfer?.commands(sid) ??
       Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
-    delivery: (messageId) => deliveryTransfer?.record(id, messageId) ?? Effect.succeed(undefined),
+    delivery: (messageId) =>
+      deliveryTransfer?.record(id, messageId) ?? Effect.as(Effect.void, undefined),
   });
 
   const importThread: ThreadImport["Service"]["import"] = (pages) =>
@@ -2156,24 +2163,29 @@ const makeThreadStore = Effect.gen(function* () {
           const id = result.threadId;
 
           const fallback = {
-            admission: () => Effect.succeed(undefined),
-            runOwner: () => Effect.succeed(undefined),
+            admission: () => Effect.as(Effect.void, undefined),
+            runOwner: () => Effect.as(Effect.void, undefined),
             commands: () => Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
           };
 
           const reader: ThreadImportReader["Service"] = {
             ...exactRecordReader(id, restoredThread),
             ...(stagedLedger?.reader ?? fallback),
-            delivery: stagedDelivery?.record ?? (() => Effect.succeed(undefined)),
+            delivery: stagedDelivery?.record ?? (() => Effect.as(Effect.void, undefined)),
           };
 
           return yield* Effect.gen(function* () {
             for (const runId of restoredThread.runRecords.keys()) {
               yield* verifyRunContinuations(
-                yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
+                yield* reader.runRecords(
+                  yield* Schema.decodeEffect(RunId)(runId).pipe(Effect.orDie),
+                ),
                 { verifyContext: false },
               ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
-              yield* validateClosedRun(id, Schema.decodeSync(RunId)(runId));
+              yield* validateClosedRun(
+                id,
+                yield* Schema.decodeEffect(RunId)(runId).pipe(Effect.orDie),
+              );
             }
             let lastInputQueue = -1;
 
@@ -2231,7 +2243,7 @@ const makeThreadStore = Effect.gen(function* () {
                 : yield* stagedLedger.prepareCommit(progress.manifest?.workerSeal);
 
             const commitDelivery =
-              stagedDelivery === undefined ? undefined : yield* stagedDelivery.prepareCommit();
+              stagedDelivery === undefined ? undefined : yield* stagedDelivery.prepareCommit;
 
             const installed = restoredThread;
 
@@ -2251,7 +2263,7 @@ const makeThreadStore = Effect.gen(function* () {
               admission: (threadId, sid) =>
                 threadId === id
                   ? reader.admission(sid)
-                  : (ledgerTransfer?.admission(threadId, sid) ?? Effect.succeed(undefined)),
+                  : (ledgerTransfer?.admission(threadId, sid) ?? Effect.as(Effect.void, undefined)),
               record: (threadId, recordId) =>
                 Effect.succeed(
                   threadId === id

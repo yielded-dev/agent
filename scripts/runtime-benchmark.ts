@@ -738,9 +738,9 @@ export const compareRuntime = Effect.fn("benchmark.compareRuntime")(function* (o
                   stage.stage,
                   {
                     NODE_ENV: "production",
-                    RUNTIME_BENCHMARK_OPTIONS: Schema.encodeSync(
+                    RUNTIME_BENCHMARK_OPTIONS: yield* Schema.encodeEffect(
                       Schema.fromJsonString(WorkerOptions),
-                    )(workerOptions),
+                    )(workerOptions).pipe(Effect.orDie),
                   },
                   logFile,
                 ).pipe(

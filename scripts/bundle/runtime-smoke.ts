@@ -92,7 +92,11 @@ export const program = Effect.gen(function* () {
     const invalid = yield* AgentRuntime.run(agent, "").pipe(
       Effect.as(false),
       Effect.catchTag("AgentInputDecodeError", (error) =>
-        Effect.succeed(error instanceof AgentInputDecodeError && error.message.length > 0),
+        Effect.succeed(
+          Schema.is(AgentInputDecodeError)(error) &&
+            Object.prototype.isPrototypeOf.call(AgentInputDecodeError.prototype, error) &&
+            error.message.length > 0,
+        ),
       ),
     );
 

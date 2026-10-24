@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@effect/ai-openai": "catalog:",
+    "@effect/platform-browser": "catalog:",
     "@effect/platform-node": "catalog:",
     "@yielded/agent": "workspace:*",
     "@yielded/agent-platform-cloudflare": "workspace:*",

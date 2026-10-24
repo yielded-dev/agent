@@ -235,7 +235,13 @@ export const recordEncoding = (
   if (existing !== undefined) return Result.succeed(existing);
 
   try {
-    if (!(record instanceof ExportedRecord)) return captureRecord(record);
+    if (
+      !(
+        Schema.is(ExportedRecord)(record) &&
+        Object.prototype.isPrototypeOf.call(ExportedRecord.prototype, record)
+      )
+    )
+      return captureRecord(record);
     const json = canonicalJson(record.wire);
     const bytes = utf8ByteLength(json);
 

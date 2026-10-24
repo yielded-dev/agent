@@ -464,12 +464,10 @@ const executeInProcess: CodeExecutorExecute = Effect.fnUntraced(function* (reque
     });
 
     if (typeof candidate !== "function") {
-      return yield* Effect.fail(
-        classifyProgramFailure(
-          new EvaluationThrew(new NotAFunction(typeof candidate)),
-          request.limits,
-          capture,
-        ),
+      return yield* classifyProgramFailure(
+        new EvaluationThrew(new NotAFunction(typeof candidate)),
+        request.limits,
+        capture,
       );
     }
 

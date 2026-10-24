@@ -199,7 +199,9 @@ it("persists bounded retention progress across faults and reopen, preserving cor
                 source: { name: "host", version: "1" },
                 matchingKey: "entity",
                 payload: null,
-                payloadDigest: Schema.decodeSync(Digest)("a".repeat(64)),
+                payloadDigest: yield* Schema.decodeEffect(Digest)("a".repeat(64)).pipe(
+                  Effect.orDie,
+                ),
                 occurredAtMillis: 1_000,
                 acceptedAtMillis: 1_000,
                 cutoff: 0,

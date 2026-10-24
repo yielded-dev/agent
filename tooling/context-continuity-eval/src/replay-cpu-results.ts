@@ -4,7 +4,7 @@ import { requireReplayCpu } from "./replay-cpu-build.ts";
 import { ReplayCpuOperation, ReplayCpuRole } from "./replay-cpu-contracts.ts";
 
 const optionalString = Schema.optionalKey(Schema.NullOr(Schema.String));
-const optionalNumber = Schema.optionalKey(Schema.NullOr(Schema.Number));
+const optionalNumber = Schema.optionalKey(Schema.NullOr(Schema.Finite));
 
 const TelemetryResponse = Schema.Struct({
   success: Schema.Literal(true),
@@ -13,7 +13,7 @@ const TelemetryResponse = Schema.Struct({
       count: Schema.Natural,
       events: Schema.Array(
         Schema.Struct({
-          timestamp: Schema.optionalKey(Schema.Union([Schema.String, Schema.Number])),
+          timestamp: Schema.optionalKey(Schema.Union([Schema.String, Schema.Finite])),
           $metadata: Schema.Struct({
             id: optionalString,
             type: optionalString,
@@ -95,10 +95,10 @@ export const ReplayCpuSample = Schema.Struct({
   invocationId: Schema.String,
   traceId: Schema.String,
   deploymentVersion: Schema.String,
-  cpuMs: Schema.Number,
-  workerWallMs: Schema.Number,
-  ingressCpuMs: Schema.Number,
-  clientElapsedMs: Schema.Number,
+  cpuMs: Schema.Finite,
+  workerWallMs: Schema.Finite,
+  ingressCpuMs: Schema.Finite,
+  clientElapsedMs: Schema.Finite,
   promptSha256: Schema.String,
 });
 
@@ -116,9 +116,9 @@ const median = (values: ReadonlyArray<number>) => {
   const middle = Math.floor(sorted.length / 2);
 
   return sorted.length % 2 === 1
-    ? Schema.decodeSync(Schema.Number)(sorted[middle])
-    : (Schema.decodeSync(Schema.Number)(sorted[middle - 1]) +
-        Schema.decodeSync(Schema.Number)(sorted[middle])) /
+    ? Schema.decodeSync(Schema.Finite)(sorted[middle])
+    : (Schema.decodeSync(Schema.Finite)(sorted[middle - 1]) +
+        Schema.decodeSync(Schema.Finite)(sorted[middle])) /
         2;
 };
 
@@ -166,8 +166,8 @@ export const summarizeReplayCpu = (samples: ReadonlyArray<typeof ReplayCpuSample
 
         return {
           block,
-          candidateRatio: median(c.map((n, i) => n / Schema.decodeSync(Schema.Number)(b[i]))),
-          controlRatio: median(a.map((n, i) => n / Schema.decodeSync(Schema.Number)(b[i]))),
+          candidateRatio: median(c.map((n, i) => n / Schema.decodeSync(Schema.Finite)(b[i]))),
+          controlRatio: median(a.map((n, i) => n / Schema.decodeSync(Schema.Finite)(b[i]))),
         };
       });
 
@@ -178,10 +178,10 @@ export const summarizeReplayCpu = (samples: ReadonlyArray<typeof ReplayCpuSample
         candidate: stats(candidate),
         control: stats(control),
         pairedCandidateRatios: stats(
-          candidate.map((n, i) => n / Schema.decodeSync(Schema.Number)(baseline[i])),
+          candidate.map((n, i) => n / Schema.decodeSync(Schema.Finite)(baseline[i])),
         ),
         pairedControlRatios: stats(
-          control.map((n, i) => n / Schema.decodeSync(Schema.Number)(baseline[i])),
+          control.map((n, i) => n / Schema.decodeSync(Schema.Finite)(baseline[i])),
         ),
         blocks,
         comparisonCriterionMet: blocks.every(

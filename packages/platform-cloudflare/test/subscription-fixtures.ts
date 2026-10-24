@@ -140,7 +140,7 @@ export const subscriptionAlarmExtensionLayer = Layer.effect(
 
     const replacement = yield* makeSubscriptionPartitionAlarmHandler({
       tag: "test/replacement",
-      payload: Schema.Number,
+      payload: Schema.Finite,
       timeoutMillis: 100,
       handle: (event) =>
         alarms

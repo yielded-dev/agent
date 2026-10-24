@@ -501,12 +501,13 @@ const isGeneratedChangesetRelease = Effect.fnUntraced(
 
     return versionChanged && changesetConsumed;
   },
-  Effect.catchTag("BinaryBlob", () => Effect.succeed(false)),
-  Effect.catchTag("GitHubApiFailure", (error) =>
-    Effect.logWarning("Release classification unavailable; applying normal review policy", {
-      operation: error.operation,
-    }).pipe(Effect.as(false)),
-  ),
+  Effect.catchTags({
+    BinaryBlob: () => Effect.succeed(false),
+    GitHubApiFailure: (error) =>
+      Effect.logWarning("Release classification unavailable; applying normal review policy", {
+        operation: error.operation,
+      }).pipe(Effect.as(false)),
+  }),
 );
 
 // Spend limited review capacity on implementation and configuration before prose

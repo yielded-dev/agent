@@ -22,8 +22,8 @@ import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 let threadSequence = 0;
 
 const identifiers = Layer.succeed(IdGenerator, {
-  nextThreadId: Effect.sync(() =>
-    Schema.decodeSync(ThreadId)(`input-prompt-thread-${++threadSequence}`),
+  nextThreadId: Effect.suspend(() =>
+    Schema.decodeEffect(ThreadId)(`input-prompt-thread-${++threadSequence}`).pipe(Effect.orDie),
   ),
   nextRunId: Effect.succeed(Schema.decodeSync(RunId)("input-prompt-run")),
   nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("input-prompt-turn")),
@@ -86,14 +86,11 @@ layer(testLayer)("Agent input prompts", (it) => {
         Agent.make("native-input-prompt", {
           input: Schema.Struct({
             question: Schema.String,
-            count: Schema.NumberFromString,
+            count: Schema.FiniteFromString,
             hostOnly: Schema.String,
           }),
           output: Schema.String,
-          instructions: () =>
-            Effect.sync(() => {
-              return "Answer the public question.";
-            }),
+          instructions: () => Effect.succeed("Answer the public question."),
           inputPrompt: (input) =>
             Effect.map(InputPromptService, ({ prefix }) => {
               expect(input.count).toBe(2);

@@ -56,7 +56,7 @@ export class ThreadProjectionMaintenance extends Context.Service<
   static readonly layer = Layer.succeed(this)({
     applyCommitted: () => Effect.void,
     drain: Effect.void,
-    pendingDeadline: Effect.succeed(Option.none()),
+    pendingDeadline: Effect.succeedNone,
   });
 }
 

@@ -525,79 +525,76 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
     Effect.orElseSucceed(() => undefined),
   );
 
-  const complete = Effect.fnUntraced(
-    function* (
-      writer: WriterIdentity,
-      original: InitialContextInput,
-      history: PromptHistory,
-      committed?: CommittedPromptSuffix,
-    ) {
-      const { encoded, bytes, digest } = history;
-      const input = original.record.payload;
+  const complete = Effect.fnUntraced(function* (
+    writer: WriterIdentity,
+    original: InitialContextInput,
+    history: PromptHistory,
+    committed?: CommittedPromptSuffix,
+  ) {
+    const { encoded, bytes, digest } = history;
+    const input = original.record.payload;
 
-      if (
-        closed ||
-        encoded === undefined ||
-        bytes === undefined ||
-        digest === undefined ||
-        input._tag !== "UserInputRecorded" ||
-        input.runId === undefined
-      )
-        return;
-      const store = yield* ThreadStore;
-      const tail = yield* (yield* CurrentRunWriter).tail;
+    if (
+      closed ||
+      encoded === undefined ||
+      bytes === undefined ||
+      digest === undefined ||
+      input._tag !== "UserInputRecorded" ||
+      input.runId === undefined
+    )
+      return;
+    const store = yield* ThreadStore;
+    const tail = yield* (yield* CurrentRunWriter).tail;
 
-      const delta = yield* readSuffix(
-        writer,
-        CanonicalSequence.make(original.sequence - 1),
-        tail.sequence,
-        input.runId,
-        MAX_BYTES - bytes,
-        tail.sequence,
-        1,
-        committed?.take(tail.sequence),
-      );
+    const delta = yield* readSuffix(
+      writer,
+      CanonicalSequence.make(original.sequence - 1),
+      tail.sequence,
+      input.runId,
+      MAX_BYTES - bytes,
+      tail.sequence,
+      1,
+      committed?.take(tail.sequence),
+    );
 
-      if (
-        delta === undefined ||
-        delta.runs !== 1 ||
-        appendedBytes(bytes, delta) > MAX_BYTES ||
-        history.prompt.content.length + delta.prompt.content.length > MAX_ENTRIES
-      )
-        return;
-      const head = yield* store.inspectTail(ThreadTailRequest.make({ threadId: writer.threadId }));
+    if (
+      delta === undefined ||
+      delta.runs !== 1 ||
+      appendedBytes(bytes, delta) > MAX_BYTES ||
+      history.prompt.content.length + delta.prompt.content.length > MAX_ENTRIES
+    )
+      return;
+    const head = yield* store.inspectTail(ThreadTailRequest.make({ threadId: writer.threadId }));
 
-      if (closed || head.tailSequence !== tail.sequence) return;
-      const runsSinceCheckpoint = (history.runsSinceCheckpoint ?? MAX_PROMPT_CHECKPOINT_RUNS) + 1;
-      const refresh = runsSinceCheckpoint >= MAX_PROMPT_CHECKPOINT_RUNS;
+    if (closed || head.tailSequence !== tail.sequence) return;
+    const runsSinceCheckpoint = (history.runsSinceCheckpoint ?? MAX_PROMPT_CHECKPOINT_RUNS) + 1;
+    const refresh = runsSinceCheckpoint >= MAX_PROMPT_CHECKPOINT_RUNS;
 
-      if (refresh && store.promptCheckpoints !== undefined) {
-        yield* store.promptCheckpoints
-          .save({
-            version: 2,
-            recordFormat: CURRENT_RECORD_FORMAT,
-            threadId: writer.threadId,
-            runId: input.runId,
-            throughSequence: tail.sequence,
-            historyThrough: CanonicalSequence.make(original.sequence - 1),
-            priorHistoryLength: history.prompt.content.length,
-            historyDigest: digest,
-            promptJson: encoded,
-          })
-          .pipe(Effect.catch(() => Effect.void));
-      }
-      if (closed) return;
-      current = {
-        threadId: writer.threadId,
-        through: tail.sequence,
-        prompt: Prompt.concat(history.prompt, delta.prompt),
-        encoded: appendJson({ prompt: history.prompt, encoded }, delta),
-        bytes: appendedBytes(bytes, delta),
-        runsSinceCheckpoint: refresh ? 0 : runsSinceCheckpoint,
-      };
-    },
-    Effect.catch(() => Effect.void),
-  );
+    if (refresh && store.promptCheckpoints !== undefined) {
+      yield* store.promptCheckpoints
+        .save({
+          version: 2,
+          recordFormat: CURRENT_RECORD_FORMAT,
+          threadId: writer.threadId,
+          runId: input.runId,
+          throughSequence: tail.sequence,
+          historyThrough: CanonicalSequence.make(original.sequence - 1),
+          priorHistoryLength: history.prompt.content.length,
+          historyDigest: digest,
+          promptJson: encoded,
+        })
+        .pipe(Effect.ignore());
+    }
+    if (closed) return;
+    current = {
+      threadId: writer.threadId,
+      through: tail.sequence,
+      prompt: Prompt.concat(history.prompt, delta.prompt),
+      encoded: appendJson({ prompt: history.prompt, encoded }, delta),
+      bytes: appendedBytes(bytes, delta),
+      runsSinceCheckpoint: refresh ? 0 : runsSinceCheckpoint,
+    };
+  }, Effect.ignore());
 
   return { take, complete };
 });

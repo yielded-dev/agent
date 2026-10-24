@@ -1,4 +1,6 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { Deferred, Effect, Exit, Option, Schema } from "effect";
+import * as Crypto from "effect/Crypto";
 import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 
 import { speechContext } from "../conversation.ts";
@@ -21,6 +23,11 @@ import { VoiceRequest } from "./delegation.ts";
 import { VoiceError } from "./protocol.ts";
 import { runVoiceSession, VoiceBackend, VoiceConnection, type VoiceView } from "./session.ts";
 import { groupCaption, type CaptionGroups } from "./transcript.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 export const voiceViewAtom = Atom.make<VoiceView>({
   status: "idle",
@@ -63,7 +70,7 @@ export const startVoiceAtom = PlannerClient.runtime
       if (!AsyncResult.isSuccess(session)) return;
       const subjectId = session.value.subjectId;
       const selected = get(selectionAtom);
-      const conversationId = selected.conversationId ?? crypto.randomUUID();
+      const conversationId = selected.conversationId ?? (yield* randomUUID);
 
       get.set(voiceOwnerAtom, { subjectId, conversationId });
       if (selected.conversationId === null) get.set(selectionAtom, { ...selected, conversationId });
@@ -233,17 +240,18 @@ export const startVoiceAtom = PlannerClient.runtime
                 });
               },
               persist: (requests) =>
-                Effect.try({
-                  try: () =>
-                    sessionStorage.setItem(
-                      storageKey,
-                      Schema.encodeSync(Schema.fromJsonString(StoredRequests))({
-                        version: 1,
-                        requests,
-                      }),
-                    ),
-                  catch: unavailable,
-                }),
+                Schema.encodeEffect(Schema.fromJsonString(StoredRequests))({
+                  version: 1,
+                  requests,
+                }).pipe(
+                  Effect.mapError(unavailable),
+                  Effect.flatMap((encoded) =>
+                    Effect.try({
+                      try: () => sessionStorage.setItem(storageKey, encoded),
+                      catch: unavailable,
+                    }),
+                  ),
+                ),
               view: (view) => {
                 const current = get(spokenConversationAtom);
 

@@ -174,7 +174,7 @@ export const recoveryTestLayer = (bindings: ReadonlyArray<ResolvedBinding>, host
       return Layer.fresh(ThreadMaintenance.layer).pipe(
         Layer.provide(host),
         Layer.provideMerge(DurableAgentRuntime.layerWithBindings(bindings)),
-        Layer.provide(runStorageLayer()),
+        Layer.provide(runStorageLayer),
         Layer.provideMerge(ports),
         Layer.provide(
           Layer.fresh(cloudflareWakeSchedulerLayer).pipe(

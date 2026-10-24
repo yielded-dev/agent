@@ -151,7 +151,11 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   F extends Diagnostic,
 >(journal: SqlJournal<S, C, W, F>, options: SqlThreadStoreOptions<S, C, F>) {
   const OFFSET_PREFIX = options.offsetPrefix;
-  const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
+
+  const ZERO_CANONICAL_SEQUENCE = yield* Schema.decodeEffect(CanonicalSequence)(0).pipe(
+    Effect.orDie,
+  );
+
   const isAppendConflict = Schema.is(AppendConflict);
   const isThreadStoreError = Schema.is(ThreadStoreError);
 

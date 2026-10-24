@@ -75,7 +75,7 @@ export class ProgressWaitRegistry extends Context.Service<
           return [false, next] as const;
         });
 
-        return cancelled ? Effect.void : Deferred.await(deferred);
+        return yield* Effect.succeed(cancelled ? Effect.void : Deferred.await(deferred));
       });
 
       // Updating the registry and completing captured signals form one nonblocking operation;

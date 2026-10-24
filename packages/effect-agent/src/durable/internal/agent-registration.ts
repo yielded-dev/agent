@@ -180,6 +180,12 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
 
       if (version === undefined || !present) return yield* invalidContracts();
 
+      const providerArgs = Tool.isProviderDefined(tool)
+        ? yield* Schema.decodeUnknownEffect(Schema.Json)(tool.args ?? null).pipe(
+            Effect.mapError(invalidContracts),
+          )
+        : undefined;
+
       return yield* Effect.try({
         try: () => ({
           name: tool.name,
@@ -190,7 +196,7 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
                   provider: {
                     id: tool.id,
                     providerName: tool.providerName,
-                    args: Schema.decodeUnknownSync(Schema.Json)(tool.args ?? null),
+                    args: providerArgs ?? null,
                     requiresHandler: tool.requiresHandler,
                   },
                   readonly: Context.get(tool.annotations, Tool.Readonly),

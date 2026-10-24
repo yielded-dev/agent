@@ -106,7 +106,7 @@ const owner = { tenantId: "restart-tenant", ownerId: "restart-owner" } as const;
 const scope = { owner, principal: TEST_PRINCIPAL };
 const scheduleId = Schema.decodeSync(ScheduleId)("restart-schedule");
 const thread = "restart-scheduled-thread";
-const CreateRequest = Schema.Struct({ deadlineAtMillis: Schema.Number });
+const CreateRequest = Schema.Struct({ deadlineAtMillis: Schema.Finite });
 
 const schedulingLayer = CloudflareSchedulingClient.layer.pipe(
   Layer.provide(

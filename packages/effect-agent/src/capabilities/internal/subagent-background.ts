@@ -95,17 +95,15 @@ export type Worker<Name extends string> = ReturnType<typeof Worker<Name>>["Type"
 /** Model-facing projection deliberately excludes operator-private diagnostics. */
 const toolObservation = <Success extends Schema.Top>(success: Success) =>
   Schema.Union([
-    Schema.Struct({ _tag: Schema.Literal("Pending"), receipt: Receipt }),
-    Schema.Struct({
-      _tag: Schema.Literal("Settled"),
+    Schema.TaggedStruct("Pending", { receipt: Receipt }),
+    Schema.TaggedStruct("Settled", {
       receipt: Receipt,
       runId: RunId,
       settlementId: SettlementId,
       outcome: Schema.Literal("completed"),
       result: success,
     }),
-    Schema.Struct({
-      _tag: Schema.Literal("Settled"),
+    Schema.TaggedStruct("Settled", {
       receipt: Receipt,
       runId: Schema.optionalKey(RunId),
       settlementId: SettlementId,

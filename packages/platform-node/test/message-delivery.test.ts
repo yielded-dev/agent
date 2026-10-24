@@ -126,7 +126,9 @@ const prepare = Effect.fn("NodeMessageTest.prepare")(function* (definitions: Def
       definitions,
       input,
       inputDigest: yield* digestJson(input),
-      admissionKey: Schema.decodeSync(IdempotencyKey)("message-admission"),
+      admissionKey: yield* Schema.decodeEffect(IdempotencyKey)("message-admission").pipe(
+        Effect.orDie,
+      ),
       authorization: { policyId: "host", decisionId: "allow" },
     },
   });
@@ -177,7 +179,9 @@ describe("Node message delivery recovery", () => {
                 {
                   threadId: sourceThreadId,
                   principal,
-                  idempotencyKey: Schema.decodeSync(IdempotencyKey)("source"),
+                  idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("source").pipe(
+                    Effect.orDie,
+                  ),
                   definitions,
                 },
               );

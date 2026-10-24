@@ -167,7 +167,7 @@ describe("retained Run recovery", () => {
           const runtime = yield* DurableAgentRuntime.pipe(
             Effect.provide(
               DurableAgentRuntime.layerWithBindings([binding]).pipe(
-                Layer.provide(runStorageLayer()),
+                Layer.provide(runStorageLayer),
                 Layer.provide(
                   Layer.mergeAll(
                     RunToolAuthorization.allowAll,
@@ -378,7 +378,7 @@ describe("retained Run recovery", () => {
 
       const runtime = yield* Layer.build(
         DurableAgentRuntime.layerWithBindings([binding]).pipe(
-          Layer.provide(runStorageLayer()),
+          Layer.provide(runStorageLayer),
           Layer.provide(
             Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
           ),
@@ -669,7 +669,7 @@ describe("retained Run recovery", () => {
         return yield* DurableAgentRuntime.pipe(
           Effect.provide(
             DurableAgentRuntime.layerWithBindings([binding]).pipe(
-              Layer.provide(runStorageLayer()),
+              Layer.provide(runStorageLayer),
               Layer.provide(
                 Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
               ),

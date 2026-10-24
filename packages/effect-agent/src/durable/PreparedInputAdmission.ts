@@ -102,30 +102,27 @@ export const admitPreparedInput = <R>(
   submit.pipe(
     Effect.timeout(timeoutMillis),
     Effect.map((receipt) => ({ _tag: "Receipt" as const, receipt })),
-    Effect.catchTag("PreparedInputRefused", (error) =>
-      Effect.succeed({ _tag: "Refused" as const, error }),
-    ),
-    Effect.catchTag("PreparedInputRetryable", (error) =>
-      Effect.succeed({
-        _tag: "Retry" as const,
-        reason: error.reason,
-        diagnostic: FailureDiagnostic.capture(error),
-      }),
-    ),
-    Effect.catchTag("TimeoutError", (error) =>
-      Effect.succeed({
-        _tag: "Retry" as const,
-        reason: "timeout" as const,
-        diagnostic: FailureDiagnostic.capture(error),
-      }),
-    ),
-    Effect.catchTag("ScheduleStorageError", (error) =>
-      error.reason === "unavailable"
-        ? Effect.succeed({
-            _tag: "Retry" as const,
-            reason: "storage" as const,
-            diagnostic: FailureDiagnostic.capture(error),
-          })
-        : Effect.fail(error),
-    ),
+    Effect.catchTags({
+      PreparedInputRefused: (error) => Effect.succeed({ _tag: "Refused" as const, error }),
+      PreparedInputRetryable: (error) =>
+        Effect.succeed({
+          _tag: "Retry" as const,
+          reason: error.reason,
+          diagnostic: FailureDiagnostic.capture(error),
+        }),
+      TimeoutError: (error) =>
+        Effect.succeed({
+          _tag: "Retry" as const,
+          reason: "timeout" as const,
+          diagnostic: FailureDiagnostic.capture(error),
+        }),
+      ScheduleStorageError: (error) =>
+        error.reason === "unavailable"
+          ? Effect.succeed({
+              _tag: "Retry" as const,
+              reason: "storage" as const,
+              diagnostic: FailureDiagnostic.capture(error),
+            })
+          : Effect.fail(error),
+    }),
   );

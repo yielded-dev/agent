@@ -101,9 +101,13 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
   raceAppend = false,
 ) {
   const store = yield* ThreadStore;
-  const threadId = Schema.decodeSync(ThreadId)(`history-cost-${historySize}`);
+
+  const threadId = yield* Schema.decodeEffect(ThreadId)(`history-cost-${historySize}`).pipe(
+    Effect.orDie,
+  );
+
   const createdAt = yield* DateTime.now;
-  let tailSequence = Schema.decodeSync(CanonicalSequence)(0);
+  let tailSequence = yield* Schema.decodeEffect(CanonicalSequence)(0).pipe(Effect.orDie);
   const retainedInputs: Array<string> = [];
 
   yield* store.materialize(ThreadMaterialization.make({ threadId }));
@@ -160,8 +164,8 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
         expectedTailSequence: tailSequence,
 
         batch: CanonicalBatch.make({
-          batchId: Schema.decodeSync(BatchId)(`history-seed:${start}`),
-          producerId: Schema.decodeSync(ProducerId)("history-cost"),
+          batchId: yield* Schema.decodeEffect(BatchId)(`history-seed:${start}`).pipe(Effect.orDie),
+          producerId: yield* Schema.decodeEffect(ProducerId)("history-cost").pipe(Effect.orDie),
           records,
         }),
       }),
@@ -235,16 +239,16 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
                           payload: ModelCompleted.make({
                             runId: RunId.make("racing-history"),
                             output: "racing answer",
-                            messages: Schema.decodeUnknownSync(PersistedJson)(
-                              Schema.encodeSync(Prompt.Prompt)(
+                            messages: yield* Schema.decodeUnknownEffect(PersistedJson)(
+                              yield* Schema.encodeEffect(Prompt.Prompt)(
                                 Prompt.make([
                                   { role: "user", content: input },
                                   { role: "assistant", content: "racing answer" },
                                 ]),
-                              ),
-                            ),
-                            history: Schema.decodeUnknownSync(PersistedJson)(
-                              Schema.encodeSync(Prompt.Prompt)(
+                              ).pipe(Effect.orDie),
+                            ).pipe(Effect.orDie),
+                            history: yield* Schema.decodeUnknownEffect(PersistedJson)(
+                              yield* Schema.encodeEffect(Prompt.Prompt)(
                                 Prompt.make([
                                   ...retainedInputs.flatMap((text) => [
                                     { role: "user" as const, content: text },
@@ -253,8 +257,8 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
                                   { role: "user", content: input },
                                   { role: "assistant", content: "racing answer" },
                                 ]),
-                              ),
-                            ),
+                              ).pipe(Effect.orDie),
+                            ).pipe(Effect.orDie),
                           }),
                         }),
                       ],
@@ -308,14 +312,14 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
   const agent = Agent.withModel(definition, model);
 
   const runtime = yield* DurableAgentRuntime.pipe(
-    Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+    Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer))),
     Effect.provideService(ThreadStore, counted),
   );
 
   const receipt = yield* runtime.submit(agent, "measure", {
     threadId,
-    principal: Schema.decodeSync(Principal)("history-cost"),
-    idempotencyKey: Schema.decodeSync(IdempotencyKey)("history-cost"),
+    principal: yield* Schema.decodeEffect(Principal)("history-cost").pipe(Effect.orDie),
+    idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("history-cost").pipe(Effect.orDie),
     definitions,
   });
 
@@ -398,7 +402,7 @@ it.live(
 
       const services = yield* Layer.build(
         DurableAgentRuntime.layer.pipe(
-          Layer.provideMerge(runStorageLayer()),
+          Layer.provideMerge(runStorageLayer),
           Layer.provide(Layer.succeed(ThreadStore, counted)),
         ),
       );
@@ -438,7 +442,7 @@ it.live(
       );
 
       const agent = Agent.withModel(definition, model);
-      const encode = Schema.encodeSync(Schema.toCodecJson(Prompt.Prompt));
+      const encode = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
       const counts: Array<number> = [];
 
       for (let turn = 0; turn < 28; turn++) {
@@ -505,16 +509,16 @@ it.live(
         expect(settled).toHaveLength(1);
         expect(settled[0]?.outcome).toBe("completed");
         expect(
-          encode(
+          yield* encode(
             Prompt.fromMessages(observed.content.filter((message) => message.role !== "system")),
-          ),
+          ).pipe(Effect.orDie),
         ).toEqual(
-          encode(
+          yield* encode(
             Prompt.concat(
               expected,
               Prompt.make([{ role: "user", content: JSON.stringify(input) }]),
             ),
-          ),
+          ).pipe(Effect.orDie),
         );
         if (turn === 26) {
           const prefix = prior.find(
@@ -526,7 +530,9 @@ it.live(
           expect(readSequences.has(prefix.sequence)).toBe(true);
         }
 
-        expect(observedHistoryDigest).toBe(yield* digestJson(encode(expected)));
+        expect(observedHistoryDigest).toBe(
+          yield* digestJson(yield* encode(expected).pipe(Effect.orDie)),
+        );
       }
       const warm = [...counts.slice(1, 26), counts[27]];
 

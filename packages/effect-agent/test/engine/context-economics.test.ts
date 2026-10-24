@@ -37,7 +37,9 @@ import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 let threadSequence = 0;
 
 const identifiers = Layer.succeed(IdGenerator, {
-  nextThreadId: Effect.sync(() => Schema.decodeSync(ThreadId)(`thread-1-${++threadSequence}`)),
+  nextThreadId: Effect.suspend(() =>
+    Schema.decodeEffect(ThreadId)(`thread-1-${++threadSequence}`).pipe(Effect.orDie),
+  ),
   nextRunId: Effect.succeed(Schema.decodeSync(RunId)("run-1")),
   nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("turn-1")),
 });
@@ -207,7 +209,11 @@ layer(testLayer)("context economics — bounding, tracking, status, exhaustion",
         const results = toolResultValues(second.prompt);
 
         expect(results).toHaveLength(1);
-        const envelope = Schema.decodeUnknownSync(TruncatedToolResult)(results[0]);
+
+        const envelope = yield* Schema.decodeUnknownEffect(TruncatedToolResult)(results[0]).pipe(
+          Effect.orDie,
+        );
+
         const originalEncoded = JSON.stringify({ data: bigData });
 
         expect(envelope.originalBytes).toBe(originalEncoded.length);
@@ -311,7 +317,7 @@ layer(testLayer)("context economics — bounding, tracking, status, exhaustion",
           commitCompaction: () => Effect.void,
           noteTurnUsage: () => Effect.void,
           step: {
-            lookup: () => Effect.succeed(Option.none()),
+            lookup: () => Effect.succeedNone,
             reserve: () => Effect.succeed(Effect.void),
             commit: () => Effect.void,
           },

@@ -20,7 +20,6 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -42,7 +41,9 @@ const usage = {
 };
 
 const identifiers = Layer.succeed(IdGenerator, {
-  nextThreadId: Effect.sync(() => Schema.decodeSync(ThreadId)(`thread-broker-${++threadSequence}`)),
+  nextThreadId: Effect.suspend(() =>
+    Schema.decodeEffect(ThreadId)(`thread-broker-${++threadSequence}`).pipe(Effect.orDie),
+  ),
   nextRunId: Effect.succeed(Schema.decodeSync(RunId)("run-broker")),
   nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("turn-broker")),
 });
@@ -260,7 +261,7 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
           commitCompaction: () => Effect.void,
           noteTurnUsage: () => Effect.void,
           step: {
-            lookup: () => Effect.succeed(Option.none()),
+            lookup: () => Effect.succeedNone,
             reserve: () => Effect.succeed(Effect.void),
             commit: () => Effect.void,
           },
@@ -306,7 +307,7 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
             commitCompaction: () => Effect.void,
             noteTurnUsage: () => Effect.void,
             step: {
-              lookup: () => Effect.succeed(Option.none()),
+              lookup: () => Effect.succeedNone,
               reserve: () => Effect.succeed(Effect.void),
               commit: () => Effect.void,
             },
@@ -437,7 +438,7 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
       yield* runOrchestrated({
         innerToolkit,
         innerHandlers: innerToolkit.toLayer({
-          loose: () => Effect.sync(() => null),
+          loose: () => Effect.succeed(null),
         }),
         passOptions: {
           maxResultBytes,

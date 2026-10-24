@@ -154,6 +154,8 @@ const CHILD_DIGESTS = DefinitionDigests.make({
 });
 
 const PRINCIPAL = Schema.decodeSync(Principal)("principal-certification");
+const decodeRunId = Schema.decodeSync(RunId);
+const decodeTurnId = Schema.decodeSync(TurnId);
 const decodeThreadId = Schema.decodeSync(ThreadId);
 const decodeIdempotencyKey = Schema.decodeSync(IdempotencyKey);
 const decodeToolCallId = Schema.decodeSync(ToolCallId);
@@ -361,8 +363,8 @@ const identifiers = Layer.effect(
 
     return {
       nextThreadId: next(decodeThreadId, "certify-fixture-thread"),
-      nextRunId: next(Schema.decodeSync(RunId), "certify-fixture-run"),
-      nextTurnId: next(Schema.decodeSync(TurnId), "certify-fixture-turn"),
+      nextRunId: next(decodeRunId, "certify-fixture-run"),
+      nextTurnId: next(decodeTurnId, "certify-fixture-turn"),
     };
   }),
 );
@@ -908,7 +910,7 @@ export const durableCoordinatorConformance: Effect.Effect<
   }
 }).pipe(
   Effect.provide(
-    Layer.mergeAll(runStorageLayer(), ThreadReader.layer()).pipe(
+    Layer.mergeAll(runStorageLayer, ThreadReader.layer()).pipe(
       Layer.provideMerge(
         Layer.mergeAll(
           WakeScheduler.layerNoop,

@@ -177,7 +177,7 @@ const staleCompletion = conformanceCase(
 
       const stale = yield* store.change(key("stale-completion"), {
         _tag: "Complete",
-        occurrenceId: Schema.decodeSync(Digest)("f".repeat(64)),
+        occurrenceId: yield* Schema.decodeEffect(Digest)("f".repeat(64)).pipe(Effect.orDie),
         receipt,
         nowMillis: 130,
       });
@@ -279,7 +279,9 @@ const ownerCapacity = conformanceCase(
         .pipe(Effect.result);
 
       yield* ensure(
-        Result.isFailure(attempted) && attempted.failure instanceof ScheduleCapacityError,
+        Result.isFailure(attempted) &&
+          Schema.is(ScheduleCapacityError)(attempted.failure) &&
+          Object.prototype.isPrototypeOf.call(ScheduleCapacityError.prototype, attempted.failure),
         "owner capacity did not fail with ScheduleCapacityError",
       );
 

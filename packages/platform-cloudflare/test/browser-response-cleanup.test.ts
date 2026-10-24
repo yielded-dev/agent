@@ -51,12 +51,12 @@ const capture = (
         return yield* (yield* PageCapture).capture(
           PageCaptureRequest.make({ ...common, action: CapturePageMarkdown.make({}) }),
         );
-      }).pipe(Effect.provide(browserQuickActionCaptureLayer().pipe(Layer.provide(binding))))
+      }).pipe(Effect.provide(browserQuickActionCaptureLayer.pipe(Layer.provide(binding))))
     : Effect.gen(function* () {
         return yield* (yield* PageScreenshot).capture(
           PageScreenshotRequest.make({ ...common, fullPage: false }),
         );
-      }).pipe(Effect.provide(browserQuickActionScreenshotLayer().pipe(Layer.provide(binding))));
+      }).pipe(Effect.provide(browserQuickActionScreenshotLayer.pipe(Layer.provide(binding))));
 };
 
 it.effect.each([

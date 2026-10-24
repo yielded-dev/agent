@@ -233,7 +233,7 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
                     tail = { sequence: conflict.actualTailSequence };
                     if (captured.executions !== undefined) return Effect.fail(conflict);
 
-                    return Effect.succeed(undefined);
+                    return Effect.as(Effect.void, undefined);
                   }),
                 );
 
@@ -491,7 +491,7 @@ export const make = Effect.gen(function* () {
                               return writer.refresh.pipe(
                                 Effect.andThen(
                                   captured.executions === undefined
-                                    ? Effect.succeed(undefined)
+                                    ? Effect.as(Effect.void, undefined)
                                     : Effect.fail(conflict),
                                 ),
                               );
@@ -533,4 +533,4 @@ export const make = Effect.gen(function* () {
   return RunStorage.of({ claim, publishSettlement: publisher.publish });
 });
 
-export const layer = () => Layer.effect(RunStorage, make);
+export const layer = Layer.fresh(Layer.effect(RunStorage, make));

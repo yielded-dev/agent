@@ -188,15 +188,15 @@ describe("PR-review eval quality report", () => {
         ),
       });
 
-      const original = Schema.decodeSync(EvalCase)({
-        ...Schema.encodeSync(EvalCase)(known),
+      const original = yield* Schema.decodeEffect(EvalCase)({
+        ...(yield* Schema.encodeEffect(EvalCase)(known).pipe(Effect.orDie)),
         kind: "unadjudicated",
         inputDigest: yield* digestReviewRequest(request),
-        request: Schema.encodeSync(ReviewRequest)(request),
+        request: yield* Schema.encodeEffect(ReviewRequest)(request).pipe(Effect.orDie),
         expectedDefects: [],
         expectedResolvedFollowUpIds: ["fixed"],
         expectedUnresolvedFollowUpIds: ["open"],
-      });
+      }).pipe(Effect.orDie);
 
       const variant = configuration("adjudicated-before-corpus-update");
       const observations = [observation(original, variant, 1, succeeded([finding("Valid bug")]))];
@@ -260,11 +260,11 @@ describe("PR-review eval quality report", () => {
         inputDigest: yield* digestReviewRequest(request),
       });
 
-      const evalCase = Schema.decodeSync(EvalCase)({
-        ...Schema.encodeSync(EvalCase)(candidate),
+      const evalCase = yield* Schema.decodeEffect(EvalCase)({
+        ...(yield* Schema.encodeEffect(EvalCase)(candidate).pipe(Effect.orDie)),
         expectedResolvedFollowUpIds: ["fixed-a", "fixed-b"],
         expectedUnresolvedFollowUpIds: ["open-a", "open-b"],
-      });
+      }).pipe(Effect.orDie);
 
       const suite = EvalSuite.make({ version: 1, cases: [evalCase] });
 
@@ -443,7 +443,9 @@ describe("PR-review eval quality report", () => {
           EvalExpectedDefect.make({ ...first, severity: "important" }),
           EvalExpectedDefect.make({
             ...first,
-            id: Schema.decodeSync(EvalDefectId)("second-important-defect"),
+            id: yield* Schema.decodeEffect(EvalDefectId)("second-important-defect").pipe(
+              Effect.orDie,
+            ),
             severity: "important",
             invariant: "A second independent supported operation returns the wrong result.",
           }),

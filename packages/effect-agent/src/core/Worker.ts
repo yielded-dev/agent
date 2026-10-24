@@ -53,15 +53,13 @@ export type WorkerBudgetScope = typeof WorkerBudgetScope.Type;
 
 /** Host-bound caller metadata. Programmatic calls never fabricate Run or Tool Call identities. */
 export const WorkerSource = Schema.Union([
-  Schema.Struct({
-    _tag: Schema.Literal("tool"),
+  Schema.TaggedStruct("tool", {
     agentId: AgentId,
     threadId: ThreadId,
     runId: RunId,
     toolCallId: ToolCallId,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("programmatic"),
+  Schema.TaggedStruct("programmatic", {
     agentId: AgentId,
     threadId: ThreadId,
   }),
@@ -215,8 +213,7 @@ export type WorkerReport<Success extends Schema.Top> = ReturnType<
 >["Type"];
 
 /** Framework message stored separately from the parent's application input. */
-export const WorkerCompletion = Schema.Struct({
-  _tag: Schema.Literal("WorkerCompletion"),
+export const WorkerCompletion = Schema.TaggedStruct("WorkerCompletion", {
   budgetExhausted: Schema.Boolean,
   schemaVersion: Schema.Literal(1),
   report: WorkerReport(Schema.Json),
@@ -225,8 +222,7 @@ export const WorkerCompletion = Schema.Struct({
 export type WorkerCompletion = typeof WorkerCompletion.Type;
 
 /** Source-worker intermediate output, kept separate from application input. */
-export const WorkerUpdate = Schema.Struct({
-  _tag: Schema.Literal("WorkerUpdate"),
+export const WorkerUpdate = Schema.TaggedStruct("WorkerUpdate", {
   schemaVersion: Schema.Literal(1),
   worker: WorkerRef,
   update: Update,

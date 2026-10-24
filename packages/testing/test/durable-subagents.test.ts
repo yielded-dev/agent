@@ -99,6 +99,8 @@ const WRONG_CHILD_DIGESTS = DefinitionDigests.make({
 });
 
 const PRINCIPAL = Schema.decodeSync(Principal)("principal-durable-subagents");
+const decodeRunId = Schema.decodeSync(RunId);
+const decodeTurnId = Schema.decodeSync(TurnId);
 const decodeThreadId = Schema.decodeSync(ThreadId);
 const decodeIdempotencyKey = Schema.decodeSync(IdempotencyKey);
 const decodeToolCallId = Schema.decodeSync(ToolCallId);
@@ -285,19 +287,18 @@ const configLayer = DurableRuntimeConfig.layer({
 let admissionFault: string | undefined;
 
 const baseLayer = (ledger: typeof MemorySubmissionLedgerLive) =>
-  DurableAgentRuntime.layer
-    .pipe(Layer.provide(runStorageLayer()))
-    .pipe(
-      Layer.provideMerge(
-        Layer.mergeAll(
-          ledger.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
-          WakeScheduler.layerNoop,
-          DurableRuntimeFailpointTestControl.layer,
-          ToolReconciler.uncertain,
-          configLayer,
-        ).pipe(Layer.provideMerge(NodeCrypto.layer)),
-      ),
-    );
+  DurableAgentRuntime.layer.pipe(
+    Layer.provide(runStorageLayer),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        ledger.pipe(Layer.provideMerge(MemoryThreadStoreLive)),
+        WakeScheduler.layerNoop,
+        DurableRuntimeFailpointTestControl.layer,
+        ToolReconciler.uncertain,
+        configLayer,
+      ).pipe(Layer.provideMerge(NodeCrypto.layer)),
+    ),
+  );
 
 const testLayer = baseLayer(MemorySubmissionLedgerLive);
 
@@ -329,8 +330,8 @@ const identifiers = Layer.effect(
 
     return {
       nextThreadId: next(decodeThreadId, "fixture-thread"),
-      nextRunId: next(Schema.decodeSync(RunId), "fixture-run"),
-      nextTurnId: next(Schema.decodeSync(TurnId), "fixture-turn"),
+      nextRunId: next(decodeRunId, "fixture-run"),
+      nextTurnId: next(decodeTurnId, "fixture-turn"),
     };
   }),
 );
@@ -417,9 +418,10 @@ const makeHarness = Effect.fnUntraced(function* (options?: {
     bindings,
     runtime: yield* DurableAgentRuntime.pipe(
       Effect.provide(
-        DurableAgentRuntime.layerWithBindings(bindings)
-          .pipe(Layer.provide(runStorageLayer()))
-          .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+        DurableAgentRuntime.layerWithBindings(bindings).pipe(
+          Layer.provide(runStorageLayer),
+          Layer.provide(RunToolAuthorization.allowAll),
+        ),
       ),
     ),
     childInvocations: childScripted.calls,
@@ -486,9 +488,10 @@ const makeSiblingHarnessWith = Effect.fnUntraced(function* (
     bindings: [parentResolved, childResolved],
     runtime: yield* DurableAgentRuntime.pipe(
       Effect.provide(
-        DurableAgentRuntime.layerWithBindings([parentResolved, childResolved])
-          .pipe(Layer.provide(runStorageLayer()))
-          .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+        DurableAgentRuntime.layerWithBindings([parentResolved, childResolved]).pipe(
+          Layer.provide(runStorageLayer),
+          Layer.provide(RunToolAuthorization.allowAll),
+        ),
       ),
     ),
     childInvocations: childScripted.calls,
@@ -671,9 +674,10 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
       const runtime = yield* DurableAgentRuntime.pipe(
         Effect.provide(
-          DurableAgentRuntime.layerWithBindings([parentResolved, selected])
-            .pipe(Layer.provide(runStorageLayer()))
-            .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+          DurableAgentRuntime.layerWithBindings([parentResolved, selected]).pipe(
+            Layer.provide(runStorageLayer),
+            Layer.provide(RunToolAuthorization.allowAll),
+          ),
         ),
       );
 
@@ -705,18 +709,17 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
       const replacement = yield* DurableAgentRuntime.pipe(
         Effect.provide(
-          DurableAgentRuntime.layerWithBindings([parentResolved, selected, alternative])
-            .pipe(Layer.provide(runStorageLayer()))
-            .pipe(
-              Layer.provide(RunToolAuthorization.allowAll),
-              Layer.provide(
-                Layer.succeed(CurrentBindingSelection, {
-                  key: "shared-child-v1",
-                  select: (submission) =>
-                    Effect.succeed(submission.agentId === child.id ? child : undefined),
-                }),
-              ),
+          DurableAgentRuntime.layerWithBindings([parentResolved, selected, alternative]).pipe(
+            Layer.provide(runStorageLayer),
+            Layer.provide(RunToolAuthorization.allowAll),
+            Layer.provide(
+              Layer.succeed(CurrentBindingSelection, {
+                key: "shared-child-v1",
+                select: (submission) =>
+                  Effect.succeed(submission.agentId === child.id ? child : undefined),
+              }),
             ),
+          ),
         ),
       );
 
@@ -835,7 +838,7 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
         const reports = yield* DurableAgentRuntime.pipe(
           Effect.flatMap((runtime) => runtime.runRecovery()),
           Effect.provide(
-            Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+            Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer))),
           ),
           Effect.provideService(ThreadStore, unavailable),
         );
@@ -918,9 +921,10 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
         const hostileRuntime = yield* DurableAgentRuntime.pipe(
           Effect.provide(
-            DurableAgentRuntime.layerWithBindings(harness.bindings)
-              .pipe(Layer.provide(runStorageLayer()))
-              .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+            DurableAgentRuntime.layerWithBindings(harness.bindings).pipe(
+              Layer.provide(runStorageLayer),
+              Layer.provide(RunToolAuthorization.allowAll),
+            ),
           ),
           Effect.provideService(ThreadStore, corruptStore),
         );
@@ -1043,9 +1047,10 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
             bindings: [parentResolved, childResolved],
             runtime: yield* DurableAgentRuntime.pipe(
               Effect.provide(
-                DurableAgentRuntime.layerWithBindings([parentResolved, childResolved])
-                  .pipe(Layer.provide(runStorageLayer()))
-                  .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+                DurableAgentRuntime.layerWithBindings([parentResolved, childResolved]).pipe(
+                  Layer.provide(runStorageLayer),
+                  Layer.provide(RunToolAuthorization.allowAll),
+                ),
               ),
             ),
             childInvocations: childScripted.calls,
@@ -1192,9 +1197,10 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
       const runtime = yield* DurableAgentRuntime.pipe(
         Effect.provide(
-          DurableAgentRuntime.layerWithBindings(bindings)
-            .pipe(Layer.provide(runStorageLayer()))
-            .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+          DurableAgentRuntime.layerWithBindings(bindings).pipe(
+            Layer.provide(runStorageLayer),
+            Layer.provide(RunToolAuthorization.allowAll),
+          ),
         ),
       );
 
@@ -1297,11 +1303,15 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
         const admission = AdmissionRequest.make({
           threadId: request.childThreadId,
-          principal: Schema.decodeSync(Principal)(request.childPrincipal),
+          principal: yield* Schema.decodeEffect(Principal)(request.childPrincipal).pipe(
+            Effect.orDie,
+          ),
           idempotencyKey: decodeIdempotencyKey(request.childIdempotencyKey),
           agentId: request.targetAgentId,
           agentDigests: request.targetDigests,
-          deploymentId: Schema.decodeSync(DeploymentId)("deployment-durable-subagents"),
+          deploymentId: yield* Schema.decodeEffect(DeploymentId)(
+            "deployment-durable-subagents",
+          ).pipe(Effect.orDie),
           inputPayload: request.childInput,
           inputDigest: request.childInputDigest,
           parentLinkage: ParentLinkage.make({
@@ -1367,14 +1377,13 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
             DurableAgentRuntime.layerWithBindings([
               currentBinding,
               ...original.bindings.filter((binding) => binding.agentId === childDefinition.id),
-            ])
-              .pipe(Layer.provide(runStorageLayer()))
-              .pipe(
-                Layer.provide([
-                  RunToolAuthorization.allowAll,
-                  Layer.succeed(SubmissionLedger)(racingLedger),
-                ]),
-              ),
+            ]).pipe(
+              Layer.provide(runStorageLayer),
+              Layer.provide([
+                RunToolAuthorization.allowAll,
+                Layer.succeed(SubmissionLedger)(racingLedger),
+              ]),
+            ),
           ),
         );
 
@@ -1502,25 +1511,24 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
         const runtime = yield* DurableAgentRuntime.pipe(
           Effect.provide(
-            DurableAgentRuntime.layerWithBindings([parentBinding, childResolved])
-              .pipe(Layer.provide(runStorageLayer()))
-              .pipe(
-                Layer.provide(
-                  Layer.succeed(RunToolAuthorization)({
-                    authorize: ({ runId, call }) => {
-                      if (runId === originalRunId && call.toolCallId === "original-mutation")
-                        return Effect.succeed({ _tag: "allowed" });
-                      denied.push(call.toolCallId);
+            DurableAgentRuntime.layerWithBindings([parentBinding, childResolved]).pipe(
+              Layer.provide(runStorageLayer),
+              Layer.provide(
+                Layer.succeed(RunToolAuthorization)({
+                  authorize: ({ runId, call }) => {
+                    if (runId === originalRunId && call.toolCallId === "original-mutation")
+                      return Effect.succeed({ _tag: "allowed" });
+                    denied.push(call.toolCallId);
 
-                      return Effect.succeed({
-                        _tag: "denied",
-                        reason:
-                          "An unresolved supplier action does not authorize replacement mutations or delegation",
-                      });
-                    },
-                  }),
-                ),
+                    return Effect.succeed({
+                      _tag: "denied",
+                      reason:
+                        "An unresolved supplier action does not authorize replacement mutations or delegation",
+                    });
+                  },
+                }),
               ),
+            ),
           ),
         );
 

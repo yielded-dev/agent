@@ -43,7 +43,9 @@ import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 let threadSequence = 0;
 
 const identifiers = Layer.succeed(IdGenerator, {
-  nextThreadId: Effect.sync(() => Schema.decodeSync(ThreadId)(`thread-1-${++threadSequence}`)),
+  nextThreadId: Effect.suspend(() =>
+    Schema.decodeEffect(ThreadId)(`thread-1-${++threadSequence}`).pipe(Effect.orDie),
+  ),
   nextRunId: Effect.succeed(Schema.decodeSync(RunId)("run-1")),
   nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("turn-1")),
 });
@@ -222,7 +224,7 @@ const driveRun = Effect.fnUntraced(function* (setup: RunSetup) {
           commitTurn: () => Effect.succeed("committed"),
           checkToolDispatch: Effect.void,
           step: {
-            lookup: () => Effect.succeed(Option.none()),
+            lookup: () => Effect.succeedNone,
             reserve: () => Effect.succeed(Effect.void),
             commit: () => Effect.void,
           },

@@ -721,7 +721,9 @@ const workerAdmissionIdentity = conformanceCase(
         WorkerAdmission.make({ ...metadata, parameters: { prompt: "changed" } }),
         WorkerAdmission.make({
           ...metadata,
-          sourceSubmissionId: Schema.decodeSync(SubmissionId)("other-source-input"),
+          sourceSubmissionId: yield* Schema.decodeEffect(SubmissionId)("other-source-input").pipe(
+            Effect.orDie,
+          ),
         }),
         WorkerAdmission.make({
           ...metadata,
@@ -859,13 +861,13 @@ const messageAdmissionIdentity = conformanceCase(
         { text: "hello" },
       );
 
-      const metadata = Schema.decodeSync(MessageAdmission)({
+      const metadata = yield* Schema.decodeEffect(MessageAdmission)({
         schemaVersion: 1,
         message: { ownerThreadId: "peer-source", messageId: "peer-message" },
         peerName: "reviewer",
         sender: { threadId: "peer-source", agentId: "peer-agent" },
         returnAddress: { threadId: "peer-source", agentId: "peer-agent" },
-      });
+      }).pipe(Effect.orDie);
 
       const admitted = yield* ledger.admit(
         AdmissionRequest.make({ ...base, messageAdmission: metadata }),
@@ -932,7 +934,7 @@ const workerUpdateIdentity = conformanceCase(
         { text: "original application input" },
       );
 
-      const metadata = Schema.decodeSync(WorkerUpdate)({
+      const metadata = yield* Schema.decodeEffect(WorkerUpdate)({
         _tag: "WorkerUpdate",
         schemaVersion: 1,
         worker: {
@@ -950,7 +952,7 @@ const workerUpdateIdentity = conformanceCase(
           sequence: 1,
           value: { finding: "partial" },
         },
-      });
+      }).pipe(Effect.orDie);
 
       const admitted = yield* ledger.admit(
         AdmissionRequest.make({ ...base, messageAdmission: metadata }),
@@ -1024,7 +1026,7 @@ const workerCompletionIdentity = conformanceCase(
         { text: "hello" },
       );
 
-      const metadata = Schema.decodeSync(WorkerCompletion)({
+      const metadata = yield* Schema.decodeEffect(WorkerCompletion)({
         _tag: "WorkerCompletion",
         schemaVersion: 1,
         budgetExhausted: false,
@@ -1047,7 +1049,7 @@ const workerCompletionIdentity = conformanceCase(
           outcome: "completed",
           result: { answer: "done" },
         },
-      });
+      }).pipe(Effect.orDie);
 
       const admitted = yield* ledger.admit(
         AdmissionRequest.make({ ...base, messageAdmission: metadata }),
@@ -1196,12 +1198,12 @@ const admissionTupleBoundaries = conformanceCase(
 
       const firstRequest = AdmissionRequest.make({
         ...base,
-        principal: Schema.decodeSync(Principal)("p\u001fq"),
+        principal: yield* Schema.decodeEffect(Principal)("p\u001fq").pipe(Effect.orDie),
       });
 
       const secondRequest = AdmissionRequest.make({
         ...base,
-        principal: Schema.decodeSync(Principal)("p"),
+        principal: yield* Schema.decodeEffect(Principal)("p").pipe(Effect.orDie),
         idempotencyKey: decodeIdempotencyKey("q\u001fr"),
       });
 
@@ -4472,7 +4474,7 @@ const assignmentSettlement = conformanceCase(
           if ("joined" in scenario) {
             yield* claim.session.markJoined(queued.submissionId, {
               recordId: submissionInputRecordId(queued.submissionId),
-              sequence: Schema.decodeSync(CanonicalSequence)(2),
+              sequence: yield* Schema.decodeEffect(CanonicalSequence)(2).pipe(Effect.orDie),
             });
           }
         }

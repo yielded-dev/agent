@@ -1,5 +1,7 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { authenticatedHttpClient, sessionObservation } from "@yielded/agent-example-auth/client";
 import { Cause, Effect, Option, Predicate, Redacted, Schema } from "effect";
+import * as Crypto from "effect/Crypto";
 import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
 import {
@@ -15,6 +17,11 @@ import {
   type ModelId,
   type RunInput,
 } from "./contract.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 export class LabClient extends AtomHttpApi.Service<LabClient>()("browser-speed/client", {
   api: LabApi,
@@ -317,7 +324,10 @@ export const downloadTraceAtom = LabClient.runtime.fn<ReadonlyArray<string>>()(
       const trace = yield* client.lab.trace({ headers, params: { id } });
 
       if (index === 0) conversationId = trace.conversationId;
-      const json = Schema.encodeSync(Schema.fromJsonString(TraceArchive))(trace);
+
+      const json = yield* Schema.encodeEffect(Schema.fromJsonString(TraceArchive))(trace).pipe(
+        Effect.orDie,
+      );
 
       yield* Effect.tryPromise({
         try: () => writer.write(`${index === 0 ? "" : ","}${json}`),
@@ -408,7 +418,7 @@ export const runAtom = LabClient.runtime.fn<
                       : { serviceTier: serviceTierForModel(variant.model ?? "", serviceTier) }),
                   }
                 : {}),
-              id: crypto.randomUUID(),
+              id: yield* randomUUID,
             },
           }),
           ["lab"],
@@ -473,7 +483,7 @@ export const sendChatAtom = LabClient.runtime.fn<
     if (!prompt) return;
     const client = yield* LabClient;
     const { url, ...options } = settings;
-    const id = crypto.randomUUID();
+    const id = yield* randomUUID;
     const chatId = get(chatIdAtom);
     const start = performance.now();
 
@@ -649,8 +659,11 @@ export const exportAtom = Atom.fn<void>()(
   Effect.fnUntraced(function* (_, get) {
     const samples = get(historyAtom);
 
-    yield* Effect.sync(() => {
-      const json = Schema.encodeSync(Schema.fromJsonString(Schema.Array(ClientSample)))(samples);
+    const downloadSamples = Effect.fnUntraced(function* () {
+      const json = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Array(ClientSample)))(
+        samples,
+      ).pipe(Effect.orDie);
+
       const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
       const link = document.createElement("a");
 
@@ -659,6 +672,8 @@ export const exportAtom = Atom.fn<void>()(
       link.click();
       URL.revokeObjectURL(url);
     });
+
+    yield* downloadSamples();
   }),
 );
 

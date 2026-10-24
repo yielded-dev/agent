@@ -716,12 +716,16 @@ const sustainedRetention = conformanceCase(
           limits,
         );
 
-        const deliveryId = Schema.decodeSync(Digest)(index.toString(16).padStart(64, "0"));
+        const deliveryId = yield* Schema.decodeEffect(Digest)(
+          index.toString(16).padStart(64, "0"),
+        ).pipe(Effect.orDie);
 
         const selected = {
           ...delivery(registration, accepted),
           deliveryId,
-          admissionKey: Schema.decodeSync(IdempotencyKey)(`subscription:${deliveryId}`),
+          admissionKey: yield* Schema.decodeEffect(IdempotencyKey)(
+            `subscription:${deliveryId}`,
+          ).pipe(Effect.orDie),
         };
 
         yield* store.select(accepted, [selected], registration.ordinal, true, now, limits);
@@ -796,12 +800,17 @@ const lifetimeCapacity = conformanceCase(
       for (let index = 0; index < 4; index++) {
         const registration = yield* store.register(record(`lifetime-${index}`), limits);
         const accepted = yield* store.accept(event(`lifetime-${index}`), limits);
-        const deliveryId = Schema.decodeSync(Digest)(index.toString(16).padStart(64, "0"));
+
+        const deliveryId = yield* Schema.decodeEffect(Digest)(
+          index.toString(16).padStart(64, "0"),
+        ).pipe(Effect.orDie);
 
         const selected = {
           ...delivery(registration, accepted),
           deliveryId,
-          admissionKey: Schema.decodeSync(IdempotencyKey)(`subscription:${deliveryId}`),
+          admissionKey: yield* Schema.decodeEffect(IdempotencyKey)(
+            `subscription:${deliveryId}`,
+          ).pipe(Effect.orDie),
         };
 
         if (index === 3) {

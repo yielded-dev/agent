@@ -204,7 +204,8 @@ export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
   });
 });
 
-export const initializeSqliteJournal = () =>
-  Effect.map(initializeSqliteJournalKernel(), (kernel) => kernel.journal);
+export const initializeSqliteJournal = Effect.suspend(() =>
+  Effect.map(initializeSqliteJournalKernel(), (kernel) => kernel.journal),
+);
 
-export type SqliteJournal = Effect.Success<ReturnType<typeof initializeSqliteJournal>>;
+export type SqliteJournal = Effect.Success<typeof initializeSqliteJournal>;

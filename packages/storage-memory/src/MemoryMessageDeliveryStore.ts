@@ -560,7 +560,7 @@ export const memoryMessageDeliveryStoreLayer = (
             messageDeliveryKeyString({ ownerThreadId: threadId, messageId }),
           );
 
-          return text === undefined ? Effect.succeed(undefined) : transferDecode(text);
+          return text === undefined ? Effect.as(Effect.void, undefined) : transferDecode(text);
         },
         snapshot: (threadId) => {
           const counts = MutableRef.get(state.ref).counts.get(threadId);
@@ -599,7 +599,9 @@ export const memoryMessageDeliveryStoreLayer = (
                   current.records.get(
                     messageDeliveryKeyString({
                       ownerThreadId: threadId,
-                      messageId: Schema.decodeSync(MessageDeliveryKey.fields.messageId)(messageId),
+                      messageId: yield* Schema.decodeEffect(MessageDeliveryKey.fields.messageId)(
+                        messageId,
+                      ).pipe(Effect.orDie),
                     }),
                   ) ?? "",
                 );
@@ -633,7 +635,7 @@ export const memoryMessageDeliveryStoreLayer = (
                 messageDeliveryKeyString({ ownerThreadId: threadId, messageId }),
               );
 
-              return text === undefined ? Effect.succeed(undefined) : transferDecode(text);
+              return text === undefined ? Effect.as(Effect.void, undefined) : transferDecode(text);
             },
             stage: Effect.fnUntraced(function* (page) {
               for (const record of page.archive.deliveries) {
@@ -685,7 +687,7 @@ export const memoryMessageDeliveryStoreLayer = (
                 commitInto(staged, record, text, false);
               }
             }),
-            prepareCommit: Effect.fnUntraced(function* () {
+            prepareCommit: Effect.gen(function* () {
               const reader = yield* ThreadDeliveryImportReader;
 
               const read = (messageId: MessageDeliveryKey["messageId"]) => {
@@ -915,7 +917,9 @@ export const memoryMessageDeliveryStoreLayer = (
             const text = current.records.get(
               messageDeliveryKeyString({
                 ownerThreadId: input.ownerThreadId,
-                messageId: Schema.decodeSync(MessageDeliveryKey.fields.messageId)(keys[at]),
+                messageId: yield* Schema.decodeEffect(MessageDeliveryKey.fields.messageId)(
+                  keys[at],
+                ).pipe(Effect.orDie),
               }),
             );
 

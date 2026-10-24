@@ -1014,7 +1014,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
     readFreshRun: (request) =>
       options.ownsThread(request.threadId) && local.readFreshRun !== undefined
         ? local.readFreshRun(request)
-        : Effect.succeed(Option.none()),
+        : Effect.succeedNone,
     readExecution: (request) =>
       options.ownsThread(request.threadId)
         ? local.readExecution(request)

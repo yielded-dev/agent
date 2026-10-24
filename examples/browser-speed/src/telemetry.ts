@@ -434,13 +434,13 @@ export const traceOtlp = (runId: string) =>
           const trace = yield* Trace;
 
           return HttpClient.make((request) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               if (request.body._tag === "Uint8Array")
                 trace.event(
                   "otlp",
-                  Schema.decodeSync(Schema.fromJsonString(Schema.Json))(
+                  yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Json))(
                     new TextDecoder().decode(request.body.body),
-                  ),
+                  ).pipe(Effect.orDie),
                 );
 
               return HttpClientResponse.fromWeb(request, new globalThis.Response("{}"));

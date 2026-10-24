@@ -148,7 +148,7 @@ const makeRuntime = (bindings: ReadonlyArray<ResolvedBinding> = []) =>
   DurableAgentRuntime.pipe(
     Effect.provide(
       DurableAgentRuntime.layerWithBindings(bindings).pipe(
-        Layer.provide(runStorageLayer()),
+        Layer.provide(runStorageLayer),
         Layer.provide(RunToolAuthorization.allowAll),
       ),
     ),
@@ -402,7 +402,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
           const projection = yield* projectRunJournal(
             original.records,
-            Schema.decodeSync(RunId)(`run:${first.submissionId}`),
+            yield* Schema.decodeEffect(RunId)(`run:${first.submissionId}`).pipe(Effect.orDie),
           );
 
           if (providerFailure) {
@@ -466,13 +466,17 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
               payload,
             });
 
-          const oldRunId = Schema.decodeSync(RunId)("run:old-submission");
+          const oldRunId = yield* Schema.decodeEffect(RunId)("run:old-submission").pipe(
+            Effect.orDie,
+          );
 
           const response = yield* turnResponseBatch({
             runId: oldRunId,
             toolOperations: [
               {
-                toolCallId: Schema.decodeSync(ToolCallId)("uncertain-call"),
+                toolCallId: yield* Schema.decodeEffect(ToolCallId)("uncertain-call").pipe(
+                  Effect.orDie,
+                ),
                 toolName: "failing_action",
                 executionClass: "uncertain",
                 executionKind: "ordinary",
@@ -481,8 +485,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
             ],
             turn: 1,
             turnId: turnIdForRun(oldRunId, 1),
-            producerId: Schema.decodeSync(ProducerId)("head-test"),
-            deploymentId: Schema.decodeSync(DeploymentId)("head-test"),
+            producerId: yield* Schema.decodeEffect(ProducerId)("head-test").pipe(Effect.orDie),
+            deploymentId: yield* Schema.decodeEffect(DeploymentId)("head-test").pipe(Effect.orDie),
             createdAt: DateTime.toUtc(DateTime.makeUnsafe(1_000)),
             responseMessages: Prompt.make([
               { role: "user", content: "OLD RETAINED EVIDENCE" },
@@ -509,8 +513,10 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
               expectedTailSequence: tail.tailSequence,
 
               batch: CanonicalBatch.make({
-                batchId: Schema.decodeSync(CanonicalBatch.fields.batchId)("retained-history"),
-                producerId: Schema.decodeSync(ProducerId)("head-test"),
+                batchId: yield* Schema.decodeEffect(CanonicalBatch.fields.batchId)(
+                  "retained-history",
+                ).pipe(Effect.orDie),
+                producerId: yield* Schema.decodeEffect(ProducerId)("head-test").pipe(Effect.orDie),
                 records: [
                   ...response.records,
                   record("settled-old", {
@@ -1252,7 +1258,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
   // Slow setup must keep exclusive ownership even after an arbitrary amount of time.
   it.effect("keeps its claim live after slow binding selection", () =>
     Effect.gen(function* () {
-      const storage = yield* RunStorage.pipe(Effect.provide(runStorageLayer()));
+      const storage = yield* RunStorage.pipe(Effect.provide(runStorageLayer));
       const selecting = yield* Deferred.make<void>();
       const started = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
@@ -1405,7 +1411,9 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           yield* runtime
             .submit({ definition }, "second", {
               ...original,
-              idempotencyKey: Schema.decodeSync(IdempotencyKey)("second"),
+              idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("second").pipe(
+                Effect.orDie,
+              ),
             })
             .pipe(Effect.flip),
         ).toMatchObject({ reason: "occupied" });
@@ -1418,7 +1426,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
         expect(
           (yield* runtime.submit({ definition }, "second", {
             ...original,
-            idempotencyKey: Schema.decodeSync(IdempotencyKey)("second"),
+            idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("second").pipe(Effect.orDie),
           })).submissionId,
         ).not.toBe(receipt.submissionId);
       }),
@@ -1464,15 +1472,21 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
       const mismatched = Receipt.make({
         ...receipt,
-        threadId: Schema.decodeSync(ThreadId)("other"),
+        threadId: yield* Schema.decodeEffect(ThreadId)("other").pipe(Effect.orDie),
       });
 
       expect((yield* runtime.submissionStatus(mismatched).pipe(Effect.flip))._tag).toBe(
         "OperationDenied",
       );
       for (const altered of [
-        Receipt.make({ ...receipt, receiptId: Schema.decodeSync(ReceiptId)("wrong-receipt") }),
-        Receipt.make({ ...receipt, queueSequence: Schema.decodeSync(QueueSequence)(999) }),
+        Receipt.make({
+          ...receipt,
+          receiptId: yield* Schema.decodeEffect(ReceiptId)("wrong-receipt").pipe(Effect.orDie),
+        }),
+        Receipt.make({
+          ...receipt,
+          queueSequence: yield* Schema.decodeEffect(QueueSequence)(999).pipe(Effect.orDie),
+        }),
       ])
         expect((yield* runtime.submissionStatus(altered).pipe(Effect.flip))._tag).toBe(
           "OperationDenied",

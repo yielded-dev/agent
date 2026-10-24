@@ -461,7 +461,7 @@ const PlannerLive = Layer.unwrap(
       defaultPlannerSettings.model,
       ReadTravelPageLive.pipe(
         Layer.provide(
-          browserQuickActionCaptureLayer().pipe(
+          browserQuickActionCaptureLayer.pipe(
             Layer.provide(BrowserQuickActionBrowserBinding.layer({ browser: env.BROWSER })),
           ),
         ),

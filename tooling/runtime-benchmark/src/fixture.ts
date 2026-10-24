@@ -292,15 +292,20 @@ const exportArchive = (): Stream.Stream<
 const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
   const ledger = yield* SubmissionLedger;
   const inputDigest = yield* digestJson("fixture");
-  const seedThread = Schema.decodeSync(ThreadId)("settled-ledger-fixture");
+
+  const seedThread = yield* Schema.decodeEffect(ThreadId)("settled-ledger-fixture").pipe(
+    Effect.orDie,
+  );
 
   for (let index = 0; index < count; index++) {
     const admitted = yield* ledger.admit(
       AdmissionRequest.make({
         threadId: seedThread,
         principal,
-        idempotencyKey: Schema.decodeSync(IdempotencyKey)(`seed-${index}`),
-        agentId: Schema.decodeSync(AgentId)("runtime-benchmark"),
+        idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)(`seed-${index}`).pipe(
+          Effect.orDie,
+        ),
+        agentId: yield* Schema.decodeEffect(AgentId)("runtime-benchmark").pipe(Effect.orDie),
         agentDigests: definitions,
         deploymentId,
         inputPayload: "fixture",
@@ -707,7 +712,7 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
         return yield* runtime.submit({ definition: agent }, "Answer", {
           threadId,
           principal,
-          idempotencyKey: Schema.decodeSync(IdempotencyKey)("measured"),
+          idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("measured").pipe(Effect.orDie),
           definitions,
         });
       });

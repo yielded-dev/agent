@@ -121,7 +121,9 @@ const command = Command.make(
         };
         yield* fs.writeFileString(
           resourcesPath,
-          Schema.encodeSync(Schema.fromJsonString(PerformanceResources))(resources),
+          yield* Schema.encodeEffect(Schema.fromJsonString(PerformanceResources))(resources).pipe(
+            Effect.orDie,
+          ),
         );
       }
 
@@ -188,7 +190,7 @@ const command = Command.make(
       report = { ...report, elapsedMillis: (yield* Clock.currentTimeMillis) - start };
       yield* fs.writeFileString(
         path.join(directory, "report.json"),
-        Schema.encodeSync(Schema.fromJsonString(Report))(report),
+        yield* Schema.encodeEffect(Schema.fromJsonString(Report))(report).pipe(Effect.orDie),
       );
     });
 
@@ -268,7 +270,9 @@ const command = Command.make(
           };
           yield* fs.writeFileString(
             resourcesPath,
-            Schema.encodeSync(Schema.fromJsonString(PerformanceResources))(resources),
+            yield* Schema.encodeEffect(Schema.fromJsonString(PerformanceResources))(resources).pipe(
+              Effect.orDie,
+            ),
           );
         },
         (effect) =>
@@ -284,7 +288,9 @@ const command = Command.make(
 
       yield* fs.writeFileString(
         resourcesPath,
-        Schema.encodeSync(Schema.fromJsonString(PerformanceResources))(resources),
+        yield* Schema.encodeEffect(Schema.fromJsonString(PerformanceResources))(resources).pipe(
+          Effect.orDie,
+        ),
       );
       const operations = yield* makePerformanceDeployment(secretPath, [openai, token]);
       const client = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);

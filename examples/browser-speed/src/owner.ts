@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { InMemory } from "@yielded/agent";
 import {
   CredentialAccessError,
@@ -14,6 +15,7 @@ import {
 import { ThreadId } from "@yielded/agent/identifiers";
 import type { ThreadHistory } from "@yielded/agent/thread-history";
 import { Cause, Clock, Effect, Exit, Fiber, type Layer, Option, Redacted, Schema } from "effect";
+import * as Crypto from "effect/Crypto";
 
 import { Browser, makeBrowser } from "./browser.ts";
 import {
@@ -36,6 +38,11 @@ import type { connectKitesurf } from "./kitesurf.ts";
 import { executeTask } from "./runner.ts";
 import { makeTrace, traceOtlp, Trace } from "./telemetry.ts";
 import { TraceStore } from "./trace-store.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 /** Validated provider keys for one run: the visitor's, or the lab's for a funded account. */
 export interface VisitorKeys {
@@ -694,7 +701,7 @@ export const makeOwner = (
       if (!continuing)
         yield* current.measure("cleanup", "Close previous browser", closeReference());
 
-      const session = yield* Effect.gen(function* () {
+      const prepareSession = Effect.fnUntraced(function* () {
         if (input.engine === "kitesurf") {
           const open = config.kitesurf;
 
@@ -731,6 +738,8 @@ export const makeOwner = (
           provider(sessions.attach(reference)),
         );
       });
+
+      const session = yield* prepareSession();
 
       const browser = yield* makeBrowser(session, input.screenshots, (value) => {
         image = value;
@@ -802,7 +811,7 @@ export const makeOwner = (
 
         if (prepared._tag === "Success") {
           const entry: RetainedEntry = {
-            id: crypto.randomUUID(),
+            id: yield* randomUUID,
             runId: input.id,
             form: entryForm,
             binding: prepared.success,

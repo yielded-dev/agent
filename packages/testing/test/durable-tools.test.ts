@@ -328,9 +328,10 @@ const baseLayer = Layer.mergeAll(
   configLayer,
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
 
-const testLayer = DurableAgentRuntime.layerWithServices
-  .pipe(Layer.provide(runStorageLayer()))
-  .pipe(Layer.provideMerge(baseLayer));
+const testLayer = DurableAgentRuntime.layerWithServices.pipe(
+  Layer.provide(runStorageLayer),
+  Layer.provideMerge(baseLayer),
+);
 
 const readLog = Effect.fnUntraced(function* (threadId: string) {
   const store = yield* ThreadStore;
@@ -935,7 +936,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         }),
       ).pipe(
         Effect.provide(
-          DurableAgentRuntime.layerWithBindings(before).pipe(Layer.provide(runStorageLayer())),
+          DurableAgentRuntime.layerWithBindings(before).pipe(Layer.provide(runStorageLayer)),
         ),
       );
 
@@ -945,7 +946,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         runtime.processThreadHead(receipt.threadId),
       ).pipe(
         Effect.provide(
-          DurableAgentRuntime.layerWithBindings(after).pipe(Layer.provide(runStorageLayer())),
+          DurableAgentRuntime.layerWithBindings(after).pipe(Layer.provide(runStorageLayer)),
         ),
       );
 
@@ -1017,7 +1018,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
 
       const runtime = yield* DurableAgentRuntime.pipe(
         Effect.provide(
-          DurableAgentRuntime.layerWithBindings(bindings).pipe(Layer.provide(runStorageLayer())),
+          DurableAgentRuntime.layerWithBindings(bindings).pipe(Layer.provide(runStorageLayer)),
         ),
       );
 
@@ -1094,7 +1095,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       const Failed = Tool.make("failed", {
         parameters: Schema.Struct({ ref: Schema.String }),
         success: Schema.String,
-        failure: Schema.Struct({ _tag: Schema.Literal("LookupFailure"), message: Schema.String }),
+        failure: Schema.TaggedStruct("LookupFailure", { message: Schema.String }),
         failureMode: "return",
       });
 
@@ -1217,9 +1218,11 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         ).toHaveLength(2);
       }).pipe(
         Effect.provide(
-          DurableAgentRuntime.layerWithServices
-            .pipe(Layer.provide(runStorageLayer()))
-            .pipe(Layer.provideMerge(baseLayer), Layer.provide(observerLayer)),
+          DurableAgentRuntime.layerWithServices.pipe(
+            Layer.provide(runStorageLayer),
+            Layer.provideMerge(baseLayer),
+            Layer.provide(observerLayer),
+          ),
           { local: true },
         ),
       );
@@ -1441,7 +1444,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       }).pipe(
         Effect.provide(
           Layer.fresh(
-            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer)),
           ).pipe(
             Layer.provide(
               Layer.succeed(RunContextPreparation, {
@@ -1491,8 +1494,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
           payload: { private: "private-authority-payload" },
         });
 
-        const rpcError = Schema.Struct({
-          _tag: Schema.Literal("AuthorityRpcError"),
+        const rpcError = Schema.TaggedStruct("AuthorityRpcError", {
           reason: Schema.Literal("unavailable"),
           cause: FailureDiagnostic.Cause,
         });
@@ -1550,7 +1552,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         const runtime = yield* DurableAgentRuntime.pipe(
           Effect.provide(
             Layer.fresh(
-              DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+              DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer)),
             ).pipe(
               Layer.provide(
                 Layer.succeed(RunToolAuthorization, { authorize: () => Effect.fail(check) }),
@@ -1639,7 +1641,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       const runtime = yield* DurableAgentRuntime.pipe(
         Effect.provide(
           Layer.fresh(
-            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer)),
           ).pipe(
             Layer.provide(
               Layer.succeed(RunToolAuthorization, {
@@ -2063,7 +2065,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       }).pipe(
         Effect.provide(
           Layer.fresh(
-            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer())),
+            DurableAgentRuntime.layerWithServices.pipe(Layer.provide(runStorageLayer)),
           ).pipe(
             Layer.provide(
               DurableRuntimeConfig.layer({

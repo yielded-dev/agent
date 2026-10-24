@@ -692,7 +692,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           selected.length !== row.last_sequence - row.first_sequence + 1
         )
           return yield* failure("export batch", "Batch identity or count differs from its index");
-        const records: Array<typeof ThreadExportRecord.Type> = [];
+        const records: Array<ThreadExportRecord> = [];
 
         for (const [index, item] of selected.entries()) {
           if (item.batch_id !== batch.batchId || item.sequence !== fromSequence + index)
@@ -702,7 +702,12 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             );
           const entry = yield* envelope(item);
 
-          if (!(entry.record instanceof ExportedRecord))
+          if (
+            !(
+              Schema.is(ExportedRecord)(entry.record) &&
+              Object.prototype.isPrototypeOf.call(ExportedRecord.prototype, entry.record)
+            )
+          )
             return yield* failure("export batch", "Canonical wire is missing");
           if (canonicalJson(entry.record.wire) !== canonicalJson(batch.records[index]!))
             return yield* failure(
@@ -812,12 +817,16 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         sql`r.record_id=${JSON.stringify(recordId)} AND r.sequence<=${tailSequence}`,
         1,
       ).pipe(
-        Effect.flatMap((r) => (r[0] === undefined ? Effect.succeed(undefined) : envelope(r[0]))),
+        Effect.flatMap((r) =>
+          r[0] === undefined ? Effect.as(Effect.void, undefined) : envelope(r[0]),
+        ),
       );
 
     const readAdmission = (sid: SubmissionId) =>
       admissionRows(id, sql`s.submission_id=${sid}`, 1).pipe(
-        Effect.flatMap((r) => (r[0] === undefined ? Effect.succeed(undefined) : admission(r[0]))),
+        Effect.flatMap((r) =>
+          r[0] === undefined ? Effect.as(Effect.void, undefined) : admission(r[0]),
+        ),
       );
 
     const maxRunRecords =
@@ -878,7 +887,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           ),
           Effect.flatMap((r) =>
             r[0] === undefined
-              ? Effect.succeed(undefined)
+              ? Effect.as(Effect.void, undefined)
               : json(MessageDeliveryRecord, r[0].record_json),
           ),
         ),
@@ -1205,7 +1214,12 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 const captured = [];
 
                 for (const [index, record] of batch.batch.records.entries()) {
-                  if (!(record instanceof ExportedRecord))
+                  if (
+                    !(
+                      Schema.is(ExportedRecord)(record) &&
+                      Object.prototype.isPrototypeOf.call(ExportedRecord.prototype, record)
+                    )
+                  )
                     return yield* invalidThreadArchive(
                       "Imported record has no owned wire",
                       threadId,

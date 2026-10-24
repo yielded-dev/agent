@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { DoStorageFailpoint } from "@yielded/agent-storage-cloudflare/do-storage-failpoint";
 import { submissionLedgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
 import {
@@ -53,7 +54,7 @@ import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "c
 import { DurableObject } from "effect-cf";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
-import type * as Crypto from "effect/Crypto";
+import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -91,6 +92,11 @@ import {
 import { scheduledAlarm, stubFor } from "./harness.ts";
 import { recoveryReadHolds, recoveryReplies } from "./recovery-fixture.ts";
 import type { TestThreadObject } from "./worker.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 // Reconstruct the real runtime over one physical SQLite owner, retaining its mutation gate.
 // The read probe observes the public port; it never substitutes canonical data or decisions.
@@ -199,7 +205,7 @@ const localRun =
                   ),
                 ),
               ),
-              Layer.provide(runStorageLayer()),
+              Layer.provide(runStorageLayer),
               Layer.provideMerge(ports),
               Layer.provide(
                 Layer.succeed(WakeScheduler, {
@@ -293,7 +299,7 @@ const corruptHistory = (owner: string, thread: string, sequence = 1) =>
 it("retries an accepted abort after transient recovery failure while its binding is parked", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const owner = `parked-abort-${crypto.randomUUID()}`;
+      const owner = `parked-abort-${yield* randomUUID}`;
 
       yield* TestClock.setTime(Date.now() + 86_400_000);
       maintenanceClocks.set(owner, yield* Clock.Clock);
@@ -359,7 +365,7 @@ it(
   () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const owner = `native-concurrent-${crypto.randomUUID()}`;
+        const owner = `native-concurrent-${yield* randomUUID}`;
         const first = `${owner}-a`;
         const second = `${owner}-b`;
         const third = `${owner}-c`;
@@ -494,7 +500,7 @@ it(
   () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const owner = `native-interrupt-${crypto.randomUUID()}`;
+        const owner = `native-interrupt-${yield* randomUUID}`;
         const threads = [`${owner}-a`, `${owner}-b`];
 
         yield* TestClock.setTime(Date.now() + 86_400_000);
@@ -596,7 +602,9 @@ describe("recovery faults independent of execution history", () => {
   it("retries a terminal delivery fault by its retained alarm and parks only after repair", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const owner = `terminal-recovery-${crypto.randomUUID()}`;
+        const effectContext = yield* Effect.context<never>();
+
+        const owner = `terminal-recovery-${yield* randomUUID}`;
         const threadId = decodeThreadId(owner);
         const messageId = decodeIdempotencyKey("terminal-handoff");
 
@@ -701,7 +709,9 @@ describe("recovery faults independent of execution history", () => {
             messageId,
           );
 
-          return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.record_json)));
+          return Effect.runPromiseWith(effectContext)(
+            invalidate(state.storage).pipe(Effect.as(row.record_json)),
+          );
         });
 
         expect(yield* run(pass.pipe(Effect.result))).toMatchObject({
@@ -743,7 +753,7 @@ describe("recovery faults independent of execution history", () => {
             messageId,
           );
 
-          return Effect.runPromise(invalidate(state.storage));
+          return Effect.runPromiseWith(effectContext)(invalidate(state.storage));
         });
         yield* TestClock.setTime(retryAlarm);
         yield* Effect.promise(() => runDurableObjectAlarm(stubFor(owner)));
@@ -770,7 +780,9 @@ describe("recovery faults independent of execution history", () => {
   it("delivers submission fault transitions across interruption and keeps retries silent", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const owner = `recovery-events-${crypto.randomUUID()}`;
+        const effectContext = yield* Effect.context<never>();
+
+        const owner = `recovery-events-${yield* randomUUID}`;
         const thread = `${owner}-blocked`;
         const events: Array<ThreadRecoveryFaultEvent> = [];
         const notifications: Array<string> = [];
@@ -849,7 +861,9 @@ describe("recovery faults independent of execution history", () => {
             JSON.stringify(execution.progress.runId),
           );
 
-          return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.checkpoint_json)));
+          return Effect.runPromiseWith(effectContext)(
+            invalidate(state.storage).pipe(Effect.as(row.checkpoint_json)),
+          );
         });
 
         // Interrupt after fault commit but before notification, then reconstruct maintenance.
@@ -926,7 +940,7 @@ describe("recovery faults independent of execution history", () => {
             JSON.stringify(execution.progress.runId),
           );
 
-          return Effect.runPromise(invalidate(state.storage));
+          return Effect.runPromiseWith(effectContext)(invalidate(state.storage));
         });
         const changed = yield* retainedFault(owner, thread);
 
@@ -963,7 +977,7 @@ describe("recovery faults independent of execution history", () => {
   it("does not attach an old recovery deadline to an admission still becoming ready", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const owner = `recovery-admission-${crypto.randomUUID()}`;
+        const owner = `recovery-admission-${yield* randomUUID}`;
         const old = `${owner}-old`;
         const fresh = `${owner}-fresh`;
         const reads: Array<string> = [];
@@ -1358,7 +1372,7 @@ describe("recovery faults independent of execution history", () => {
     it(`isolates abort control ${faultKind}, skips its backoff, and reports the retained fault once`, () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const owner = `recovery-control-${crypto.randomUUID()}`;
+          const owner = `recovery-control-${yield* randomUUID}`;
           const old = `${owner}-a`;
           const fresh = `${owner}-z`;
           const reads: Array<string> = [];

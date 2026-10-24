@@ -53,7 +53,7 @@ export interface MemoryLedgerImport {
 
 export interface MemoryLedgerTransfer {
   readonly snapshot: (threadId: ThreadId) => Effect.Effect<
-    Omit<typeof ThreadExportSnapshot.Type, "deliveries"> & {
+    Omit<ThreadExportSnapshot, "deliveries"> & {
       readonly idle: boolean;
       readonly workerSeal?: Pick<WorkerLedgerState, "terminal">;
     },
@@ -80,7 +80,7 @@ export interface MemoryDeliveryImport {
   readonly stage: (
     page: PreparedImportPage,
   ) => Effect.Effect<void, ThreadImportRejected | ThreadStoreError>;
-  readonly prepareCommit: () => Effect.Effect<
+  readonly prepareCommit: Effect.Effect<
     () => void,
     ThreadImportRejected | ThreadStoreError,
     ThreadDeliveryImportReader

@@ -1,4 +1,6 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { Context, Effect, Layer, Schema } from "effect";
+import * as Crypto from "effect/Crypto";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import {
@@ -11,6 +13,11 @@ import {
   type PublishTripRequest,
   type SaveTripRequest,
 } from "../domain.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 const StoredTrip = Schema.Struct({ version: Schema.Literal(1), trip: Trip });
 const StoredPublication = Schema.Struct({ version: Schema.Literal(1), site: PublishedSite });
@@ -130,10 +137,7 @@ export const TripRepositoryLive = Layer.effect(
             yield* sql`INSERT INTO travel_conversations (conversation_id, value) VALUES (${conversation.conversationId}, ${value})`;
           }),
         )
-        .pipe(
-          Effect.catchTag("SqlError", storageError),
-          Effect.catchTag("SchemaError", storageError),
-        );
+        .pipe(Effect.catchTags({ SqlError: storageError, SchemaError: storageError }));
       yield* failpoint.hit("conversation:after");
     });
 
@@ -147,18 +151,14 @@ export const TripRepositoryLive = Layer.effect(
       const rows =
         yield* sql`SELECT value FROM travel_trip_publications WHERE trip_id = ${id} ORDER BY revision DESC LIMIT 1`.pipe(
           Effect.flatMap(Schema.decodeUnknownEffect(Rows)),
-          Effect.mapError(storageError),
         );
 
       if (rows[0] === undefined) return null;
 
       return yield* Schema.decodeEffect(Schema.fromJsonString(StoredPublication))(
         rows[0].value,
-      ).pipe(
-        Effect.map((stored) => stored.site),
-        Effect.mapError(storageError),
-      );
-    });
+      ).pipe(Effect.map((stored) => stored.site));
+    }, Effect.mapError(storageError));
 
     const get = Effect.fn("TripRepository.get")(function* (id: string) {
       const rows =
@@ -196,14 +196,11 @@ export const TripRepositoryLive = Layer.effect(
       const rows =
         yield* sql`SELECT conversation_id AS value FROM travel_trip_conversations WHERE trip_id = ${id}`.pipe(
           Effect.flatMap(Schema.decodeUnknownEffect(Rows)),
-          Effect.mapError(storageError),
         );
 
       // Older trips get their own conversation without rewriting the original shared log.
-      return yield* Schema.decodeEffect(ConversationId)(rows[0]?.value ?? `trip-${id}`).pipe(
-        Effect.mapError(storageError),
-      );
-    });
+      return yield* Schema.decodeEffect(ConversationId)(rows[0]?.value ?? `trip-${id}`);
+    }, Effect.mapError(storageError));
 
     const save = Effect.fn("TripRepository.save")(function* (
       request: SaveTripRequest,
@@ -238,7 +235,7 @@ export const TripRepositoryLive = Layer.effect(
               days: request.days,
               notes: request.notes,
               places: request.places ?? previous?.places ?? [],
-              id: previous?.id ?? crypto.randomUUID(),
+              id: previous?.id ?? (yield* randomUUID),
               revision: (previous?.revision ?? 0) + 1,
               published: previous?.published ?? null,
             }).pipe(

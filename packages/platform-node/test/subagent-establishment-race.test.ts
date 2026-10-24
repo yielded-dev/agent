@@ -160,9 +160,11 @@ for (const boundary of ["ThreadCreated", "SubagentLineageRecorded"] as const) {
           const store = Context.get(context, ThreadStore);
 
           const receipt = yield* runtime.submitRegistered(parent, "research", {
-            threadId: Schema.decodeSync(ThreadId)("parent"),
-            principal: Schema.decodeSync(Principal)("owner"),
-            idempotencyKey: Schema.decodeSync(IdempotencyKey)("parent-input"),
+            threadId: yield* Schema.decodeEffect(ThreadId)("parent").pipe(Effect.orDie),
+            principal: yield* Schema.decodeEffect(Principal)("owner").pipe(Effect.orDie),
+            idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("parent-input").pipe(
+              Effect.orDie,
+            ),
           });
 
           const establishing = yield* runtime

@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { ThreadMutationGate } from "@yielded/agent-platform-cloudflare/alarm";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import { ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
@@ -7,10 +8,16 @@ import { CheckpointInput, SandboxCheckpoint } from "@yielded/sandbox/cloudflare/
 import { reportSanitizedCause } from "@yielded/sandbox/observability/RuntimeDiagnostics";
 import { Cause, Clock, Context, Effect, Fiber, Layer, Schema } from "effect";
 import { DurableObjectState } from "effect-cf";
+import * as Crypto from "effect/Crypto";
 
 import type { SavedFiles } from "./contract.ts";
 import { SHELL_ACTIVE_KEY, SHELL_COMMAND_PREFIX, ShellCommand } from "./contract.ts";
 import { Workspace } from "./workspace.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 export const snapshotLane = "sandbox-files";
 const key = "workspace-snapshot";
@@ -258,7 +265,7 @@ const make = Effect.gen(function* () {
 
         const operation = {
           kind: "saving" as const,
-          id: crypto.randomUUID(),
+          id: yield* randomUUID,
           source,
           instanceId,
           sequence,
@@ -344,7 +351,7 @@ const make = Effect.gen(function* () {
             restoreFailed: false,
             operation: {
               kind: "restoring",
-              id: crypto.randomUUID(),
+              id: yield* randomUUID,
               instanceId: null,
               mode: state.snapshot.checkpoint === undefined ? "backup" : "checkpoint",
             },

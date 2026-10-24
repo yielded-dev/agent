@@ -165,14 +165,16 @@ export const gradePerformancePhase = Effect.fn("Performance.grade")(function* (
         )
       : undefined;
 
-  const encodedExpected = Schema.encodeSync(Schema.fromJsonString(PerformanceOutput))(
+  const encodedExpected = yield* Schema.encodeEffect(Schema.fromJsonString(PerformanceOutput))(
     expectedPerformanceOutput(phase),
-  );
+  ).pipe(Effect.orDie);
 
   if (
     output === undefined ||
     output._tag === "None" ||
-    Schema.encodeSync(Schema.fromJsonString(PerformanceOutput))(output.value) !== encodedExpected
+    (yield* Schema.encodeEffect(Schema.fromJsonString(PerformanceOutput))(output.value).pipe(
+      Effect.orDie,
+    )) !== encodedExpected
   )
     failures.push(
       "Schema-valid order must contain computed totals, current tool evidence, and previous order total",
@@ -534,7 +536,7 @@ export const runPerformanceSample = Effect.fn("Performance.sample")(function* (o
         yield* save();
       }),
     ),
-    Effect.catchCause(() => Effect.void),
+    Effect.ignoreCause(),
   );
 
   return result;

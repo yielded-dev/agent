@@ -70,7 +70,7 @@ export const backgroundUpdatePrompts: Array<string> = [];
 export const backgroundUpdateTarget = Agent.make("cf-update-hotel", {
   input: backgroundTarget.input,
   output: backgroundTarget.output,
-  updates: Schema.Struct({ _tag: Schema.Literal("AreaConcern"), area: Schema.String }),
+  updates: Schema.TaggedStruct("AreaConcern", { area: Schema.String }),
   instructions: "Report an area concern while hotel research continues.",
   toolkit: Toolkit.empty,
   policy: { maxTurns: 4, maxToolCalls: 2, maxDuration: "30 seconds" },
@@ -451,10 +451,10 @@ export const backgroundWorkerAuthority = Layer.mergeAll(
     resolve: (request) => {
       const capture = capturedConcurrency.get(request.source.threadId);
 
-      if (capture === undefined) return Effect.succeed(Option.none());
+      if (capture === undefined) return Effect.succeedNone;
 
       return request.sourceSubmission?.submissionId === capture.owner
-        ? Effect.succeed(Option.some({ maxActiveWorkersPerSource: capture.limit }))
+        ? Effect.succeedSome({ maxActiveWorkersPerSource: capture.limit })
         : WorkerError.make({ operation: "start", reason: "denied" });
     },
   }),

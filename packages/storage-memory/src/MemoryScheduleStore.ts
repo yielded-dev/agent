@@ -37,22 +37,19 @@ const storageError = (operation: string, reason: "unavailable" | "corrupt") =>
   ScheduleStorageError.make({ operation, reason });
 
 const encodeRecord = (operation: string, record: ScheduleRecord) =>
-  Effect.try({
-    try: () => Schema.encodeSync(Schema.fromJsonString(ScheduleRecord))(record),
-    catch: () => storageError(operation, "corrupt"),
-  });
+  Schema.encodeEffect(Schema.fromJsonString(ScheduleRecord))(record).pipe(
+    Effect.mapError(() => storageError(operation, "corrupt")),
+  );
 
 const decodeRecord = (operation: string, encoded: string) =>
-  Effect.try({
-    try: () => Schema.decodeSync(Schema.fromJsonString(ScheduleRecord))(encoded),
-    catch: () => storageError(operation, "corrupt"),
-  });
+  Schema.decodeEffect(Schema.fromJsonString(ScheduleRecord))(encoded).pipe(
+    Effect.mapError(() => storageError(operation, "corrupt")),
+  );
 
 const decodeInput = <A, I>(operation: string, schema: Schema.Codec<A, I>, value: unknown) =>
-  Effect.try({
-    try: () => Schema.decodeUnknownSync(schema)(value),
-    catch: () => storageError(operation, "corrupt"),
-  });
+  Schema.decodeUnknownEffect(schema)(value).pipe(
+    Effect.mapError(() => storageError(operation, "corrupt")),
+  );
 
 const sameOwner = (record: ScheduleRecord, owner: ScheduleOwner): boolean =>
   scheduleOwnerKey(record.owner) === scheduleOwnerKey(owner);
@@ -316,7 +313,11 @@ const makeScheduleStore = Effect.gen(function* () {
   return ScheduleStore.of({ insert, get, list, change, due, nextDeadline });
 });
 
-export const memoryScheduleStoreLayer = (): Layer.Layer<ScheduleStore> =>
-  Layer.effect(ScheduleStore, makeScheduleStore);
+export const memoryScheduleStoreLayer: Layer.Layer<ScheduleStore> = Layer.fresh(
+  Layer.effect(ScheduleStore, makeScheduleStore),
+);
 
-export const MemoryScheduleStoreLive: Layer.Layer<ScheduleStore> = memoryScheduleStoreLayer();
+export const MemoryScheduleStoreLive: Layer.Layer<ScheduleStore> = Layer.effect(
+  ScheduleStore,
+  makeScheduleStore,
+);

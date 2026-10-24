@@ -96,7 +96,8 @@ export const ReadRecord = RecordJson.pipe(
   Schema.decodeTo(Schema.toType(RecordEnvelope), {
     decode: decodeView,
     encode: SchemaGetter.transformEffect((record) =>
-      (record instanceof ExportedRecord
+      (Schema.is(ExportedRecord)(record) &&
+      Object.prototype.isPrototypeOf.call(ExportedRecord.prototype, record)
         ? Schema.encodeEffect(ExportRecord)(record)
         : Schema.encodeEffect(RecordEnvelope)(record)
       ).pipe(Effect.mapError((error) => error.issue)),

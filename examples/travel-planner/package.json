@@ -10,6 +10,7 @@
     "@cloudflare/sandbox": "catalog:",
     "@effect/ai-openai": "catalog:",
     "@effect/atom-react": "catalog:",
+    "@effect/platform-browser": "catalog:",
     "@effect/sql-sqlite-do": "catalog:",
     "@streamparser/json": "catalog:",
     "@tanstack/react-router": "catalog:",

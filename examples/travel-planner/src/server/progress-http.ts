@@ -69,6 +69,8 @@ const transferResponse = (response: Response, close: () => Promise<void>): Respo
 /** Worker ingress has already verified the session and bounded the RPC request body. */
 export const serveProgress = Effect.fn("serveProgress")(
   function* (request: Request, env: ProgressEnvironment, session: AccountSession) {
+    const effectContext = yield* Effect.context<never>();
+
     const scope = yield* Scope.make();
 
     const response = yield* Effect.gen(function* () {
@@ -114,7 +116,9 @@ export const serveProgress = Effect.fn("serveProgress")(
       Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
     );
 
-    return transferResponse(response, () => Effect.runPromise(Scope.close(scope, Exit.void)));
+    return transferResponse(response, () =>
+      Effect.runPromiseWith(effectContext)(Scope.close(scope, Exit.void)),
+    );
   },
   Effect.catchDefect(() =>
     Effect.succeed(

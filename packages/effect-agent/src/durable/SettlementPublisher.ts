@@ -22,9 +22,9 @@ import { AppendRequest, PreparedAppend, type ThreadStoreFailure } from "./Thread
 
 /** Authority rechecked atomically on every publication attempt, including canonical replay. */
 export const SettlementPublicationAuthority = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("Owned") }),
-  Schema.Struct({ _tag: Schema.Literal("Joined"), hostSubmissionId: SubmissionId }),
-  Schema.Struct({ _tag: Schema.Literal("QueuedAbort") }),
+  Schema.TaggedStruct("Owned", {}),
+  Schema.TaggedStruct("Joined", { hostSubmissionId: SubmissionId }),
+  Schema.TaggedStruct("QueuedAbort", {}),
 ]);
 
 export type SettlementPublicationAuthority = typeof SettlementPublicationAuthority.Type;

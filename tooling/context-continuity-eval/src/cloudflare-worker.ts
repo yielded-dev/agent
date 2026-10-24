@@ -316,11 +316,12 @@ const application = Layer.unwrap(
           const before = state.pendingRestart;
           const notes = yield* currentNotes;
           const recovered = yield* continuationEvidence(threadId, before.execution.progress.runId);
-          const encode = Schema.encodeSync(Schema.fromJsonString(ExecutionCheckpoint));
+          const encode = Schema.encodeEffect(Schema.fromJsonString(ExecutionCheckpoint));
 
           if (
             recovered.status !== "present" ||
-            encode(recovered.checkpoint) !== encode(before.execution)
+            (yield* encode(recovered.checkpoint).pipe(Effect.orDie)) !==
+              (yield* encode(before.execution).pipe(Effect.orDie))
           )
             return yield* EvaluationError.make({
               stage: "restart",
@@ -569,7 +570,7 @@ export default {
         ),
         Effect.scoped,
         Effect.tapCause(Effect.logError),
-        Effect.catch(() => Effect.succeed(new Response("Evaluation host failed", { status: 500 }))),
+        Effect.orElseSucceed(() => new Response("Evaluation host failed", { status: 500 })),
       ),
     );
   },

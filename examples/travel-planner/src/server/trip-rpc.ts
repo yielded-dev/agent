@@ -26,8 +26,8 @@ const Request = Schema.Union([
 
 const response = <A, I>(schema: Schema.Codec<A, I>) =>
   Schema.Union([
-    Schema.Struct({ _tag: Schema.Literal("Success"), value: schema }),
-    Schema.Struct({ _tag: Schema.Literal("Failure"), error: PlannerError }),
+    Schema.TaggedStruct("Success", { value: schema }),
+    Schema.TaggedStruct("Failure", { error: PlannerError }),
   ]);
 
 const unavailable = () =>

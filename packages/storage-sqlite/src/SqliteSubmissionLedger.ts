@@ -24,7 +24,7 @@ import {
 
 const makeServices = Effect.fnUntraced(function* () {
   const failpoint = yield* SqliteStorageFailpoint;
-  const journal = yield* initializeSqliteJournal();
+  const journal = yield* initializeSqliteJournal;
 
   const services = yield* makeSqlSubmissionLedgerKernel(journal, {
     errors: sqliteErrors,

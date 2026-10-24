@@ -94,8 +94,8 @@ const makeAgent = (firstTurn: ReadonlyArray<Response.StreamPartEncoded> = [appli
 
 const testLayer = Layer.mergeAll(
   Layer.succeed(IdGenerator, {
-    nextThreadId: Effect.sync(() =>
-      Schema.decodeSync(ThreadId)(`progress-thread-${++threadSequence}`),
+    nextThreadId: Effect.suspend(() =>
+      Schema.decodeEffect(ThreadId)(`progress-thread-${++threadSequence}`).pipe(Effect.orDie),
     ),
     nextRunId: Effect.succeed(Schema.decodeSync(RunId)("progress-run")),
     nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("progress-turn")),

@@ -364,7 +364,9 @@ const harness = Effect.fn("workerHostHarness")(function* (
       const snapshot = ThreadIdentity.make({
         hasAdmissions: [...submissions.values()].some((row) => row.threadId === threadId),
         threadId,
-        tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
+        tailSequence: yield* Schema.decodeEffect(CanonicalSequence)(records.length).pipe(
+          Effect.orDie,
+        ),
         records: selected,
       });
 
@@ -478,19 +480,18 @@ const harness = Effect.fn("workerHostHarness")(function* (
         operation: "export",
         message: "Worker fixture does not export Threads",
       }),
-    inspectTail: ({ threadId }) =>
-      Effect.suspend(() => {
-        const records = logs.get(threadId);
+    inspectTail: Effect.fnUntraced(function* ({ threadId }) {
+      const records = logs.get(threadId);
 
-        return records === undefined
-          ? ThreadNotMaterialized.make({ threadId })
-          : Effect.succeed(
-              ThreadTail.make({
-                threadId,
-                tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-              }),
-            );
-      }),
+      return records === undefined
+        ? yield* ThreadNotMaterialized.make({ threadId })
+        : ThreadTail.make({
+            threadId,
+            tailSequence: yield* Schema.decodeEffect(CanonicalSequence)(records.length).pipe(
+              Effect.orDie,
+            ),
+          });
+    }),
     append: Effect.fnUntraced(function* (request) {
       yield* Effect.yieldNow;
 
@@ -541,8 +542,10 @@ const harness = Effect.fn("workerHostHarness")(function* (
           deliveries.set(delivery.key.messageId, delivery);
 
       return AppendResult.make({
-        firstSequence: Schema.decodeSync(CanonicalSequence)(first),
-        lastSequence: Schema.decodeSync(CanonicalSequence)(records.length),
+        firstSequence: yield* Schema.decodeEffect(CanonicalSequence)(first).pipe(Effect.orDie),
+        lastSequence: yield* Schema.decodeEffect(CanonicalSequence)(records.length).pipe(
+          Effect.orDie,
+        ),
 
         replayed: false,
       });
@@ -575,14 +578,14 @@ const harness = Effect.fn("workerHostHarness")(function* (
   });
 
   const runtimes = yield* makeWorkerRuntime({
-    deploymentId: Schema.decodeSync(DeploymentId)("test"),
-    producerId: Schema.decodeSync(ProducerId)("test"),
+    deploymentId: yield* Schema.decodeEffect(DeploymentId)("test").pipe(Effect.orDie),
+    producerId: yield* Schema.decodeEffect(ProducerId)("test").pipe(Effect.orDie),
     settlementPollInterval: Duration.millis(5),
     bindings: [sourceAgent, target].map((definition) => ({
       definition,
       agentId: definition.id,
       digests: definitions,
-      attempt: () => Effect.succeed(Option.none()),
+      attempt: () => Effect.succeedNone,
       reporting:
         definition === sourceAgent ? (options.sourceReports ?? []) : (options.targetReports ?? []),
     })),
@@ -824,13 +827,18 @@ const harness = Effect.fn("workerHostHarness")(function* (
           );
         yield* runtime.ensureOrigin(metadata.origin).pipe(Effect.orDie);
         sequence++;
-        const submissionId = Schema.decodeSync(SubmissionId)(`submission-${sequence}`);
+
+        const submissionId = yield* Schema.decodeEffect(SubmissionId)(
+          `submission-${sequence}`,
+        ).pipe(Effect.orDie);
 
         const receipt = Receipt.make({
           threadId: envelope.threadId,
           submissionId,
-          receiptId: Schema.decodeSync(ReceiptId)(`receipt-${sequence}`),
-          queueSequence: Schema.decodeSync(QueueSequence)(sequence),
+          receiptId: yield* Schema.decodeEffect(ReceiptId)(`receipt-${sequence}`).pipe(
+            Effect.orDie,
+          ),
+          queueSequence: yield* Schema.decodeEffect(QueueSequence)(sequence).pipe(Effect.orDie),
         });
 
         submissions.set(
@@ -841,7 +849,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
             idempotencyKey: envelope.admissionKey,
             agentId: target.id,
             agentDigests: definitions,
-            deploymentId: Schema.decodeSync(DeploymentId)("test"),
+            deploymentId: yield* Schema.decodeEffect(DeploymentId)("test").pipe(Effect.orDie),
             inputPayload: envelope.input,
             inputDigest: envelope.inputDigest,
             state: "ready",
@@ -861,7 +869,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
   );
 
   runtime = runtimes.runtime;
-  const ownerId = Schema.decodeSync(SubmissionId)("report-owner");
+  const ownerId = yield* Schema.decodeEffect(SubmissionId)("report-owner").pipe(Effect.orDie);
 
   if (options.sourceReports?.length)
     submissions.set(
@@ -869,15 +877,17 @@ const harness = Effect.fn("workerHostHarness")(function* (
       SubmissionSnapshot.make({
         submissionId: ownerId,
         threadId: sourceId,
-        queueSequence: Schema.decodeSync(QueueSequence)(1),
+        queueSequence: yield* Schema.decodeEffect(QueueSequence)(1).pipe(Effect.orDie),
         principal,
-        idempotencyKey: Schema.decodeSync(IdempotencyKey)("report-owner"),
+        idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("report-owner").pipe(
+          Effect.orDie,
+        ),
         agentId: sourceAgent.id,
         agentDigests: definitions,
-        deploymentId: Schema.decodeSync(DeploymentId)("test"),
+        deploymentId: yield* Schema.decodeEffect(DeploymentId)("test").pipe(Effect.orDie),
         inputPayload: "original parent input",
         inputDigest: digest,
-        receiptId: Schema.decodeSync(ReceiptId)("report-owner"),
+        receiptId: yield* Schema.decodeEffect(ReceiptId)("report-owner").pipe(Effect.orDie),
         state: "settled",
         createdAt: DateTime.makeUnsafe(now),
       }),
@@ -898,7 +908,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
 
     const writer = yield* makeProgressWriter(
       threadId,
-      Schema.decodeSync(DeploymentId)("test"),
+      yield* Schema.decodeEffect(DeploymentId)("test").pipe(Effect.orDie),
     ).pipe(Effect.provideService(ThreadReader, ThreadReader.fromStore(store)));
 
     yield* writer
@@ -908,7 +918,9 @@ const harness = Effect.fn("workerHostHarness")(function* (
           producerId: ProducerId.make("test"),
           records: [
             RecordEnvelope.make({
-              recordId: Schema.decodeSync(RecordEnvelope.fields.recordId)(id),
+              recordId: yield* Schema.decodeEffect(RecordEnvelope.fields.recordId)(id).pipe(
+                Effect.orDie,
+              ),
               family: "thread",
               schemaVersion: 1,
               createdAt: DateTime.makeUnsafe(now),
@@ -948,9 +960,9 @@ const harness = Effect.fn("workerHostHarness")(function* (
     const settlementId = submissionSettlementId(row.submissionId);
     const outcome = "completed";
 
-    const runId = Schema.decodeSync(SubmissionSettled.fields.runId)(
+    const runId = yield* Schema.decodeEffect(SubmissionSettled.fields.runId)(
       `run:${options.host?.submissionId ?? row.submissionId}`,
-    );
+    ).pipe(Effect.orDie);
 
     if (
       runId !== undefined &&
@@ -967,7 +979,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
         `input:${row.submissionId}`,
       );
 
-    const payload = Schema.decodeUnknownSync(Schema.toType(SubmissionSettledRecord))(
+    const payload = yield* Schema.decodeUnknownEffect(Schema.toType(SubmissionSettledRecord))(
       SubmissionSettled.make({
         submissionId: row.submissionId,
         receiptId: row.receiptId,
@@ -976,7 +988,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
         ...(options.host === undefined && outcome === "completed" ? { result } : {}),
         ...(runId === undefined ? {} : { runId }),
       }),
-    );
+    ).pipe(Effect.orDie);
 
     yield* commit(row.threadId, payload, `settled:${row.submissionId}`);
     yield* runtime.completeInput(row);
@@ -1127,7 +1139,9 @@ layer(NodeCrypto.layer)((it) => {
         const mismatch = yield* h.runtime
           .ensureOrigin({
             ...origin,
-            firstMessageId: Schema.decodeSync(IdempotencyKey)("different-origin"),
+            firstMessageId: yield* Schema.decodeEffect(IdempotencyKey)("different-origin").pipe(
+              Effect.orDie,
+            ),
           })
           .pipe(Effect.flip);
 
@@ -1151,11 +1165,15 @@ layer(NodeCrypto.layer)((it) => {
                 delegationId: origin.worker.delegationId,
                 parentAgentId: sourceAgent.id,
                 parentThreadId: sourceId,
-                parentRunId: Schema.decodeSync(RunId)("parent-run"),
-                parentToolCallId: Schema.decodeSync(ToolCallId)("parent-call"),
+                parentRunId: yield* Schema.decodeEffect(RunId)("parent-run").pipe(Effect.orDie),
+                parentToolCallId: yield* Schema.decodeEffect(ToolCallId)("parent-call").pipe(
+                  Effect.orDie,
+                ),
                 depth: 1,
               }),
-              parentSubmissionId: Schema.decodeSync(SubmissionId)("parent-submission"),
+              parentSubmissionId: yield* Schema.decodeEffect(SubmissionId)(
+                "parent-submission",
+              ).pipe(Effect.orDie),
               childDefinitionDigests: definitions,
               childInputDigest: digest,
               grantDigest: digest,
@@ -1219,8 +1237,13 @@ layer(NodeCrypto.layer)((it) => {
           principal,
         );
 
-      const worker = Schema.decodeSync(Subagent.Worker(declaration))(first.worker);
-      const key = Schema.decodeSync(IdempotencyKey)("explicit-correction");
+      const worker = yield* Schema.decodeEffect(Subagent.Worker(declaration))(first.worker).pipe(
+        Effect.orDie,
+      );
+
+      const key = yield* Schema.decodeEffect(IdempotencyKey)("explicit-correction").pipe(
+        Effect.orDie,
+      );
 
       const followUp = Subagent.followUp(
         declaration,
@@ -1286,7 +1309,9 @@ layer(NodeCrypto.layer)((it) => {
           worker,
           { note: "new correction" },
           {
-            idempotencyKey: Schema.decodeSync(IdempotencyKey)("fresh-command"),
+            idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("fresh-command").pipe(
+              Effect.orDie,
+            ),
           },
         ).pipe(Effect.provideService(SubagentHost, later), Effect.flip),
       ).toEqual(PreparationFailed.make());
@@ -1313,11 +1338,11 @@ layer(NodeCrypto.layer)((it) => {
 
           const h = yield* harness().pipe(
             Effect.provideService(WorkerPolicyResolver, {
-              resolveSource: () => Effect.succeed(Option.none()),
+              resolveSource: () => Effect.succeedNone,
               resolveTarget: () =>
                 denyPolicy
                   ? WorkerError.make({ operation: "followUp", reason: "denied" })
-                  : Effect.succeed(Option.none()),
+                  : Effect.succeedNone,
             }),
           );
 
@@ -1332,8 +1357,13 @@ layer(NodeCrypto.layer)((it) => {
             prepareInput: ({ note }) => Effect.succeed({ text: note }),
           });
 
-          const worker = Schema.decodeSync(Subagent.Worker(declaration))(first.worker);
-          const key = Schema.decodeSync(IdempotencyKey)("racing-correction");
+          const worker = yield* Schema.decodeEffect(Subagent.Worker(declaration))(
+            first.worker,
+          ).pipe(Effect.orDie);
+
+          const key = yield* Schema.decodeEffect(IdempotencyKey)("racing-correction").pipe(
+            Effect.orDie,
+          );
 
           const loser = yield* Subagent.followUp(
             {
@@ -1569,7 +1599,7 @@ layer(NodeCrypto.layer)((it) => {
 
         const h = yield* harness({ independentBudget: true }).pipe(
           Effect.provideService(WorkerPolicyResolver, {
-            resolveSource: () => Effect.succeed(Option.none()),
+            resolveSource: () => Effect.succeedNone,
             resolveTarget: Effect.fnUntraced(function* (input) {
               if (unavailable)
                 return yield* WorkerError.make({ operation: "start", reason: "unavailable" });
@@ -1657,7 +1687,7 @@ layer(NodeCrypto.layer)((it) => {
         const followup = {
           worker: started.worker,
           target,
-          idempotencyKey: Schema.decodeSync(IdempotencyKey)("later"),
+          idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("later").pipe(Effect.orDie),
           encodedInput: { text: "different later input" },
           encodedParameters: { note: "later" },
         };
@@ -1692,7 +1722,10 @@ layer(NodeCrypto.layer)((it) => {
       const receipt = first.delivery.receipt;
 
       if (receipt === null) return yield* Effect.die("Expected an admitted worker input");
-      const runId = Schema.decodeSync(RunId)(`run:${receipt.submissionId}`);
+
+      const runId = yield* Schema.decodeEffect(RunId)(`run:${receipt.submissionId}`).pipe(
+        Effect.orDie,
+      );
 
       onRead = Effect.sync(() => {
         onRead = Effect.void;
@@ -1910,7 +1943,7 @@ layer(NodeCrypto.layer)((it) => {
 
   it.effect("validates report authority against the receiving worker's original ancestor", () =>
     Effect.gen(function* () {
-      const scoutId = Schema.decodeSync(DelegationId)("scout");
+      const scoutId = yield* Schema.decodeEffect(DelegationId)("scout").pipe(Effect.orDie);
 
       const scoutReport = Subagent.reporting(
         Subagent.make("scout", {
@@ -1987,8 +2020,8 @@ layer(NodeCrypto.layer)((it) => {
             _tag: "tool",
             agentId: target.id,
             threadId: builder.worker.threadId,
-            runId: Schema.decodeSync(RunId)("builder-run"),
-            toolCallId: Schema.decodeSync(ToolCallId)("scout-call"),
+            runId: yield* Schema.decodeEffect(RunId)("builder-run").pipe(Effect.orDie),
+            toolCallId: yield* Schema.decodeEffect(ToolCallId)("scout-call").pipe(Effect.orDie),
           },
           policy,
           depth: 1,
@@ -2036,7 +2069,10 @@ layer(NodeCrypto.layer)((it) => {
 
       {
         const submission = h.submissions.get(scout.delivery.receipt!.submissionId)!;
-        const runId = Schema.decodeSync(RunId)(`run:${submission.submissionId}`);
+
+        const runId = yield* Schema.decodeEffect(RunId)(`run:${submission.submissionId}`).pipe(
+          Effect.orDie,
+        );
 
         yield* h.startRun(scout.delivery.receipt!);
         yield* h.updates
@@ -2044,7 +2080,9 @@ layer(NodeCrypto.layer)((it) => {
             submission,
             runId,
             definitions,
-            updateId: Schema.decodeSync(IdempotencyKey)("scout-finding"),
+            updateId: yield* Schema.decodeEffect(IdempotencyKey)("scout-finding").pipe(
+              Effect.orDie,
+            ),
             value: { finding: "area concern" },
           })
           .pipe(Effect.provideService(CurrentRunWriter, yield* h.writer(submission.threadId)));
@@ -2131,14 +2169,20 @@ layer(NodeCrypto.layer)((it) => {
         expect(yield* validate()).toEqual(message);
         for (const changed of [
           { ...options, threadId: sourceId },
-          { ...options, principal: Schema.decodeSync(Principal)("other") },
-          { ...options, idempotencyKey: Schema.decodeSync(IdempotencyKey)("other") },
+          {
+            ...options,
+            principal: yield* Schema.decodeEffect(Principal)("other").pipe(Effect.orDie),
+          },
+          {
+            ...options,
+            idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("other").pipe(Effect.orDie),
+          },
           { ...options, workerAdmission: undefined },
           {
             ...options,
             definitions: DefinitionDigests.make({
               ...options.definitions,
-              agent: Schema.decodeSync(Digest)("b".repeat(64)),
+              agent: yield* Schema.decodeEffect(Digest)("b".repeat(64)).pipe(Effect.orDie),
             }),
           },
         ])
@@ -2149,13 +2193,18 @@ layer(NodeCrypto.layer)((it) => {
         expect(
           (yield* validate({
             ...message,
-            report: { ...message.report, runId: Schema.decodeSync(RunId)("unprepared-run") },
+            report: {
+              ...message.report,
+              runId: yield* Schema.decodeEffect(RunId)("unprepared-run").pipe(Effect.orDie),
+            },
           }).pipe(Effect.flip)).reason,
         ).toBe("denied");
         expect(
-          (yield* validate(message, options, Schema.decodeSync(Digest)("b".repeat(64))).pipe(
-            Effect.flip,
-          )).reason,
+          (yield* validate(
+            message,
+            options,
+            yield* Schema.decodeEffect(Digest)("b".repeat(64)).pipe(Effect.orDie),
+          ).pipe(Effect.flip)).reason,
         ).toBe("denied");
         h.deny("report");
         expect((yield* validate().pipe(Effect.flip)).reason).toBe("denied");

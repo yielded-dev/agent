@@ -50,17 +50,16 @@ export const PlannerSettingsStoreLive = Layer.effect(
     const get = Effect.gen(function* () {
       const rows = yield* sql`SELECT value FROM travel_planner_settings WHERE id = 1`.pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Rows)),
-        Effect.mapError(storageError),
       );
 
       if (rows[0] === undefined) return defaultPlannerSettings;
 
       const stored = yield* Schema.decodeEffect(Schema.fromJsonString(StoredSettings))(
         rows[0].value,
-      ).pipe(Effect.mapError(storageError));
+      );
 
       return stored.settings;
-    });
+    }).pipe(Effect.mapError(storageError));
 
     const save = Effect.fn("PlannerSettingsStore.save")(function* (candidate: PlannerSettings) {
       const settings = yield* Schema.decodeEffect(PlannerSettings)(candidate).pipe(

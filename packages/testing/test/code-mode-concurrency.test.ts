@@ -211,7 +211,8 @@ layer(Layer.mergeAll(ThreadHistory.layer, RunContextPreparationPassthrough), {
         (id) => (id === 0 ? Effect.sync(() => ++writes) : Effect.interrupt),
       );
 
-      const runtimeLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer())).pipe(
+      const runtimeLayer = DurableAgentRuntime.layer.pipe(
+        Layer.provide(runStorageLayer),
         Layer.provideMerge(
           Layer.mergeAll(
             MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),

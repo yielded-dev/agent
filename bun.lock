@@ -64,6 +64,7 @@
         "@effect/ai-openai": "catalog:",
         "@effect/ai-openai-compat": "catalog:",
         "@effect/atom-react": "catalog:",
+        "@effect/platform-browser": "catalog:",
         "@fontsource-variable/ibm-plex-sans": "catalog:",
         "@fontsource/ibm-plex-mono": "catalog:",
         "@yielded/agent": "workspace:*",
@@ -183,6 +184,7 @@
         "@cloudflare/sandbox": "catalog:",
         "@effect/ai-openai": "catalog:",
         "@effect/atom-react": "catalog:",
+        "@effect/platform-browser": "catalog:",
         "@effect/sql-sqlite-do": "catalog:",
         "@streamparser/json": "catalog:",
         "@tanstack/react-router": "catalog:",
@@ -509,6 +511,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@effect/ai-openai": "catalog:",
+        "@effect/platform-browser": "catalog:",
         "@effect/platform-node": "catalog:",
         "@yielded/agent": "workspace:*",
         "@yielded/agent-platform-cloudflare": "workspace:*",
