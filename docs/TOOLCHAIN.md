@@ -18,8 +18,9 @@ Use Vite+ (`vp`) for commands and Bun for dependencies. Versions live in
 
 Use `vp run <task>` for other tasks and `vp help` for options.
 Typechecking uses `effect-tsrs` for projects with Effect diagnostics and `tsrs` for
-the documentation project. Effect warnings fail checks; suggestions do not. Neither
-checker requires patching after installation.
+the documentation project. Effect warnings remain visible but do not fail checks;
+TypeScript and configured Effect errors do. Neither checker requires patching after
+installation.
 `@effect/tsgo` remains available for its editor language service and tsconfig schema;
 Oxlint handles linting.
 

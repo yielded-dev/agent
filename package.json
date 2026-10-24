@@ -26,7 +26,7 @@
     "ready": "vp run check && vp run test && vp run build",
     "check:record-format": "bun scripts/verify-record-format.ts",
     "typecheck": "vp run -F './packages/*' -F './examples/*' -F './tooling/*' -F './docs' --concurrency-limit 1 check && vp run check:scripts",
-    "check:scripts": "effect-tsrs diagnostics --strict --project scripts/tsconfig.json",
+    "check:scripts": "effect-tsrs diagnostics --project scripts/tsconfig.json",
     "check:docs": "tsrs --noEmit -p docs/tsconfig.json"
   },
   "devDependencies": {

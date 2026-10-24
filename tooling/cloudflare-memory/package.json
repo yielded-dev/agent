@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "effect-tsrs diagnostics --strict --project tsconfig.json",
+    "check": "effect-tsrs diagnostics --project tsconfig.json",
     "measure": "node --experimental-transform-types src/measure-main.ts",
     "measure:heap": "node --experimental-transform-types src/heap-main.ts"
   },

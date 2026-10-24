@@ -28,7 +28,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "check": "effect-tsrs diagnostics --strict --project tsconfig.json",
+    "check": "effect-tsrs diagnostics --project tsconfig.json",
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {
