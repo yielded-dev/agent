@@ -32,7 +32,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "check": "effect-tsrs diagnostics --project tsconfig.json",
+    "check": "effect-tsrs diagnostics --type-check --project tsconfig.json",
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {

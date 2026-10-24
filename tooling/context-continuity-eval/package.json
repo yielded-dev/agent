@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "check": "effect-tsrs diagnostics --project tsconfig.json"
+    "check": "effect-tsrs diagnostics --type-check --project tsconfig.json"
   },
   "dependencies": {
     "@effect/ai-openai": "catalog:",

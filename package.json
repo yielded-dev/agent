@@ -26,7 +26,7 @@
     "ready": "vp run check && vp run test && vp run build",
     "check:record-format": "bun scripts/verify-record-format.ts",
     "typecheck": "vp run -F './packages/*' -F './examples/*' -F './tooling/*' -F './docs' --concurrency-limit 1 check && vp run check:scripts",
-    "check:scripts": "effect-tsrs diagnostics --project scripts/tsconfig.json",
+    "check:scripts": "effect-tsrs diagnostics --type-check --project scripts/tsconfig.json",
     "check:docs": "tsrs --noEmit -p docs/tsconfig.json"
   },
   "devDependencies": {
@@ -154,7 +154,7 @@
     "@yielded/jose": "0.1.0-beta.43",
     "drizzle-orm": "1.0.0-rc.4",
     "drizzle-kit": "1.0.0-rc.4",
-    "@yielded/effect-tsrs": "0.2.1",
+    "@yielded/effect-tsrs": "0.2.2",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929"
   },
   "catalogs": {
