@@ -195,7 +195,6 @@ export const MessageDeliveryChange = Schema.Union([
   }),
   Schema.TaggedStruct("Recover", { ...fence, deadlineAtMillis: ScheduleInstant }),
   /** Waiting for earlier admission never spends an automatic transport attempt. */
-  /** Waiting for earlier admission never spends an automatic transport attempt. */
   Schema.TaggedStruct("Defer", { ...fence, untilMillis: ScheduleInstant }),
 ]);
 

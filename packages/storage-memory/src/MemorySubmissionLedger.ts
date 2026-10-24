@@ -1,6 +1,7 @@
 import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import {
   type ToolCallId,
+  type RunId,
   AttemptId,
   ReceiptId,
   SubmissionId,
@@ -3367,9 +3368,7 @@ const makeSubmissionLedger = Effect.fnUntraced(
                 ? undefined
                 : toAdmission(stored.row, settledTimes.get(id));
             }),
-          runOwner: Effect.fnUntraced(function* (
-            runId: import("@yielded/agent/identifiers").RunId,
-          ) {
+          runOwner: Effect.fnUntraced(function* (runId: RunId) {
             if (!runId.startsWith("run:")) return undefined;
             const id = yield* Schema.decodeEffect(SubmissionId)(runId.slice(4)).pipe(Effect.orDie);
             const stored = staged.submissions.get(id);

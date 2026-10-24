@@ -705,19 +705,16 @@ export const ThreadSelection = Schema.Union([
   Schema.TaggedStruct("RecordId", { recordId: RecordId }),
   Schema.TaggedStruct("RunInput", { runId: RunId }),
   /** Exact original declaration indexed by its deterministic settlement identity. */
-  /** Exact original declaration indexed by its deterministic settlement identity. */
   Schema.TaggedStruct("ToolDeclaration", {
     settlementRecordId: RecordId,
     throughSequence: CanonicalSequence,
   }),
-  /** Only the selected Run's facts; unrelated Thread traffic cannot enlarge its suffix. */
   /** Only the selected Run's facts; unrelated Thread traffic cannot enlarge its suffix. */
   Schema.TaggedStruct("RunEvidence", {
     runId: RunId,
     submissionId: SubmissionId,
     throughSequence: CanonicalSequence,
   }),
-  /** Exact declaration, this call's facts, and shared approval proof from its original batch. */
   /** Exact declaration, this call's facts, and shared approval proof from its original batch. */
   Schema.TaggedStruct("OperationEvidence", {
     runId: RunId,
@@ -736,7 +733,6 @@ export const ThreadSelection = Schema.Union([
     throughSequence: CanonicalSequence,
   }),
   /** Sparse canonical pages; callers bound total evidence before building model metadata. */
-  /** Sparse canonical pages; callers bound total evidence before building model metadata. */
   Schema.TaggedStruct("PromptEvidence", {
     throughSequence: CanonicalSequence,
   }),
@@ -744,16 +740,13 @@ export const ThreadSelection = Schema.Union([
     throughSequence: CanonicalSequence,
   }),
   /** Latest application input; framework worker completion/update messages are excluded. */
-  /** Latest application input; framework worker completion/update messages are excluded. */
   Schema.TaggedStruct("LatestApplicationInput", {
     throughSequence: CanonicalSequence,
   }),
   /** Presence of durable ownership forbids an immediate-history writer on this Thread. */
-  /** Presence of durable ownership forbids an immediate-history writer on this Thread. */
   Schema.TaggedStruct("DurableHistoryOwner", {
     throughSequence: CanonicalSequence,
   }),
-  /** Latest rollover covering positions strictly before the addressed evidence. */
   /** Latest rollover covering positions strictly before the addressed evidence. */
   Schema.TaggedStruct("ContextWindowBoundary", {
     atSequence: CanonicalSequence,
@@ -763,17 +756,14 @@ export const ThreadSelection = Schema.Union([
     throughSequence: CanonicalSequence,
   }),
   /** Canonical creation/handoff intents retained independently of Run settlement. */
-  /** Canonical creation/handoff intents retained independently of Run settlement. */
   Schema.TaggedStruct("WorkHandoffs", {
     throughSequence: CanonicalSequence,
   }),
-  /** Unresolved inputs only, selected through disposable work membership. */
   /** Unresolved inputs only, selected through disposable work membership. */
   Schema.TaggedStruct("LiveWorkerInputs", {
     throughSequence: CanonicalSequence,
     workerThreadId: Schema.optionalKey(ThreadId),
   }),
-  /** A retained stop for the exact worker, independent of historical inputs. */
   /** A retained stop for the exact worker, independent of historical inputs. */
   Schema.TaggedStruct("WorkerStop", {
     workerThreadId: ThreadId,

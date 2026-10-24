@@ -2406,9 +2406,7 @@ const makeThreadStore = Effect.gen(function* () {
     return captured;
   });
 
-  const archiveTarget = Effect.fnUntraced(function* (
-    request: import("@yielded/agent/thread-archive-range").ThreadArchiveRangeSeal,
-  ) {
+  const archiveTarget = Effect.fnUntraced(function* (request: ThreadArchiveRangeSeal) {
     const thread = yield* findThread(MutableRef.get(state.ref), request.threadId);
 
     return thread;
@@ -2581,7 +2579,7 @@ const makeThreadStore = Effect.gen(function* () {
     });
 
   const verification = {
-    verify: (unvalidated: import("@yielded/agent/thread-store").ThreadVerificationRequest) =>
+    verify: (unvalidated: ThreadVerificationRequest) =>
       withMutation(
         Effect.gen(function* () {
           const request = yield* validate(ThreadVerificationRequest, "verify Thread", unvalidated);
