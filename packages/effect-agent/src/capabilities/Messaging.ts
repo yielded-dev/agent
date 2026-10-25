@@ -142,7 +142,9 @@ const modelKey = Effect.fnUntraced(function* () {
     .digest("SHA-256", utf8Bytes(JSON.stringify(source)))
     .pipe(Effect.mapError(() => MessagingError.make({ operation: "send", reason: "unavailable" })));
 
-  return Schema.decodeSync(IdempotencyKey)(`peer-tool:${Hex.encode(digest)}`);
+  return yield* Schema.decodeEffect(IdempotencyKey)(`peer-tool:${Hex.encode(digest)}`).pipe(
+    Effect.orDie,
+  );
 });
 
 const native = <

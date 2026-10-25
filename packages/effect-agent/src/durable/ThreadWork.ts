@@ -38,25 +38,22 @@ const WorkId = Schema.NonEmptyString.check(Schema.isMaxLength(4096));
 
 /** Stable logical owners. Finding an owner does not acquire its lease, grant, or authority. */
 export const WorkOwner = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("Admission"), submissionId: SubmissionId }),
-  Schema.Struct({ _tag: Schema.Literal("Operation"), runId: RunId, toolCallId: ToolCallId }),
-  Schema.Struct({
-    _tag: Schema.Literal("Child"),
+  Schema.TaggedStruct("Admission", { submissionId: SubmissionId }),
+  Schema.TaggedStruct("Operation", { runId: RunId, toolCallId: ToolCallId }),
+  Schema.TaggedStruct("Child", {
     runId: RunId,
     toolCallId: ToolCallId,
     childThreadId: ThreadId,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("WorkerInput"),
+  Schema.TaggedStruct("WorkerInput", {
     messageId: IdempotencyKey,
     workerThreadId: ThreadId,
     update: Schema.Boolean,
   }),
-  Schema.Struct({ _tag: Schema.Literal("Report"), runId: RunId }),
-  Schema.Struct({ _tag: Schema.Literal("WorkerEffects"), submissionId: SubmissionId }),
-  Schema.Struct({ _tag: Schema.Literal("Delivery"), messageId: IdempotencyKey }),
-  Schema.Struct({
-    _tag: Schema.Literal("Handoff"),
+  Schema.TaggedStruct("Report", { runId: RunId }),
+  Schema.TaggedStruct("WorkerEffects", { submissionId: SubmissionId }),
+  Schema.TaggedStruct("Delivery", { messageId: IdempotencyKey }),
+  Schema.TaggedStruct("Handoff", {
     recordId: RecordId,
     kind: Schema.Literals(["worker-stop", "reservation", "child-accounting"]),
     childThreadId: Schema.optionalKey(ThreadId),
@@ -66,10 +63,9 @@ export const WorkOwner = Schema.Union([
 export type WorkOwner = typeof WorkOwner.Type;
 
 export const WorkStateReference = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("Submission"), submissionId: SubmissionId }),
-  Schema.Struct({ _tag: Schema.Literal("Canonical"), recordId: RecordId }),
-  Schema.Struct({
-    _tag: Schema.Literal("Delivery"),
+  Schema.TaggedStruct("Submission", { submissionId: SubmissionId }),
+  Schema.TaggedStruct("Canonical", { recordId: RecordId }),
+  Schema.TaggedStruct("Delivery", {
     messageId: IdempotencyKey,
     version: Schema.Int.check(Schema.isGreaterThan(0)),
   }),

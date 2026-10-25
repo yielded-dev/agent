@@ -115,9 +115,10 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
     recordId: RecordEnvelope["recordId"],
   ) {
     return Option.getOrUndefined(
-      yield* getRecord({ threadId, recordId })
-        .pipe(Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)))
-        .pipe(Effect.mapError(() => failure("send", "storage"))),
+      yield* getRecord({ threadId, recordId }).pipe(
+        Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
+        Effect.mapError(() => failure("send", "storage")),
+      ),
     )?.record;
   });
 
@@ -304,9 +305,9 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
 
       const message: MessageRef = {
         ownerThreadId: threadId,
-        messageId: Schema.decodeSync(IdempotencyKey)(
+        messageId: yield* Schema.decodeEffect(IdempotencyKey)(
           `peer:${yield* digest([threadId, principal, request.name, operation, key])}`,
-        ),
+        ).pipe(Effect.orDie),
       };
 
       const store = yield* deliveries(operation);
@@ -444,7 +445,9 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
                 expectedTailSequence: tail.tailSequence,
 
                 batch: CanonicalBatch.make({
-                  batchId: Schema.decodeSync(BatchId)(message.messageId),
+                  batchId: yield* Schema.decodeEffect(BatchId)(message.messageId).pipe(
+                    Effect.orDie,
+                  ),
                   producerId: deps.producerId,
                   records: [
                     RecordEnvelope.make({
@@ -556,7 +559,7 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
           Effect.mapError(() => failure("inbox", "invalid-reference")),
         );
 
-        const items: Array<(typeof InboxPage.Type)["items"][number]> = [];
+        const items: Array<InboxPage["items"][number]> = [];
 
         while (after < current.log.tailSequence && items.length < limit) {
           const records = yield* Stream.runCollect(

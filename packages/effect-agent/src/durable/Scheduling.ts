@@ -658,12 +658,14 @@ const makeDriver = Effect.fnUntraced(function* (limits: SchedulingLimits) {
     const expectedThreadId = usesCurrentConfiguration
       ? record.configuration.destination._tag === "ExistingThread"
         ? record.configuration.destination.threadId
-        : Schema.decodeSync(ThreadId)(`schedule-thread:${envelope.occurrenceId}`)
+        : yield* Schema.decodeEffect(ThreadId)(`schedule-thread:${envelope.occurrenceId}`).pipe(
+            Effect.orDie,
+          )
       : null;
 
-    const expectedAdmissionKey = Schema.decodeSync(IdempotencyKey)(
+    const expectedAdmissionKey = yield* Schema.decodeEffect(IdempotencyKey)(
       `schedule-occurrence:${envelope.occurrenceId}`,
-    );
+    ).pipe(Effect.orDie);
 
     const digest = yield* withCrypto(digestJson(envelope.input)).pipe(
       Effect.mapError(() => corrupt("process")),
@@ -836,9 +838,13 @@ const makeDriver = Effect.fnUntraced(function* (limits: SchedulingLimits) {
     const threadId =
       initial.configuration.destination._tag === "ExistingThread"
         ? initial.configuration.destination.threadId
-        : Schema.decodeSync(ThreadId)(`schedule-thread:${occurrenceId}`);
+        : yield* Schema.decodeEffect(ThreadId)(`schedule-thread:${occurrenceId}`).pipe(
+            Effect.orDie,
+          );
 
-    const admissionKey = Schema.decodeSync(IdempotencyKey)(`schedule-occurrence:${occurrenceId}`);
+    const admissionKey = yield* Schema.decodeEffect(IdempotencyKey)(
+      `schedule-occurrence:${occurrenceId}`,
+    ).pipe(Effect.orDie);
 
     const prepared = yield* store.change(key, {
       _tag: "Prepare",

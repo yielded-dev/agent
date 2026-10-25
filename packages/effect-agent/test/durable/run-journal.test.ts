@@ -318,11 +318,11 @@ describe("run journal batch split (plan §2.1)", () => {
           if (providerResult === undefined)
             return yield* Effect.die("Expected the staged provider result");
 
-          const frozen = Schema.decodeUnknownSync(
+          const frozen = yield* Schema.decodeUnknownEffect(
             Schema.Struct({
               action: Schema.Struct({ queries: Schema.Unknown, sources: Schema.Unknown }),
             }),
-          )(providerResult.result);
+          )(providerResult.result).pipe(Effect.orDie);
 
           for (const array of [frozen.action.queries, frozen.action.sources]) {
             expect(Array.isArray(array)).toBe(true);
@@ -332,7 +332,10 @@ describe("run journal batch split (plan §2.1)", () => {
           const batch = yield* turnResponseBatch(turnInput(history.content));
 
           const projected = yield* projectRunJournal(envelopesOf([batch]), RUN_ID);
-          const encoded = Schema.encodeSync(Prompt.Prompt)(projected.prompt);
+
+          const encoded = yield* Schema.encodeEffect(Prompt.Prompt)(projected.prompt).pipe(
+            Effect.orDie,
+          );
 
           expect(JSON.stringify(encoded)).toContain("https://www.tahoegetaways.com/");
           expect(JSON.stringify(encoded)).toContain("Tahoe private hot tub");

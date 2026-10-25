@@ -326,21 +326,20 @@ const settledCase = Effect.fn("diagnostic.ledger.settled")(function* (
     ),
   );
 
-  const receipt =
-    mode === 1
-      ? undefined
-      : yield* Effect.gen(function* () {
-          const receipt = yield* runtime.submit({ definition: agent }, "Answer", {
-            threadId: ThreadId.make("healthy"),
-            principal,
-            idempotencyKey: IdempotencyKey.make("healthy"),
-            definitions,
-          });
+  const submitHealthy = Effect.fnUntraced(function* () {
+    const receipt = yield* runtime.submit({ definition: agent }, "Answer", {
+      threadId: ThreadId.make("healthy"),
+      principal,
+      idempotencyKey: IdempotencyKey.make("healthy"),
+      definitions,
+    });
 
-          yield* runtime.processThread({ definition: agent, model }, receipt.threadId);
+    yield* runtime.processThread({ definition: agent, model }, receipt.threadId);
 
-          return receipt;
-        });
+    return receipt;
+  });
+
+  const receipt = mode === 1 ? undefined : yield* submitHealthy();
 
   if (receipt === undefined) request = yield* publish(0);
   else

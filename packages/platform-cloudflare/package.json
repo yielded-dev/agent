@@ -41,7 +41,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "check": "tsc --noEmit -p tsconfig.json"
+    "check": "effect-tsrs diagnostics --type-check --project tsconfig.json"
   },
   "dependencies": {
     "@effect/platform-browser": "catalog:",

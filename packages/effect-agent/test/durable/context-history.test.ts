@@ -367,7 +367,7 @@ describe("canonical context history", () => {
 
       const foreign = CanonicalRecordEnvelope.make({
         ...p.state.records[0]!,
-        threadId: Schema.decodeSync(ThreadId)("foreign"),
+        threadId: yield* Schema.decodeEffect(ThreadId)("foreign").pipe(Effect.orDie),
       });
 
       for (const stream of [

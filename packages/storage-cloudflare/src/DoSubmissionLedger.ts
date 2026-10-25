@@ -290,7 +290,7 @@ const decodeSettlement = Schema.decodeUnknownEffect(Settlement);
 const decodeAbortIntent = Schema.decodeUnknownEffect(AbortIntent);
 const decodeInputAppliedMarker = Schema.decodeUnknownEffect(InputAppliedMarker);
 
-const decodeSubmissionSnapshotType = (input: typeof SubmissionSnapshot.Type) =>
+const decodeSubmissionSnapshotType = (input: SubmissionSnapshot) =>
   SubmissionSnapshot.makeEffect(input).pipe(
     Effect.mapError((issue) => new Schema.SchemaError(issue)),
   );

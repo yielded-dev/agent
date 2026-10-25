@@ -69,7 +69,7 @@ export { DurableAlarmError } from "./CloudflareBindings.ts";
 /** Content-free operational notice: pending work now retries at the hourly ceiling. */
 class MaintenanceRetryParked extends Schema.TaggedError<MaintenanceRetryParked>()(
   "MaintenanceRetryParked",
-  { lane: Schema.String, retryAfterMillis: Schema.Number },
+  { lane: Schema.String, retryAfterMillis: Schema.Finite },
 ) {}
 
 const alarmFailure =
@@ -474,7 +474,7 @@ export interface ThreadPublicationService {
 const emptyPublication: ThreadPublicationService = {
   invalidate: Effect.void,
   prepareGeneration: () => Effect.void,
-  drain: Effect.succeed(Option.none()),
+  drain: Effect.succeedNone,
 };
 
 /** Opt in with `ThreadObject.layer(registrations, { publication: Layer.effect(ThreadPublication)(...) })`. */
@@ -508,7 +508,7 @@ export const ThreadMessageDelivery = Context.Reference<{
   >;
 }>("@effect-agent/platform-cloudflare/ThreadMessageDelivery", {
   defaultValue: () => ({
-    prepare: Effect.succeed({ timeoutMillis: 1, run: Effect.succeed(Option.none()) }),
+    prepare: Effect.succeed({ timeoutMillis: 1, run: Effect.succeedNone }),
   }),
 });
 
@@ -2017,7 +2017,7 @@ export class ThreadMaintenance extends Context.Service<
                 Effect.catchTag("BindingUnavailable", (failure) => {
                   bindingFailure = failure;
 
-                  return Effect.succeed(Option.none());
+                  return Effect.succeedNone;
                 }),
               );
 

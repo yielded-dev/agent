@@ -170,36 +170,32 @@ export const MessageDeliveryCompletion = Schema.Struct({
 });
 
 export const MessageDeliveryChange = Schema.Union([
-  Schema.Struct({
-    _tag: Schema.Literal("Complete"),
+  Schema.TaggedStruct("Complete", {
     nowMillis: ScheduleInstant,
     ...MessageDeliveryCompletion.fields,
   }),
-  Schema.Struct({ _tag: Schema.Literal("Claim"), ...fence }),
-  Schema.Struct({ _tag: Schema.Literal("Accept"), ...fence, receipt: Receipt }),
-  Schema.Struct({ _tag: Schema.Literal("Process"), ...fence, settlement: Settlement }),
-  Schema.Struct({ _tag: Schema.Literal("ObservePending"), ...fence }),
-  Schema.Struct({
-    _tag: Schema.Literal("Refuse"),
+  Schema.TaggedStruct("Claim", { ...fence }),
+  Schema.TaggedStruct("Accept", { ...fence, receipt: Receipt }),
+  Schema.TaggedStruct("Process", { ...fence, settlement: Settlement }),
+  Schema.TaggedStruct("ObservePending", { ...fence }),
+  Schema.TaggedStruct("Refuse", {
     ...fence,
     code: BoundedName,
     diagnostic: Schema.optionalKey(FailureDiagnostic.Diagnostic),
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Retry"),
+  Schema.TaggedStruct("Retry", {
     ...fence,
     reason: PreparedInputRetryReason,
     diagnostic: Schema.optionalKey(FailureDiagnostic.Diagnostic),
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Park"),
+  Schema.TaggedStruct("Park", {
     ...fence,
     reason: ParkReason,
     diagnostic: Schema.optionalKey(FailureDiagnostic.Diagnostic),
   }),
-  Schema.Struct({ _tag: Schema.Literal("Recover"), ...fence, deadlineAtMillis: ScheduleInstant }),
+  Schema.TaggedStruct("Recover", { ...fence, deadlineAtMillis: ScheduleInstant }),
   /** Waiting for earlier admission never spends an automatic transport attempt. */
-  Schema.Struct({ _tag: Schema.Literal("Defer"), ...fence, untilMillis: ScheduleInstant }),
+  Schema.TaggedStruct("Defer", { ...fence, untilMillis: ScheduleInstant }),
 ]);
 
 export type MessageDeliveryChange = typeof MessageDeliveryChange.Type;
@@ -853,35 +849,33 @@ export class MessageDeliveryDriver extends Context.Service<
                 const status = yield* admission.submissionStatus(claimed.receipt).pipe(
                   Effect.timeout(timeout),
                   Effect.map((status) => ({ _tag: "Status" as const, status })),
-                  Effect.catchTag("PreparedInputRetryable", (failure) =>
-                    Effect.succeed({
-                      _tag: "Retry" as const,
-                      reason: failure.reason,
-                      diagnostic: FailureDiagnostic.capture(failure),
-                    }),
-                  ),
-                  Effect.catchTag("PreparedInputRefused", (failure) =>
-                    Effect.succeed({
-                      _tag: "Unavailable" as const,
-                      diagnostic: FailureDiagnostic.capture(failure),
-                    }),
-                  ),
-                  Effect.catchTag("TimeoutError", (failure) =>
-                    Effect.succeed({
-                      _tag: "Retry" as const,
-                      reason: "timeout" as const,
-                      diagnostic: FailureDiagnostic.capture(failure),
-                    }),
-                  ),
-                  Effect.catchTag("ScheduleStorageError", (failure) =>
-                    failure.reason === "unavailable"
-                      ? Effect.succeed({
-                          _tag: "Retry" as const,
-                          reason: "storage" as const,
-                          diagnostic: FailureDiagnostic.capture(failure),
-                        })
-                      : Effect.fail(error("corrupt", "status", failure)),
-                  ),
+                  Effect.catchTags({
+                    PreparedInputRetryable: (failure) =>
+                      Effect.succeed({
+                        _tag: "Retry" as const,
+                        reason: failure.reason,
+                        diagnostic: FailureDiagnostic.capture(failure),
+                      }),
+                    PreparedInputRefused: (failure) =>
+                      Effect.succeed({
+                        _tag: "Unavailable" as const,
+                        diagnostic: FailureDiagnostic.capture(failure),
+                      }),
+                    TimeoutError: (failure) =>
+                      Effect.succeed({
+                        _tag: "Retry" as const,
+                        reason: "timeout" as const,
+                        diagnostic: FailureDiagnostic.capture(failure),
+                      }),
+                    ScheduleStorageError: (failure) =>
+                      failure.reason === "unavailable"
+                        ? Effect.succeed({
+                            _tag: "Retry" as const,
+                            reason: "storage" as const,
+                            diagnostic: FailureDiagnostic.capture(failure),
+                          })
+                        : Effect.fail(error("corrupt", "status", failure)),
+                  }),
                 );
 
                 if (status._tag === "Unavailable")

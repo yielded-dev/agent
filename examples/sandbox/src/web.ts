@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { WebCapture } from "@yielded/agent";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import {
@@ -29,8 +30,14 @@ import { RunContextPreparation } from "@yielded/agent/run-options";
 import { Clock, Effect, Layer, Option, Schema } from "effect";
 import { WorkerEnvironment } from "effect-cf";
 import { Prompt, Tool, Toolkit } from "effect/ai";
+import * as Crypto from "effect/Crypto";
 
 import { ScreenshotEvidence, ScreenshotId, screenshotKey } from "./contract.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
@@ -227,11 +234,7 @@ export const webLive = Layer.unwrap(
             function* ({ url, engine = "kitesurf", fullPage = false }) {
               const steps = yield* DurableStep;
 
-              const imageId = yield* steps.do(
-                "image-id",
-                ScreenshotId,
-                Effect.sync(() => crypto.randomUUID()),
-              );
+              const imageId = yield* steps.do("image-id", ScreenshotId, randomUUID);
 
               return yield* steps.do(
                 "image",
@@ -257,10 +260,10 @@ export const webLive = Layer.unwrap(
                       }),
                     );
 
-                    const metadata = Schema.encodeSync(ScreenshotMetadata)({
+                    const metadata = yield* Schema.encodeEffect(ScreenshotMetadata)({
                       engine,
                       capturedAt: yield* Clock.currentTimeMillis,
-                    });
+                    }).pipe(Effect.orDie);
 
                     object = yield* Effect.tryPromise({
                       try: async () => {
@@ -362,9 +365,7 @@ export const webLive = Layer.unwrap(
     });
 
     return Layer.mergeAll(pageHandlers, screenshotHandlers, context).pipe(
-      Layer.provide(
-        Layer.merge(browserQuickActionCaptureLayer(), browserQuickActionScreenshotLayer()),
-      ),
+      Layer.provide(Layer.merge(browserQuickActionCaptureLayer, browserQuickActionScreenshotLayer)),
       Layer.provide(BrowserQuickActionBrowserBinding.layer({ browser: env.BROWSER })),
     );
   }),

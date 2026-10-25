@@ -32,17 +32,15 @@ export type ScheduleKey = typeof ScheduleKey.Type;
 export const ScheduleScope = Schema.Struct({ owner: ScheduleOwner, principal: Principal });
 export type ScheduleScope = typeof ScheduleScope.Type;
 
-const At = Schema.Struct({ _tag: Schema.Literal("At"), atMillis: ScheduleInstant });
-const After = Schema.Struct({ _tag: Schema.Literal("After"), delayMillis: Positive });
+const At = Schema.TaggedStruct("At", { atMillis: ScheduleInstant });
+const After = Schema.TaggedStruct("After", { delayMillis: Positive });
 
-const Interval = Schema.Struct({
-  _tag: Schema.Literal("Interval"),
+const Interval = Schema.TaggedStruct("Interval", {
   everyMillis: Positive,
   anchorMillis: ScheduleInstant,
 });
 
-const Cron = Schema.Struct({
-  _tag: Schema.Literal("Cron"),
+const Cron = Schema.TaggedStruct("Cron", {
   expression: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
   timeZone: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
 });
@@ -51,13 +49,11 @@ const Cron = Schema.Struct({
 export const ScheduleTimingRequest = Schema.Union([
   At,
   After,
-  Schema.Struct({
-    _tag: Schema.Literal("Interval"),
+  Schema.TaggedStruct("Interval", {
     everyMillis: Positive,
     anchorMillis: Schema.optionalKey(ScheduleInstant),
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Cron"),
+  Schema.TaggedStruct("Cron", {
     expression: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
     timeZone: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(128))),
   }),
@@ -68,8 +64,8 @@ export const ScheduleTiming = Schema.Union([At, Interval, Cron]);
 export type ScheduleTiming = typeof ScheduleTiming.Type;
 
 export const ScheduleDestination = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("ExistingThread"), threadId: ThreadId }),
-  Schema.Struct({ _tag: Schema.Literal("FreshThread") }),
+  Schema.TaggedStruct("ExistingThread", { threadId: ThreadId }),
+  Schema.TaggedStruct("FreshThread", {}),
 ]);
 
 export type ScheduleDestination = typeof ScheduleDestination.Type;
@@ -338,22 +334,19 @@ export type ScheduleDueCursor = typeof ScheduleDueCursor.Type;
 
 /** Local transaction commands. Admission is deliberately absent from this union. */
 export const ScheduleChange = Schema.Union([
-  Schema.Struct({
-    _tag: Schema.Literal("Recover"),
+  Schema.TaggedStruct("Recover", {
     expectedGeneration: Schema.Natural,
     expectedRevision: Positive,
     occurrenceId: Digest,
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Update"),
+  Schema.TaggedStruct("Update", {
     expectedRevision: Positive,
     configuration: ScheduleConfiguration,
     nextAtMillis: Schema.NullOr(ScheduleInstant),
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Control"),
+  Schema.TaggedStruct("Control", {
     expectedRevision: Positive,
     expectedVersion: Positive,
     action: Schema.Literals(["pause", "resume", "cancel"]),
@@ -361,8 +354,7 @@ export const ScheduleChange = Schema.Union([
     nowMillis: ScheduleInstant,
     skippedRange: Schema.NullOr(ScheduleSkippedRange),
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Prepare"),
+  Schema.TaggedStruct("Prepare", {
     expectedRevision: Positive,
     expectedCursor: ScheduleInstant,
     envelope: ScheduledEnvelope,
@@ -370,27 +362,23 @@ export const ScheduleChange = Schema.Union([
     skippedRange: Schema.NullOr(ScheduleSkippedRange),
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("DenyPreparation"),
+  Schema.TaggedStruct("DenyPreparation", {
     expectedRevision: Positive,
     expectedCursor: ScheduleInstant,
     refusal: ScheduleRefusal,
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Complete"),
+  Schema.TaggedStruct("Complete", {
     occurrenceId: Digest,
     receipt: Receipt,
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Retry"),
+  Schema.TaggedStruct("Retry", {
     occurrenceId: Digest,
     retry: ScheduleRetry,
     nowMillis: ScheduleInstant,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("Refuse"),
+  Schema.TaggedStruct("Refuse", {
     occurrenceId: Digest,
     refusal: ScheduleRefusal,
     nowMillis: ScheduleInstant,

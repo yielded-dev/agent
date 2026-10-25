@@ -104,15 +104,15 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
       submission.threadId,
       call.runId,
       nativeUpdateId(call.runId, call.toolCallId),
-    ).pipe(Effect.provideService(Crypto.Crypto, crypto), Effect.mapError(storage));
+    ).pipe(Effect.provideService(Crypto.Crypto, crypto));
 
     const record = yield* getRecord({
       threadId: submission.threadId,
       recordId: RecordId.make(`agent-update:${digest}`),
-    }).pipe(Effect.provideService(ThreadReader, reader), Effect.mapError(storage));
+    }).pipe(Effect.provideService(ThreadReader, reader));
 
     return Option.isSome(record) && nativeUpdateAccepted(submission, call, [record.value]);
-  });
+  }, Effect.mapError(storage));
 
   const readRun = Effect.fnUntraced(function* (threadId: ThreadId, submissionId: SubmissionId) {
     const tail = yield* store
@@ -182,7 +182,11 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
       );
 
       const id = `agent-update:${digest}`;
-      const messageId = Schema.decodeSync(IdempotencyKey)(`worker-update:${digest}`);
+
+      const messageId = yield* Schema.decodeEffect(IdempotencyKey)(`worker-update:${digest}`).pipe(
+        Effect.orDie,
+      );
+
       const maxCount = request.maxCount ?? 32;
       const maxBytes = request.maxBytes ?? 16_384;
 
@@ -286,11 +290,11 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
         const appended = yield* writer
           .append(
             CanonicalBatch.make({
-              batchId: Schema.decodeSync(BatchId)(id),
+              batchId: yield* Schema.decodeEffect(BatchId)(id).pipe(Effect.orDie),
               producerId: options.producerId,
               records: [
                 RecordEnvelope.make({
-                  recordId: Schema.decodeSync(RecordId)(id),
+                  recordId: yield* Schema.decodeEffect(RecordId)(id).pipe(Effect.orDie),
                   family: "thread",
                   schemaVersion: 1,
                   createdAt: DateTime.makeUnsafe(yield* Clock.currentTimeMillis),

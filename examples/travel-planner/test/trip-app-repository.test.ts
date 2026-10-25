@@ -100,8 +100,8 @@ afterAll(async () => {
 });
 
 const Result = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("Success"), value: Schema.Unknown }),
-  Schema.Struct({ _tag: Schema.Literal("Failure"), error: Schema.String }),
+  Schema.TaggedStruct("Success", { value: Schema.Unknown }),
+  Schema.TaggedStruct("Failure", { error: Schema.String }),
 ]);
 
 const call = async (owner: string, input: unknown) => {

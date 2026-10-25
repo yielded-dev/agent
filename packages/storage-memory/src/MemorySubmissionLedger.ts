@@ -1,6 +1,7 @@
 import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import {
   type ToolCallId,
+  type RunId,
   AttemptId,
   ReceiptId,
   SubmissionId,
@@ -3367,16 +3368,13 @@ const makeSubmissionLedger = Effect.fnUntraced(
                 ? undefined
                 : toAdmission(stored.row, settledTimes.get(id));
             }),
-          runOwner: (runId: import("@yielded/agent/identifiers").RunId) =>
-            Effect.sync(() => {
-              if (!runId.startsWith("run:")) return undefined;
-              const id = Schema.decodeSync(SubmissionId)(runId.slice(4));
-              const stored = staged.submissions.get(id);
+          runOwner: Effect.fnUntraced(function* (runId: RunId) {
+            if (!runId.startsWith("run:")) return undefined;
+            const id = yield* Schema.decodeEffect(SubmissionId)(runId.slice(4)).pipe(Effect.orDie);
+            const stored = staged.submissions.get(id);
 
-              return stored === undefined
-                ? undefined
-                : toAdmission(stored.row, settledTimes.get(id));
-            }),
+            return stored === undefined ? undefined : toAdmission(stored.row, settledTimes.get(id));
+          }),
           commands: (id: SubmissionId) => readCommands(staged.submissions.get(id)),
         };
 

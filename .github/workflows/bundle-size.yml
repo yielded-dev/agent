@@ -76,7 +76,7 @@ jobs:
           timeout: 5m
           working-directory: .bundle-base
           command: |
-            vp run --no-cache patch:tsgo
+            if grep -q '"patch:tsgo"' vite.config.ts; then vp run --no-cache patch:tsgo; fi
             vp run -F './packages/*' build
 
       - name: Build PR packages

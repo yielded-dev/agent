@@ -713,7 +713,10 @@ const recoveryFailureDetails = (cause: Cause.Cause<DurableWorkerFailure>) => {
     const decoded = decodeRecoveryCause(nested);
 
     if (Option.isNone(decoded)) break;
-    if (decoded.value.diagnostic instanceof ThreadStoreDiagnostic) {
+    if (
+      Schema.is(ThreadStoreDiagnostic)(decoded.value.diagnostic) &&
+      Object.prototype.isPrototypeOf.call(ThreadStoreDiagnostic.prototype, decoded.value.diagnostic)
+    ) {
       diagnostic = decoded.value.diagnostic;
       break;
     }
@@ -1154,8 +1157,13 @@ const isPersistenceCapacityCause = (cause: Cause.Cause<unknown>): boolean =>
   cause.reasons.every(
     (reason) =>
       Cause.isFailReason(reason) &&
-      reason.error instanceof ThreadStoreError &&
-      reason.error.cause instanceof AgentPersistenceCapacityError,
+      Schema.is(ThreadStoreError)(reason.error) &&
+      Object.prototype.isPrototypeOf.call(ThreadStoreError.prototype, reason.error) &&
+      Schema.is(AgentPersistenceCapacityError)(reason.error.cause) &&
+      Object.prototype.isPrototypeOf.call(
+        AgentPersistenceCapacityError.prototype,
+        reason.error.cause,
+      ),
   );
 
 const PolicyFailure = Schema.TaggedStruct("AgentPolicyError", {
@@ -1176,13 +1184,17 @@ const agentApprovalPendingOption = (
   cause: Cause.Cause<unknown>,
 ): Option.Option<AgentApprovalPending> => {
   try {
-    // Suspension authority is nominal. Schema.is/decode would accept a forged tagged object.
+    // Suspension authority is nominal; Schema.is also accepts copied HMR class brands.
     const first = cause.reasons.find(Cause.isFailReason);
 
     return first !== undefined &&
-      first.error instanceof AgentApprovalPending &&
+      Schema.is(AgentApprovalPending)(first.error) &&
+      Object.prototype.isPrototypeOf.call(AgentApprovalPending.prototype, first.error) &&
       cause.reasons.every(
-        (reason) => reason._tag !== "Fail" || reason.error instanceof AgentApprovalPending,
+        (reason) =>
+          reason._tag !== "Fail" ||
+          (Schema.is(AgentApprovalPending)(reason.error) &&
+            Object.prototype.isPrototypeOf.call(AgentApprovalPending.prototype, reason.error)),
       )
       ? Option.some(first.error)
       : Option.none();
@@ -1193,8 +1205,11 @@ const agentApprovalPendingOption = (
 
 const agentChildPendingOption = (error: unknown): Option.Option<AgentChildPending> => {
   try {
-    // Suspension authority is nominal. Schema.is/decode would accept a forged tagged object.
-    return error instanceof AgentChildPending ? Option.some(error) : Option.none();
+    // Suspension authority is nominal; Schema.is also accepts copied HMR class brands.
+    return Schema.is(AgentChildPending)(error) &&
+      Object.prototype.isPrototypeOf.call(AgentChildPending.prototype, error)
+      ? Option.some(error)
+      : Option.none();
   } catch {
     return Option.none();
   }
@@ -1534,7 +1549,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   const currentOperationsFor = Effect.fnUntraced(function* (submission: SubmissionSnapshot) {
     const binding = yield* resolveCurrentBinding(submission).pipe(
-      Effect.catchTag("BindingUnavailable", () => Effect.succeed(undefined)),
+      Effect.catchTag("BindingUnavailable", () => Effect.as(Effect.void, undefined)),
     );
 
     return binding === undefined
@@ -1919,8 +1934,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     submissionIds: ReadonlyArray<SubmissionId>,
   ): Effect.fn.Return<RecoveryHistorySnapshot, ThreadStoreError> {
     const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId })).pipe(
-      Effect.map(Option.some),
-      Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())),
+      Effect.asSome,
+      Effect.catchTag("ThreadNotMaterialized", () => Effect.succeedNone),
     );
 
     if (Option.isNone(tail))
@@ -2523,7 +2538,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               toolCallSettledRecordId(
                 runId,
                 lastResponse.turn,
-                Schema.decodeSync(ToolCallId)(call.id),
+                yield* Schema.decodeEffect(ToolCallId)(call.id).pipe(Effect.orDie),
               ))
         )
           return yield* RunJournalError.make({
@@ -2815,7 +2830,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                       if (executions !== undefined && executions.length > 0)
                         return ctx.refresh.pipe(Effect.andThen(Effect.fail(conflict)));
 
-                      return Effect.succeed(undefined);
+                      return Effect.as(Effect.void, undefined);
                     }),
                   );
 
@@ -3184,8 +3199,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           }),
         )
         .pipe(
-          Effect.map(Option.some),
-          Effect.catchTag("ToolReconcilerError", () => Effect.succeed(Option.none())),
+          Effect.asSome,
+          Effect.catchTag("ToolReconcilerError", () => Effect.succeedNone),
         );
 
       if (Option.isNone(reconciled)) {
@@ -3312,7 +3327,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     if (operational === undefined) {
       const loaded = yield* reader
         .readExecution({ threadId, runId })
-        .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())));
+        .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeedNone));
 
       if (Option.isNone(loaded)) return undefined;
       operational = loaded.value.operational;
@@ -5150,7 +5165,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         completionCandidate !== undefined &&
         supportsOperation(
           OpenToolCallEvidence.make({
-            toolCallId: Schema.decodeSync(ToolCallId)(completionCandidate.id),
+            toolCallId: yield* Schema.decodeEffect(ToolCallId)(completionCandidate.id).pipe(
+              Effect.orDie,
+            ),
             toolName: completionCandidate.name,
             turn: pending.turn,
           }),
@@ -5159,7 +5176,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           ),
           { definition: agent.definition, contracts: currentContracts },
         )
-          ? Schema.decodeSync(ToolCallId)(completionCandidate.id)
+          ? yield* Schema.decodeEffect(ToolCallId)(completionCandidate.id).pipe(Effect.orDie)
           : undefined;
 
       const knownIds = knownRecordIdsOf(records);
@@ -5623,16 +5640,26 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
           const failure = Effect.failCause(
             Cause.map(cause, (error) =>
-              error instanceof ThreadStoreError &&
-              error.cause instanceof AgentPersistenceCapacityError
+              Schema.is(ThreadStoreError)(error) &&
+              Object.prototype.isPrototypeOf.call(ThreadStoreError.prototype, error) &&
+              Schema.is(AgentPersistenceCapacityError)(error.cause) &&
+              Object.prototype.isPrototypeOf.call(
+                AgentPersistenceCapacityError.prototype,
+                error.cause,
+              )
                 ? error.cause
                 : new CoordinatorHalt(error),
             ),
           );
 
           return Option.isNone(first) ||
-            (first.value instanceof ThreadStoreError &&
-              first.value.cause instanceof AgentPersistenceCapacityError)
+            (Schema.is(ThreadStoreError)(first.value) &&
+              Object.prototype.isPrototypeOf.call(ThreadStoreError.prototype, first.value) &&
+              Schema.is(AgentPersistenceCapacityError)(first.value.cause) &&
+              Object.prototype.isPrototypeOf.call(
+                AgentPersistenceCapacityError.prototype,
+                first.value.cause,
+              ))
             ? failure
             : Effect.andThen(Ref.set(haltRef, first.value), failure);
         });
@@ -5701,8 +5728,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const flushDeferredResponse = promoteResponse.pipe(
         // Retain failure before releasing the permit; a waiting capability must not retry it.
         Effect.tapError((failure) =>
-          failure instanceof ThreadStoreError &&
-          failure.cause instanceof AgentPersistenceCapacityError
+          Schema.is(ThreadStoreError)(failure) &&
+          Object.prototype.isPrototypeOf.call(ThreadStoreError.prototype, failure) &&
+          Schema.is(AgentPersistenceCapacityError)(failure.cause) &&
+          Object.prototype.isPrototypeOf.call(
+            AgentPersistenceCapacityError.prototype,
+            failure.cause,
+          )
             ? Effect.void
             : Ref.set(haltRef, failure),
         ),
@@ -8035,7 +8067,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             }
             if (
               cause.reasons.some(
-                (reason) => reason._tag === "Fail" && reason.error instanceof AgentInputDecodeError,
+                (reason) =>
+                  reason._tag === "Fail" &&
+                  Schema.is(AgentInputDecodeError)(reason.error) &&
+                  Object.prototype.isPrototypeOf.call(
+                    AgentInputDecodeError.prototype,
+                    reason.error,
+                  ),
               )
             ) {
               // Accepted input is still owed. A current codec refusal is a Binding problem,
@@ -8096,7 +8134,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
               // Host authorization can observe cancellation before the abort watcher ticks.
               // Only an authorization denial with this Submission's durable intent is an abort.
-              if (error instanceof AgentToolAuthorizationDenied) {
+              if (
+                Schema.is(AgentToolAuthorizationDenied)(error) &&
+                Object.prototype.isPrototypeOf.call(AgentToolAuthorizationDenied.prototype, error)
+              ) {
                 const intent = yield* ledger.readAbortIntent(
                   AbortIntentRequest.make({ submissionId }),
                 );
@@ -8116,8 +8157,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   (reason) =>
                     reason._tag === "Die" ||
                     (reason._tag === "Fail" &&
-                      !(reason.error instanceof AgentApprovalDenied) &&
-                      !(reason.error instanceof AgentToolAuthorizationDenied)),
+                      !(
+                        Schema.is(AgentApprovalDenied)(reason.error) &&
+                        Object.prototype.isPrototypeOf.call(
+                          AgentApprovalDenied.prototype,
+                          reason.error,
+                        )
+                      ) &&
+                      !(
+                        Schema.is(AgentToolAuthorizationDenied)(reason.error) &&
+                        Object.prototype.isPrototypeOf.call(
+                          AgentToolAuthorizationDenied.prototype,
+                          reason.error,
+                        )
+                      )),
                 )
               )
                 yield* Effect.logError("Agent run failed", cause).pipe(
@@ -8694,12 +8747,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           if (
             call.providerExecuted ||
             settled.has(call.id) ||
-            rejected.has(Schema.decodeSync(ToolCallId)(call.id))
+            rejected.has(yield* Schema.decodeEffect(ToolCallId)(call.id).pipe(Effect.orDie))
           )
             continue;
 
           const evidence = OpenToolCallEvidence.make({
-            toolCallId: Schema.decodeSync(ToolCallId)(call.id),
+            toolCallId: yield* Schema.decodeEffect(ToolCallId)(call.id).pipe(Effect.orDie),
             toolName: call.name,
             turn: continuation.turn,
           });
@@ -8832,7 +8885,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               suffix.length === 0);
 
           // Every replay stays bounded at the ORIGINAL admission, never the later Thread tail.
-          const source: InitialJournalSource = yield* Effect.gen(function* () {
+          const readJournalSource = Effect.fnUntraced(function* () {
             if (
               checkpointPrompt !== undefined &&
               fresh &&
@@ -8860,6 +8913,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
             return { records: history, original, suffix, cacheable };
           });
+
+          const source: InitialJournalSource = yield* readJournalSource();
 
           initialJournal = source;
           canonical = Stream.fromIterableEffect(
@@ -9090,7 +9145,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         Effect.flatMap((claimed) =>
           Option.isNone(claimed)
             ? Effect.succeed(Option.none<RunStorageSession>())
-            : withProgressSession(claimed.value).pipe(Effect.map(Option.some)),
+            : withProgressSession(claimed.value).pipe(Effect.asSome),
         ),
       );
 
@@ -10520,8 +10575,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               }),
             )
             .pipe(
-              Effect.map(Option.some),
-              Effect.catchTag("ToolReconcilerError", () => Effect.succeed(Option.none())),
+              Effect.asSome,
+              Effect.catchTag("ToolReconcilerError", () => Effect.succeedNone),
             )
         : Option.none();
 
@@ -11587,7 +11642,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           const finalized = yield* readFinalizedSubmission(receipt);
 
           if (Option.isNone(finalized))
-            yield* Effect.raceFirst(awaitHint, Effect.sleep(config.settlementPollInterval));
+            yield* awaitHint.pipe(Effect.timeoutOption(config.settlementPollInterval));
 
           return finalized;
         }),
@@ -11632,7 +11687,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           ),
         ).pipe(
           Effect.catchTag("ThreadNotMaterialized", (error) =>
-            afterSequence === ZERO_SEQUENCE ? Effect.succeed(Option.none()) : Effect.fail(error),
+            afterSequence === ZERO_SEQUENCE ? Effect.succeedNone : Effect.fail(error),
           ),
         );
 

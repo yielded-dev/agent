@@ -659,7 +659,7 @@ describe("SqliteSubmissionLedger", () => {
             expect(resumed.value.claim.submissionId).toBe(before.older.submissionId);
         }).pipe(
           Effect.scoped,
-          Effect.provide(runStorageLayer().pipe(Layer.provideMerge(combinedLayer(filename)))),
+          Effect.provide(runStorageLayer.pipe(Layer.provideMerge(combinedLayer(filename)))),
         );
       }),
     ),

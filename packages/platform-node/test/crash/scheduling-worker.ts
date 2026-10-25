@@ -21,8 +21,7 @@ export const SchedulingCrashBoundary = Schema.Literals([
 
 export type SchedulingCrashBoundary = typeof SchedulingCrashBoundary.Type;
 
-export const SchedulingCrashMarker = Schema.Struct({
-  _tag: Schema.Literal("SchedulingCrashMarker"),
+export const SchedulingCrashMarker = Schema.TaggedStruct("SchedulingCrashMarker", {
   boundary: SchedulingCrashBoundary,
 });
 
@@ -83,10 +82,10 @@ export const schedulingCrashWorker = Effect.gen(function* () {
   const config = yield* decodeConfig();
   const latched = yield* Ref.make(false);
 
-  const encodedMarker = Schema.encodeSync(Schema.fromJsonString(SchedulingCrashMarker))({
+  const encodedMarker = yield* Schema.encodeEffect(Schema.fromJsonString(SchedulingCrashMarker))({
     _tag: "SchedulingCrashMarker",
     boundary: config.boundary,
-  });
+  }).pipe(Effect.orDie);
 
   const failpoint = {
     hit: Effect.fnUntraced(function* (point: string) {

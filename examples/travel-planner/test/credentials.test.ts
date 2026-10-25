@@ -14,11 +14,10 @@ const token = "preference-test-token";
 const first = "sk-proj-fixture-private-first-1111";
 const second = "sk-proj-fixture-private-second-2222";
 
-const RpcExit = Schema.Struct({
-  _tag: Schema.Literal("Exit"),
+const RpcExit = Schema.TaggedStruct("Exit", {
   exit: Schema.Union([
-    Schema.Struct({ _tag: Schema.Literal("Success"), value: Schema.Unknown }),
-    Schema.Struct({ _tag: Schema.Literal("Failure"), cause: Schema.Unknown }),
+    Schema.TaggedStruct("Success", { value: Schema.Unknown }),
+    Schema.TaggedStruct("Failure", { cause: Schema.Unknown }),
   ]),
 });
 

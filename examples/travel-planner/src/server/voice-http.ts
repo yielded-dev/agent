@@ -77,12 +77,11 @@ export const serveVoice = Effect.fn("serveVoice")(
     return Response.json(answer, { status: 201, headers: { "cache-control": "no-store" } });
   },
   Effect.provide(FetchHttpClient.layer),
-  Effect.catch(() =>
-    Effect.succeed(
+  Effect.orElseSucceed(
+    () =>
       new Response(unavailable().message, {
         status: 503,
         headers: { "cache-control": "no-store" },
       }),
-    ),
   ),
 );

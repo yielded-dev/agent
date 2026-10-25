@@ -126,7 +126,7 @@ describe("PR-review model eval", () => {
       const suite = yield* makeSuite();
 
       const variant = yield* makeCurrentOpenAiVariant({
-        id: Schema.decodeSync(EvalVariantId)("provider-failure"),
+        id: yield* Schema.decodeEffect(EvalVariantId)("provider-failure").pipe(Effect.orDie),
       }).pipe(
         Effect.provideService(
           ConfigProvider.ConfigProvider,
@@ -453,7 +453,7 @@ describe("PR-review model eval", () => {
       });
 
       const suite = yield* makeSuite(withFollowUps);
-      const encoded = Schema.encodeSync(EvalSuite)(suite);
+      const encoded = yield* Schema.encodeEffect(EvalSuite)(suite).pipe(Effect.orDie);
       const first = encoded.cases[0];
 
       if (first === undefined) throw new Error("Missing eval case");
@@ -464,9 +464,13 @@ describe("PR-review model eval", () => {
         expectedUnresolvedFollowUpIds: ["review-2", "review-3"],
       };
 
-      const parsed = Schema.decodeSync(EvalSuite)({ ...encoded, cases: [oracle] });
+      const parsed = yield* Schema.decodeEffect(EvalSuite)({ ...encoded, cases: [oracle] }).pipe(
+        Effect.orDie,
+      );
 
-      expect(Schema.encodeSync(EvalSuite)(parsed).cases[0]).toMatchObject({
+      expect(
+        (yield* Schema.encodeEffect(EvalSuite)(parsed).pipe(Effect.orDie)).cases[0],
+      ).toMatchObject({
         expectedResolvedFollowUpIds: ["review-1"],
         expectedUnresolvedFollowUpIds: ["review-2", "review-3"],
       });
@@ -493,7 +497,7 @@ describe("PR-review model eval", () => {
   it.effect("rejects resolution expectations when the request has no follow-ups", () =>
     Effect.gen(function* () {
       const suite = yield* makeSuite();
-      const encoded = Schema.encodeSync(EvalSuite)(suite);
+      const encoded = yield* Schema.encodeEffect(EvalSuite)(suite).pipe(Effect.orDie);
       const evalCase = encoded.cases[0];
 
       if (evalCase === undefined) throw new Error("Missing eval case");

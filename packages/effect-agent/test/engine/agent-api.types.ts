@@ -54,7 +54,7 @@ const toolkit = Toolkit.make(Lookup);
 
 const Input = Schema.Struct({
   city: Schema.String,
-  days: Schema.NumberFromString.pipe(
+  days: Schema.FiniteFromString.pipe(
     Schema.decode({
       decode: SchemaGetter.transformEffect((days) => Effect.as(Decoder, days)),
       encode: SchemaGetter.transformEffect((days) => Effect.as(Encoder, days)),
@@ -544,7 +544,7 @@ export const verifyRetainsEveryBranchsToolRequirementsAndFailuresAcrossExecution
 
 export const verifyTextOutputPreservesSchemaTransformationsErrorsAndDecoderRequirements = () => {
   const schema = Output.text(
-    Schema.NumberFromString.pipe(
+    Schema.FiniteFromString.pipe(
       Schema.decode({
         decode: SchemaGetter.transformEffect((value) => Effect.as(Decoder, value)),
         encode: SchemaGetter.transformEffect((value) => Effect.as(Encoder, value)),
@@ -569,7 +569,7 @@ export const verifyTextOutputPreservesSchemaTransformationsErrorsAndDecoderRequi
   // @ts-expect-error Text output requires a string-encoded Schema.
   Output.text(Schema.Struct({ answer: Schema.String }));
   // @ts-expect-error A decoded string is insufficient when its encoded form is numeric.
-  Output.text(Schema.flip(Schema.NumberFromString));
+  Output.text(Schema.flip(Schema.FiniteFromString));
 };
 
 export const verifyResolvedCallPreparationPreservesHostAndProviderRequirementsAndTypedFailure =

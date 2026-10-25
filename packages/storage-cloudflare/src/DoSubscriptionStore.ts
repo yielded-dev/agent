@@ -252,7 +252,7 @@ const makeSubscriptionStore = Effect.fnUntraced(function* (owned: SourcePartitio
     );
 
     const decoded = yield* decodeRows(
-      Schema.Struct({ deadline: Schema.NullOr(Schema.Number) }),
+      Schema.Struct({ deadline: Schema.NullOr(Schema.Finite) }),
       rows,
       "read subscription deadline",
     );

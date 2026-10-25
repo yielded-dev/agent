@@ -120,7 +120,7 @@ export default defineConfig({
     ignorePatterns: generatedPaths,
     options: {
       typeAware: true,
-      // Patched tsc owns compiler and Effect diagnostics; keep unique typed lint rules.
+      // effect-tsrs owns compiler and Effect diagnostics; keep unique typed lint rules.
       typeCheck: false,
     },
     jsPlugins: [
@@ -188,10 +188,6 @@ export default defineConfig({
       scripts: true,
     },
     tasks: {
-      "patch:tsgo": {
-        cache: false,
-        command: "effect-tsgo patch --typescript",
-      },
       "ci:format": {
         command: "vp fmt --check",
       },

@@ -615,12 +615,12 @@ const nativeWorkerAccounting = conformanceCase(
 
       yield* materialize(threadId);
       const workerThreadId = decodeThreadId("worker");
-      const agentId = Schema.decodeSync(AgentId)("agent");
+      const agentId = yield* Schema.decodeEffect(AgentId)("agent").pipe(Effect.orDie);
 
       const origin = {
         worker: {
           schemaVersion: 1 as const,
-          delegationId: Schema.decodeSync(DelegationId)("child"),
+          delegationId: yield* Schema.decodeEffect(DelegationId)("child").pipe(Effect.orDie),
           targetAgentId: agentId,
           threadId: workerThreadId,
         },
@@ -651,7 +651,7 @@ const nativeWorkerAccounting = conformanceCase(
         },
         grant: SubagentGrant.make({ allowedToolNames: [], maxDepth: 1 }),
         depth: 1,
-        firstMessageId: Schema.decodeSync(IdempotencyKey)("message-0"),
+        firstMessageId: yield* Schema.decodeEffect(IdempotencyKey)("message-0").pipe(Effect.orDie),
         createdAtMillis: 0,
         expiresAtMillis: 1000,
       };
@@ -770,7 +770,10 @@ const nativeWorkerAccounting = conformanceCase(
         batch("scoped-budgets", [
           budgetRow("selected", CONFORMANCE_SUBMISSION),
           budgetRow("selected-second", CONFORMANCE_SUBMISSION),
-          budgetRow("old-run", Schema.decodeSync(SubmissionId)("old-run")),
+          budgetRow(
+            "old-run",
+            yield* Schema.decodeEffect(SubmissionId)("old-run").pipe(Effect.orDie),
+          ),
         ]),
         tail,
       );
@@ -804,10 +807,14 @@ const nativeWorkerAccounting = conformanceCase(
           envelope(
             "stop-worker",
             WorkerStopRequested.make({
-              principal: Schema.decodeSync(WorkerStopRequested.fields.principal)("owner"),
+              principal: yield* Schema.decodeEffect(WorkerStopRequested.fields.principal)(
+                "owner",
+              ).pipe(Effect.orDie),
               command: {
                 worker: origin.worker,
-                idempotencyKey: Schema.decodeSync(IdempotencyKey)("stop-worker"),
+                idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("stop-worker").pipe(
+                  Effect.orDie,
+                ),
               },
             }),
           ),

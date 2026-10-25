@@ -986,7 +986,9 @@ const makeJournal = Effect.fnUntraced(function* (
             record_id: record.recordId,
             batch_id: request.batchId,
             record_json: record.recordJson,
-            sequence: Schema.decodeSync(CanonicalSequence)(row.sequence),
+            sequence: yield* Schema.decodeEffect(CanonicalSequence)(row.sequence).pipe(
+              Effect.orDie,
+            ),
           }),
           record.recordBytes,
         );

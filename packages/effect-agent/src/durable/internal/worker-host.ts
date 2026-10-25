@@ -693,11 +693,11 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             expectedTailSequence: current.tailSequence,
 
             batch: CanonicalBatch.make({
-              batchId: Schema.decodeSync(BatchId)(id),
+              batchId: yield* Schema.decodeEffect(BatchId)(id).pipe(Effect.orDie),
               producerId: deps.producerId,
               records: [
                 RecordEnvelope.make({
-                  recordId: Schema.decodeSync(RecordId)(id),
+                  recordId: yield* Schema.decodeEffect(RecordId)(id).pipe(Effect.orDie),
                   family: "thread",
                   schemaVersion: 1,
                   createdAt: DateTime.makeUnsafe(
@@ -1208,7 +1208,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         page: { afterSequence: pressure.after, limit: Math.min(64, pressure.remaining) },
       }),
     ).pipe(
-      Effect.map(Option.some),
+      Effect.asSome,
       Effect.catchTag("ThreadStoreError", (cause) =>
         deps.store
           .inspectTail(ThreadTailRequest.make({ threadId }))
@@ -1460,7 +1460,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         activeLimit,
         pendingLimit,
       }).pipe(
-        Effect.map(Option.some),
+        Effect.asSome,
         Effect.catchTag("ThreadStoreError", (cause) =>
           deps.store
             .inspectTail(ThreadTailRequest.make({ threadId: origin.source.threadId }))
@@ -1509,9 +1509,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         yield* reserveSubtree(
           origin.source.threadId,
           SubtreeBudgetReserved.make({
-            reservationId: Schema.decodeSync(SubtreeBudgetReserved.fields.reservationId)(
+            reservationId: yield* Schema.decodeEffect(SubtreeBudgetReserved.fields.reservationId)(
               admission.messageId,
-            ),
+            ).pipe(Effect.orDie),
             executionRunId: admission.executionRunId,
             ...(admission.sourceSubmissionId === undefined
               ? {}
@@ -1865,17 +1865,17 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
       const projection = yield* Effect.suspend(() =>
         descriptor.reportCompletion?.(report) === false
-          ? Effect.succeed(undefined)
+          ? Effect.as(Effect.void, undefined)
           : descriptor.prepare(report),
       ).pipe(
         Effect.timeout(
           Math.min(deps.limits.reportPreparationTimeoutMillis ?? 5_000, deadlineAtMillis - now),
         ),
         Effect.map((value) => ({ _tag: "Prepared" as const, value })),
-        Effect.catchTag("WorkerReportPreparationFailure", (error) =>
-          Effect.succeed(refused(error.stage)),
-        ),
-        Effect.catchTag("TimeoutError", () => Effect.succeed(refused("timeout"))),
+        Effect.catchTags({
+          WorkerReportPreparationFailure: (error) => Effect.succeed(refused(error.stage)),
+          TimeoutError: () => Effect.succeed(refused("timeout")),
+        }),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterrupts(cause),
           () => Effect.succeed(refused("defect")),
@@ -2304,7 +2304,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       recordId: RecordId.make(`worker-effects-resolved:${admission.messageId}`),
     }).pipe(
       Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
-      Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())),
+      Effect.catchTag("ThreadNotMaterialized", () => Effect.succeedNone),
       Effect.mapError(storageFailure("inspect")),
     );
 
@@ -2609,7 +2609,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           : yield* deps.deliveries.value
               .get({
                 ownerThreadId: context.source.threadId,
-                messageId: Schema.decodeSync(IdempotencyKey)(worker.threadId),
+                messageId: yield* Schema.decodeEffect(IdempotencyKey)(worker.threadId).pipe(
+                  Effect.orDie,
+                ),
               })
               .pipe(Effect.mapError(storageFailure(operation)));
 
@@ -2889,7 +2891,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
       const tail = () =>
         deps.store.inspectTail(ThreadTailRequest.make({ threadId })).pipe(
-          Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(undefined)),
+          Effect.catchTag("ThreadNotMaterialized", () => Effect.as(Effect.void, undefined)),
           Effect.mapError(storageFailure(operation)),
         );
 
@@ -3289,39 +3291,41 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                 ),
           );
 
+          const prepareWorkerRequest = Effect.fnUntraced(function* (
+            deferred: Extract<typeof command, { prepare: unknown }>,
+          ) {
+            const declarationPolicy =
+              deferred.declarationPolicy === undefined
+                ? undefined
+                : yield* decode(SubagentPolicy, deferred.declarationPolicy, "start");
+
+            const limits = resolveSubagentPolicy(
+              { target: resolved.definition, policy: declarationPolicy },
+              effectiveScope === "worker-run" ? targetPolicy : sourcePolicy,
+              undefined,
+              effectiveScope === "worker-run" ? "root-attached" : "conserved",
+              targetPolicy,
+            );
+
+            if (limits === undefined) return yield* failure("start", "denied");
+
+            return {
+              ...deferred,
+              encodedInput,
+              policy: limits.childPolicy,
+              budget: SubagentBudgetReservation.make({
+                caps: limits.caps,
+                allocation: limits.allocation,
+                ...(limits.policy.descendantInvocations === undefined
+                  ? {}
+                  : { descendantInvocations: limits.policy.descendantInvocations }),
+              }),
+              toolCallAllowance: limits.childPolicy.maxToolCalls,
+            };
+          });
+
           const request: StartWorkerRequest =
-            "prepare" in command
-              ? yield* Effect.gen(function* () {
-                  const declarationPolicy =
-                    command.declarationPolicy === undefined
-                      ? undefined
-                      : yield* decode(SubagentPolicy, command.declarationPolicy, "start");
-
-                  const limits = resolveSubagentPolicy(
-                    { target: resolved.definition, policy: declarationPolicy },
-                    effectiveScope === "worker-run" ? targetPolicy : sourcePolicy,
-                    undefined,
-                    effectiveScope === "worker-run" ? "root-attached" : "conserved",
-                    targetPolicy,
-                  );
-
-                  if (limits === undefined) return yield* failure("start", "denied");
-
-                  return {
-                    ...command,
-                    encodedInput,
-                    policy: limits.childPolicy,
-                    budget: SubagentBudgetReservation.make({
-                      caps: limits.caps,
-                      allocation: limits.allocation,
-                      ...(limits.policy.descendantInvocations === undefined
-                        ? {}
-                        : { descendantInvocations: limits.policy.descendantInvocations }),
-                    }),
-                    toolCallAllowance: limits.childPolicy.maxToolCalls,
-                  };
-                })
-              : command;
+            "prepare" in command ? yield* prepareWorkerRequest(command) : command;
 
           const now = yield* Clock.currentTimeMillis;
           const sourceBinding = prepared.source.binding;
@@ -3346,7 +3350,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                 schemaVersion: 1,
                 delegationId: request.delegationId,
                 targetAgentId: request.target.id,
-                threadId: Schema.decodeSync(ThreadId)(messageId),
+                threadId: yield* Schema.decodeEffect(ThreadId)(messageId).pipe(Effect.orDie),
               },
               source: context.source,
               ...(currentPrevious === undefined
@@ -3586,7 +3590,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                   .read(
                     ThreadRead.make({
                       threadId: request.worker.threadId,
-                      afterSequence: Schema.decodeSync(CanonicalSequence)(cursor),
+                      afterSequence: yield* Schema.decodeEffect(CanonicalSequence)(cursor).pipe(
+                        Effect.orDie,
+                      ),
                       limit,
                     }),
                   )
@@ -3655,7 +3661,11 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             workerStarts: { delegationId: request.delegationId, targetAgentId: request.target.id },
             ...(request.after === undefined
               ? {}
-              : { after: Schema.decodeSync(IdempotencyKey)(request.after) }),
+              : {
+                  after: yield* Schema.decodeEffect(IdempotencyKey)(request.after).pipe(
+                    Effect.orDie,
+                  ),
+                }),
           })
           .pipe(Effect.mapError(storageFailure("list")));
 
@@ -3667,7 +3677,13 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             : summarize(origin, "list");
         });
 
-        return { items, next: page.next === null ? null : Schema.decodeSync(ThreadId)(page.next) };
+        return {
+          items,
+          next:
+            page.next === null
+              ? null
+              : yield* Schema.decodeEffect(ThreadId)(page.next).pipe(Effect.orDie),
+        };
       }),
       stop: Effect.fnUntraced(function* (request) {
         const principal = yield* authorize("stop", "control", request.worker);
@@ -3676,9 +3692,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         if (deps.ledger.stopWorker === undefined) return yield* failure("stop", "unavailable");
         const command = yield* decode(WorkerStop, request, "stop");
 
-        const id = Schema.decodeSync(RecordId)(
+        const id = yield* Schema.decodeEffect(RecordId)(
           `worker-stop:${yield* messageIdFor([context.source.threadId, request.idempotencyKey])}`,
-        );
+        ).pipe(Effect.orDie);
 
         let retained = false;
 

@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { DoStorageFailpoint } from "@yielded/agent-storage-cloudflare/do-storage-failpoint";
 import { submissionLedgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
 import {
@@ -19,6 +20,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { DurableObject } from "effect-cf";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as ErrorReporter from "effect/ErrorReporter";
@@ -53,13 +55,18 @@ import {
 } from "./fixtures.ts";
 import { readCanonical, runClient, scheduledAlarm, stubFor } from "./harness.ts";
 
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
+
 describe("maintenance retry deadlines", () => {
   // Regression: https://linear.app/reve-ai/issue/KOM-291
   // Empty and rejected native producers must not renew a failing discovery wave.
   it("keeps the native budget across no-op and failed producers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const thread = `native-no-progress-${crypto.randomUUID()}`;
+        const thread = `native-no-progress-${yield* randomUUID}`;
 
         yield* TestClock.setTime(Date.now() + 86_400_000);
         const clock = yield* Clock.Clock;
@@ -89,10 +96,12 @@ describe("maintenance retry deadlines", () => {
                         ),
                       ),
                     ),
-                  drain: Effect.succeed(Option.none()),
+                  drain: Effect.succeedNone,
                 });
 
                 yield* Effect.gen(function* () {
+                  const effectContext = yield* Effect.context<never>();
+
                   const guarded = yield* ThreadMaintenance;
 
                   for (let pass = 0; pass < 20; pass++) {
@@ -100,7 +109,7 @@ describe("maintenance retry deadlines", () => {
                     yield* Effect.exit(gate.withMutation(Effect.fail("rejected")));
                     yield* Effect.exit(guarded.pass);
                     yield* Effect.promise(() =>
-                      Effect.runPromise(
+                      Effect.runPromiseWith(effectContext)(
                         TestClock.adjust(60_000).pipe(Effect.provideService(Clock.Clock, clock)),
                       ),
                     );
@@ -128,7 +137,7 @@ describe("maintenance retry deadlines", () => {
     (finishes) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const thread = `required-publication-${crypto.randomUUID()}`;
+          const thread = `required-publication-${yield* randomUUID}`;
 
           yield* TestClock.setTime(Date.now() + 86_400_000);
           const clock = yield* Clock.Clock;
@@ -155,12 +164,14 @@ describe("maintenance retry deadlines", () => {
                   let publicationReady = finishes;
 
                   yield* Effect.gen(function* () {
+                    const effectContext = yield* Effect.context<never>();
+
                     const maintenance = yield* ThreadMaintenance;
 
                     for (let pass = 0; pass < 12; pass++) {
                       settled += (yield* maintenance.pass).settled;
                       yield* Effect.promise(() =>
-                        Effect.runPromise(
+                        Effect.runPromiseWith(effectContext)(
                           TestClock.adjust(60_000).pipe(Effect.provideService(Clock.Clock, clock)),
                         ),
                       );
@@ -207,13 +218,15 @@ describe("maintenance retry deadlines", () => {
   it("parks any lane that repeatedly rearms without committed progress", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const thread = `no-progress-lane-${crypto.randomUUID()}`;
+        const effectContext = yield* Effect.context<never>();
+
+        const thread = `no-progress-lane-${yield* randomUUID}`;
 
         yield* TestClock.setTime(Date.now() + 86_400_000);
         const clock = yield* Clock.Clock;
 
         const adjust = (millis: number) =>
-          Effect.runPromise(
+          Effect.runPromiseWith(effectContext)(
             TestClock.adjust(millis).pipe(Effect.provideService(Clock.Clock, clock)),
           );
 
@@ -311,7 +324,7 @@ describe("maintenance retry deadlines", () => {
   it("drains newly enrolled host work when instrumentation returns fresh SQL handles", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const thread = `instrumented-due-queue-${crypto.randomUUID()}`;
+        const thread = `instrumented-due-queue-${yield* randomUUID}`;
 
         // This fixture drives its own maintenance service; keep the native
         // alarm from racing it through the original storage handle.
@@ -378,7 +391,7 @@ describe("maintenance retry deadlines", () => {
     (arrival) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const thread = `maintenance-preemption-${crypto.randomUUID()}`;
+          const thread = `maintenance-preemption-${yield* randomUUID}`;
 
           yield* TestClock.setTime(Date.now() + 86_400_000);
           maintenanceClocks.set(thread, yield* Clock.Clock);
@@ -521,7 +534,7 @@ describe("maintenance retry deadlines", () => {
   it("gives each due post-native lane a turn across full passes and coordinator rebuilds", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const thread = `maintenance-after-native-fairness-${crypto.randomUUID()}`;
+        const thread = `maintenance-after-native-fairness-${yield* randomUUID}`;
 
         yield* TestClock.setTime(Date.now() + 86_400_000);
         maintenanceClocks.set(thread, yield* Clock.Clock);
@@ -599,7 +612,7 @@ describe("maintenance retry deadlines", () => {
   it.each([false, true])("runs one post-native wave after attempt cleanup (failed: %s)", (failed) =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const thread = `maintenance-after-native-${crypto.randomUUID()}`;
+        const thread = `maintenance-after-native-${yield* randomUUID}`;
 
         yield* TestClock.setTime(Date.now() + 86_400_000);
         maintenanceClocks.set(thread, yield* Clock.Clock);
@@ -753,7 +766,7 @@ describe("maintenance retry deadlines", () => {
     (failure) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const thread = `maintenance-isolation-${crypto.randomUUID()}`;
+          const thread = `maintenance-isolation-${yield* randomUUID}`;
 
           yield* TestClock.setTime(Date.now() + 86_400_000);
           maintenanceClocks.set(thread, yield* Clock.Clock);
@@ -783,7 +796,7 @@ describe("maintenance retry deadlines", () => {
                   );
 
                   const services = DurableAgentRuntime.layerWithBindings(bindings).pipe(
-                    Layer.provide(runStorageLayer()),
+                    Layer.provide(runStorageLayer),
                     Layer.provideMerge(ports),
                     Layer.provide(WakeScheduler.layerNoop),
                   );
@@ -904,7 +917,7 @@ describe("maintenance retry deadlines", () => {
     it(`parks a ${unavailable} binding until the registry changes`, async ({ signal }) => {
       await Effect.runPromise(
         Effect.gen(function* () {
-          const thread = `maintenance-binding-${crypto.randomUUID()}`;
+          const thread = `maintenance-binding-${yield* randomUUID}`;
 
           yield* TestClock.setTime(Date.now() + 86_400_000);
           maintenanceClocks.set(thread, yield* Clock.Clock);
@@ -1009,7 +1022,7 @@ describe("maintenance retry deadlines", () => {
                       Effect.provide(
                         Layer.fresh(ThreadMaintenance.layer).pipe(
                           Layer.provideMerge(DurableAgentRuntime.layerWithBindings(deployed)),
-                          Layer.provide(runStorageLayer()),
+                          Layer.provide(runStorageLayer),
                           Layer.provide(Layer.succeed(CurrentBindingSelection, selection)),
                           Layer.provide(ports),
                         ),
@@ -1153,7 +1166,7 @@ describe("maintenance retry deadlines", () => {
   it("retains exponential no-progress backoff while preserving a live claim", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const thread = `maintenance-owned-${crypto.randomUUID()}`;
+        const thread = `maintenance-owned-${yield* randomUUID}`;
 
         yield* TestClock.setTime(Date.now() + 86_400_000);
         maintenanceClocks.set(thread, yield* Clock.Clock);

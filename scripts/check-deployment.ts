@@ -4,7 +4,7 @@ import { ChildProcess } from "effect/process";
 
 class DeploymentCheckError extends Schema.TaggedError<DeploymentCheckError>()(
   "DeploymentCheckError",
-  { command: Schema.String, exitCode: Schema.Number },
+  { command: Schema.String, exitCode: Schema.Finite },
 ) {}
 
 export const checkDeployment = Effect.gen(function* () {

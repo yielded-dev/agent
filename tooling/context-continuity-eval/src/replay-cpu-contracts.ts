@@ -87,7 +87,7 @@ export const ReplayCpuEvidence = Schema.Struct({
     Schema.Struct({
       phase: Schema.Natural,
       call: Schema.Natural,
-      nativeEstimatedTokens: Schema.Number,
+      nativeEstimatedTokens: Schema.Finite,
       encodedBytes: Schema.Natural,
       prompt: Schema.optionalKey(Schema.Json),
     }),

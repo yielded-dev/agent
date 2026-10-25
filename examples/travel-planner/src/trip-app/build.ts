@@ -1,6 +1,8 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema } from "effect";
 import { CloudflareTracer, WorkerEnvironment, Workflow } from "effect-cf";
 import * as Sandbox from "effect-cf/sandbox";
+import * as Crypto from "effect/Crypto";
 
 import {
   AppBuildRequest,
@@ -19,6 +21,11 @@ import { AppBuildBucket } from "./bucket.ts";
 import { appRepositoryForOwner, callAppRepository } from "./remote.ts";
 import { AppRepository } from "./repository.ts";
 import { AppSourceStore, appSourceLayer } from "./source.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 const MAX_FILE = 4 * 1024 * 1024;
 const MAX_BUILD = 24 * 1024 * 1024;
@@ -158,7 +165,7 @@ export const AppBuilderLive = Layer.effect(
           Effect.mapError(() => failed("Invalid build identity.")),
         );
 
-        const name = `${prefix.slice(0, 24)}-${crypto.randomUUID().replaceAll("-", "")}`;
+        const name = `${prefix.slice(0, 24)}-${(yield* randomUUID).replaceAll("-", "")}`;
 
         return yield* Effect.acquireUseRelease(
           namespace.get(name, { sleepAfter: "5m" }),

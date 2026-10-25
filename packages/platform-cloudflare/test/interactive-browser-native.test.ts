@@ -152,7 +152,7 @@ it.live(
 
       const logs: Array<ReturnType<typeof Logger.formatStructured.log>> = [];
 
-      const layer = browserRunInteractiveLayer().pipe(
+      const layer = browserRunInteractiveLayer.pipe(
         Layer.provide(
           BrowserRunInteractiveBinding.layer({
             browser: {

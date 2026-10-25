@@ -153,7 +153,7 @@ export const exclusiveHostClientLayer: Layer.Layer<
       ),
     );
 
-    yield* initializeSqliteJournal().pipe(Effect.provideService(SqlClientService.SqlClient, sql));
+    yield* initializeSqliteJournal.pipe(Effect.provideService(SqlClientService.SqlClient, sql));
 
     return Context.make(SqlClientService.SqlClient, sql).pipe(
       Context.add(ExclusiveSqliteHost, { sql }),
@@ -164,7 +164,7 @@ export const exclusiveHostClientLayer: Layer.Layer<
 const makeServices = Effect.fnUntraced(function* () {
   const config = yield* SqliteStorageConfig;
   const failpoint = yield* SqliteStorageFailpoint;
-  const journal = yield* initializeSqliteJournal();
+  const journal = yield* initializeSqliteJournal;
 
   const services = yield* makeSqlThreadStoreKernel(journal, {
     ...config,

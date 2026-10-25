@@ -25,8 +25,8 @@ import * as TestClock from "effect/testing/TestClock";
 let threadSequence = 0;
 
 const identifiers = Layer.succeed(IdGenerator, {
-  nextThreadId: Effect.sync(() =>
-    Schema.decodeSync(ThreadId)(`model-retry-thread-${++threadSequence}`),
+  nextThreadId: Effect.suspend(() =>
+    Schema.decodeEffect(ThreadId)(`model-retry-thread-${++threadSequence}`).pipe(Effect.orDie),
   ),
   nextRunId: Effect.succeed(Schema.decodeSync(RunId)("model-retry-run")),
   nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("model-retry-turn")),

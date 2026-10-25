@@ -85,9 +85,6 @@ jobs:
       - name: Install dependencies (frozen, scripts suppressed)
         run: bunx --package vite-plus@1.1.0 vp install --frozen-lockfile --ignore-scripts
 
-      - name: Patch Effect TypeScript-Go
-        run: ./node_modules/.bin/vp run patch:tsgo
-
       - name: Prepare isolated checkout attempt
         shell: bash
         run: |

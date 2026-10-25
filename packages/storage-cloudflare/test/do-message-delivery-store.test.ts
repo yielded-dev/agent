@@ -233,7 +233,11 @@ it("applies the consuming adapter's stored-value bound to a shared pending view"
       const sql = yield* SqlClient.SqlClient;
       const journal = yield* initializeDoJournal(sql, () => Effect.void, 1_900_000);
       const record = yield* makeMessageDeliveryFixture();
-      const text = Schema.encodeSync(Schema.fromJsonString(MessageDeliveryRecord))(record);
+
+      const text = yield* Schema.encodeEffect(Schema.fromJsonString(MessageDeliveryRecord))(
+        record,
+      ).pipe(Effect.orDie);
+
       const size = new TextEncoder().encode(text).byteLength;
 
       // Transaction decorators retain the physical owner's cache identity.

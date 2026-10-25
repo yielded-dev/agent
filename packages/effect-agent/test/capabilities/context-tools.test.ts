@@ -38,12 +38,12 @@ describe("context window tools", () => {
       let requests = 0;
 
       const client = HttpClient.make((request) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
           requests++;
           expect(request.body._tag).toBe("Uint8Array");
           if (request.body._tag !== "Uint8Array") throw new Error("Expected JSON request body");
 
-          const body = Schema.decodeSync(
+          const body = yield* Schema.decodeEffect(
             Schema.fromJsonString(
               Schema.Struct({
                 tools: Schema.Array(
@@ -55,7 +55,7 @@ describe("context window tools", () => {
                 ),
               }),
             ),
-          )(new globalThis.TextDecoder().decode(request.body.body));
+          )(new globalThis.TextDecoder().decode(request.body.body)).pipe(Effect.orDie);
 
           expect(body.tools.map(({ name, parameters }) => ({ name, parameters }))).toEqual([
             { name: "get_context_remaining", parameters: expectedParameters },

@@ -277,15 +277,14 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
         const observations: Array<ToolFailureObservation> = [];
         const stream = AgentRuntime.stream(binding(returns, [call("returned")]), "go");
 
-        const events = yield* stream
-          .pipe(Stream.takeUntil((event) => event._tag === "ToolCallFailed"))
-          .pipe(
-            Stream.runCollect,
-            Effect.provide([
-              returns.toLayer({ returned: () => Effect.fail(declared) }),
-              toolFailureObserverLayer(collect(observations)),
-            ]),
-          );
+        const events = yield* stream.pipe(
+          Stream.takeUntil((event) => event._tag === "ToolCallFailed"),
+          Stream.runCollect,
+          Effect.provide([
+            returns.toLayer({ returned: () => Effect.fail(declared) }),
+            toolFailureObserverLayer(collect(observations)),
+          ]),
+        );
 
         expect(observations).toEqual(
           ignored

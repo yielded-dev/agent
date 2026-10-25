@@ -150,8 +150,8 @@ const makeHarness = Effect.fn(function* (
       ToolReconciler.uncertain,
       RunToolAuthorization.allowAll,
       DurableRuntimeConfig.layer({
-        deploymentId: Schema.decodeSync(DeploymentId)("peer-test"),
-        producerId: Schema.decodeSync(ProducerId)("peer-test"),
+        deploymentId: yield* Schema.decodeEffect(DeploymentId)("peer-test").pipe(Effect.orDie),
+        producerId: yield* Schema.decodeEffect(ProducerId)("peer-test").pipe(Effect.orDie),
         settlementPollInterval: Duration.millis(100),
       }),
       Layer.succeed(PeerAuthorizer, {
@@ -207,7 +207,7 @@ const makeHarness = Effect.fn(function* (
 
   const makeRuntime = Effect.fn(function* (lifetimeMillis = options.lifetimeMillis ?? 60_000) {
     const context = yield* Layer.build(
-      DurableAgentRuntime.layerWithBindings(bindings).pipe(Layer.provide(runStorageLayer())),
+      DurableAgentRuntime.layerWithBindings(bindings).pipe(Layer.provide(runStorageLayer)),
     ).pipe(
       Effect.provideService(PeerDeliveryLifetime, lifetimeMillis),
       Effect.provideService(PeerMessageCapacity, options.maxMessagesPerSource ?? 256),

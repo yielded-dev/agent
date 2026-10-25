@@ -98,9 +98,9 @@ describe("in-memory semantic index", () => {
         });
       }
       for (const [ordinal, namespace] of namespaces.entries()) {
-        const reconstructed = Schema.decodeSync(MemoryNamespace.Any)({
+        const reconstructed = yield* Schema.decodeEffect(MemoryNamespace.Any)({
           address: namespace.address,
-        });
+        }).pipe(Effect.orDie);
 
         const found = yield* index.search({ ...query([1, 0]), namespace: reconstructed });
 

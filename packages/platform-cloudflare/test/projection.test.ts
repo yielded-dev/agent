@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import type { Receipt } from "@yielded/agent/receipt";
 import { type PersistedJson } from "@yielded/agent/records";
@@ -23,6 +24,7 @@ import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test"
 import { DurableObject } from "effect-cf";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -69,6 +71,11 @@ import {
   projectionControls,
 } from "./projection-fixture.ts";
 import { PublicationCursor, PUBLICATION_KEY } from "./publication-fixture.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 const namespace = "PROJECTIONS";
 const stub = (thread: string) => env.PROJECTIONS.get(env.PROJECTIONS.idFromName(thread));
@@ -117,7 +124,9 @@ const withThread = (
 ) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const thread = `projection-${crypto.randomUUID()}`;
+      const effectContext = yield* Effect.context<never>();
+
+      const thread = `projection-${yield* randomUUID}`;
       const now = Date.now() + 86_400_000;
 
       yield* TestClock.setTime(now);
@@ -134,7 +143,9 @@ const withThread = (
         }),
       );
       yield* Effect.promise(() =>
-        test(thread, now, (millis) => Effect.runPromise(testClock.adjust(millis))),
+        test(thread, now, (millis) =>
+          Effect.runPromiseWith(effectContext)(testClock.adjust(millis)),
+        ),
       );
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   );

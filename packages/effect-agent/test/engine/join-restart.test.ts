@@ -110,9 +110,15 @@ it.live("restarts disposable calls twice, discards their drafts and then drains 
           Layer.mergeAll(
             ThreadHistory.layer,
             Layer.succeed(IdGenerator, {
-              nextThreadId: Effect.succeed(Schema.decodeSync(ThreadId)("join-thread")),
-              nextRunId: Effect.succeed(Schema.decodeSync(RunId)("join-run")),
-              nextTurnId: Effect.sync(() => Schema.decodeSync(TurnId)(`turn-${++turnIds}`)),
+              nextThreadId: Effect.succeed(
+                yield* Schema.decodeEffect(ThreadId)("join-thread").pipe(Effect.orDie),
+              ),
+              nextRunId: Effect.succeed(
+                yield* Schema.decodeEffect(RunId)("join-run").pipe(Effect.orDie),
+              ),
+              nextTurnId: Effect.suspend(() =>
+                Schema.decodeEffect(TurnId)(`turn-${++turnIds}`).pipe(Effect.orDie),
+              ),
             }),
           ),
         ),
@@ -232,9 +238,15 @@ it.live("charges aborted usage before admitting a replacement against the cost b
           Layer.mergeAll(
             ThreadHistory.layer,
             Layer.succeed(IdGenerator, {
-              nextThreadId: Effect.succeed(Schema.decodeSync(ThreadId)("cost-thread")),
-              nextRunId: Effect.succeed(Schema.decodeSync(RunId)("cost-run")),
-              nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("cost-turn")),
+              nextThreadId: Effect.succeed(
+                yield* Schema.decodeEffect(ThreadId)("cost-thread").pipe(Effect.orDie),
+              ),
+              nextRunId: Effect.succeed(
+                yield* Schema.decodeEffect(RunId)("cost-run").pipe(Effect.orDie),
+              ),
+              nextTurnId: Effect.succeed(
+                yield* Schema.decodeEffect(TurnId)("cost-turn").pipe(Effect.orDie),
+              ),
             }),
           ),
         ),

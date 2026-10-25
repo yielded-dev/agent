@@ -36,9 +36,7 @@ export class TripData extends Worker.make(Layer.empty, {
     return new Response(body, {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
-  }).pipe(
-    Effect.catch(() => Effect.succeed(new Response("Trip data is unavailable.", { status: 503 }))),
-  ),
+  }).pipe(Effect.orElseSucceed(() => new Response("Trip data is unavailable.", { status: 503 }))),
 }) {}
 
 const secureHeaders = (headers: Headers) => {
@@ -58,6 +56,8 @@ export const serveTripApp = Effect.fn("serveTripApp")(function* (
   request: Request,
   ctx: ExecutionContext,
 ) {
+  const effectContext = yield* Effect.context<never>();
+
   const env = yield* WorkerEnvironment;
 
   if (!env.APP_BUILDS || !env.APP_LOADER) return yield* unavailable();
@@ -112,7 +112,7 @@ export const serveTripApp = Effect.fn("serveTripApp")(function* (
     const response = yield* Effect.tryPromise({
       try: async () => {
         const worker = loader.get(`${app.id}:${commit}`, () =>
-          Effect.runPromise(
+          Effect.runPromiseWith(effectContext)(
             Effect.gen(function* () {
               const bundle = yield* Effect.tryPromise({
                 try: () => bucket.get(`${prefix}server/index.js`),

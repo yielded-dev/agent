@@ -561,7 +561,7 @@ export class NodeDurableAgentRuntime {
                   ),
               });
 
-        const ordinaryStorage = runStorageLayer().pipe(
+        const ordinaryStorage = runStorageLayer.pipe(
           Layer.provideMerge(Layer.mergeAll(threadStoreLayer, submissionLedgerLayer)),
         );
 

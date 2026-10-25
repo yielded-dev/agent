@@ -239,7 +239,7 @@ const timeout =
               Fiber.await(fiber).pipe(
                 Effect.timeoutOrElse({
                   duration: options.duration,
-                  orElse: () => Effect.succeed(undefined),
+                  orElse: () => Effect.as(Effect.void, undefined),
                 }),
               ),
             ).pipe(
@@ -589,7 +589,8 @@ export class BrowserSessions extends Context.Service<
           }),
           Effect.scoped,
           mapBrowserError((error) =>
-            error instanceof BrowserSessionError
+            Schema.is(BrowserSessionError)(error) &&
+            Object.prototype.isPrototypeOf.call(BrowserSessionError.prototype, error)
               ? inheritBrowserReport(
                   error,
                   FailureDiagnostic.withCause(
@@ -922,7 +923,8 @@ export class BrowserSessions extends Context.Service<
           }),
           Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
           mapBrowserError((error) =>
-            error instanceof BrowserSessionError
+            Schema.is(BrowserSessionError)(error) &&
+            Object.prototype.isPrototypeOf.call(BrowserSessionError.prototype, error)
               ? inheritBrowserReport(
                   error,
                   FailureDiagnostic.withCause(

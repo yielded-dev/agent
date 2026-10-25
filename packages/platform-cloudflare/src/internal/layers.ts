@@ -1095,7 +1095,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
       // The Object's MemoMap owns the build; services and finalizers remain incarnation-local.
       const runtimeStack = Layer.suspend(() =>
         application.pipe(
-          Layer.provideMerge(runStorageLayer()),
+          Layer.provideMerge(runStorageLayer),
           Layer.provide(
             cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
           ),

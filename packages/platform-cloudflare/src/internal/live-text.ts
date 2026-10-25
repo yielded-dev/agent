@@ -48,6 +48,9 @@ interface Observer {
   readonly close: (error?: HostProtocolError) => void;
 }
 
+// The observer callback is synchronous; compile its frame encoder once.
+const encode = Schema.encodeSync(Frame);
+
 /** One Object incarnation; owns drafts and subscriptions independently of RPC event scopes. */
 export class LiveTextHub extends Context.Service<
   LiveTextHub,
@@ -68,7 +71,6 @@ export class LiveTextHub extends Context.Service<
         | { readonly error: HostProtocolError; readonly attemptId: Event["attemptId"] }
         | undefined;
 
-      const encode = Schema.encodeSync(Frame);
       const encoder = new TextEncoder();
 
       yield* Effect.addFinalizer(() =>

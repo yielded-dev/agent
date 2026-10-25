@@ -47,7 +47,7 @@ const readPage = Effect.gen(function* () {
 });
 ```
 
-Supply `browserQuickActionCaptureLayer()` with `BrowserQuickActionBrowserBinding.layer({ browser })`
+Supply `browserQuickActionCaptureLayer` with `BrowserQuickActionBrowserBinding.layer({ browser })`
 in a Worker, or use `browserRestCaptureLayer({ accountId, apiToken })` with an Effect HTTP client.
 Applications compose their own native Effect AI tools over this port; the
 [sandbox example](https://github.com/yielded-dev/agent/blob/main/examples/sandbox/src/web.ts)

@@ -1,7 +1,9 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { fetchWithSession } from "@yielded/agent-example-auth/client";
 import { decodeLiveText } from "@yielded/agent-platform-cloudflare/live-text";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { DateTime, Effect, Layer, Schema, Stream } from "effect";
+import * as Crypto from "effect/Crypto";
 import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 
 import {
@@ -27,6 +29,11 @@ import {
   type Entry,
 } from "./contract";
 import { workspaceIdFromPath } from "./location";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 const runtime = Atom.runtime(Layer.empty);
 const problem = (message: string) => SandboxError.make({ message });
@@ -198,7 +205,7 @@ const createWorkspace = runtime.fn<void>()(
 
       if (current.active || current.pending || current.admissionRequestId) return;
     }
-    const id = get(pendingWorkspaceId) ?? crypto.randomUUID();
+    const id = get(pendingWorkspaceId) ?? (yield* randomUUID);
 
     get.set(pendingWorkspaceId, id);
     yield* json("workspaces", Schema.Struct({}), { workspaceId: id });
@@ -849,7 +856,7 @@ export const workspace = Atom.family((id: string) => {
             }
           : {
               workspaceId: id,
-              requestId: crypto.randomUUID(),
+              requestId: yield* randomUUID,
               message,
               settings: get(settings),
             },

@@ -91,7 +91,7 @@ export default defineConfig({
         },
       },
       check: {
-        command: "tsc --noEmit",
+        command: "effect-tsrs diagnostics --type-check --project tsconfig.json",
         cache: {
           input: [
             { auto: true },

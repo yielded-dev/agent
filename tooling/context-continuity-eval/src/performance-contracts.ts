@@ -108,7 +108,7 @@ export const PerformanceState = Schema.Struct({
   closed: Schema.Boolean,
 });
 
-export const emptyPerformanceUsage: typeof ModelUsage.Type = {
+export const emptyPerformanceUsage: ModelUsage = {
   calls: 0,
   completedCalls: 0,
   inputTokens: 0,

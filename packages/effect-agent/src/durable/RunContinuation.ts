@@ -225,7 +225,7 @@ export const readContinuation = Effect.fnUntraced(function* (
     .pipe(
       Effect.catchTag("ThreadNotMaterialized", (cause) =>
         throughSequence === 0
-          ? Effect.succeed(Option.none())
+          ? Effect.succeedNone
           : failure("Active Run history is not materialized", cause),
       ),
     );
@@ -1701,7 +1701,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
             if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
             cached.clear();
 
-            return Effect.succeed(undefined);
+            return Effect.as(Effect.void, undefined);
           }),
         );
 
@@ -1753,7 +1753,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
             if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
             cached.clear();
 
-            return Effect.succeed(undefined);
+            return Effect.as(Effect.void, undefined);
           }),
         );
 
@@ -1804,10 +1804,12 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         });
         reservations.set(recordId, { runId, turn: state.continuation.turn, bytes, records: 1 });
 
-        return gate.withPermits(1)(
-          Effect.sync(() => {
-            reservations.delete(recordId);
-          }),
+        return yield* Effect.succeed(
+          gate.withPermits(1)(
+            Effect.sync(() => {
+              reservations.delete(recordId);
+            }),
+          ),
         );
       }),
     );

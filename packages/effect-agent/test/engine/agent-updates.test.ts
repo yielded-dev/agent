@@ -73,7 +73,7 @@ const model = (name: string, params: unknown, prompts: Array<Prompt.Prompt> = []
 const definition = Agent.make("updates", {
   input: Schema.String,
   output: Schema.String,
-  updates: Schema.Struct({ candidateCount: Schema.NumberFromString }),
+  updates: Schema.Struct({ candidateCount: Schema.FiniteFromString }),
   instructions: "Report findings then finish",
   toolkit: Toolkit.empty,
 });
@@ -141,7 +141,7 @@ layer(base)("Agent updates", (it) => {
       });
 
       let captured: AgentUpdates.Emitter["Service"] | undefined;
-      const key = Schema.decodeSync(IdempotencyKey)("stable");
+      const key = yield* Schema.decodeEffect(IdempotencyKey)("stable").pipe(Effect.orDie);
 
       const handlers = tools.toLayer({
         job: Effect.fnUntraced(function* () {
@@ -197,7 +197,7 @@ layer(base)("Agent updates", (it) => {
         toolkit: tools,
       });
 
-      const key = Schema.decodeSync(IdempotencyKey)("stable");
+      const key = yield* Schema.decodeEffect(IdempotencyKey)("stable").pipe(Effect.orDie);
       const hostValue = { finding: "accepted" };
 
       const handlers = tools.toLayer({

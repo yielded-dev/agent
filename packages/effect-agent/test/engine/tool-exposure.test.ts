@@ -143,7 +143,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("native Tool exposure", 
             parameters: Schema.Struct({
               key: Schema.String.annotate({ description: documentation }),
             }),
-            success: Schema.NumberFromString,
+            success: Schema.FiniteFromString,
           });
 
           const WriteDocument = Tool.make("write", {

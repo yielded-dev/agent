@@ -192,9 +192,9 @@ const streamingFixture = Stream.fromEffect(
 
     if (Option.isNone(attempt))
       return yield* Effect.die("Fixture needs the real planner attempt writer");
-    observedSettings = Schema.encodeSync(PlannerSettings)(
+    observedSettings = yield* Schema.encodeEffect(PlannerSettings)(
       yield* attempt.value.settings.pipe(Effect.orDie),
-    );
+    ).pipe(Effect.orDie);
     const writer = attempt.value.progress;
 
     yield* writer.newResponse;

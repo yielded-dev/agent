@@ -115,7 +115,7 @@ it("preserves a returned Tool result across an input-drain failure without repla
     );
 
     const runtimeLayer = DurableAgentRuntime.layer.pipe(
-      Layer.provide(runStorageLayer()),
+      Layer.provide(runStorageLayer),
       Layer.provide(failingDrain),
     );
 
@@ -187,7 +187,7 @@ it("settles an abort during fresh instructions without a recovery attempt", () =
   const thread = `cf-abort-fresh-instructions-${crypto.randomUUID()}`;
 
   return runInDurableObject(stubFor(thread), (instance) => {
-    const runtimeLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()));
+    const runtimeLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer));
 
     return instance[DurableObject.RunSymbol](
       Effect.gen(function* () {

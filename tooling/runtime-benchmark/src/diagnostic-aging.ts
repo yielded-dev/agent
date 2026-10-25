@@ -301,7 +301,7 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
     return yield* DurableAgentRuntime.pipe(
       Effect.provide(
         DurableAgentRuntime.layerWithBindings([binding]).pipe(
-          Layer.provide(runStorageLayer()),
+          Layer.provide(runStorageLayer),
           Layer.provide(
             Layer.mergeAll(
               RunToolAuthorization.allowAll,
@@ -835,8 +835,8 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
 
         yield* check(
           actual !== undefined &&
-            JSON.stringify(Schema.encodeSync(ReadEnvelope)(actual)) ===
-              JSON.stringify(Schema.encodeSync(ReadEnvelope)(expected)),
+            JSON.stringify(yield* Schema.encodeEffect(ReadEnvelope)(actual).pipe(Effect.orDie)) ===
+              JSON.stringify(yield* Schema.encodeEffect(ReadEnvelope)(expected).pipe(Effect.orDie)),
           "Aged recovery changed archived canonical data",
         );
       }

@@ -96,12 +96,11 @@ const publishedResponse = Effect.fn("publishedResponse")(
       Effect.catchTag("SchemaError", () =>
         Effect.succeed(new Response("Not found", { status: 404 })),
       ),
-      Effect.catch(() =>
-        Effect.succeed(
+      Effect.orElseSucceed(
+        () =>
           new Response("Trip storage is temporarily unavailable. Please try again.", {
             status: 503,
           }),
-        ),
       ),
     ),
 );
@@ -128,8 +127,8 @@ export const handleRequest = (verify = authenticate) =>
       return yield* serveTripApp(request, ctx).pipe(
         Effect.provide(AppBuildBucketLive),
         Effect.provideService(WorkerEnvironment, env),
-        Effect.catch(() =>
-          Effect.succeed(new Response("The trip app is temporarily unavailable.", { status: 503 })),
+        Effect.orElseSucceed(
+          () => new Response("The trip app is temporarily unavailable.", { status: 503 }),
         ),
       );
     }

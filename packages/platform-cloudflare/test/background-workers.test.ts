@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import type { SubmissionId } from "@yielded/agent/identifiers";
@@ -14,6 +15,7 @@ import { WorkerCompletion, WorkerUpdate } from "@yielded/agent/worker";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { DurableObject } from "effect-cf";
 import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -71,6 +73,11 @@ import {
   workerInputContentions,
 } from "./helpers/worker-input-contention.ts";
 import { droppedMessageWakes } from "./message-delivery-fixture.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 const evict = async (thread: string) => {
   await runInDurableObject(stubFor(thread), (_instance, state) => {
@@ -769,7 +776,7 @@ it("drains private worker progress through rebuilt runtime maintenance into an i
 it("retains an alarm for a settled worker's factual acknowledgement with dropped wakes", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const source = `background-cf-report-${crypto.randomUUID()}`;
+      const source = `background-cf-report-${yield* randomUUID}`;
       const sourceThreadId = decodeThreadId(source);
 
       const run = <A, E>(

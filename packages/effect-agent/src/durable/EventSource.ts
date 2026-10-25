@@ -140,17 +140,16 @@ export const makeEventSource = Effect.fnUntraced(function* <
 
   const matches: EventSource["matches"] = Effect.fnUntraced(
     function* (event, subscription) {
-      const e = yield* Schema.decodeEffect(options.event)(event.payload).pipe(
-        Effect.mapError(invalid),
-      );
+      const e = yield* Schema.decodeEffect(options.event)(event.payload);
 
       const p = yield* Schema.decodeEffect(options.parameters)(
         subscription.configuration.parameters,
-      ).pipe(Effect.mapError(invalid));
+      );
 
       return options.matches(e, p);
     },
     (effect) => effect.pipe(Effect.scoped, Effect.provideContext(services)),
+    Effect.mapError(invalid),
   );
 
   const reconcile = options.reconcile;

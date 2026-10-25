@@ -16,7 +16,7 @@ export const messageDeliveryStoreLayer = (limits?: MessageDeliveryStoreLimits) =
   Layer.effect(
     MessageDeliveryStore,
     Effect.gen(function* () {
-      const journal = yield* initializeSqliteJournal();
+      const journal = yield* initializeSqliteJournal;
       const store = yield* makeSqlMessageDeliveryStore(journal.owner, limits);
 
       yield* registerCanonicalMessageWriter(journal.owner, store);

@@ -6,12 +6,12 @@ import { ChildProcess } from "effect/process";
 import { HeapProbeError, NodeSample, WorkerdSample } from "./heap-contracts.ts";
 import { measureWorkerd } from "./heap-workerd.ts";
 
-const ModuleContribution = Schema.Struct({ path: Schema.String, bytes: Schema.Number });
+const ModuleContribution = Schema.Struct({ path: Schema.String, bytes: Schema.Finite });
 
 const Bundle = Schema.Struct({
   name: Schema.String,
   file: Schema.String,
-  bytes: Schema.Number,
+  bytes: Schema.Finite,
   sha256: Schema.String,
   modules: Schema.Array(ModuleContribution),
   nodeSamples: Schema.Array(NodeSample),
@@ -24,8 +24,8 @@ const Report = Schema.Struct({
   wrangler: Schema.String,
   miniflare: Schema.String,
   effect: Schema.String,
-  objectCount: Schema.Number,
-  sampleCount: Schema.Number,
+  objectCount: Schema.Finite,
+  sampleCount: Schema.Finite,
   bundles: Schema.Array(Bundle),
   workerdSamples: Schema.Array(WorkerdSample),
   notes: Schema.Array(Schema.String),
@@ -35,9 +35,9 @@ const Metafile = Schema.Struct({
   outputs: Schema.Record(
     Schema.String,
     Schema.Struct({
-      bytes: Schema.Number,
+      bytes: Schema.Finite,
       entryPoint: Schema.optionalKey(Schema.String),
-      inputs: Schema.Record(Schema.String, Schema.Struct({ bytesInOutput: Schema.Number })),
+      inputs: Schema.Record(Schema.String, Schema.Struct({ bytesInOutput: Schema.Finite })),
     }),
   ),
 });

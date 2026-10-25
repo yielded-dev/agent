@@ -332,7 +332,7 @@ it.effect("bounds custom acknowledgement waves after success and interruption", 
                 : Effect.sync(() => {
                     acknowledged.push(wave);
                   }),
-            pendingDeadline: Effect.succeed(Option.none()),
+            pendingDeadline: Effect.succeedNone,
             retryParked: () => Effect.void,
           };
 

@@ -49,6 +49,8 @@ const packet = Schema.decodeUnknownSync(
 // Real Workers WebSockets and the published browser client. Only the remote CDP
 // endpoint is substituted; these tests run inside the existing workerd lane.
 const endpoint = Effect.fnUntraced(function* (mode: "success" | "pending" | "pending-version") {
+  const effectContext = yield* Effect.context<never>();
+
   const pair = yield* Effect.acquireRelease(
     Effect.sync(() => new WebSocketPair()),
     (pair) =>
@@ -77,14 +79,16 @@ const endpoint = Effect.fnUntraced(function* (mode: "success" | "pending" | "pen
 
   pair[1].accept();
   pair[1].addEventListener("close", () => pair[1].close());
-  pair[0].addEventListener("close", () => Effect.runSync(Deferred.succeed(closed, undefined)));
+  pair[0].addEventListener("close", () =>
+    Effect.runSyncWith(effectContext)(Deferred.succeed(closed, undefined)),
+  );
   pair[1].addEventListener("message", (event) => {
     const message = packet(event.data);
 
     methods.push(message.method);
-    Effect.runSync(Deferred.succeed(started, undefined));
+    Effect.runSyncWith(effectContext)(Deferred.succeed(started, undefined));
     if (message.method === "Browser.getVersion") {
-      Effect.runSync(Deferred.succeed(versionStarted, undefined));
+      Effect.runSyncWith(effectContext)(Deferred.succeed(versionStarted, undefined));
       if (mode === "pending-version") return;
     }
     if (mode === "pending") return;
@@ -422,6 +426,8 @@ it.effect.each(["upgrade", "close-failure"] as const)(
   "retires late resume upgrades without SDK dispatch and preserves genuine failures (%s)",
   (mode) =>
     Effect.gen(function* () {
+      const effectContext = yield* Effect.context<never>();
+
       const started = yield* Deferred.make<void>();
       const respond = yield* Deferred.make<void>();
       const reported = yield* Deferred.make<void>();
@@ -455,8 +461,8 @@ it.effect.each(["upgrade", "close-failure"] as const)(
         Layer.provide(
           BrowserRunBinding.layer({
             fetch: async (input, init) => {
-              Effect.runSync(Deferred.succeed(started, undefined));
-              await Effect.runPromise(Deferred.await(respond));
+              Effect.runSyncWith(effectContext)(Deferred.succeed(started, undefined));
+              await Effect.runPromiseWith(effectContext)(Deferred.await(respond));
 
               if (mode === "upgrade" || mode === "close-failure")
                 return fixture.browser.fetch(input, init);
@@ -488,7 +494,7 @@ it.effect.each(["upgrade", "close-failure"] as const)(
           ErrorReporter.layer([
             ErrorReporter.make(({ cause }) => {
               reports.push(cause);
-              Effect.runSync(Deferred.succeed(reported, undefined));
+              Effect.runSyncWith(effectContext)(Deferred.succeed(reported, undefined));
             }),
           ]),
         ]),

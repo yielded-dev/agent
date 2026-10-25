@@ -243,8 +243,11 @@ describe("Scheduling public recovery contract", () => {
     }).pipe(
       Effect.provide(
         layer((envelope) =>
-          Effect.sync(() => {
-            submitted.push(Schema.decodeUnknownSync(ScheduledEnvelope)(envelope).intendedAtMillis);
+          Effect.gen(function* () {
+            submitted.push(
+              (yield* Schema.decodeUnknownEffect(ScheduledEnvelope)(envelope).pipe(Effect.orDie))
+                .intendedAtMillis,
+            );
 
             return receiptFor(envelope);
           }),
@@ -335,7 +338,7 @@ describe("Scheduling public recovery contract", () => {
             expectedRevision: 1,
             destination: {
               _tag: "ExistingThread",
-              threadId: Schema.decodeSync(ThreadId)("other-thread"),
+              threadId: yield* Schema.decodeEffect(ThreadId)("other-thread").pipe(Effect.orDie),
             },
             timing: { _tag: "At", atMillis: 50_000 },
           },

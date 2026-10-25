@@ -1871,7 +1871,7 @@ export function layer<
           ),
           Effect.timeoutOrElse({
             duration: Math.max(0, durationDeadlineMillis - (yield* Clock.currentTimeMillis)),
-            orElse: () => Effect.succeed(undefined),
+            orElse: () => Effect.as(Effect.void, undefined),
           }),
           Effect.tapCause((cause) =>
             Cause.hasDies(cause)

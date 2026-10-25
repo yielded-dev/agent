@@ -1,6 +1,6 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
+import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import type * as Agent from "../core/Agent.ts";
@@ -82,8 +82,8 @@ export const WorkerPolicyResolver = Context.Reference<{
   ) => Effect.Effect<Option.Option<AgentPolicy>, WorkerError>;
 }>("@effect-agent/thread/WorkerPolicyResolver", {
   defaultValue: () => ({
-    resolveSource: () => Effect.succeed(Option.none()),
-    resolveTarget: () => Effect.succeed(Option.none()),
+    resolveSource: () => Effect.succeedNone,
+    resolveTarget: () => Effect.succeedNone,
   }),
 });
 
@@ -116,7 +116,7 @@ export const WorkerConcurrencyResolver = Context.Reference<{
     readonly principal: Principal;
   }) => Effect.Effect<Option.Option<WorkerConcurrencyLimit>, WorkerError>;
 }>("@effect-agent/thread/WorkerConcurrencyResolver", {
-  defaultValue: () => ({ resolve: () => Effect.succeed(Option.none()) }),
+  defaultValue: () => ({ resolve: () => Effect.succeedNone }),
 });
 
 /** Host ceilings apply across all declarations owned by one source Thread. */

@@ -364,7 +364,7 @@ describe("pinned local Git review source", () => {
         ({ root, request }) =>
           Effect.gen(function* () {
             const source = yield* openLocalGitRepository({ root, request, ignore: [] });
-            const id = Schema.decodeSync(EvalCaseId)("pinned-source");
+            const id = yield* Schema.decodeEffect(EvalCaseId)("pinned-source").pipe(Effect.orDie);
 
             const suite = EvalSuite.make({
               version: 1,

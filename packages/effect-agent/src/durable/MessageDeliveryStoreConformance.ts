@@ -37,13 +37,13 @@ const verify = (condition: boolean, message: string) =>
 /** One valid frozen envelope shared by real storage and restart tests. */
 export const makeMessageDeliveryFixture = Effect.fn("MessageDeliveryConformance.fixture")(
   function* (messageId = "message", owner = "sender", text = "hello") {
-    const digest = Schema.decodeSync(Digest)("a".repeat(64));
+    const digest = yield* Schema.decodeEffect(Digest)("a".repeat(64)).pipe(Effect.orDie);
     const input = { text };
 
     return yield* prepareMessageDelivery({
       key: {
-        ownerThreadId: Schema.decodeSync(ThreadId)(owner),
-        messageId: Schema.decodeSync(IdempotencyKey)(messageId),
+        ownerThreadId: yield* Schema.decodeEffect(ThreadId)(owner).pipe(Effect.orDie),
+        messageId: yield* Schema.decodeEffect(IdempotencyKey)(messageId).pipe(Effect.orDie),
       },
       createdAtMillis: 0,
       deadlineAtMillis: 1_000,
@@ -56,13 +56,15 @@ export const makeMessageDeliveryFixture = Effect.fn("MessageDeliveryConformance.
       },
       envelope: {
         schemaVersion: 1,
-        threadId: Schema.decodeSync(ThreadId)("receiver"),
-        deliveryPrincipal: Schema.decodeSync(Principal)("principal"),
-        agentId: Schema.decodeSync(AgentId)("agent"),
+        threadId: yield* Schema.decodeEffect(ThreadId)("receiver").pipe(Effect.orDie),
+        deliveryPrincipal: yield* Schema.decodeEffect(Principal)("principal").pipe(Effect.orDie),
+        agentId: yield* Schema.decodeEffect(AgentId)("agent").pipe(Effect.orDie),
         definitions: DefinitionDigests.make({ agent: digest, model: digest, tools: digest }),
         input,
         inputDigest: yield* digestJson(input),
-        admissionKey: Schema.decodeSync(IdempotencyKey)(`admit:${owner}:${messageId}`),
+        admissionKey: yield* Schema.decodeEffect(IdempotencyKey)(
+          `admit:${owner}:${messageId}`,
+        ).pipe(Effect.orDie),
         authorization: { policyId: "policy", decisionId: "decision" },
       },
     });
@@ -93,15 +95,15 @@ export const makeWorkerUpdateDeliveryFixture = Effect.fn(
         schemaVersion: 1,
         worker: {
           schemaVersion: 1,
-          delegationId: Schema.decodeSync(DelegationId)("worker"),
-          targetAgentId: Schema.decodeSync(AgentId)("child"),
+          delegationId: yield* Schema.decodeEffect(DelegationId)("worker").pipe(Effect.orDie),
+          targetAgentId: yield* Schema.decodeEffect(AgentId)("child").pipe(Effect.orDie),
           threadId: base.key.ownerThreadId,
         },
         update: Update.make({
           schemaVersion: 1,
-          agentId: Schema.decodeSync(AgentId)("child"),
+          agentId: yield* Schema.decodeEffect(AgentId)("child").pipe(Effect.orDie),
           threadId: base.key.ownerThreadId,
-          runId: Schema.decodeSync(RunId)("run"),
+          runId: yield* Schema.decodeEffect(RunId)("run").pipe(Effect.orDie),
           updateId: base.key.messageId,
           sequence: 1,
           value: { finding: id },
@@ -141,7 +143,7 @@ export const messageDeliveryStoreConformanceCases = [
       yield* verify(
         (yield* store.get({
           ...terminal.key,
-          messageId: Schema.decodeSync(IdempotencyKey)("overflow"),
+          messageId: yield* Schema.decodeEffect(IdempotencyKey)("overflow").pipe(Effect.orDie),
         })) === null,
         "Rejected update must not mutate delivery storage",
       );
@@ -154,7 +156,7 @@ export const messageDeliveryStoreConformanceCases = [
 
       const initial = {
         ...(yield* makeMessageDeliveryFixture("later")),
-        predecessor: Schema.decodeSync(IdempotencyKey)("earlier"),
+        predecessor: yield* Schema.decodeEffect(IdempotencyKey)("earlier").pipe(Effect.orDie),
       };
 
       yield* store.insert(initial);
@@ -185,7 +187,10 @@ export const messageDeliveryStoreConformanceCases = [
       );
 
       const changed = yield* store
-        .insert({ ...initial, predecessor: Schema.decodeSync(IdempotencyKey)("different") })
+        .insert({
+          ...initial,
+          predecessor: yield* Schema.decodeEffect(IdempotencyKey)("different").pipe(Effect.orDie),
+        })
         .pipe(Effect.result);
 
       yield* verify(
@@ -242,7 +247,7 @@ export const messageDeliveryStoreConformanceCases = [
       const settlement = Settlement.make({
         receiptId: messageDeliveryFixtureReceipt.receiptId,
         submissionId: messageDeliveryFixtureReceipt.submissionId,
-        settlementId: Schema.decodeSync(SettlementId)("settlement"),
+        settlementId: yield* Schema.decodeEffect(SettlementId)("settlement").pipe(Effect.orDie),
         outcome: "completed",
         settledAt: DateTime.makeUnsafe(7),
       });

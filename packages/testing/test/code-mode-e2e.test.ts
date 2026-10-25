@@ -45,7 +45,9 @@ let threadSequence = 0;
 const usage = { inputTokens: {}, outputTokens: {} };
 
 const identifiers = Layer.succeed(IdGenerator, {
-  nextThreadId: Effect.sync(() => Schema.decodeSync(ThreadId)(`thread-cm-e2e-${++threadSequence}`)),
+  nextThreadId: Effect.suspend(() =>
+    Schema.decodeEffect(ThreadId)(`thread-cm-e2e-${++threadSequence}`).pipe(Effect.orDie),
+  ),
   nextRunId: Effect.succeed(Schema.decodeSync(RunId)("run-cm-e2e")),
   nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("turn-cm-e2e")),
 });
@@ -318,7 +320,8 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
         });
       });
 
-      const runtimeLayer = DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer())).pipe(
+      const runtimeLayer = DurableAgentRuntime.layer.pipe(
+        Layer.provide(runStorageLayer),
         Layer.provideMerge(
           Layer.mergeAll(
             MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive)),

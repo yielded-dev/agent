@@ -226,7 +226,7 @@ export const LifecyclePublicationConfig = Context.Reference<Option.Option<Crypto
 
 /** Enable native SQL obligations without changing dependencies of disabled storage assemblies. */
 export const lifecyclePublicationLayer = Layer.effect(LifecyclePublicationConfig)(
-  Effect.map(Crypto.Crypto, Option.some),
+  Effect.asSome(Crypto.Crypto),
 );
 
 /** Resolve immutable evidence by its exact native identity, never by scanning execution history. */

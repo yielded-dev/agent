@@ -6,10 +6,10 @@ export class HeapProbeError extends Schema.TaggedError<HeapProbeError>()("HeapPr
 }) {}
 
 export const HeapUsage = Schema.Struct({
-  usedSize: Schema.Number,
-  totalSize: Schema.Number,
-  embedderHeapUsedSize: Schema.optionalKey(Schema.Number),
-  backingStorageSize: Schema.optionalKey(Schema.Number),
+  usedSize: Schema.Finite,
+  totalSize: Schema.Finite,
+  embedderHeapUsedSize: Schema.optionalKey(Schema.Finite),
+  backingStorageSize: Schema.optionalKey(Schema.Finite),
 });
 
 export const ObjectStatus = Schema.Struct({
@@ -19,11 +19,11 @@ export const ObjectStatus = Schema.Struct({
 });
 
 export const NodeMemory = Schema.Struct({
-  rss: Schema.Number,
-  heapTotal: Schema.Number,
-  heapUsed: Schema.Number,
-  external: Schema.Number,
-  arrayBuffers: Schema.Number,
+  rss: Schema.Finite,
+  heapTotal: Schema.Finite,
+  heapUsed: Schema.Finite,
+  external: Schema.Finite,
+  arrayBuffers: Schema.Finite,
 });
 
 export const NodeSample = Schema.Struct({
@@ -34,8 +34,8 @@ export const NodeSample = Schema.Struct({
   baseline: NodeMemory,
   evaluated: NodeMemory,
   retained: NodeMemory,
-  evaluatedHeapDelta: Schema.Number,
-  retainedHeapDelta: Schema.Number,
+  evaluatedHeapDelta: Schema.Finite,
+  retainedHeapDelta: Schema.Finite,
   exports: Schema.Array(Schema.String),
 });
 

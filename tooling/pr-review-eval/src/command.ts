@@ -133,7 +133,7 @@ const runCommand = Command.make(
     const fs = yield* FileSystem.FileSystem;
 
     const guidanceText = yield* Option.match(options.guidance, {
-      onNone: () => Effect.succeed(undefined),
+      onNone: () => Effect.as(Effect.void, undefined),
       onSome: Effect.fnUntraced(function* (path) {
         const text = yield* fs.readFileString(path).pipe(
           Effect.mapError((cause) =>
@@ -219,7 +219,7 @@ const reportCommand = Command.make(
     const observations = yield* loadObservationFiles(options.observationFiles);
 
     const judgments = yield* Option.match(options.judgmentsFile, {
-      onNone: () => Effect.succeed(undefined),
+      onNone: () => Effect.as(Effect.void, undefined),
       onSome: loadJudgmentSet,
     });
 

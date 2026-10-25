@@ -723,12 +723,13 @@ export class CloudflareThreadClient extends Context.Service<
               ),
             );
 
+            const encodedRequest = yield* Schema.encodeEffect(WatchTextRequest)({
+              schemaVersion: 1,
+            }).pipe(Effect.mapError(openingFailure));
+
             const raw = yield* Effect.tryPromise({
               try: () => {
-                request = target.watchTextEncoded(
-                  Schema.encodeSync(WatchTextRequest)({ schemaVersion: 1 }),
-                  ...traceArgs,
-                );
+                request = target.watchTextEncoded(encodedRequest, ...traceArgs);
 
                 return request.then((value) => {
                   received = value;

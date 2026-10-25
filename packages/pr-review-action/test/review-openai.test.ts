@@ -653,11 +653,11 @@ describe("review provider boundary", () => {
         };
 
         const client = HttpClient.make((httpRequest, url) =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
             if (url.pathname.includes("/check-runs")) {
               if (httpRequest.body._tag !== "Uint8Array") throw new Error("Expected check JSON");
               checkWrites.push(
-                Schema.decodeSync(Schema.fromJsonString(Schema.Json))(
+                yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Json))(
                   new TextDecoder().decode(httpRequest.body.body),
                 ),
               );
@@ -826,7 +826,7 @@ describe("review provider boundary", () => {
             if (httpRequest.method === "POST" && url.pathname.endsWith("/pulls/12/reviews")) {
               if (httpRequest.body._tag !== "Uint8Array") throw new Error("Expected review JSON");
               published.push(
-                Schema.decodeSync(
+                yield* Schema.decodeEffect(
                   Schema.fromJsonString(
                     Schema.Struct({
                       commit_id: Schema.String,
@@ -843,7 +843,7 @@ describe("review provider boundary", () => {
               });
             }
             throw new Error(`Unexpected fixture request: ${httpRequest.method} ${url.pathname}`);
-          }),
+          }).pipe(Effect.orDie),
         );
 
         const exit = yield* reviewActionProgram.pipe(

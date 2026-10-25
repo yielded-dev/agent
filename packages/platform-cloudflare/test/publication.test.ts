@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import * as AgentUpdates from "@yielded/agent/agent-updates";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ThreadId } from "@yielded/agent/identifiers";
@@ -10,6 +11,7 @@ import {
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { DurableObject } from "effect-cf";
 import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -55,6 +57,11 @@ import {
   lifecyclePublicationControls,
 } from "./publication-fixture.ts";
 
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
+
 const namespace = "PUBLICATIONS";
 const stub = (thread: string) => stubFor(thread, namespace);
 
@@ -83,7 +90,7 @@ const lifecycleRows = (thread: string) =>
       Schema.Array(
         Schema.Struct({
           id: Schema.String,
-          ordinal: Schema.Number,
+          ordinal: Schema.Finite,
           fingerprint: Schema.String,
           payload_json: Schema.NullOr(Schema.String),
         }),
@@ -169,7 +176,9 @@ const withThread = (
 ) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const thread = `${lifecycle ? "lifecycle-publication" : "publication"}-${crypto.randomUUID()}`;
+      const effectContext = yield* Effect.context<never>();
+
+      const thread = `${lifecycle ? "lifecycle-publication" : "publication"}-${yield* randomUUID}`;
       const now = Date.now() + 86_400_000;
 
       yield* TestClock.setTime(now);
@@ -190,7 +199,7 @@ const withThread = (
         }),
       );
       yield* Effect.promise(() =>
-        test(thread, now, (millis) => Effect.runPromise(clock.adjust(millis))),
+        test(thread, now, (millis) => Effect.runPromiseWith(effectContext)(clock.adjust(millis))),
       );
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   );
@@ -230,7 +239,9 @@ describe("durable host publication", () => {
             yield* Effect.promise(() => emit.promise);
             for (const summary of summaries)
               yield* AgentUpdates.emit(bookDefinition, summary, {
-                idempotencyKey: Schema.decodeSync(IdempotencyKey)(summary),
+                idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)(summary).pipe(
+                  Effect.orDie,
+                ),
               });
             updated.resolve();
             yield* Effect.promise(() => release.promise);

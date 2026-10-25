@@ -3,5 +3,11 @@
   "compilerOptions": {
     "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vite.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "vite.config.ts",
+    "../../test/fixtures/instrumented-storage.ts",
+    "../../test/fixtures/ledger-read-contracts.ts"
+  ]
 }

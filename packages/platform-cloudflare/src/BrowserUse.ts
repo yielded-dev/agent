@@ -76,6 +76,10 @@ interface AttachedPage {
   readonly targetId: string;
 }
 
+const isBrowserUseError = (value: unknown): value is BrowserUseError =>
+  Schema.is(BrowserUseError)(value) &&
+  Object.prototype.isPrototypeOf.call(BrowserUseError.prototype, value);
+
 /**
  * A scoped CDP bridge over an existing BrowserSession. No DOM classifier, selectors,
  * implicit waits, input retries, or generated-code execution live in this adapter.
@@ -177,16 +181,13 @@ export const make = Effect.fnUntraced(function* <R>(
     const result = yield* session
       .run(
         Effect.gen(function* () {
-          if (released) return yield* Effect.fail(invalid("Browser attachment scope is closed"));
+          if (released) return yield* invalid("Browser attachment scope is closed");
           if (limits.maxCommands !== null && calls++ >= limits.maxCommands)
-            return yield* Effect.fail(invalid("Browser command limit reached"));
+            return yield* invalid("Browser command limit reached");
           selected = targetId === undefined ? primary : (pages.get(targetId) ?? primary);
           if (targetId !== undefined && !pages.has(targetId))
-            return yield* Effect.fail(
-              invalid("Unknown page; call cdp.tabs({}) to discover current targets"),
-            );
-          if (selected.page.isClosed())
-            return yield* Effect.fail(invalid("The selected page is closed"));
+            return yield* invalid("Unknown page; call cdp.tabs({}) to discover current targets");
+          if (selected.page.isClosed()) return yield* invalid("The selected page is closed");
           pageUrl = primary.page.url();
           targetUrl = selected.page.url();
           frame =
@@ -194,7 +195,7 @@ export const make = Effect.fnUntraced(function* <R>(
               ? undefined
               : selected.page.frames().find((candidate) => candidate._id === frameId);
           if (frameId !== undefined && frame === undefined)
-            return yield* Effect.fail(invalid("Unknown frame; call cdp.frames({}) again"));
+            return yield* invalid("Unknown frame; call cdp.frames({}) again");
           frameUrl = frame?.url();
           yield* authorize(command, {
             pageUrl,
@@ -220,9 +221,9 @@ export const make = Effect.fnUntraced(function* <R>(
       )
       .pipe(serial.withPermits(1), mapSessionFailure);
 
-    if (!result.ok) return yield* Effect.fail(result.error);
+    if (!result.ok) return yield* result.error;
     // Only host-created failures belong in E; a protocol response with similar fields is data.
-    if (result.value instanceof BrowserUseError) return yield* Effect.fail(result.value);
+    if (isBrowserUseError(result.value)) return yield* result.value;
 
     const encoded = yield* Effect.try({
       try: () => JSON.stringify(result.value),
@@ -238,14 +239,12 @@ export const make = Effect.fnUntraced(function* <R>(
       encoded === undefined ||
       new TextEncoder().encode(encoded).byteLength > limits.maxReturnedBytes
     )
-      return yield* Effect.fail(
-        BrowserUseError.make({
-          code: "browser",
-          message:
-            "Browser result exceeded its byte limit; request a smaller result without repeating mutations",
-          dispatch: "possibly-dispatched",
-        }),
-      );
+      return yield* BrowserUseError.make({
+        code: "browser",
+        message:
+          "Browser result exceeded its byte limit; request a smaller result without repeating mutations",
+        dispatch: "possibly-dispatched",
+      });
 
     return result.value;
   });
@@ -260,9 +259,7 @@ export const make = Effect.fnUntraced(function* <R>(
         value.method === "Page.close" ||
         value.method === "Page.crash"
       )
-        return yield* Effect.fail(
-          invalid("Browser lifecycle commands belong to the host; use the tab helpers"),
-        );
+        return yield* invalid("Browser lifecycle commands belong to the host; use the tab helpers");
 
       const runReport = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -389,7 +386,7 @@ export const make = Effect.fnUntraced(function* <R>(
         return result;
       });
 
-      if (result === null) return yield* Effect.fail(invalid("Browser tab limit exceeded"));
+      if (result === null) return yield* invalid("Browser tab limit exceeded");
 
       return result;
     }),
@@ -416,7 +413,7 @@ export const make = Effect.fnUntraced(function* <R>(
         return tab(await attach(await context.newPage()));
       });
 
-      if (result === null) return yield* Effect.fail(invalid("Browser tab limit reached"));
+      if (result === null) return yield* invalid("Browser tab limit reached");
 
       return result;
     }),
@@ -424,7 +421,7 @@ export const make = Effect.fnUntraced(function* <R>(
       const value = yield* decode(CloseTabRequest, request);
 
       if (value.targetId === primary.targetId)
-        return yield* Effect.fail(invalid("The original page belongs to the host"));
+        return yield* invalid("The original page belongs to the host");
       yield* run(
         { kind: "close-tab", request: value },
         async ({ page }) => {

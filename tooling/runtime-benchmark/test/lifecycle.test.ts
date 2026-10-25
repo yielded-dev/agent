@@ -47,14 +47,14 @@ it("completes selected workloads in fixture order regardless of request order", 
       const fs = yield* FileSystem.FileSystem;
       const directory = yield* fs.makeTempDirectoryScoped();
 
-      const options = Schema.decodeSync(WorkerOptions)({
+      const options = yield* Schema.decodeEffect(WorkerOptions)({
         profile: "smoke",
         cold: false,
         cases: ["small-stream", "small-run"],
         warmups: 0,
         samples: 1,
         output: `${directory}/worker.json`,
-      });
+      }).pipe(Effect.orDie);
 
       yield* runWorker(options);
 

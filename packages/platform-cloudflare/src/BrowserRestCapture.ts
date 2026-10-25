@@ -55,7 +55,7 @@ const RestErrorEnvelope = Schema.Struct({
   errors: Schema.Array(
     Schema.Struct({
       message: Schema.String,
-      code: Schema.optionalKey(Schema.Number),
+      code: Schema.optionalKey(Schema.Finite),
     }),
   ),
   result: Schema.optionalKey(Schema.Json),

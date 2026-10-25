@@ -15,8 +15,8 @@ const DateLabel = Schema.NullOr(Schema.String.check(Schema.isPattern(/^\d{4}-\d{
 export const TripPlace = Schema.Struct({
   id: TripId,
   label: ShortText,
-  latitude: Schema.Number.check(Schema.isBetween({ minimum: -90, maximum: 90 })),
-  longitude: Schema.Number.check(Schema.isBetween({ minimum: -180, maximum: 180 })),
+  latitude: Schema.Finite.check(Schema.isBetween({ minimum: -90, maximum: 90 })),
+  longitude: Schema.Finite.check(Schema.isBetween({ minimum: -180, maximum: 180 })),
   kind: Schema.Literals(["stay", "activity", "transport"]),
   url: Schema.NullOr(TravelUrl),
 });

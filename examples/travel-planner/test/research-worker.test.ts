@@ -16,11 +16,10 @@ import { fixtureOwner } from "./fixtures/identity.ts";
 const token = "research-worker-fixture";
 const settings: PlannerSettings = { model: "gpt-6-astra", reasoningEffort: "high", fast: true };
 
-const RpcExit = Schema.Struct({
-  _tag: Schema.Literal("Exit"),
+const RpcExit = Schema.TaggedStruct("Exit", {
   exit: Schema.Union([
-    Schema.Struct({ _tag: Schema.Literal("Success"), value: Schema.Unknown }),
-    Schema.Struct({ _tag: Schema.Literal("Failure"), cause: Schema.Unknown }),
+    Schema.TaggedStruct("Success", { value: Schema.Unknown }),
+    Schema.TaggedStruct("Failure", { cause: Schema.Unknown }),
   ]),
 });
 

@@ -1208,15 +1208,13 @@ const captureModelResponsePartGeneral = Effect.fnUntracedEager(function* <
     });
   }
 
-  let ownedEncoded: unknown;
-
-  try {
-    ownedEncoded = Reflect.apply(structuredCloneFunction, globalThis, [encoded]);
-  } catch {
-    return yield* ModelProtocolError.make({
-      message: "Model response part could not be converted into engine-owned data",
-    });
-  }
+  const ownedEncoded: unknown = yield* Effect.try({
+    try: () => Reflect.apply(structuredCloneFunction, globalThis, [encoded]),
+    catch: () =>
+      ModelProtocolError.make({
+        message: "Model response part could not be converted into engine-owned data",
+      }),
+  });
 
   return { encodedPart: ownedEncoded, retainedBytes };
 });
@@ -5601,6 +5599,8 @@ const makeTurn = <
   AgentRuntimeFailure<typeof agent, HookError, InstructionError>,
   InterpreterRequirements<typeof agent, HookRequirements, InstructionRequirements> | Scope.Scope
 > =>
+  // Exit this generator before running its returned continuation, so later Turns do not
+  // retain earlier generator frames. Effect.succeed marks that continuation as a value.
   Effect.flatten(
     Effect.gen(function* () {
       yield* checkpointExecution(context, options.durability);
@@ -5618,31 +5618,37 @@ const makeTurn = <
         );
 
       if (now >= context.durationDeadlineMillis) {
-        return failBeforeNextTurn(durationLimitError(agent.definition.policy));
+        return yield* Effect.succeed(
+          failBeforeNextTurn(durationLimitError(agent.definition.policy)),
+        );
       }
       // Fail-mode work never starts beyond the Turn ceiling. Most Tool paths
       // reject at declaration admission; this preflight also covers a
       // final-Turn completion Tool whose canonical returned result is a
       // failure and therefore needs another model Turn.
       if (policy.onExhaustion === "fail" && turn > bounds.maxTurns) {
-        return failBeforeNextTurn(
-          AgentPolicyError.make({
-            limit: "turns",
-            message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
-          }),
+        return yield* Effect.succeed(
+          failBeforeNextTurn(
+            AgentPolicyError.make({
+              limit: "turns",
+              message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
+            }),
+          ),
         );
       }
       if (context.finalizationUsed && restartTurnId === undefined) {
-        return failBeforeNextTurn(
-          AgentPolicyError.make({
-            limit:
-              turn > bounds.maxTurns
-                ? "turns"
-                : priorToolCalls + context.programmaticToolCalls > bounds.maxToolCalls
-                  ? "tool-calls"
-                  : "tokens",
-            message: "Agent already used its one grace finalization",
-          }),
+        return yield* Effect.succeed(
+          failBeforeNextTurn(
+            AgentPolicyError.make({
+              limit:
+                turn > bounds.maxTurns
+                  ? "turns"
+                  : priorToolCalls + context.programmaticToolCalls > bounds.maxToolCalls
+                    ? "tool-calls"
+                    : "tokens",
+              message: "Agent already used its one grace finalization",
+            }),
+          ),
         );
       }
       context.failedCompletionCause = undefined;
@@ -6787,19 +6793,18 @@ const makeTurn = <
                   messageTokenEstimator,
                   Math.max(0, contextTokenLimit - derivedPromptTokens()),
                   "overflow",
-                )
-                  .pipe(withCallModel)
-                  .pipe(
-                    Effect.mapError(
-                      (inner): AgentRuntimeFailure<typeof agent, HookError, InstructionError> =>
-                        AiError.isAiError(inner) && isContextOverflowMessage(overflowText(inner))
-                          ? ContextOverflowError.make({
-                              message: overflowText(inner),
-                              retried: true,
-                            })
-                          : inner,
-                    ),
-                  );
+                ).pipe(
+                  withCallModel,
+                  Effect.mapError(
+                    (inner): AgentRuntimeFailure<typeof agent, HookError, InstructionError> =>
+                      AiError.isAiError(inner) && isContextOverflowMessage(overflowText(inner))
+                        ? ContextOverflowError.make({
+                            message: overflowText(inner),
+                            retried: true,
+                          })
+                        : inner,
+                  ),
+                );
 
                 if (outcome.changed) refreshPrepared();
 
@@ -6832,7 +6837,7 @@ const makeTurn = <
 
                 const events: TurnStream = publishEvents(context, outcome.events);
 
-                return events.pipe(Effect.andThen(retried));
+                return yield* Effect.succeed(events.pipe(Effect.andThen(retried)));
               }),
             );
           },
@@ -7079,8 +7084,8 @@ const makeTurn = <
                           context,
                           decodeFinalOutput(agent, trace.text.join("")),
                         ).pipe(
-                          Effect.map(Option.some),
-                          Effect.catch(() => Effect.succeed(Option.none())),
+                          Effect.asSome,
+                          Effect.catch(() => Effect.succeedNone),
                         );
 
                         if (Option.isSome(output)) {
@@ -7089,19 +7094,21 @@ const makeTurn = <
 
                           const completionUsage = yield* usageReportOf(context);
 
-                          return emitThen(
-                            Effect.map(eventBase(context), (base) =>
-                              RunCompleted.make({
-                                ...base,
-                                output: output.value.encoded,
-                                turns: turn,
-                                finishReason: "budget-exhausted",
-                                exhausted: "tokens",
-                                ...completionUsage,
-                              }),
-                            ).pipe(
-                              Effect.tap((event) =>
-                                settleTurn(context, trace, turn, turnId, options, event),
+                          return yield* Effect.succeed(
+                            emitThen(
+                              Effect.map(eventBase(context), (base) =>
+                                RunCompleted.make({
+                                  ...base,
+                                  output: output.value.encoded,
+                                  turns: turn,
+                                  finishReason: "budget-exhausted",
+                                  exhausted: "tokens",
+                                  ...completionUsage,
+                                }),
+                              ).pipe(
+                                Effect.tap((event) =>
+                                  settleTurn(context, trace, turn, turnId, options, event),
+                                ),
                               ),
                             ),
                           );
@@ -7122,18 +7129,20 @@ const makeTurn = <
                           }),
                         );
 
-                        return emitThen(
-                          publishEvents(context, rejection).pipe(
-                            Effect.andThen(
-                              toolBatchContinuation(
-                                agent,
-                                context,
-                                trace,
-                                prompt,
-                                turn,
-                                turnId,
-                                toolCalls,
-                                options,
+                        return yield* Effect.succeed(
+                          emitThen(
+                            publishEvents(context, rejection).pipe(
+                              Effect.andThen(
+                                toolBatchContinuation(
+                                  agent,
+                                  context,
+                                  trace,
+                                  prompt,
+                                  turn,
+                                  turnId,
+                                  toolCalls,
+                                  options,
+                                ),
                               ),
                             ),
                           ),
@@ -7144,7 +7153,7 @@ const makeTurn = <
                       // typed) exactly as it would without the breach.
                     }
 
-                    return emitThen(yield* next);
+                    return yield* Effect.succeed(emitThen(yield* next));
                   }),
                 ),
               ),
@@ -7162,7 +7171,7 @@ const makeTurn = <
             const steering = yield* drainInputs(context, options);
             const nextPrompt = yield* appendInputs(context, history, steering, options);
 
-            return nextTurn(nextPrompt, turn + 1, toolCalls);
+            return yield* Effect.succeed(nextTurn(nextPrompt, turn + 1, toolCalls));
           });
 
           /**
@@ -7194,11 +7203,13 @@ const makeTurn = <
               // `maxTurns + 1`, so a second grace is structurally
               // impossible.
               if (turnsBlocked) {
-                return failExecution(
-                  AgentPolicyError.make({
-                    limit: "turns",
-                    message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
-                  }),
+                return yield* Effect.succeed(
+                  failExecution(
+                    AgentPolicyError.make({
+                      limit: "turns",
+                      message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
+                    }),
+                  ),
                 );
               }
               yield* applyRepeatedFailurePolicy(
@@ -7209,7 +7220,7 @@ const makeTurn = <
               yield* settleTurn(context, trace, turn, turnId, options);
               const nextPrompt = yield* appendInputs(context, history, queued, options);
 
-              return nextTurn(nextPrompt, turn + 1, toolCalls);
+              return yield* Effect.succeed(nextTurn(nextPrompt, turn + 1, toolCalls));
             }
 
             const output = yield* prepareWithinDeadline(
@@ -7229,22 +7240,26 @@ const makeTurn = <
 
             const completionUsage = yield* usageReportOf(context);
 
-            return Effect.map(eventBase(context), (base) =>
-              RunCompleted.make({
-                ...base,
-                output: output.encoded,
-                ...(runDisposition === undefined ? {} : { runDisposition }),
-                turns: turn,
-                // A Run settled under the final-answer constraint reports
-                // the exhaustion honestly (RUN-011), never a plain model
-                // stop, and carries the dimension that bound.
-                finishReason: finalAnswerOnly ? "budget-exhausted" : "model-stop",
-                ...(finalAnswerOnly && context.exhaustedDimension !== undefined
-                  ? { exhausted: context.exhaustedDimension }
-                  : {}),
-                ...completionUsage,
-              }),
-            ).pipe(Effect.tap((event) => settleTurn(context, trace, turn, turnId, options, event)));
+            return yield* Effect.succeed(
+              Effect.map(eventBase(context), (base) =>
+                RunCompleted.make({
+                  ...base,
+                  output: output.encoded,
+                  ...(runDisposition === undefined ? {} : { runDisposition }),
+                  turns: turn,
+                  // A Run settled under the final-answer constraint reports
+                  // the exhaustion honestly (RUN-011), never a plain model
+                  // stop, and carries the dimension that bound.
+                  finishReason: finalAnswerOnly ? "budget-exhausted" : "model-stop",
+                  ...(finalAnswerOnly && context.exhaustedDimension !== undefined
+                    ? { exhausted: context.exhaustedDimension }
+                    : {}),
+                  ...completionUsage,
+                }),
+              ).pipe(
+                Effect.tap((event) => settleTurn(context, trace, turn, turnId, options, event)),
+              ),
+            );
           });
 
           if (providerOnly && trace.finishReason === "stop") {
@@ -7331,17 +7346,19 @@ const makeTurn = <
                     batchRejection,
                   );
 
-                  return publishEvents(context, rejection).pipe(
-                    Effect.andThen(
-                      toolBatchContinuation(
-                        agent,
-                        context,
-                        trace,
-                        prompt,
-                        turn,
-                        turnId,
-                        toolCalls,
-                        options,
+                  return yield* Effect.succeed(
+                    publishEvents(context, rejection).pipe(
+                      Effect.andThen(
+                        toolBatchContinuation(
+                          agent,
+                          context,
+                          trace,
+                          prompt,
+                          turn,
+                          turnId,
+                          toolCalls,
+                          options,
+                        ),
                       ),
                     ),
                   );
@@ -7367,7 +7384,7 @@ const makeTurn = <
                   const steering = yield* drainInputs(context, options);
                   const nextPrompt = yield* appendInputs(context, history, steering, options);
 
-                  return nextTurn(nextPrompt, turn + 1, toolCalls);
+                  return yield* Effect.succeed(nextTurn(nextPrompt, turn + 1, toolCalls));
                 }),
               );
             }
@@ -7422,17 +7439,19 @@ const makeTurn = <
                       }),
                     );
 
-                    return publishEvents(context, rejection).pipe(
-                      Effect.andThen(
-                        toolBatchContinuation(
-                          agent,
-                          context,
-                          trace,
-                          prompt,
-                          turn,
-                          turnId,
-                          toolCalls,
-                          options,
+                    return yield* Effect.succeed(
+                      publishEvents(context, rejection).pipe(
+                        Effect.andThen(
+                          toolBatchContinuation(
+                            agent,
+                            context,
+                            trace,
+                            prompt,
+                            turn,
+                            turnId,
+                            toolCalls,
+                            options,
+                          ),
                         ),
                       ),
                     );
@@ -7455,17 +7474,19 @@ const makeTurn = <
                   durableResultBounds(agent.definition.policy.toolResultBounds, options, turn),
                 );
 
-                return toolResults.pipe(
-                  Effect.andThen(
-                    toolBatchContinuation(
-                      agent,
-                      context,
-                      trace,
-                      prompt,
-                      turn,
-                      turnId,
-                      toolCalls,
-                      options,
+                return yield* Effect.succeed(
+                  toolResults.pipe(
+                    Effect.andThen(
+                      toolBatchContinuation(
+                        agent,
+                        context,
+                        trace,
+                        prompt,
+                        turn,
+                        turnId,
+                        toolCalls,
+                        options,
+                      ),
                     ),
                   ),
                 );
@@ -7561,13 +7582,15 @@ const makeTurn = <
                 const inputs = yield* drainInputs(context, options);
                 const nextPrompt = yield* appendInputs(context, prompt, inputs, options);
 
-                return Effect.succeed<TurnOutput>({
-                  _tag: "NextTurn",
-                  prompt: nextPrompt,
-                  turn,
-                  toolCalls: priorToolCalls,
-                  restartTurnId: turnId,
-                });
+                return yield* Effect.succeed(
+                  Effect.succeed<TurnOutput>({
+                    _tag: "NextTurn",
+                    prompt: nextPrompt,
+                    turn,
+                    toolCalls: priorToolCalls,
+                    restartTurnId: turnId,
+                  }),
+                );
               }),
             ),
           ),
@@ -7597,15 +7620,15 @@ const makeTurn = <
         ),
       );
 
-      return (
-        modelServices === undefined ? events : Effect.provideContext(events, modelServices)
-      ).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            activeProvisionalText?.discard();
-            if (typeof context.windowTokens === "function")
-              context.windowTokens = context.lastInputTokens;
-          }),
+      return yield* Effect.succeed(
+        (modelServices === undefined ? events : Effect.provideContext(events, modelServices)).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              activeProvisionalText?.discard();
+              if (typeof context.windowTokens === "function")
+                context.windowTokens = context.lastInputTokens;
+            }),
+          ),
         ),
       );
     }),
@@ -7661,10 +7684,12 @@ const toolBatchContinuation = <
   Effect.flatten(
     Effect.gen(function* () {
       if (trace.finalToolResultIds.size !== trace.toolCalls.size) {
-        return failExecution(
-          ModelProtocolError.make({
-            message: "A Tool Call turn completed without one final result per Tool Call",
-          }),
+        return yield* Effect.succeed(
+          failExecution(
+            ModelProtocolError.make({
+              message: "A Tool Call turn completed without one final result per Tool Call",
+            }),
+          ),
         );
       }
       const orderedResults: Array<(typeof trace.applicationToolResults)[number]> = [];
@@ -7673,8 +7698,10 @@ const toolBatchContinuation = <
         const result = trace.applicationToolResults.find((candidate) => candidate?.id === call.id);
 
         if (result === undefined) {
-          return failExecution(
-            ModelProtocolError.make({ message: "Tool batch did not settle completely" }),
+          return yield* Effect.succeed(
+            failExecution(
+              ModelProtocolError.make({ message: "Tool batch did not settle completely" }),
+            ),
           );
         }
         orderedResults.push(result);
@@ -7807,21 +7834,23 @@ const toolBatchContinuation = <
 
         const completionUsage = yield* usageReportOf(context);
 
-        return Effect.map(eventBase(context), (base) =>
-          RunCompleted.make({
-            ...base,
-            output: output.encoded,
-            ...(runDisposition === undefined ? {} : { runDisposition }),
-            turns: turn,
-            finishReason: exhausted === undefined ? "completed" : "budget-exhausted",
-            ...(exhausted === undefined ? {} : { exhausted }),
-            ...completionUsage,
-          }),
-        ).pipe(Effect.tap((event) => settleTurn(context, trace, turn, turnId, options, event)));
+        return yield* Effect.succeed(
+          Effect.map(eventBase(context), (base) =>
+            RunCompleted.make({
+              ...base,
+              output: output.encoded,
+              ...(runDisposition === undefined ? {} : { runDisposition }),
+              turns: turn,
+              finishReason: exhausted === undefined ? "completed" : "budget-exhausted",
+              ...(exhausted === undefined ? {} : { exhausted }),
+              ...completionUsage,
+            }),
+          ).pipe(Effect.tap((event) => settleTurn(context, trace, turn, turnId, options, event))),
+        );
       }
       const nextPrompt = yield* appendInputs(context, history, steering, options);
 
-      return nextTurn(nextPrompt, turn + 1, toolCalls);
+      return yield* Effect.succeed(nextTurn(nextPrompt, turn + 1, toolCalls));
     }),
   ).pipe(
     Effect.catchCauseIf(
@@ -7941,17 +7970,21 @@ const makeResumeTurn = <
       }
 
       if (!Number.isInteger(turn) || turn <= 0) {
-        return failExecution(
-          ModelProtocolError.make({
-            message: "Turn resume requires a positive integer turn number",
-          }),
+        return yield* Effect.succeed(
+          failExecution(
+            ModelProtocolError.make({
+              message: "Turn resume requires a positive integer turn number",
+            }),
+          ),
         );
       }
       if (resume.calls.length === 0) {
-        return failExecution(
-          ModelProtocolError.make({
-            message: "Turn resume requires at least one declared Tool Call",
-          }),
+        return yield* Effect.succeed(
+          failExecution(
+            ModelProtocolError.make({
+              message: "Turn resume requires at least one declared Tool Call",
+            }),
+          ),
         );
       }
 
@@ -8031,15 +8064,19 @@ const makeResumeTurn = <
 
       for (const call of resume.calls) {
         if (!recordedSettledIds.has(call.id) && !hasTool(tools, call.name)) {
-          return failExecution(
-            ModelProtocolError.make({
-              message: `Turn resume declared unknown unfinished Tool ${call.name}`,
-            }),
+          return yield* Effect.succeed(
+            failExecution(
+              ModelProtocolError.make({
+                message: `Turn resume declared unknown unfinished Tool ${call.name}`,
+              }),
+            ),
           );
         }
         if (trace.toolCalls.has(call.id)) {
-          return failExecution(
-            ModelProtocolError.make({ message: `Turn resume repeated Tool Call ID ${call.id}` }),
+          return yield* Effect.succeed(
+            failExecution(
+              ModelProtocolError.make({ message: `Turn resume repeated Tool Call ID ${call.id}` }),
+            ),
           );
         }
         const tool = tools[call.name] as ToolUnion<Tools>;
@@ -8104,14 +8141,17 @@ const makeResumeTurn = <
         completionCandidates,
       );
 
-      if (rolloverError !== undefined) return failExecution(rolloverError);
-      if (completionBatchError !== undefined) return failExecution(completionBatchError);
+      if (rolloverError !== undefined) return yield* Effect.succeed(failExecution(rolloverError));
+      if (completionBatchError !== undefined)
+        return yield* Effect.succeed(failExecution(completionBatchError));
 
       if (context.finalizationUsed && (!completionBatch || trace.toolCalls.size !== 1)) {
-        return failExecution(
-          ModelProtocolError.make({
-            message: "A resumed grace finalization may only execute the completion Tool",
-          }),
+        return yield* Effect.succeed(
+          failExecution(
+            ModelProtocolError.make({
+              message: "A resumed grace finalization may only execute the completion Tool",
+            }),
+          ),
         );
       }
       const settledIds = new Set<string>();
@@ -8145,17 +8185,21 @@ const makeResumeTurn = <
         const declared = declarationByCallId.get(settledCall.id);
 
         if (declared === undefined) {
-          return failExecution(
-            ModelProtocolError.make({
-              message: `Turn resume settled an undeclared Tool Call ${settledCall.id}`,
-            }),
+          return yield* Effect.succeed(
+            failExecution(
+              ModelProtocolError.make({
+                message: `Turn resume settled an undeclared Tool Call ${settledCall.id}`,
+              }),
+            ),
           );
         }
         if (settledIds.has(settledCall.id)) {
-          return failExecution(
-            ModelProtocolError.make({
-              message: `Turn resume settled Tool Call ${settledCall.id} more than once`,
-            }),
+          return yield* Effect.succeed(
+            failExecution(
+              ModelProtocolError.make({
+                message: `Turn resume settled Tool Call ${settledCall.id} more than once`,
+              }),
+            ),
           );
         }
         settledIds.add(settledCall.id);
@@ -8200,21 +8244,25 @@ const makeResumeTurn = <
 
       for (const [id, call] of declarationByCallId) {
         if (call.providerExecuted && !settledIds.has(id)) {
-          return failExecution(
-            ModelProtocolError.make({
-              message: `Turn resume lacks the canonical provider result for ${id}`,
-            }),
+          return yield* Effect.succeed(
+            failExecution(
+              ModelProtocolError.make({
+                message: `Turn resume lacks the canonical provider result for ${id}`,
+              }),
+            ),
           );
         }
       }
       const overToolBudget = toolCalls + context.programmaticToolCalls > bounds.maxToolCalls;
 
       if (overToolBudget && policy.onExhaustion === "fail") {
-        return failExecution(
-          AgentPolicyError.make({
-            limit: "tool-calls",
-            message: `Agent exceeded its ${bounds.maxToolCalls} Tool Call limit`,
-          }),
+        return yield* Effect.succeed(
+          failExecution(
+            AgentPolicyError.make({
+              limit: "tool-calls",
+              message: `Agent exceeded its ${bounds.maxToolCalls} Tool Call limit`,
+            }),
+          ),
         );
       }
 
@@ -8229,11 +8277,13 @@ const makeResumeTurn = <
         (policy.onExhaustion === "fail" && turn === bounds.maxTurns && !completionBatch);
 
       if (turnsBlocked) {
-        return failExecution(
-          AgentPolicyError.make({
-            limit: "turns",
-            message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
-          }),
+        return yield* Effect.succeed(
+          failExecution(
+            AgentPolicyError.make({
+              limit: "turns",
+              message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
+            }),
+          ),
         );
       }
       const toolkit = yield* agent.definition.toolkit;
@@ -8324,9 +8374,11 @@ const makeResumeTurn = <
           settledIds,
         );
 
-        return started.pipe(
-          Effect.andThen(publishEvents(context, rejection)),
-          Effect.andThen(continueAfterBatch()),
+        return yield* Effect.succeed(
+          started.pipe(
+            Effect.andThen(publishEvents(context, rejection)),
+            Effect.andThen(continueAfterBatch()),
+          ),
         );
       }
 
@@ -8347,7 +8399,9 @@ const makeResumeTurn = <
         settledIds,
       );
 
-      return started.pipe(Effect.andThen(toolResults), Effect.andThen(continueAfterBatch()));
+      return yield* Effect.succeed(
+        started.pipe(Effect.andThen(toolResults), Effect.andThen(continueAfterBatch())),
+      );
     }),
   );
 
@@ -8393,7 +8447,7 @@ const enforceDurationDeadline = <A, E, R>(
     const remaining = durationDeadlineMillis - now;
 
     if (remaining <= 0) {
-      return yield* Effect.fail(durationLimit);
+      return yield* durationLimit;
     }
 
     return yield* effect.pipe(
@@ -8804,21 +8858,25 @@ function executeWithCompletion<
               agent.definition.policy.onExhaustion === "fail" &&
               resumeUsage.toolCalls + context.programmaticToolCalls > bounds.maxToolCalls
             ) {
-              return failExecution(
-                AgentPolicyError.make({
-                  limit: "tool-calls",
-                  message: `Agent exceeded its ${bounds.maxToolCalls} Tool Call limit`,
-                }),
+              return yield* Effect.succeed(
+                failExecution(
+                  AgentPolicyError.make({
+                    limit: "tool-calls",
+                    message: `Agent exceeded its ${bounds.maxToolCalls} Tool Call limit`,
+                  }),
+                ),
               );
             }
             const failureLimit = agent.definition.policy.repeatedFailureLimit;
 
             if (failureLimit > 0 && context.consecutiveToolFailures >= failureLimit) {
-              return failExecution(
-                AgentPolicyError.make({
-                  limit: "repeated-failures",
-                  message: `Agent reached its ${failureLimit} consecutive Tool Call failure limit`,
-                }),
+              return yield* Effect.succeed(
+                failExecution(
+                  AgentPolicyError.make({
+                    limit: "repeated-failures",
+                    message: `Agent reached its ${failureLimit} consecutive Tool Call failure limit`,
+                  }),
+                ),
               );
             }
             // Cost is an unconditional hard rail with no grace call in either
@@ -8828,11 +8886,13 @@ function executeWithCompletion<
             const seededCostBudget = agent.definition.policy.costBudgetMicrousd;
 
             if (seededCostBudget !== undefined && context.costMicrousd > seededCostBudget) {
-              return failExecution(
-                AgentPolicyError.make({
-                  limit: "cost",
-                  message: `Agent exceeded its ${seededCostBudget} microdollar cost budget`,
-                }),
+              return yield* Effect.succeed(
+                failExecution(
+                  AgentPolicyError.make({
+                    limit: "cost",
+                    message: `Agent exceeded its ${seededCostBudget} microdollar cost budget`,
+                  }),
+                ),
               );
             }
             const seededBudget = agent.definition.policy.tokenBudget;
@@ -8842,11 +8902,13 @@ function executeWithCompletion<
               context.inputTokens + context.outputTokens > seededBudget
             ) {
               if (agent.definition.policy.onExhaustion === "fail") {
-                return failExecution(
-                  AgentPolicyError.make({
-                    limit: "tokens",
-                    message: `Agent exceeded its ${seededBudget} token budget`,
-                  }),
+                return yield* Effect.succeed(
+                  failExecution(
+                    AgentPolicyError.make({
+                      limit: "tokens",
+                      message: `Agent exceeded its ${seededBudget} token budget`,
+                    }),
+                  ),
                 );
               }
               context.tokenExhausted = true;
@@ -9076,7 +9138,7 @@ function executeWithCompletion<
                 });
               });
 
-              return turns;
+              return yield* Effect.succeed(turns);
             }),
           );
 
@@ -9200,45 +9262,52 @@ function executeWithCompletion<
             Context.add(ToolBroker, closedToolBroker),
           );
 
-          return started.pipe(
-            Effect.andThen(execution),
-            Effect.raceFirst(Deferred.await(context.progressFailure)),
-            Effect.catchCauseFilter(Cause.findError, (error, cause) =>
-              Cause.hasInterrupts(cause)
-                ? Effect.failCause(cause)
-                : publishEvent(context, () =>
-                    Effect.gen(function* () {
-                      if (
-                        error instanceof AgentApprovalPending ||
-                        error instanceof AgentChildPending
-                      ) {
-                        return RunSuspended.make({
-                          ...(yield* terminalEventBase(context)),
-                          reason: error.message,
-                          ...(yield* usageReportOf(context)),
-                        });
-                      }
+          return yield* Effect.succeed(
+            started.pipe(
+              Effect.andThen(execution),
+              Effect.raceFirst(Deferred.await(context.progressFailure)),
+              Effect.catchCauseFilter(Cause.findError, (error, cause) =>
+                Cause.hasInterrupts(cause)
+                  ? Effect.failCause(cause)
+                  : publishEvent(context, () =>
+                      Effect.gen(function* () {
+                        if (
+                          (Schema.is(AgentApprovalPending)(error) &&
+                            Object.prototype.isPrototypeOf.call(
+                              AgentApprovalPending.prototype,
+                              error,
+                            )) ||
+                          (Schema.is(AgentChildPending)(error) &&
+                            Object.prototype.isPrototypeOf.call(AgentChildPending.prototype, error))
+                        ) {
+                          return RunSuspended.make({
+                            ...(yield* terminalEventBase(context)),
+                            reason: error.message,
+                            ...(yield* usageReportOf(context)),
+                          });
+                        }
 
-                      return RunFailed.make({
-                        ...(yield* terminalEventBase(context)),
-                        ...(yield* usageReportOf(context)),
-                        errorTag: errorTag(error),
-                        message: errorMessage(error),
-                      });
-                    }),
-                  ).pipe(Effect.andThen(Effect.failCause(cause))),
+                        return RunFailed.make({
+                          ...(yield* terminalEventBase(context)),
+                          ...(yield* usageReportOf(context)),
+                          errorTag: errorTag(error),
+                          message: errorMessage(error),
+                        });
+                      }),
+                    ).pipe(Effect.andThen(Effect.failCause(cause))),
+              ),
+              Effect.withSpan(`invoke_agent ${context.agentId}`, {
+                attributes: {
+                  ...agentTelemetryAttributes(context),
+                  "gen_ai.operation.name": "invoke_agent",
+                  agentId: context.agentId,
+                  threadId: context.threadId,
+                  runId: context.runId,
+                },
+              }),
+              Effect.provide(engineToolServices),
+              Effect.provideService(ContextCompactor, compactor),
             ),
-            Effect.withSpan(`invoke_agent ${context.agentId}`, {
-              attributes: {
-                ...agentTelemetryAttributes(context),
-                "gen_ai.operation.name": "invoke_agent",
-                agentId: context.agentId,
-                threadId: context.threadId,
-                runId: context.runId,
-              },
-            }),
-            Effect.provide(engineToolServices),
-            Effect.provideService(ContextCompactor, compactor),
           );
         }),
       );
@@ -9279,38 +9348,40 @@ function executeWithCompletion<
 
       // Closing execution first joins every owned child and finalizer before validation,
       // history commit and observable success. Application Layers retain their outer Scope.
-      return Effect.scoped(events).pipe(
-        Effect.flatMap((terminal) =>
-          Effect.gen(function* () {
-            if (onCompleted !== undefined) yield* onCompleted(terminal);
-            if (retained !== undefined) yield* retained.commit(terminal);
-            if (publish !== undefined) yield* publish([terminal]);
+      return yield* Effect.succeed(
+        Effect.scoped(events).pipe(
+          Effect.flatMap((terminal) =>
+            Effect.gen(function* () {
+              if (onCompleted !== undefined) yield* onCompleted(terminal);
+              if (retained !== undefined) yield* retained.commit(terminal);
+              if (publish !== undefined) yield* publish([terminal]);
 
-            return terminal;
-          }).pipe(
-            Effect.catchCauseFilter(Cause.findError, (error, cause) => {
-              if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+              return terminal;
+            }).pipe(
+              Effect.catchCauseFilter(Cause.findError, (error, cause) => {
+                if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
 
-              const failed =
-                publish === undefined
-                  ? Effect.void
-                  : publish([
-                      RunFailed.make({
-                        eventVersion: terminal.eventVersion,
-                        threadId: terminal.threadId,
-                        runId: terminal.runId,
-                        agentId: terminal.agentId,
-                        usage: terminal.usage,
-                        delegatedUsage: terminal.delegatedUsage,
-                        sequence: terminal.sequence,
-                        timestamp: terminal.timestamp,
-                        errorTag: errorTag(error),
-                        message: errorMessage(error),
-                      }),
-                    ]);
+                const failed =
+                  publish === undefined
+                    ? Effect.void
+                    : publish([
+                        RunFailed.make({
+                          eventVersion: terminal.eventVersion,
+                          threadId: terminal.threadId,
+                          runId: terminal.runId,
+                          agentId: terminal.agentId,
+                          usage: terminal.usage,
+                          delegatedUsage: terminal.delegatedUsage,
+                          sequence: terminal.sequence,
+                          timestamp: terminal.timestamp,
+                          errorTag: errorTag(error),
+                          message: errorMessage(error),
+                        }),
+                      ]);
 
-              return failed.pipe(Effect.andThen(Effect.failCause(cause)));
-            }),
+                return failed.pipe(Effect.andThen(Effect.failCause(cause)));
+              }),
+            ),
           ),
         ),
       );
@@ -10094,7 +10165,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
           ) => Effect.Effect<unknown, Schema.SchemaError>;
 
           const invalidParameters = yield* decodeParameters(input.encodedArguments).pipe(
-            Effect.map(() => undefined),
+            Effect.asVoid,
             Effect.catchCauseFilter(Cause.findError, (error, cause) =>
               preflightFailure(
                 input,
@@ -10131,7 +10202,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
             .pipe(
               Effect.flatMap((decision) =>
                 decision._tag === "allowed"
-                  ? Effect.succeed(undefined)
+                  ? Effect.as(Effect.void, undefined)
                   : preflightFailure(
                       input,
                       "infrastructure",
@@ -10180,7 +10251,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
                   }),
                   binding.hookServices,
                 ).pipe(
-                  Effect.map(() => undefined),
+                  Effect.asVoid,
                   Effect.catchCauseFilter(Cause.findError, (error, cause) =>
                     Effect.succeed({ error, cause }),
                   ),
@@ -10334,7 +10405,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
                     }
                   }),
                 ),
-                Effect.map(() => undefined),
+                Effect.asVoid,
                 Effect.catchCauseFilter(Cause.findError, (error, cause) =>
                   Effect.succeed(new BrokerCallFailure(error, cause)),
                 ),
@@ -10665,11 +10736,13 @@ const makeDurableStepService = <HookError, HookRequirements>(
               toolCallId,
               stepName: name,
               reason:
-                cause instanceof AgentPersistenceCapacityError
+                Schema.is(AgentPersistenceCapacityError)(cause) &&
+                Object.prototype.isPrototypeOf.call(AgentPersistenceCapacityError.prototype, cause)
                   ? "capacity-exhausted"
                   : "reservation-failed",
               message:
-                cause instanceof AgentPersistenceCapacityError
+                Schema.is(AgentPersistenceCapacityError)(cause) &&
+                Object.prototype.isPrototypeOf.call(AgentPersistenceCapacityError.prototype, cause)
                   ? "Durable Step has no room for a valid saved result"
                   : "Durable Step capacity reservation failed",
               cause,
@@ -10913,12 +10986,19 @@ const makeSubagentDurabilityService = <HookError, HookRequirements>(
 const waitingFromCause = (cause: Cause.Cause<unknown>): ToolCallWaiting | undefined => {
   const failure = Cause.findErrorOption(cause);
 
-  if (Option.isSome(failure) && failure.value instanceof ToolCallWaiting) {
+  if (
+    Option.isSome(failure) &&
+    Schema.is(ToolCallWaiting)(failure.value) &&
+    Object.prototype.isPrototypeOf.call(ToolCallWaiting.prototype, failure.value)
+  ) {
     return failure.value;
   }
   const squashed = Cause.squash(cause);
 
-  return squashed instanceof ToolCallWaiting ? squashed : undefined;
+  return Schema.is(ToolCallWaiting)(squashed) &&
+    Object.prototype.isPrototypeOf.call(ToolCallWaiting.prototype, squashed)
+    ? squashed
+    : undefined;
 };
 
 /** Stable delegation identity supplied by the invoking delegation Tool handler. */

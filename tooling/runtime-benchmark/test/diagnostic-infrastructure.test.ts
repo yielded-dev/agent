@@ -23,13 +23,13 @@ it("completes selected workloads in fixture order regardless of request order", 
       const fs = yield* FileSystem.FileSystem;
       const directory = yield* fs.makeTempDirectoryScoped();
 
-      const options = Schema.decodeSync(DiagnosticWorkerOptions)({
+      const options = yield* Schema.decodeEffect(DiagnosticWorkerOptions)({
         output: `${directory}/worker.json`,
         cases: ["history-single", "history-unchanged"],
         warmups: 0,
         samples: 1,
         timeoutMs: 1_000,
-      });
+      }).pipe(Effect.orDie);
 
       const exit = yield* Effect.exit(runDiagnosticWorker(options));
 

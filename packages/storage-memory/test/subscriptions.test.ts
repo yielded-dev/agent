@@ -63,7 +63,7 @@ const Event = Schema.Struct({
   id: Schema.String,
   key: Schema.String,
   text: Schema.String,
-  occurredAtMillis: Schema.optionalKey(Schema.Number),
+  occurredAtMillis: Schema.optionalKey(Schema.Finite),
 });
 
 type Event = typeof Event.Type;
@@ -370,7 +370,10 @@ describe("Durable subscription delivery", () => {
 
         const changed = {
           ...original,
-          definitions: { ...definitions, agent: Schema.decodeSync(Digest)("b".repeat(64)) },
+          definitions: {
+            ...definitions,
+            agent: yield* Schema.decodeEffect(Digest)("b".repeat(64)).pipe(Effect.orDie),
+          },
         };
 
         for (const bindings of [[], [changed], [original, original]]) {

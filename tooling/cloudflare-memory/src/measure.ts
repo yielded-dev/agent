@@ -22,9 +22,9 @@ const Placement = Schema.Struct({
 });
 
 const Distribution = Schema.Struct({
-  p50: Schema.NullOr(Schema.Number),
-  p95: Schema.NullOr(Schema.Number),
-  p99: Schema.NullOr(Schema.Number),
+  p50: Schema.NullOr(Schema.Finite),
+  p95: Schema.NullOr(Schema.Finite),
+  p99: Schema.NullOr(Schema.Finite),
 });
 
 const Summary = Schema.Struct({
@@ -47,7 +47,7 @@ const Report = Schema.Struct({
   version: Schema.Literal(1),
   url: Schema.String,
   revision: Schema.String,
-  startedAt: Schema.Number,
+  startedAt: Schema.Finite,
   samplesPerWarmCohort: Schema.Natural,
   inactivitySeconds: Schema.Natural,
   notes: Schema.Array(Schema.String),

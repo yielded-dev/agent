@@ -702,24 +702,21 @@ export type ThreadPromptRead = typeof ThreadPromptRead.Type;
 
 /** Closed native selections; mutable metadata is read at this exact canonical tail. */
 export const ThreadSelection = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("RecordId"), recordId: RecordId }),
-  Schema.Struct({ _tag: Schema.Literal("RunInput"), runId: RunId }),
+  Schema.TaggedStruct("RecordId", { recordId: RecordId }),
+  Schema.TaggedStruct("RunInput", { runId: RunId }),
   /** Exact original declaration indexed by its deterministic settlement identity. */
-  Schema.Struct({
-    _tag: Schema.Literal("ToolDeclaration"),
+  Schema.TaggedStruct("ToolDeclaration", {
     settlementRecordId: RecordId,
     throughSequence: CanonicalSequence,
   }),
   /** Only the selected Run's facts; unrelated Thread traffic cannot enlarge its suffix. */
-  Schema.Struct({
-    _tag: Schema.Literal("RunEvidence"),
+  Schema.TaggedStruct("RunEvidence", {
     runId: RunId,
     submissionId: SubmissionId,
     throughSequence: CanonicalSequence,
   }),
   /** Exact declaration, this call's facts, and shared approval proof from its original batch. */
-  Schema.Struct({
-    _tag: Schema.Literal("OperationEvidence"),
+  Schema.TaggedStruct("OperationEvidence", {
     runId: RunId,
     toolCallId: ToolCallId,
     originRecordId: RecordId,
@@ -732,62 +729,50 @@ export const ThreadSelection = Schema.Union([
   }).check(
     Schema.makeFilter((selection) => selection.approvalToolCallIds.includes(selection.toolCallId)),
   ),
-  Schema.Struct({
-    _tag: Schema.Literal("LastAgentUpdate"),
+  Schema.TaggedStruct("LastAgentUpdate", {
     throughSequence: CanonicalSequence,
   }),
   /** Sparse canonical pages; callers bound total evidence before building model metadata. */
-  Schema.Struct({
-    _tag: Schema.Literal("PromptEvidence"),
+  Schema.TaggedStruct("PromptEvidence", {
     throughSequence: CanonicalSequence,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("LatestModelCompleted"),
+  Schema.TaggedStruct("LatestModelCompleted", {
     throughSequence: CanonicalSequence,
   }),
   /** Latest application input; framework worker completion/update messages are excluded. */
-  Schema.Struct({
-    _tag: Schema.Literal("LatestApplicationInput"),
+  Schema.TaggedStruct("LatestApplicationInput", {
     throughSequence: CanonicalSequence,
   }),
   /** Presence of durable ownership forbids an immediate-history writer on this Thread. */
-  Schema.Struct({
-    _tag: Schema.Literal("DurableHistoryOwner"),
+  Schema.TaggedStruct("DurableHistoryOwner", {
     throughSequence: CanonicalSequence,
   }),
   /** Latest rollover covering positions strictly before the addressed evidence. */
-  Schema.Struct({
-    _tag: Schema.Literal("ContextWindowBoundary"),
+  Schema.TaggedStruct("ContextWindowBoundary", {
     atSequence: CanonicalSequence,
     throughSequence: CanonicalSequence,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("DeliveryPredecessor"),
+  Schema.TaggedStruct("DeliveryPredecessor", {
     throughSequence: CanonicalSequence,
   }),
   /** Canonical creation/handoff intents retained independently of Run settlement. */
-  Schema.Struct({
-    _tag: Schema.Literal("WorkHandoffs"),
+  Schema.TaggedStruct("WorkHandoffs", {
     throughSequence: CanonicalSequence,
   }),
   /** Unresolved inputs only, selected through disposable work membership. */
-  Schema.Struct({
-    _tag: Schema.Literal("LiveWorkerInputs"),
+  Schema.TaggedStruct("LiveWorkerInputs", {
     throughSequence: CanonicalSequence,
     workerThreadId: Schema.optionalKey(ThreadId),
   }),
   /** A retained stop for the exact worker, independent of historical inputs. */
-  Schema.Struct({
-    _tag: Schema.Literal("WorkerStop"),
+  Schema.TaggedStruct("WorkerStop", {
     workerThreadId: ThreadId,
     throughSequence: CanonicalSequence,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("WorkerExecution"),
+  Schema.TaggedStruct("WorkerExecution", {
     expectedTailSequence: CanonicalSequence,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal("WorkerState"),
+  Schema.TaggedStruct("WorkerState", {
     expectedTailSequence: CanonicalSequence,
     sourceSubmissionId: Schema.optionalKey(SubmissionId),
   }),

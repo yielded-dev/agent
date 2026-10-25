@@ -201,7 +201,7 @@ export default {
         return new Response("Not found", { status: 404 });
       }).pipe(
         Effect.scoped,
-        Effect.catch(() => Effect.succeed(new Response("Invalid request", { status: 400 }))),
+        Effect.orElseSucceed(() => new Response("Invalid request", { status: 400 })),
       ),
     );
   },

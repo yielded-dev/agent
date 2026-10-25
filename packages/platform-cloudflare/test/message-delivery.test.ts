@@ -1,3 +1,4 @@
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { digestJson } from "@yielded/agent/digest";
 import { type AgentId } from "@yielded/agent/identifiers";
 import { MessageDeliveryStore, prepareMessageDelivery } from "@yielded/agent/message-delivery";
@@ -5,6 +6,7 @@ import { ApprovalDecisionCommand } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { DurableObject } from "effect-cf";
 import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it } from "vite-plus/test";
@@ -38,6 +40,11 @@ import {
   messageDeliveryHolds,
   messageDeliveryResources,
 } from "./message-delivery-fixture.ts";
+
+const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+  Effect.provide(BrowserCrypto.layer),
+  Effect.orDie,
+);
 
 const latch = () => {
   let resolve = () => {};
@@ -148,8 +155,10 @@ const withThreads = (
 ) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const source = `messages-source-${crypto.randomUUID()}`;
-      const destination = `messages-destination-${crypto.randomUUID()}`;
+      const effectContext = yield* Effect.context<never>();
+
+      const source = `messages-source-${yield* randomUUID}`;
+      const destination = `messages-destination-${yield* randomUUID}`;
       const now = Date.now() + 86_400_000;
 
       yield* TestClock.setTime(now);
@@ -176,7 +185,9 @@ const withThreads = (
         }),
       );
       yield* Effect.promise(() =>
-        body(source, destination, now, (millis) => Effect.runPromise(testClock.adjust(millis))),
+        body(source, destination, now, (millis) =>
+          Effect.runPromiseWith(effectContext)(testClock.adjust(millis)),
+        ),
       );
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   );

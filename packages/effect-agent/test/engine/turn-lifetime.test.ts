@@ -22,8 +22,8 @@ import * as Stream from "effect/Stream";
 let threadSequence = 0;
 
 const identifiers = Layer.succeed(IdGenerator, {
-  nextThreadId: Effect.sync(() =>
-    Schema.decodeSync(ThreadId)(`turn-lifetime-thread-${++threadSequence}`),
+  nextThreadId: Effect.suspend(() =>
+    Schema.decodeEffect(ThreadId)(`turn-lifetime-thread-${++threadSequence}`).pipe(Effect.orDie),
   ),
   nextRunId: Effect.succeed(Schema.decodeSync(RunId)("turn-lifetime-run")),
   nextTurnId: Effect.succeed(Schema.decodeSync(TurnId)("turn-lifetime-turn")),
@@ -138,10 +138,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("Turn lifetime", (it) =>
           Stream.runDrain,
           Effect.provide(
             tools.toLayer({
-              next: () =>
-                Effect.sync(() => {
-                  return "continue";
-                }),
+              next: () => Effect.succeed("continue"),
             }),
           ),
         );

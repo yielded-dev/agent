@@ -80,7 +80,7 @@ export class HostedAccounts extends Context.Service<
 
               return { displayName: session.displayName, funded } satisfies Account;
             },
-            Effect.catch(() => Effect.succeed(null)),
+            Effect.orElseSucceed(() => null),
           ),
         };
       }),

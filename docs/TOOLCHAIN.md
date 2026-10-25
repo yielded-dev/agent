@@ -3,22 +3,26 @@
 Use Vite+ (`vp`) for commands and Bun for dependencies. Versions live in
 [package.json](../package.json).
 
-| Command            | Purpose                                                   |
-| ------------------ | --------------------------------------------------------- |
-| `vp install`       | Install dependencies, patch the compiler, configure hooks |
-| `vp check`         | Check formatting and lint                                 |
-| `vp fmt`           | Format files                                              |
-| `vp run typecheck` | Check types with the patched Effect compiler              |
-| `vp run check`     | Run all static checks                                     |
-| `vp run test`      | Run all workspace tests                                   |
-| `vp run build`     | Build packages, docs, and the Action                      |
-| `vp run ready`     | Run check, test, and build before handoff                 |
-| `vp run docs:dev`  | Start the docs server                                     |
-| `vp env doctor`    | Diagnose local setup                                      |
+| Command            | Purpose                                             |
+| ------------------ | --------------------------------------------------- |
+| `vp install`       | Install dependencies and configure hooks            |
+| `vp check`         | Check formatting and lint                           |
+| `vp fmt`           | Format files                                        |
+| `vp run typecheck` | Check types and Effect diagnostics with effect-tsrs |
+| `vp run check`     | Run all static checks                               |
+| `vp run test`      | Run all workspace tests                             |
+| `vp run build`     | Build packages, docs, and the Action                |
+| `vp run ready`     | Run check, test, and build before handoff           |
+| `vp run docs:dev`  | Start the docs server                               |
+| `vp env doctor`    | Diagnose local setup                                |
 
 Use `vp run <task>` for other tasks and `vp help` for options.
-After installing with lifecycle scripts disabled, run `vp run patch:tsgo`.
-Typechecking also ensures the compiler is patched; Oxlint handles linting.
+Typechecking uses `effect-tsrs` for projects with Effect diagnostics and `tsrs` for
+the documentation project. Effect warnings remain visible but do not fail checks;
+TypeScript and configured Effect errors do. Neither checker requires patching after
+installation.
+`@effect/tsgo` remains available for its editor language service and tsconfig schema;
+Oxlint handles linting.
 
 ## Postgres tests
 

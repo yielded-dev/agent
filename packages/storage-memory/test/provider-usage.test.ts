@@ -106,8 +106,8 @@ for (const failure of ["open-part", "missing-usage"] as const) {
         RunToolAuthorization.allowAll,
         toolkit.toLayer({ lookup: () => Effect.succeed("found") }),
         DurableRuntimeConfig.layer({
-          deploymentId: Schema.decodeSync(DeploymentId)("usage-test"),
-          producerId: Schema.decodeSync(ProducerId)("usage-test"),
+          deploymentId: yield* Schema.decodeEffect(DeploymentId)("usage-test").pipe(Effect.orDie),
+          producerId: yield* Schema.decodeEffect(ProducerId)("usage-test").pipe(Effect.orDie),
           estimateCostMicrousd: () =>
             Effect.sync(() => {
               return {
@@ -124,16 +124,16 @@ for (const failure of ["open-part", "missing-usage"] as const) {
         const store = yield* ThreadStore;
 
         const runtime = yield* DurableAgentRuntime.pipe(
-          Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+          Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer))),
         );
 
-        const threadId = Schema.decodeSync(ThreadId)("usage-test");
+        const threadId = yield* Schema.decodeEffect(ThreadId)("usage-test").pipe(Effect.orDie);
         const agent = Agent.withModel(definition, model);
 
         yield* runtime.submit(agent, "go", {
           threadId,
-          principal: Schema.decodeSync(Principal)("viewer"),
-          idempotencyKey: Schema.decodeSync(IdempotencyKey)("input"),
+          principal: yield* Schema.decodeEffect(Principal)("viewer").pipe(Effect.orDie),
+          idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("input").pipe(Effect.orDie),
           definitions,
         });
         yield* runtime.processThread(agent, threadId);
@@ -292,8 +292,10 @@ it.live(
           approve: () => Effect.succeed("approved"),
         }),
         DurableRuntimeConfig.layer({
-          deploymentId: Schema.decodeSync(DeploymentId)("recovery-usage"),
-          producerId: Schema.decodeSync(ProducerId)("recovery-usage"),
+          deploymentId: yield* Schema.decodeEffect(DeploymentId)("recovery-usage").pipe(
+            Effect.orDie,
+          ),
+          producerId: yield* Schema.decodeEffect(ProducerId)("recovery-usage").pipe(Effect.orDie),
           estimateCostMicrousd: () =>
             Effect.succeed({
               costMicrousd: 25,
@@ -305,11 +307,11 @@ it.live(
 
       yield* Effect.gen(function* () {
         const store = yield* ThreadStore;
-        const threadId = Schema.decodeSync(ThreadId)("recovery-usage");
+        const threadId = yield* Schema.decodeEffect(ThreadId)("recovery-usage").pipe(Effect.orDie);
 
         const freshRuntime = DurableAgentRuntime.pipe(
           Effect.provide(
-            Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
+            Layer.fresh(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer))),
           ),
         );
 
@@ -320,8 +322,10 @@ it.live(
             // Native summaries cover prior Runs, so first create real canonical history.
             yield* runtime.submit(agent, "look up", {
               threadId,
-              principal: Schema.decodeSync(Principal)("viewer"),
-              idempotencyKey: Schema.decodeSync(IdempotencyKey)("history"),
+              principal: yield* Schema.decodeEffect(Principal)("viewer").pipe(Effect.orDie),
+              idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("history").pipe(
+                Effect.orDie,
+              ),
               definitions,
             });
             yield* runtime.processThread(agent, threadId);
@@ -329,8 +333,10 @@ it.live(
 
             const receipt = yield* runtime.submit(agent, "go", {
               threadId,
-              principal: Schema.decodeSync(Principal)("viewer"),
-              idempotencyKey: Schema.decodeSync(IdempotencyKey)("input"),
+              principal: yield* Schema.decodeEffect(Principal)("viewer").pipe(Effect.orDie),
+              idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("input").pipe(
+                Effect.orDie,
+              ),
               definitions,
             });
 
@@ -369,7 +375,7 @@ it.live(
             yield* runtime.resolveApproval(
               ApprovalDecisionCommand.make({
                 submissionId: receipt.submissionId,
-                toolCallId: Schema.decodeSync(ToolCallId)("approval-1"),
+                toolCallId: yield* Schema.decodeEffect(ToolCallId)("approval-1").pipe(Effect.orDie),
                 decision: "approved",
                 resolver: "usage-test",
                 reason: "resume accounting regression",

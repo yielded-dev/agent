@@ -540,7 +540,11 @@ it.effect.each(["Target.getTargetInfo", "Cloudflare.handoff"])(
       expect(diagnostic).toContain("private-cdp-command");
       expect(diagnostic).toContain("private-cdp-detach");
       for (const reason of failed.cause.reasons) {
-        if (Cause.isFailReason(reason) && reason.error instanceof BrowserSessionError) {
+        if (
+          Cause.isFailReason(reason) &&
+          Schema.is(BrowserSessionError)(reason.error) &&
+          Object.prototype.isPrototypeOf.call(BrowserSessionError.prototype, reason.error)
+        ) {
           const encoded = yield* Schema.encodeEffect(Schema.toCodecJson(BrowserSessionError))(
             reason.error,
           );
@@ -1229,11 +1233,14 @@ it.effect.each([
 
 it.effect("preserves a completed command while a delayed disconnect acknowledgment arrives", () =>
   Effect.gen(function* () {
+    const effectContext = yield* Effect.context<never>();
+
     const host = yield* BrowserSessions;
     const reference = yield* host.create(options, () => Effect.void);
     const closing = yield* Deferred.make<void>();
 
-    provider.delayRetirement = () => Effect.runSync(Deferred.succeed(closing, undefined));
+    provider.delayRetirement = () =>
+      Effect.runSyncWith(effectContext)(Deferred.succeed(closing, undefined));
     let completed = false;
 
     const attempt = yield* Effect.gen(function* () {

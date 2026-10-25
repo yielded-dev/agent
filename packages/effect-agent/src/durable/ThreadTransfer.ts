@@ -252,7 +252,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
   const page = yield* ThreadExport.makeEffect({
     ...manifest,
     transferFormat: "effect-agent/thread-transfer@4",
-    fromSequence: Schema.decodeSync(CanonicalSequence)(fromSequence),
+    fromSequence: yield* Schema.decodeEffect(CanonicalSequence)(fromSequence).pipe(Effect.orDie),
     ...canonical,
     ...facts,
     dependencies: transferDependencies(canonical.records),

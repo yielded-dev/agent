@@ -30,8 +30,7 @@ import * as Stream from "effect/Stream";
 const input = Schema.Struct({ question: Schema.String });
 const output = Schema.Struct({ answer: Schema.String });
 
-const areaConcern = Schema.Struct({
-  _tag: Schema.Literal("AreaConcern"),
+const areaConcern = Schema.TaggedStruct("AreaConcern", {
   area: Schema.String,
   recommendation: Schema.String,
 });

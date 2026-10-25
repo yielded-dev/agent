@@ -420,12 +420,12 @@ const readText = (selector?: string) =>
 const click = () => BrowserClickRequest.make({ selector: "button[type=submit]" });
 
 const fixtureLayer = (fixture: Fixture): Layer.Layer<InteractiveBrowser> =>
-  browserRunInteractiveLayer().pipe(
+  browserRunInteractiveLayer.pipe(
     Layer.provide(Layer.succeed(BrowserRunInteractiveBinding)(fixture.binding)),
   );
 
 const fixtureHostLayer = (fixture: Fixture): Layer.Layer<BrowserRunInteractiveHost> =>
-  browserRunInteractiveHostLayer().pipe(
+  browserRunInteractiveHostLayer.pipe(
     Layer.provide(Layer.succeed(BrowserRunInteractiveBinding)(fixture.binding)),
   );
 

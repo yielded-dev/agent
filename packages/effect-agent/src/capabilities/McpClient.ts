@@ -127,7 +127,7 @@ const protocolDefect = (message: string, cause?: unknown): RpcClientError.RpcCli
 const InitializeProtocolVersion = Schema.Struct({ protocolVersion: Schema.String });
 const decodeInitializeProtocolVersion = Schema.decodeUnknownOption(InitializeProtocolVersion);
 
-const ServerRequest = Schema.Struct({ _tag: Schema.Literal("Request"), tag: Schema.String });
+const ServerRequest = Schema.TaggedStruct("Request", { tag: Schema.String });
 const isServerRequest = Schema.is(ServerRequest);
 
 const isJsonRpcRequest = (message: unknown): message is RpcMessage.RequestEncoded =>
@@ -669,7 +669,7 @@ export const McpStdioTransport = {
 const ToolArguments = Schema.Record(Schema.String, Schema.Json);
 const decodeToolArguments = Schema.decodeUnknownEffect(ToolArguments);
 
-const errorText = (content: ReadonlyArray<typeof McpSchema.ContentBlock.Type>): string =>
+const errorText = (content: ReadonlyArray<McpSchema.ContentBlock>): string =>
   content
     .flatMap((block) => (block.type === "text" ? [block.text] : []))
     .join("\n")

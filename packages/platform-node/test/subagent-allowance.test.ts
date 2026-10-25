@@ -218,7 +218,9 @@ it.effect(
             yield* DurableWorkerBinding.make(child, digests).pipe(Effect.provide(handlers)),
           ];
 
-          const parentId = Schema.decodeSync(ThreadId)(`allowance-parent-${index}`);
+          const parentId = yield* Schema.decodeEffect(ThreadId)(`allowance-parent-${index}`).pipe(
+            Effect.orDie,
+          );
 
           const receipt = yield* withRuntime(
             Effect.gen(function* () {
@@ -226,8 +228,12 @@ it.effect(
 
               const receipt = yield* runtime.submit(parent, "probe", {
                 threadId: parentId,
-                principal: Schema.decodeSync(Principal)("allowance-test"),
-                idempotencyKey: Schema.decodeSync(IdempotencyKey)("one"),
+                principal: yield* Schema.decodeEffect(Principal)("allowance-test").pipe(
+                  Effect.orDie,
+                ),
+                idempotencyKey: yield* Schema.decodeEffect(IdempotencyKey)("one").pipe(
+                  Effect.orDie,
+                ),
                 definitions: digests,
               });
 
@@ -271,7 +277,7 @@ it.effect(
               yield* runtime.resolveApproval(
                 ApprovalDecisionCommand.make({
                   submissionId: childSubmission,
-                  toolCallId: Schema.decodeSync(ToolCallId)("probe-1"),
+                  toolCallId: yield* Schema.decodeEffect(ToolCallId)("probe-1").pipe(Effect.orDie),
                   decision: "approved",
                   resolver: "test",
                   reason: "first probe approved",

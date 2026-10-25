@@ -233,7 +233,7 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
             Effect.provideService(DurableObjectContext, { ctx: state, env }),
             Effect.provide(
               DurableAgentRuntime.layer.pipe(
-                Layer.provide(observedRuns.pipe(Layer.provide(runStorageLayer()))),
+                Layer.provide(observedRuns.pipe(Layer.provide(runStorageLayer))),
                 Layer.provide(observedLedger),
                 Layer.provide(
                   Layer.effect(

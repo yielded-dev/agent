@@ -1165,7 +1165,7 @@ it.effect(
         let dispatches = 0;
         let latest: Effect.Effect<WorkerSummary> = Effect.die("Worker not started");
         const corrections = ["clarification", "first email", "corrected email"];
-        const consentId = Schema.decodeSync(ToolCallId)("consent-1");
+        const consentId = yield* Schema.decodeEffect(ToolCallId)("consent-1").pipe(Effect.orDie);
 
         const toolkit = Toolkit.make(
           Tool.make("consent", {

@@ -246,8 +246,14 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer, RunContextPreparationPass
     it.effect("runs beyond default count ceilings with JSON-round-tripped unbounded policy", () =>
       Effect.gen(function* () {
         const policy = AgentPolicy.resolve({ maxTurns: null, maxToolCalls: null });
-        const encoded = Schema.encodeSync(Schema.toCodecJson(AgentPolicy))(policy);
-        const restored = Schema.decodeSync(Schema.toCodecJson(AgentPolicy))(encoded);
+
+        const encoded = yield* Schema.encodeEffect(Schema.toCodecJson(AgentPolicy))(policy).pipe(
+          Effect.orDie,
+        );
+
+        const restored = yield* Schema.decodeEffect(Schema.toCodecJson(AgentPolicy))(encoded).pipe(
+          Effect.orDie,
+        );
 
         expect(encoded).toMatchObject({ maxTurns: null, maxToolCalls: null });
 

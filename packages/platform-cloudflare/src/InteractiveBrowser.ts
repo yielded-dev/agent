@@ -96,9 +96,9 @@ const BoundedHostText = Schema.String.check(
 const BoundedRemoteText = Schema.String.check(Schema.isMaxLength(MAX_TEXT_LENGTH));
 
 const TextObservation = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("Text"), text: BoundedRemoteText }),
-  Schema.Struct({ _tag: Schema.Literal("MissingElement") }),
-  Schema.Struct({ _tag: Schema.Literal("OverLimit"), observed: Schema.Natural }),
+  Schema.TaggedStruct("Text", { text: BoundedRemoteText }),
+  Schema.TaggedStruct("MissingElement", {}),
+  Schema.TaggedStruct("OverLimit", { observed: Schema.Natural }),
 ]);
 
 const ActionTargetState = Schema.Struct({
@@ -289,7 +289,7 @@ export class BrowserRunHandoffState extends Schema.Class<BrowserRunHandoffState>
   durationMs: Schema.optionalKey(HandoffDuration),
 }) {}
 
-type BrowserFailure = typeof InteractiveBrowserError.Type;
+type BrowserFailure = InteractiveBrowserError;
 type BrowserOperation = InteractiveBrowserActionError["operation"];
 
 interface InteractiveBrowserPolicySnapshot {
@@ -3020,14 +3020,14 @@ const makeHostService = (
               }, "Detaching the browser transport failed").close;
               releaseOwner();
             }).pipe(
-              Effect.catchTag("InteractiveBrowserActionError", (error) =>
-                reportBrowserCause("interactive.detach", Cause.fail(error)).pipe(
-                  Effect.andThen(Effect.fail(reportedBrowserError(actionError("close")))),
-                ),
-              ),
-              Effect.catchTag("InteractiveBrowserProtocolError", (error) =>
-                failReportedProtocol("interactive.detach", error),
-              ),
+              Effect.catchTags({
+                InteractiveBrowserActionError: (error) =>
+                  reportBrowserCause("interactive.detach", Cause.fail(error)).pipe(
+                    Effect.andThen(Effect.fail(reportedBrowserError(actionError("close")))),
+                  ),
+                InteractiveBrowserProtocolError: (error) =>
+                  failReportedProtocol("interactive.detach", error),
+              }),
             ),
           ),
         );
@@ -3061,7 +3061,7 @@ const makeHostService = (
               ),
             );
 
-            return cached;
+            return yield* Effect.succeed(cached);
           }),
         );
 
@@ -3284,24 +3284,25 @@ const makeHostService = (
 };
 
 /** Cloudflare host controls and private session identity for one scoped Browser Run pass. */
-export const browserRunInteractiveHostLayer = (): Layer.Layer<
+export const browserRunInteractiveHostLayer: Layer.Layer<
   BrowserRunInteractiveHost,
   never,
   BrowserRunInteractiveBinding
-> =>
+> = Layer.fresh(
   Layer.effect(
     BrowserRunInteractiveHost,
     Effect.gen(function* () {
       return makeHostService(yield* BrowserRunInteractiveBinding);
     }),
-  );
+  ),
+);
 
 /** Worker-only generic adapter; Cloudflare identity and controls remain host-only. */
-export const browserRunInteractiveLayer = (): Layer.Layer<
+export const browserRunInteractiveLayer: Layer.Layer<
   InteractiveBrowser,
   never,
   BrowserRunInteractiveBinding
-> =>
+> = Layer.fresh(
   Layer.effect(
     InteractiveBrowser,
     Effect.gen(function* () {
@@ -3312,7 +3313,8 @@ export const browserRunInteractiveLayer = (): Layer.Layer<
         open: (policy) => host.open(policy).pipe(Effect.map((session) => session.handle)),
       });
     }),
-  );
+  ),
+);
 
 /** Resolved Worker binding, cleanup credentials, and optional initial viewport. */
 export interface CloudflareInteractiveBrowserOptions extends BrowserRunLifecycleOptions {
@@ -3333,8 +3335,8 @@ export const CloudflareInteractiveBrowser = {
    * an explicit policy and Scope; no browser is launched during Layer construction.
    */
   layer: (options: CloudflareInteractiveBrowserOptions) =>
-    browserRunInteractiveLayer().pipe(Layer.provide(interactiveBindingLayer(options))),
+    browserRunInteractiveLayer.pipe(Layer.provide(interactiveBindingLayer(options))),
   /** Opt into private host controls instead of exposing them through the generic service. */
   hostLayer: (options: CloudflareInteractiveBrowserOptions) =>
-    browserRunInteractiveHostLayer().pipe(Layer.provide(interactiveBindingLayer(options))),
+    browserRunInteractiveHostLayer.pipe(Layer.provide(interactiveBindingLayer(options))),
 };

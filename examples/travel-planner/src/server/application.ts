@@ -64,7 +64,7 @@ const readThread = Effect.fn("readPlannerThread")(function* (id: string) {
   const store = yield* ThreadStore;
 
   const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId })).pipe(
-    Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(undefined)),
+    Effect.catchTag("ThreadNotMaterialized", () => Effect.as(Effect.void, undefined)),
     Effect.mapError(unavailable),
   );
 
@@ -403,16 +403,14 @@ export const plannerSnapshot = Effect.fn("plannerSnapshot")(function* (
 
       const submissionId = yield* Schema.decodeEffect(SubmissionLookupById.fields.submissionId)(
         message.submissionId,
-      ).pipe(Effect.mapError(unavailable));
+      );
 
-      const submission = yield* ledger
-        .lookup(SubmissionLookupById.make({ submissionId }))
-        .pipe(Effect.mapError(unavailable));
+      const submission = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
       return Option.isSome(submission)
         ? { ...message, requestId: submission.value.idempotencyKey }
         : message;
-    }),
+    }, Effect.mapError(unavailable)),
   );
 
   const queuedMessages = yield* Effect.forEach(
@@ -505,7 +503,7 @@ export const voiceWork = Effect.fn("voiceWork")(function* (request: typeof Voice
   const tail = yield* store
     .inspectTail(ThreadTailRequest.make({ threadId: submission.threadId }))
     .pipe(
-      Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(undefined)),
+      Effect.catchTag("ThreadNotMaterialized", () => Effect.as(Effect.void, undefined)),
       Effect.mapError(unavailable),
     );
 

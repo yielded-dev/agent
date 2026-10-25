@@ -56,7 +56,7 @@ it.effect(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const directory = yield* fs.makeTempDirectoryScoped({ prefix: "successor-report-" });
-        const peer = Schema.decodeSync(Principal)("current-peer");
+        const peer = yield* Schema.decodeEffect(Principal)("current-peer").pipe(Effect.orDie);
 
         const child = Agent.withModel(
           Agent.make("successor-report-child", {

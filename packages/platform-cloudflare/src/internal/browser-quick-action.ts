@@ -130,7 +130,7 @@ const QuickActionErrorEnvelope = Schema.Struct({
   errors: Schema.Array(
     Schema.Struct({
       message: Schema.String,
-      code: Schema.optionalKey(Schema.Number),
+      code: Schema.optionalKey(Schema.Finite),
       detail: Schema.optionalKey(Schema.String),
       path: Schema.optionalKey(Schema.String),
     }),
@@ -504,17 +504,18 @@ const makeCapture = (browser: BrowserQuickActionClient): PageCaptureCapture =>
   });
 
 /** Stateless captures require explicit host-owned browser binding authority. */
-export const browserQuickActionCaptureLayer = (): Layer.Layer<
+export const browserQuickActionCaptureLayer: Layer.Layer<
   PageCapture,
   never,
   BrowserQuickActionBrowserBinding
-> =>
+> = Layer.fresh(
   Layer.effect(
     PageCapture,
     Effect.map(BrowserQuickActionBrowserBinding, (browser) =>
       PageCapture.of({ capture: makeCapture(browser) }),
     ),
-  );
+  ),
+);
 
 const screenshotOptions = (request: PageScreenshotRequest): BrowserRunScreenshotOptions => ({
   ...quickActionCommonOptions(request),
@@ -657,14 +658,15 @@ const makeScreenshot = (browser: BrowserQuickActionClient): PageScreenshotCaptur
   });
 
 /** Native Browser Run screenshot adapter. It retains PNG bytes only for the caller's result. */
-export const browserQuickActionScreenshotLayer = (): Layer.Layer<
+export const browserQuickActionScreenshotLayer: Layer.Layer<
   PageScreenshot,
   never,
   BrowserQuickActionBrowserBinding
-> =>
+> = Layer.fresh(
   Layer.effect(
     PageScreenshot,
     Effect.map(BrowserQuickActionBrowserBinding, (browser) =>
       PageScreenshot.of({ capture: makeScreenshot(browser) }),
     ),
-  );
+  ),
+);

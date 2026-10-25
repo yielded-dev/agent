@@ -125,7 +125,7 @@ const DEFINITIONS = DefinitionDigests.make({ agent: DIGEST, model: DIGEST, tools
 const HISTORY_RECORDS = 2_050;
 
 const runtimeLayer = DurableAgentRuntime.layer.pipe(
-  Layer.provide(runStorageLayer()),
+  Layer.provide(runStorageLayer),
   Layer.provideMerge(
     Layer.mergeAll(
       countingThreadStoreLayer,

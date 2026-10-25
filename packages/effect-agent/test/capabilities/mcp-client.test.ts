@@ -54,7 +54,7 @@ const callHandler = Effect.fnUntraced(function* (
 const JsonRpcRequest = Schema.fromJsonString(
   Schema.Struct({
     jsonrpc: Schema.Literal("2.0"),
-    id: Schema.optionalKey(Schema.Union([Schema.String, Schema.Number])),
+    id: Schema.optionalKey(Schema.Union([Schema.String, Schema.Finite])),
     method: Schema.String,
     params: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
   }),
