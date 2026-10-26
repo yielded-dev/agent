@@ -15,7 +15,7 @@
     "@yielded/agent": "workspace:*",
     "@yielded/agent-example-auth": "workspace:*",
     "@yielded/agent-platform-cloudflare": "workspace:*",
-    "@yielded/sandbox": "0.3.2",
+    "@yielded/sandbox": "0.6.2",
     "@yielded/ui": "workspace:*",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
@@ -37,6 +37,6 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "4.151.0"
+    "wrangler": "4.152.0"
   }
 }
