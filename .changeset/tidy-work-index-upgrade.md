@@ -6,4 +6,4 @@
 "@yielded/agent-platform-cloudflare": patch
 ---
 
-Preserve work discovery across storage upgrades and automatically finish interrupted index transitions in bounded recovery passes without replaying uncertain operations.
+Repair SQL work-index upgrades while preserving unfinished operations. SQL discovery advances incomplete upgrades in bounded passes; Cloudflare maintenance continues them automatically, including previously parked recovery. Operations with unknown external outcomes remain unresolved.
