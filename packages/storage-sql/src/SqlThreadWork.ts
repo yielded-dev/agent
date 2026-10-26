@@ -1257,7 +1257,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
         }),
       );
     }),
-    rebuild,
+    rebuild: (input) => rebuild(input),
   };
 
   return {

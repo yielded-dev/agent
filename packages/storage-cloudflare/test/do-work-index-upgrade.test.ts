@@ -166,6 +166,7 @@ it("continues a long upgrade after cold opens and records only actual page progr
 
         if (store.work === undefined) return yield* Effect.fail("Work discovery is unavailable");
         yield* store.work.page({ threadId, limit: 32 });
+        yield* Effect.forEach([{ threadId }, { threadId }], store.work.rebuild);
       }).pipe(
         Effect.provide(layer({ storage })),
         Effect.provideService(SqlStorageProgress, {
