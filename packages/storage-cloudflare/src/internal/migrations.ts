@@ -6,7 +6,10 @@ import {
   SQL_PROMPT_PREDICATE,
   upgradeExecutionCheckpoints,
 } from "@yielded/agent-storage-sql/sql-thread-native-reads";
-import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
+import {
+  createSqlThreadWorkTables,
+  upgradeSqlThreadWorkIndex,
+} from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
@@ -22,7 +25,7 @@ import {
   DoStorageError,
 } from "../DoStorageError.ts";
 
-export const CurrentDoStorageVersion = 30;
+export const CurrentDoStorageVersion = 31;
 
 /** Exact released layout, retained for predecessor validation. */
 const layout28Statements = [
@@ -172,6 +175,7 @@ const layout26 = inspection(26, layout27Statements);
 const layout27 = inspection(27, layout27Statements);
 const layout28 = inspection(28, layout28Statements);
 const layout29 = inspection(29, layoutStatements);
+const layout30 = inspection(30, layoutStatements);
 
 const inspectStorage = Effect.fnUntraced(function* (
   allowUpgrade = false,
@@ -202,20 +206,19 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   const version = legacy.value;
 
-  if (
-    (version === 28 || version === 29 || version === CurrentDoStorageVersion) &&
-    objects.some(({ name }) => name === "effect_agent_canonical_batches_last")
-  )
+  if (version >= 28 && objects.some(({ name }) => name === "effect_agent_canonical_batches_last"))
     return yield* incompatible(version, "Layout contains the retired batch-end index.");
-  if (
-    (version === 29 || version === CurrentDoStorageVersion) &&
-    objects.some(({ name }) => name === "effect_agent_checkpoints")
-  )
+  if (version >= 29 && objects.some(({ name }) => name === "effect_agent_checkpoints"))
     return yield* incompatible(version, "Current layout contains retired generic checkpoints.");
 
   if (
     allowUpgrade &&
-    (version === 25 || version === 26 || version === 27 || version === 28 || version === 29)
+    (version === 25 ||
+      version === 26 ||
+      version === 27 ||
+      version === 28 ||
+      version === 29 ||
+      version === 30)
   ) {
     if (version === 25 && objects.some(({ name }) => addedIndexes.has(name)))
       return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
@@ -229,7 +232,9 @@ const inspectStorage = Effect.fnUntraced(function* (
             ? layout27
             : version === 28
               ? layout28
-              : layout29;
+              : version === 29
+                ? layout29
+                : layout30;
 
     const header = yield* predecessor.readHeader(objects, version);
 
@@ -251,7 +256,7 @@ export const readDoStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layouts 25–29. */
+/** Initialize fresh storage or atomically upgrade the exact released layouts 25–30. */
 const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
@@ -260,7 +265,7 @@ const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(functi
       Effect.gen(function* () {
         const header = yield* inspectStorage(true);
 
-        if (header !== undefined && header.layoutVersion < CurrentDoStorageVersion)
+        if (header !== undefined && header.layoutVersion < 30)
           yield* assertLegacyMessagePublicationDrained().pipe(
             Effect.mapError((cause) =>
               cause.reason === "conflict"
@@ -306,19 +311,26 @@ const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(functi
           );
         }
         if (header !== undefined && header.layoutVersion < CurrentDoStorageVersion) {
-          yield* sql`DROP INDEX IF EXISTS effect_agent_records_delivery_predecessor`;
-          yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_message`;
-          yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_peer`;
-          if (header.layoutVersion <= 27)
-            yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
-          // Retire only the derived generic snapshot cache. This step preserves the exact
-          // canonical and operational bytes; earlier layout conversions remain independent.
-          if (header.layoutVersion <= 28) yield* sql`DROP TABLE effect_agent_checkpoints`;
-          yield* createSqlThreadWorkTables().pipe(
+          yield* upgradeSqlThreadWorkIndex().pipe(
             Effect.mapError((cause) =>
               DoStorageError.make({ operation: cause.operation, message: cause.message, cause }),
             ),
           );
+          if (header.layoutVersion < 30) {
+            yield* sql`DROP INDEX IF EXISTS effect_agent_records_delivery_predecessor`;
+            yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_message`;
+            yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_peer`;
+            if (header.layoutVersion <= 27)
+              yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
+            // Retire only the derived generic snapshot cache. This step preserves the exact
+            // canonical and operational bytes; earlier layout conversions remain independent.
+            if (header.layoutVersion <= 28) yield* sql`DROP TABLE effect_agent_checkpoints`;
+            yield* createSqlThreadWorkTables().pipe(
+              Effect.mapError((cause) =>
+                DoStorageError.make({ operation: cause.operation, message: cause.message, cause }),
+              ),
+            );
+          }
           yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentDoStorageVersion} WHERE singleton=1`;
           yield* sql`UPDATE effect_agent_meta SET value=${String(CurrentDoStorageVersion)} WHERE key='storage_version'`;
 

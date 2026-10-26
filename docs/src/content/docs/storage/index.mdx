@@ -79,6 +79,11 @@ See [operations](/guide/operations/) for the procedure.
 Adapters reject unsupported or ambiguous storage layouts and record formats without changing
 the store.
 
+Recognized SQL layout upgrades preserve unfinished work and continue an incomplete work-index
+transition in bounded discovery passes. Cloudflare maintenance schedules the next pass while
+progress continues. This does not replay operations whose external outcome is unknown;
+missing or damaged indexes still require explicit repair.
+
 ## Build another adapter
 
 `@yielded/agent-storage-sql` provides shared SQL implementations. Durable adapters

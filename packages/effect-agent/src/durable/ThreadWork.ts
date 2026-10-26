@@ -214,7 +214,8 @@ export interface ThreadWorkStorage {
 /**
  * Inventories combine current admission/delivery owners with canonical operations and handoffs.
  * Cursors are Thread-bound, forward-only live scans. Revalidate selected candidates; creations
- * before an already consumed cursor appear in the next scan. Rebuild never runs implicitly.
+ * before an already consumed cursor appear in the next scan. Missing or damaged indexes need
+ * explicit repair. A validated adapter layout migration may continue in bounded page calls.
  * Layer construction requires the adapter's native work-discovery port.
  */
 export class ThreadWorkDiscovery extends Context.Service<ThreadWorkDiscovery, ThreadWorkStorage>()(

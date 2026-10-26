@@ -8,7 +8,10 @@ import {
   SQL_PROMPT_PREDICATE,
   upgradeExecutionCheckpoints,
 } from "@yielded/agent-storage-sql/sql-thread-native-reads";
-import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
+import {
+  createSqlThreadWorkTables,
+  upgradeSqlThreadWorkIndex,
+} from "@yielded/agent-storage-sql/sql-thread-work";
 import { CURRENT_RECORD_FORMAT, PROMPT_EVIDENCE_TAGS } from "@yielded/agent/records";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -21,7 +24,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 30;
+export const CurrentPostgresStorageVersion = 31;
 
 /** The released layout 25 already has observe_settlement; only these indexes are new. */
 const layout26IndexStatements = {
@@ -1122,7 +1125,8 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
         legacy.version === 26 ||
         legacy.version === 27 ||
         legacy.version === 28 ||
-        legacy.version === 29)
+        legacy.version === 29 ||
+        legacy.version === 30)
     )
   )
     return yield* incompatible(legacy.version, `Unsupported storage version ${legacy.version}.`);
@@ -1458,22 +1462,30 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
       header.layoutVersion !== 26 &&
       header.layoutVersion !== 27 &&
       header.layoutVersion !== 28 &&
-      header.layoutVersion !== 29
+      header.layoutVersion !== 29 &&
+      header.layoutVersion !== 30
     )
       return yield* incompatible(header.layoutVersion, "Unsupported layout upgrade.");
 
-    yield* assertLegacyMessagePublicationDrained(namespace).pipe(
+    if (header.layoutVersion < 30)
+      yield* assertLegacyMessagePublicationDrained(namespace).pipe(
+        Effect.mapError((cause) =>
+          cause.reason === "conflict"
+            ? incompatible(
+                header.layoutVersion,
+                "Recover work discovery and drain peer, report and update publication using the previous library version before upgrading.",
+              )
+            : PostgresStorageError.make({
+                operation: cause.operation,
+                message: cause.message,
+                cause,
+              }),
+        ),
+      );
+
+    yield* upgradeSqlThreadWorkIndex(namespace).pipe(
       Effect.mapError((cause) =>
-        cause.reason === "conflict"
-          ? incompatible(
-              header.layoutVersion,
-              "Recover work discovery and drain peer, report and update publication using the previous library version before upgrading.",
-            )
-          : PostgresStorageError.make({
-              operation: cause.operation,
-              message: cause.message,
-              cause,
-            }),
+        PostgresStorageError.make({ operation: cause.operation, message: cause.message, cause }),
       ),
     );
 
@@ -1509,20 +1521,24 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
           }),
         ),
       );
-    if (header.layoutVersion <= 27)
-      yield* execute(sql`DROP INDEX ${table("effect_agent_canonical_batches_last")}`);
-    // Retire only the derived generic snapshot cache. This step preserves the exact
-    // canonical and operational bytes; earlier layout conversions remain independent.
-    if (header.layoutVersion < 29)
-      yield* execute(sql`DROP TABLE ${table("effect_agent_checkpoints")}`);
-    yield* execute(sql`DROP INDEX IF EXISTS ${table("effect_agent_records_delivery_predecessor")}`);
-    yield* execute(sql`DROP INDEX IF EXISTS ${table("effect_agent_work_entries_message")}`);
-    yield* execute(sql`DROP INDEX IF EXISTS ${table("effect_agent_work_entries_peer")}`);
-    yield* createSqlThreadWorkTables(namespace).pipe(
-      Effect.mapError((cause) =>
-        PostgresStorageError.make({ operation: cause.operation, message: cause.message, cause }),
-      ),
-    );
+    if (header.layoutVersion < 30) {
+      if (header.layoutVersion <= 27)
+        yield* execute(sql`DROP INDEX ${table("effect_agent_canonical_batches_last")}`);
+      // Retire only the derived generic snapshot cache. This step preserves the exact
+      // canonical and operational bytes; earlier layout conversions remain independent.
+      if (header.layoutVersion < 29)
+        yield* execute(sql`DROP TABLE ${table("effect_agent_checkpoints")}`);
+      yield* execute(
+        sql`DROP INDEX IF EXISTS ${table("effect_agent_records_delivery_predecessor")}`,
+      );
+      yield* execute(sql`DROP INDEX IF EXISTS ${table("effect_agent_work_entries_message")}`);
+      yield* execute(sql`DROP INDEX IF EXISTS ${table("effect_agent_work_entries_peer")}`);
+      yield* createSqlThreadWorkTables(namespace).pipe(
+        Effect.mapError((cause) =>
+          PostgresStorageError.make({ operation: cause.operation, message: cause.message, cause }),
+        ),
+      );
+    }
     yield* execute(
       sql`UPDATE ${table("effect_agent_storage_version")} SET version=${CurrentPostgresStorageVersion} WHERE id=TRUE`,
     );
