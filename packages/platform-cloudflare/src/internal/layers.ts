@@ -695,6 +695,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                   DueQueue.Native,
                   DueQueue.Publication,
                 ]),
+                Match.when("work-index", () => [DueQueue.Native]),
                 Match.when("delivery", () => [
                   DueQueue.Messages,
                   ...(options.lifecyclePublication === undefined ? [] : [DueQueue.Lifecycle]),

@@ -8,7 +8,10 @@ import {
   SQL_PROMPT_PREDICATE,
   upgradeExecutionCheckpoints,
 } from "@yielded/agent-storage-sql/sql-thread-native-reads";
-import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
+import {
+  createSqlThreadWorkTables,
+  upgradeSqlThreadWorkIndex,
+} from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import * as Effect from "effect/Effect";
@@ -22,7 +25,7 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 30;
+export const CurrentSqliteStorageVersion = 31;
 
 /** Exact released layout, retained for predecessor validation. */
 const layout27Statements = [
@@ -193,6 +196,7 @@ const layout26 = inspection(26, layout27Statements);
 const layout27 = inspection(27, layout27Statements);
 const layout28 = inspection(28, layout28Statements);
 const layout29 = inspection(29, layoutStatements);
+const layout30 = inspection(30, layoutStatements);
 
 const inspectStorage = Effect.fnUntraced(function* (
   allowUpgrade = false,
@@ -222,7 +226,12 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   if (
     allowUpgrade &&
-    (version === 25 || version === 26 || version === 27 || version === 28 || version === 29)
+    (version === 25 ||
+      version === 26 ||
+      version === 27 ||
+      version === 28 ||
+      version === 29 ||
+      version === 30)
   ) {
     if (version === 25 && objects.some(({ name }) => addedIndexes.has(name)))
       return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
@@ -236,7 +245,9 @@ const inspectStorage = Effect.fnUntraced(function* (
             ? layout27
             : version === 28
               ? layout28
-              : layout29;
+              : version === 29
+                ? layout29
+                : layout30;
 
     const header = yield* predecessor.readHeader(objects, version);
 
@@ -265,7 +276,7 @@ export const readSqliteStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layouts 25–29. */
+/** Initialize fresh storage or atomically upgrade the exact released layouts 25–30. */
 export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
@@ -281,7 +292,7 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
     Effect.gen(function* () {
       const header = yield* inspectStorage(true);
 
-      if (header !== undefined && header.layoutVersion < CurrentSqliteStorageVersion)
+      if (header !== undefined && header.layoutVersion < 30)
         yield* assertLegacyMessagePublicationDrained().pipe(
           Effect.mapError((cause) =>
             cause.reason === "conflict"
@@ -335,18 +346,30 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
         );
       }
       if (header !== undefined && header.layoutVersion < CurrentSqliteStorageVersion) {
-        if (header.layoutVersion <= 27) yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
-        // Retire only the derived generic snapshot cache. This step preserves the exact
-        // canonical and operational bytes; earlier layout conversions remain independent.
-        if (header.layoutVersion < 29) yield* sql`DROP TABLE effect_agent_checkpoints`;
-        yield* sql`DROP INDEX IF EXISTS effect_agent_records_delivery_predecessor`;
-        yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_message`;
-        yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_peer`;
-        yield* createSqlThreadWorkTables().pipe(
+        yield* upgradeSqlThreadWorkIndex().pipe(
           Effect.mapError((cause) =>
             SqliteStorageError.make({ operation: cause.operation, message: cause.message, cause }),
           ),
         );
+        if (header.layoutVersion < 30) {
+          if (header.layoutVersion <= 27)
+            yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
+          // Retire only the derived generic snapshot cache. This step preserves the exact
+          // canonical and operational bytes; earlier layout conversions remain independent.
+          if (header.layoutVersion < 29) yield* sql`DROP TABLE effect_agent_checkpoints`;
+          yield* sql`DROP INDEX IF EXISTS effect_agent_records_delivery_predecessor`;
+          yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_message`;
+          yield* sql`DROP INDEX IF EXISTS effect_agent_work_entries_peer`;
+          yield* createSqlThreadWorkTables().pipe(
+            Effect.mapError((cause) =>
+              SqliteStorageError.make({
+                operation: cause.operation,
+                message: cause.message,
+                cause,
+              }),
+            ),
+          );
+        }
         yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentSqliteStorageVersion} WHERE singleton=1`;
         yield* sql.unsafe(`PRAGMA user_version = ${CurrentSqliteStorageVersion}`).withoutTransform;
 

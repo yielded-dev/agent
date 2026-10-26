@@ -18,12 +18,14 @@ export type SqlStorageProgressKind =
   | "control"
   | "lifecycle"
   | "lifecycle-ack"
+  | "work-index"
   | "delivery";
 
 /**
  * Source-transaction enrollment for durable maintenance. Call only after a new fact was
- * written, before its transaction commits. Replays, claims, leases and retry clocks are not
- * progress. Platforms may atomically replenish their finite maintenance budget and alarm;
+ * written or a validated layout migration advances, before its transaction commits.
+ * Replays, claims, leases and retry clocks are not progress. Platforms may atomically
+ * replenish their finite maintenance budget and alarm;
  * ordinary SQL consumers do not need an alarm implementation.
  */
 export const SqlStorageProgress = Context.Reference<{

@@ -43,6 +43,7 @@ import type * as Statement from "effect/sql/Statement";
 import { sqliteJsonText } from "./internal/sql-json.ts";
 import { makeCanonicalStorage, recordBatchId, RECORD_TAGS } from "./SqlCanonicalStorage.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
+import { SqlStorageProgress } from "./SqlStorageProgress.ts";
 import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 import { canonicalRecordMetadata, canonicalRecordPointers } from "./SqlThreadNativeReads.ts";
 
@@ -105,7 +106,7 @@ export const createSqlThreadWorkTables = Effect.fnUntraced(function* (namespace?
 
 const Header = Schema.Struct({
   version: SqlInteger,
-  state: Schema.Literals(["ready", "rebuilding"]),
+  state: Schema.Literals(["ready", "rebuilding", "upgrading"]),
   through_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
   reporting: SqlInteger.pipe(Schema.decodeTo(Schema.Literals([0, 1, 2]))),
   entry_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
@@ -115,6 +116,80 @@ const Header = Schema.Struct({
 });
 
 const decodeHeader = Schema.decodeUnknownEffect(Schema.Array(Header));
+
+const isUpgrading = (header: typeof Header.Type | undefined) =>
+  header?.version === 3 && header.state === "upgrading";
+
+/**
+ * Layout 31 owns this exact v3 publication-index transition. Validate the retained
+ * prefix before removing outbox-owned handoffs; never relabel a damaged catalogue.
+ * A stale prefix keeps an explicit migration marker for bounded discovery passes.
+ * The adapter owns the surrounding layout transaction and compatibility checks.
+ */
+export const upgradeSqlThreadWorkIndex = Effect.fnUntraced(function* (namespace?: string) {
+  const sql = yield* SqlClient.SqlClient;
+  const { table, execute } = yield* makeSqlQuery(namespace);
+
+  const query = <A extends object>(statement: Statement.Statement<A>) =>
+    execute(statement).pipe(Effect.mapError((cause) => failure("upgrade work index", cause)));
+
+  if (
+    (yield* query(sql`SELECT 1 FROM ${table("effect_agent_threads")}
+    WHERE work_version NOT IN (3, ${WORK_INDEX_VERSION}) LIMIT 1`)).length > 0
+  )
+    return yield* failure("unsupported work index upgrade");
+  if (
+    (yield* query(sql`SELECT 1 FROM ${table("effect_agent_threads")}
+    WHERE work_version=3 LIMIT 1`)).length === 0
+  )
+    return;
+
+  const present = yield* query(
+    sql.onDialectOrElse({
+      pg: () => sql`SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname=${namespace ?? "public"} AND c.relname='effect_agent_work_entries' AND c.relkind='r'`,
+      orElse: () =>
+        sql`SELECT 1 FROM sqlite_master WHERE type='table' AND name='effect_agent_work_entries'`,
+    }),
+  );
+
+  if (present.length === 0) return yield* failure("missing legacy work index");
+
+  const invalid = yield* query(sql`SELECT 1 FROM ${table("effect_agent_threads")} AS owner
+    WHERE work_version=3 AND (work_state<>'ready' OR work_through_sequence<0
+      OR work_through_sequence>tail_sequence OR work_reporting NOT IN (0,1,2)
+      OR work_entry_count<>(SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} AS work WHERE work.thread_id=owner.thread_id)
+      OR worker_input_sequence<0 OR worker_input_sequence>work_through_sequence
+      OR worker_settlement_sequence<0 OR worker_settlement_sequence>work_through_sequence
+      OR (work_reporting=0 AND (worker_input_sequence IS NOT NULL OR worker_settlement_sequence IS NOT NULL))) LIMIT 1`);
+
+  if (invalid.length > 0) return yield* failure("invalid legacy work prefix");
+
+  const unpublished = yield* query(sql`SELECT 1 FROM ${table("effect_agent_work_entries")} AS work
+    JOIN ${table("effect_agent_threads")} AS owner ON owner.thread_id=work.thread_id
+    WHERE owner.work_version=3 AND work.owner_tag='Handoff' AND work.handoff_kind IN ('peer','report','update')
+      AND (work.message_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM ${table("effect_agent_message_deliveries")} AS delivery
+        WHERE delivery.owner_thread_id=work.thread_id AND ${sql.onDialectOrElse({
+          pg: () => sql`(delivery.read_metadata ->> 'messageId')`,
+          orElse: () => sql`json_quote(delivery.message_id)`,
+        })}=work.message_id)) LIMIT 1`);
+
+  if (unpublished.length > 0) return yield* failure("unpublished legacy work handoff");
+  yield* query(sql`DELETE FROM ${table("effect_agent_work_entries")}
+    WHERE owner_tag='Handoff' AND handoff_kind IN ('peer','report','update')
+      AND thread_id IN (SELECT thread_id FROM ${table("effect_agent_threads")} WHERE work_version=3)`);
+  yield* query(sql`UPDATE ${table("effect_agent_threads")} AS owner SET
+    work_version=CASE WHEN work_through_sequence=tail_sequence THEN ${WORK_INDEX_VERSION} ELSE 3 END,
+    work_state=CASE WHEN work_through_sequence=tail_sequence THEN 'ready' ELSE 'upgrading' END,
+    work_entry_count=(SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} AS work WHERE work.thread_id=owner.thread_id)
+    WHERE work_version=3`);
+  // The broken release may already have parked discovery. Enroll the first
+  // recovery opportunity with this recognized transition, even without new input.
+  yield* (yield* SqlStorageProgress)
+    .committed("work-index")
+    .pipe(Effect.mapError((cause) => failure("enroll work index upgrade", cause)));
+});
 
 const workerReportingMode = (reporting: typeof Header.Type.reporting): WorkerReportingMode =>
   reporting === 1 ? "standard" : reporting === 2 ? "private" : "none";
@@ -159,6 +234,7 @@ const WorkThreadRows = Schema.Array(Schema.Struct({ thread_id: ThreadId }));
 export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThreadWorkOptions = {}) {
   const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
+  const progress = yield* SqlStorageProgress;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
   const recordJson = canonicalRecordJson(sql, options.namespace);
   const physical = yield* makeCanonicalStorage(options.namespace);
@@ -250,7 +326,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
     if (
       value === undefined ||
-      value.version !== WORK_INDEX_VERSION ||
+      (value.version !== WORK_INDEX_VERSION && !isUpgrading(value)) ||
+      (value.state === "upgrading" && value.version !== 3) ||
       value.entry_count !== value.actual_count
     )
       return undefined;
@@ -268,14 +345,19 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     return rows[0]?.tail_sequence ?? CanonicalSequence.make(0);
   });
 
-  const requireReady = Effect.fnUntraced(function* (threadId: ThreadId) {
-    const current = yield* header(threadId);
-
+  const checkReady = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    current: typeof Header.Type | undefined,
+  ) {
     if (current === undefined) return yield* unavailable(threadId, "missing-index");
     if (current.state !== "ready" || current.through_sequence !== (yield* tail(threadId)))
       return yield* unavailable(threadId, "incomplete-rebuild");
 
     return current;
+  });
+
+  const requireReady = Effect.fnUntraced(function* (threadId: ThreadId) {
+    return yield* checkReady(threadId, yield* header(threadId));
   });
 
   const decodeEntry = Effect.fnUntraced(function* (row: typeof EntryRow.Type) {
@@ -469,12 +551,12 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   const headerFields = (
     through: CanonicalSequence,
     workerMode: WorkerReportingMode,
-    state: "ready" | "rebuilding",
+    state: "ready" | "rebuilding" | "upgrading",
     count: number,
     input: number | null,
     settlement: number | null,
   ) => ({
-    work_version: WORK_INDEX_VERSION,
+    work_version: state === "upgrading" ? 3 : WORK_INDEX_VERSION,
     work_state: state,
     work_through_sequence: through,
     work_reporting: workerMode === "standard" ? 1 : workerMode === "private" ? 2 : 0,
@@ -788,6 +870,177 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       return yield* failure("verify Worker execution pointers");
   });
 
+  const rebuild = Effect.fnUntraced(function* (
+    input: WorkIndexRebuildRequest,
+    upgradingOnly = false,
+  ) {
+    const request = yield* decode(WorkIndexRebuildRequest, input);
+
+    return yield* write(
+      Effect.gen(function* () {
+        invalidate();
+        yield* createSqlThreadWorkTables(options.namespace).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        );
+        const observedTail = yield* tail(request.threadId);
+        let current = yield* header(request.threadId);
+        const upgrading = isUpgrading(current);
+
+        if (upgradingOnly && !upgrading) {
+          // Another discovery call can finish the upgrade before this writer enters.
+          if (current === undefined) return yield* unavailable(request.threadId, "missing-index");
+          if (current.state !== "ready" || current.through_sequence !== observedTail)
+            return yield* unavailable(request.threadId, "incomplete-rebuild");
+
+          return WorkIndexProgress.make({
+            version: WORK_INDEX_VERSION,
+            threadId: request.threadId,
+            state: "ready",
+            throughSequence: current.through_sequence,
+            tailSequence: observedTail,
+            processedRecords: 0,
+            processedBytes: 0,
+          });
+        }
+
+        if (request.restart || current === undefined) {
+          // Reset the sparse tree once; rebuilding each plain sequence must not scan it.
+          yield* query(
+            sql`DELETE FROM ${table("effect_agent_rollover_buckets")} WHERE thread_id=${request.threadId}`,
+          );
+          yield* query(
+            sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${request.threadId}`,
+          );
+          yield* saveHeader(
+            request.threadId,
+            headerFields(CanonicalSequence.make(0), "none", "rebuilding", 0, null, null),
+          );
+          current = {
+            version: WORK_INDEX_VERSION,
+            state: "rebuilding",
+            through_sequence: CanonicalSequence.make(0),
+            reporting: 0,
+            entry_count: 0,
+            actual_count: 0,
+            worker_input_sequence: null,
+            worker_settlement_sequence: null,
+          };
+        }
+        if (current.through_sequence > observedTail)
+          return yield* unavailable(request.threadId, "incomplete-rebuild");
+
+        const plan = yield* decode(
+          Schema.Array(RebuildRow),
+          yield* query(sql`SELECT sequence, record_id, ${recordBatchId(sql, options.namespace)} AS batch_id,
+          ${sql.onDialectOrElse({ pg: () => sql`octet_length(${recordJson})`, orElse: () => sql`length(CAST(${recordJson} AS BLOB))` })} AS record_bytes
+          FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} AND sequence>${current.through_sequence}
+            AND sequence<=${observedTail} ORDER BY sequence LIMIT ${request.limit ?? MAX_WORK_REBUILD_RECORDS}`),
+        );
+
+        let through = current.through_sequence;
+        let workerMode = workerReportingMode(current.reporting);
+        let count = current.entry_count;
+        let input = current.worker_input_sequence;
+        let settlement = current.worker_settlement_sequence;
+        let processedBytes = 0;
+        let processedRecords = 0;
+        const writes = new Map<string, WorkEntryWrite>();
+
+        for (const row of plan) {
+          if (row.sequence !== through + 1 || row.record_bytes > MAX_WORK_REBUILD_BYTES)
+            return yield* failure("rebuild canonical coverage");
+          if (processedBytes + row.record_bytes > MAX_WORK_REBUILD_BYTES) break;
+
+          const [raw] = yield* decode(
+            Schema.Tuple([Schema.Struct({ record_json: Schema.String })]),
+            yield* query(sql`
+            SELECT ${recordJson} AS record_json FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`),
+          );
+
+          if (new TextEncoder().encode(raw.record_json).byteLength !== row.record_bytes)
+            return yield* failure("rebuild canonical bytes");
+
+          const record = yield* decodeExportRecordJson(raw.record_json).pipe(
+            Effect.mapError((cause) => failure("decode rebuild record", cause)),
+          );
+
+          if (record.recordId !== row.record_id)
+            return yield* failure("rebuild canonical identity");
+
+          const metadata = canonicalRecordMetadata({ canonical: record, wire: record.wire });
+
+          yield* query(sql`UPDATE ${table("effect_agent_canonical_records")} SET ${sql.update({ ...metadata.columns, run_id: metadata.columns.run_id === null ? null : yield* physical.run(request.threadId, metadata.columns.run_id) })}
+            WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`);
+          yield* query(
+            sql`DELETE FROM ${table("effect_agent_record_runs")} WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`,
+          );
+          for (const runId of metadata.runIds)
+            yield* query(sql`INSERT INTO ${table("effect_agent_record_runs")} (thread_id, run_id, sequence)
+            VALUES (${request.threadId}, ${yield* physical.run(request.threadId, runId)}, ${row.sequence})`);
+          yield* indexCanonicalPointers(request.threadId, row.sequence, record, true);
+
+          const folded = yield* fold(
+            request.threadId,
+            row.sequence,
+            record,
+            workerMode,
+            writes,
+            current.entry_count === 0,
+          );
+
+          if (workerMode === "none" && folded.workerMode !== "none") {
+            const prior = yield* workerExecutionThrough(request.threadId, row.sequence - 1);
+
+            input = prior.input;
+            settlement = prior.settlement;
+          }
+          workerMode = folded.workerMode;
+          if (workerMode !== "none") {
+            if (record.payload._tag === "UserInputRecorded" && record.payload.runId !== undefined)
+              input = row.sequence;
+            if (record.payload._tag === "SubmissionSettled" && record.payload.runId !== undefined)
+              settlement = row.sequence;
+          }
+          through = row.sequence;
+          processedBytes += row.record_bytes;
+          processedRecords++;
+        }
+        count += yield* flushEntries(request.threadId, writes);
+        const latestTail = yield* tail(request.threadId);
+
+        if (processedRecords === 0 && through < latestTail)
+          return yield* failure("rebuild missing canonical records");
+        const state = through === latestTail ? "ready" : "rebuilding";
+
+        yield* saveHeader(
+          request.threadId,
+          headerFields(
+            through,
+            workerMode,
+            upgrading && state === "rebuilding" ? "upgrading" : state,
+            count,
+            input,
+            settlement,
+          ),
+        );
+        if (upgrading && (processedRecords > 0 || state === "ready"))
+          yield* progress
+            .committed("work-index")
+            .pipe(Effect.mapError((cause) => failure("record work index upgrade progress", cause)));
+
+        return WorkIndexProgress.make({
+          version: WORK_INDEX_VERSION,
+          threadId: request.threadId,
+          state,
+          throughSequence: through,
+          tailSequence: latestTail,
+          processedRecords,
+          processedBytes,
+        });
+      }),
+    ).pipe(Effect.ensuring(Effect.sync(invalidate)));
+  });
+
   const storage: ThreadWorkStorage = {
     isOnlyFreshAdmission: (input) =>
       read(
@@ -821,9 +1074,12 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     page: Effect.fnUntraced(function* (input) {
       const request = yield* decode(ThreadWorkRequest, input);
 
-      return yield* read(
+      const readPage = read(
         Effect.gen(function* () {
-          const current = yield* requireReady(request.threadId);
+          const found = yield* header(request.threadId);
+
+          if (isUpgrading(found)) return undefined;
+          const current = yield* checkReady(request.threadId, found);
 
           const cursor = yield* decodeWorkCursor(request).pipe(
             Effect.provideService(Crypto.Crypto, crypto),
@@ -957,6 +1213,18 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           }
         }),
       );
+
+      const page = yield* readPage;
+
+      if (page !== undefined) return page;
+      // Release the read snapshot before acquiring the migration writer. Only the
+      // validated layout marker permits one bounded suffix pass; corruption never does.
+      yield* rebuild({ threadId: request.threadId }, true);
+      const upgraded = yield* readPage;
+
+      if (upgraded === undefined) return yield* unavailable(request.threadId, "incomplete-rebuild");
+
+      return upgraded;
     }),
     threads: Effect.fnUntraced(function* (input) {
       const request = yield* decode(WorkThreadsRequest, input);
@@ -1003,144 +1271,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
         }),
       );
     }),
-    rebuild: Effect.fnUntraced(function* (input) {
-      const request = yield* decode(WorkIndexRebuildRequest, input);
-
-      return yield* write(
-        Effect.gen(function* () {
-          invalidate();
-          yield* createSqlThreadWorkTables(options.namespace).pipe(
-            Effect.provideService(SqlClient.SqlClient, sql),
-          );
-          const observedTail = yield* tail(request.threadId);
-          let current = yield* header(request.threadId);
-
-          if (request.restart || current === undefined) {
-            // Reset the sparse tree once; rebuilding each plain sequence must not scan it.
-            yield* query(
-              sql`DELETE FROM ${table("effect_agent_rollover_buckets")} WHERE thread_id=${request.threadId}`,
-            );
-            yield* query(
-              sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${request.threadId}`,
-            );
-            yield* saveHeader(
-              request.threadId,
-              headerFields(CanonicalSequence.make(0), "none", "rebuilding", 0, null, null),
-            );
-            current = {
-              version: WORK_INDEX_VERSION,
-              state: "rebuilding",
-              through_sequence: CanonicalSequence.make(0),
-              reporting: 0,
-              entry_count: 0,
-              actual_count: 0,
-              worker_input_sequence: null,
-              worker_settlement_sequence: null,
-            };
-          }
-          if (current.through_sequence > observedTail)
-            return yield* unavailable(request.threadId, "incomplete-rebuild");
-
-          const plan = yield* decode(
-            Schema.Array(RebuildRow),
-            yield* query(sql`SELECT sequence, record_id, ${recordBatchId(sql, options.namespace)} AS batch_id,
-          ${sql.onDialectOrElse({ pg: () => sql`octet_length(${recordJson})`, orElse: () => sql`length(CAST(${recordJson} AS BLOB))` })} AS record_bytes
-          FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} AND sequence>${current.through_sequence}
-            AND sequence<=${observedTail} ORDER BY sequence LIMIT ${request.limit ?? MAX_WORK_REBUILD_RECORDS}`),
-          );
-
-          let through = current.through_sequence;
-          let workerMode = workerReportingMode(current.reporting);
-          let count = current.entry_count;
-          let input = current.worker_input_sequence;
-          let settlement = current.worker_settlement_sequence;
-          let processedBytes = 0;
-          let processedRecords = 0;
-          const writes = new Map<string, WorkEntryWrite>();
-
-          for (const row of plan) {
-            if (row.sequence !== through + 1 || row.record_bytes > MAX_WORK_REBUILD_BYTES)
-              return yield* failure("rebuild canonical coverage");
-            if (processedBytes + row.record_bytes > MAX_WORK_REBUILD_BYTES) break;
-
-            const [raw] = yield* decode(
-              Schema.Tuple([Schema.Struct({ record_json: Schema.String })]),
-              yield* query(sql`
-            SELECT ${recordJson} AS record_json FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`),
-            );
-
-            if (new TextEncoder().encode(raw.record_json).byteLength !== row.record_bytes)
-              return yield* failure("rebuild canonical bytes");
-
-            const record = yield* decodeExportRecordJson(raw.record_json).pipe(
-              Effect.mapError((cause) => failure("decode rebuild record", cause)),
-            );
-
-            if (record.recordId !== row.record_id)
-              return yield* failure("rebuild canonical identity");
-
-            const metadata = canonicalRecordMetadata({ canonical: record, wire: record.wire });
-
-            yield* query(sql`UPDATE ${table("effect_agent_canonical_records")} SET ${sql.update({ ...metadata.columns, run_id: metadata.columns.run_id === null ? null : yield* physical.run(request.threadId, metadata.columns.run_id) })}
-            WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`);
-            yield* query(
-              sql`DELETE FROM ${table("effect_agent_record_runs")} WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`,
-            );
-            for (const runId of metadata.runIds)
-              yield* query(sql`INSERT INTO ${table("effect_agent_record_runs")} (thread_id, run_id, sequence)
-            VALUES (${request.threadId}, ${yield* physical.run(request.threadId, runId)}, ${row.sequence})`);
-            yield* indexCanonicalPointers(request.threadId, row.sequence, record, true);
-
-            const folded = yield* fold(
-              request.threadId,
-              row.sequence,
-              record,
-              workerMode,
-              writes,
-              current.entry_count === 0,
-            );
-
-            if (workerMode === "none" && folded.workerMode !== "none") {
-              const prior = yield* workerExecutionThrough(request.threadId, row.sequence - 1);
-
-              input = prior.input;
-              settlement = prior.settlement;
-            }
-            workerMode = folded.workerMode;
-            if (workerMode !== "none") {
-              if (record.payload._tag === "UserInputRecorded" && record.payload.runId !== undefined)
-                input = row.sequence;
-              if (record.payload._tag === "SubmissionSettled" && record.payload.runId !== undefined)
-                settlement = row.sequence;
-            }
-            through = row.sequence;
-            processedBytes += row.record_bytes;
-            processedRecords++;
-          }
-          count += yield* flushEntries(request.threadId, writes);
-          const latestTail = yield* tail(request.threadId);
-
-          if (processedRecords === 0 && through < latestTail)
-            return yield* failure("rebuild missing canonical records");
-          const state = through === latestTail ? "ready" : "rebuilding";
-
-          yield* saveHeader(
-            request.threadId,
-            headerFields(through, workerMode, state, count, input, settlement),
-          );
-
-          return WorkIndexProgress.make({
-            version: WORK_INDEX_VERSION,
-            threadId: request.threadId,
-            state,
-            throughSequence: through,
-            tailSequence: latestTail,
-            processedRecords,
-            processedBytes,
-          });
-        }),
-      ).pipe(Effect.ensuring(Effect.sync(invalidate)));
-    }),
+    rebuild: (input) => rebuild(input),
   };
 
   return {
