@@ -4,6 +4,7 @@ import { RunId, ToolCallId } from "@yielded/agent/identifiers";
 import { CanonicalRecord, ToolCallUnknown } from "@yielded/agent/records";
 import { AppendRequest, ThreadMaterialization, ThreadStore } from "@yielded/agent/thread-store";
 import * as Effect from "effect/Effect";
+import * as Scheduler from "effect/Scheduler";
 import { expect, it } from "vite-plus/test";
 
 import { batch, inputRecord } from "./canonical-fixtures.ts";
@@ -115,12 +116,19 @@ it("continues a long upgrade after cold opens and records only actual page progr
 
       for (let pass = 0; pass < 10; pass++) {
         // Each provide opens/closes the storage owner, retaining only real SQLite state.
-        const page = yield* Effect.gen(function* () {
+        const pages = yield* Effect.gen(function* () {
           const store = yield* ThreadStore;
 
           if (store.work === undefined) return yield* Effect.fail("Work discovery is unavailable");
 
-          return yield* store.work.page({ threadId, limit: 32 }).pipe(Effect.result);
+          const page = store.work.page({ threadId, limit: 32 }).pipe(Effect.result);
+
+          if (pass < 9) return [yield* page];
+
+          // Let both reads observe the upgrade before either call takes the write gate.
+          return yield* Effect.all([page, page], { concurrency: "unbounded" }).pipe(
+            Effect.provideService(Scheduler.MaxOpsBeforeYield, 16),
+          );
         }).pipe(
           Effect.provide(layer({ storage })),
           Effect.provideService(SqlStorageProgress, {
@@ -142,19 +150,23 @@ it("continues a long upgrade after cold opens and records only actual page progr
         expect(progress).toHaveLength(pass + 2);
         previousThrough = row.work_through_sequence;
         if (pass < 9) {
-          expect(page).toMatchObject({
-            _tag: "Failure",
-            failure: { _tag: "WorkDiscoveryUnavailable", reason: "incomplete-rebuild" },
-          });
-        } else {
-          expect(page).toMatchObject({
-            _tag: "Success",
-            success: {
-              entries: [
-                { owner: { _tag: "Operation", toolCallId: "prefix-unknown" }, state: "unknown" },
-              ],
+          expect(pages).toMatchObject([
+            {
+              _tag: "Failure",
+              failure: { _tag: "WorkDiscoveryUnavailable", reason: "incomplete-rebuild" },
             },
-          });
+          ]);
+        } else {
+          expect(pages).toHaveLength(2);
+          for (const page of pages)
+            expect(page).toMatchObject({
+              _tag: "Success",
+              success: {
+                entries: [
+                  { owner: { _tag: "Operation", toolCallId: "prefix-unknown" }, state: "unknown" },
+                ],
+              },
+            });
           expect(row.work_state).toBe("ready");
         }
       }

@@ -886,8 +886,22 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
         let current = yield* header(request.threadId);
         const upgrading = isUpgrading(current);
 
-        if (upgradingOnly && !upgrading)
-          return yield* unavailable(request.threadId, "missing-index");
+        if (upgradingOnly && !upgrading) {
+          // Another discovery call can finish the upgrade before this writer enters.
+          if (current === undefined) return yield* unavailable(request.threadId, "missing-index");
+          if (current.state !== "ready" || current.through_sequence !== observedTail)
+            return yield* unavailable(request.threadId, "incomplete-rebuild");
+
+          return WorkIndexProgress.make({
+            version: WORK_INDEX_VERSION,
+            threadId: request.threadId,
+            state: "ready",
+            throughSequence: current.through_sequence,
+            tailSequence: observedTail,
+            processedRecords: 0,
+            processedBytes: 0,
+          });
+        }
 
         if (request.restart || current === undefined) {
           // Reset the sparse tree once; rebuilding each plain sequence must not scan it.
