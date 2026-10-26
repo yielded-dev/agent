@@ -1,5 +1,13 @@
 # @yielded/agent-testing
 
+## 0.1.0-beta.190
+
+### Patch Changes
+
+- [#1101](https://github.com/yielded-dev/agent/pull/1101) [`ac0a76a`](https://github.com/yielded-dev/agent/commit/ac0a76a8c20759d842121076238ebc992ea1e280) Thanks [@danieljvdm](https://github.com/danieljvdm)! - BEHAVIOR CHANGE: Replace `@yielded/agent-testing/certification` and `@yielded/agent/testing/certification` with the aggregate `durableCoordinatorConformance` Effect from `@yielded/agent-testing/durable-coordinator-conformance`. Run storage-port conformance and actual restart checks separately; the coordinator helper checks recovery after injected faults without producing certification reports.
+- Updated dependencies [[`7a36ba2`](https://github.com/yielded-dev/agent/commit/7a36ba23d39fc0a17fc63dc816ab58f70a04136d), [`e7abd30`](https://github.com/yielded-dev/agent/commit/e7abd300d3c5b4bb3bc011e92468b54afc687e73), [`ac0a76a`](https://github.com/yielded-dev/agent/commit/ac0a76a8c20759d842121076238ebc992ea1e280), [`af2dabd`](https://github.com/yielded-dev/agent/commit/af2dabd8f13ed2cb60787872b68f62fdd916d8b0), [`cc6c913`](https://github.com/yielded-dev/agent/commit/cc6c91312a2bd2f092095380b44212e57035be7d)]:
+  - @yielded/agent@0.1.0-beta.190
+
 ## 0.1.0-beta.189
 
 ### Patch Changes
