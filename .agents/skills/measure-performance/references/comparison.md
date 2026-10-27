@@ -16,6 +16,6 @@ For CI cache or concurrency claims, include setup and transfer costs, verify inv
 
 Before calling the change complete or ready to land, provide baseline/candidate results, revisions, workload, sample counts, variation, and evidence links. Passing functional checks alone is insufficient. Early PRs allowed by repository policy must identify outstanding performance verification.
 
-Fix or drop material regressions. Quantify an unavoidable tradeoff and alternatives and obtain the user's explicit decision before accepting it. Insufficient evidence means performance is unverified; keep the gap open while continuing useful work. Revert ineffective optimizations unless they have a separate, stated benefit within scope. Do not relabel reduced work as demonstrated speedup.
+Fix or drop material regressions. If a material regression is unavoidable, quantify the tradeoff and alternatives and obtain the user's decision before accepting it. Measurement noise or a negligible cost does not require approval. Insufficient evidence means performance is unverified; keep the gap open while continuing useful work. Revert ineffective optimizations unless they have a separate, stated benefit within scope. Do not relabel reduced work as demonstrated speedup.
 
 Keep reusable measurement code in the repository and compact run evidence in artifacts. For broad audits, account for every requested outcome as measured, unmeasured, or explicitly removed from scope. Reconsider the hypothesis before spending another experiment on it.
