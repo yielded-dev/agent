@@ -15,7 +15,7 @@
     "@yielded/agent": "workspace:*",
     "@yielded/agent-example-auth": "workspace:*",
     "@yielded/agent-platform-cloudflare": "workspace:*",
-    "@yielded/sandbox": "0.3.2",
+    "@yielded/sandbox": "0.9.0",
     "@yielded/ui": "workspace:*",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
