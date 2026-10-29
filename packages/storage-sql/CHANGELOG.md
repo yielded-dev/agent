@@ -1,5 +1,13 @@
 # @yielded/agent-storage-sql
 
+## 0.1.0-beta.191
+
+### Patch Changes
+
+- [#1117](https://github.com/yielded-dev/agent/pull/1117) [`c056984`](https://github.com/yielded-dev/agent/commit/c0569842948f9d3674f41c5334228f496df2e889) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Upgrade to Effect 4.1 and effect-cf 0.59. BEHAVIOR CHANGE: Replace custom Crypto layers with the required `Digest` and `SecureRandom` services from `effect/crypto`; `NodeCrypto.layer` and `BrowserCrypto.layer` supply both.
+- Updated dependencies [[`c056984`](https://github.com/yielded-dev/agent/commit/c0569842948f9d3674f41c5334228f496df2e889)]:
+  - @yielded/agent@0.1.0-beta.191
+
 ## 0.1.0-beta.190
 
 ### Patch Changes
