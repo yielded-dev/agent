@@ -25,6 +25,7 @@ import {
   ArticleTitle,
   BrowserEngine,
   defaultChallenge,
+  defaultModel,
   coffeeDemo,
   ModelId,
   modelChoices,
@@ -682,7 +683,7 @@ export const App = () => {
       transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
   }, [chatTurns]);
   const [chatResult, sendChat] = useAtom(sendChatAtom);
-  const [model, setModel] = useState<ModelId | "all">("gpt-6-luna");
+  const [model, setModel] = useState<ModelId | "all">(defaultModel);
   const [engine, setEngine] = useState<typeof BrowserEngine.Type | "all">("chromium");
   const [reasoning, setReasoning] = useState<typeof Reasoning.Type>("none");
   const [serviceTier, setServiceTier] = useState<typeof ServiceTier.Type>("fast");
@@ -883,7 +884,7 @@ export const App = () => {
       screenshots,
       liveView,
       engine: "chromium",
-      model: model === "all" ? "gpt-6-luna" : model,
+      model: model === "all" ? defaultModel : model,
       ...(!model.startsWith("@cf/")
         ? { reasoning: effectiveReasoning, serviceTier: effectiveServiceTier }
         : {}),
@@ -961,7 +962,7 @@ export const App = () => {
                         setScenario(mode.id);
                         if (mode.id === "chat") {
                           setEngine("chromium");
-                          if (model === "all") setModel("gpt-6-luna");
+                          if (model === "all") setModel(defaultModel);
                         }
                       }}
                     />
@@ -1188,7 +1189,7 @@ export const App = () => {
             </div>
             {model === "all" && serviceTier === "ultrafast" && (
               <p className="fine">
-                Astra and Sol use Ultrafast; Luna uses Fast. Each run records its requested and
+                Astra and Sol use Ultrafast; Terra uses Fast. Each run records its requested and
                 served tier.
               </p>
             )}

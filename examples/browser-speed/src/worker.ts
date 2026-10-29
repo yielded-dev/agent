@@ -21,7 +21,14 @@ import { DurableObjectState as EffectDurableObjectState } from "effect-cf";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
-import { type Account, LabApi, LabError, ModelApi, modelChoices } from "./contract.ts";
+import {
+  type Account,
+  defaultModel,
+  LabApi,
+  LabError,
+  ModelApi,
+  modelChoices,
+} from "./contract.ts";
 import { connectKitesurf } from "./kitesurf.ts";
 import { Control, emptyControl, makeOwner } from "./owner.ts";
 import { makeTraceStore, TraceStore } from "./trace-store.ts";
@@ -208,7 +215,7 @@ export class BrowserLab extends DurableObject<Env> {
         }),
       },
       {
-        model: env.OPENAI_MODEL || "gpt-6-luna",
+        model: env.OPENAI_MODEL || defaultModel,
         apiKey: env.OPENAI_API_KEY ?? "",
         history: PersistentHistory.layer.pipe(
           Layer.provide(DoThreadStore.layer({ storage: ctx.storage })),

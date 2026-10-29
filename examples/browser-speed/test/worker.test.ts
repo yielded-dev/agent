@@ -122,7 +122,7 @@ it.live(
       for (const selection of [
         { engine: "unapproved-browser" },
         { model: "unapproved-model" },
-        { model: "gpt-6-luna" },
+        { model: "gpt-6.1-terra" },
       ]) {
         const rejected = yield* status("/api/run", {
           method: "POST",
