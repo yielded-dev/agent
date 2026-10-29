@@ -153,6 +153,9 @@ const runOrchestrated = Effect.fnUntraced(function* <
       Effect.gen(function* () {
         const inner = yield* options.innerToolkit;
 
+        const schemaServices =
+          yield* Effect.context<Tool.SchemaServices<InnerTools[keyof InnerTools]>>();
+
         return {
           orchestrate: Effect.fnUntraced(function* () {
             const broker = yield* ToolBroker;
@@ -161,7 +164,7 @@ const runOrchestrated = Effect.fnUntraced(function* <
             // unavailable broker here is a harness defect, not a test case.
             const pass = yield* broker
               .openPass(inner, options.passOptions ?? { maxResultBytes: 1024 * 1024 })
-              .pipe(Effect.orDie);
+              .pipe(Effect.provide(schemaServices), Effect.orDie);
 
             return yield* options.program(pass);
           }),

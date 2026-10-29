@@ -4,7 +4,7 @@ import type { StorageOwner } from "@yielded/agent/run-storage";
 import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import type { ThreadStore } from "@yielded/agent/thread-store";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -29,7 +29,7 @@ const withFixture = <A, E>(
     | StorageOwner
     | ThreadStore
     | SqlClient.SqlClient
-    | Crypto.Crypto
+    | CryptoDigest.Digest
   >,
 ) =>
   withThreadStorage(`ledger-reads-${nextId++}`, (storage) =>

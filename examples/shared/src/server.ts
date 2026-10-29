@@ -1,8 +1,8 @@
 import { OAuthScope, OAuthServer } from "@yielded/auth";
-import * as Portable from "@yielded/crypto/Portable";
-import { Signature } from "@yielded/crypto/Signature";
 import { Jwks } from "@yielded/jose";
 import { Cause, Context, Effect, Layer, Redacted, Schema } from "effect";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Signature from "effect/crypto/Signature";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
 import { AccountClaims, AccountError } from "./contract";
@@ -98,13 +98,13 @@ export class Authentication extends Context.Service<
       Authentication,
       Effect.gen(function* () {
         const keys = yield* Jwks.Jwks;
-        const signature = yield* Signature;
+        const signature = yield* Signature.Signature;
 
         return {
           authenticate: (request: Request) =>
             authenticateRequest(request, env).pipe(
               Effect.provideService(Jwks.Jwks, keys),
-              Effect.provideService(Signature, signature),
+              Effect.provideService(Signature.Signature, signature),
             ),
         };
       }),
@@ -116,7 +116,10 @@ export class Authentication extends Context.Service<
           cacheTimeMs: 300_000,
         }),
       ),
-      Layer.provide([FetchHttpClient.layer, Portable.layerWithoutKdf(globalThis.crypto.subtle)]),
+      Layer.provide([
+        FetchHttpClient.layer,
+        Signature.layerWebCrypto.pipe(Layer.provide(SecureRandom.layerWebCrypto)),
+      ]),
       // Unconfigured authentication must not prevent public assets from being served.
       Layer.catchCause((cause) =>
         Layer.succeed(Authentication, {

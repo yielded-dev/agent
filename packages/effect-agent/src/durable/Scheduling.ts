@@ -1,6 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -166,7 +166,7 @@ const resolveInput = Effect.fnUntraced(function* <InputSchema extends Schema.Top
 ): Effect.fn.Return<
   { readonly payload: PersistedJson; readonly digest: Digest },
   ScheduleValidationError,
-  InputSchema["EncodingServices"] | Crypto.Crypto
+  InputSchema["EncodingServices"] | CryptoDigest.Digest
 > {
   const encoded = yield* Schema.encodeEffect(agent.definition.input)(input).pipe(
     Effect.mapError(() =>
@@ -210,10 +210,10 @@ const makeManagement = Effect.fnUntraced(function* (limits: SchedulingLimits) {
   const store = yield* ScheduleStore;
   const authorizer = yield* ScheduleAuthorizer;
   const wake = yield* ScheduleWake;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
-  const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
-    Effect.provideService(effect, Crypto.Crypto, crypto);
+  const withCrypto = <A, E>(effect: Effect.Effect<A, E, CryptoDigest.Digest>) =>
+    Effect.provideService(effect, CryptoDigest.Digest, crypto);
 
   const fingerprint = Effect.fnUntraced(function* (
     agentId: AgentId,
@@ -286,7 +286,7 @@ const makeManagement = Effect.fnUntraced(function* (limits: SchedulingLimits) {
     const nowMillis = yield* currentMillis;
 
     const resolvedInput = yield* resolveInput(agent, input, limits.maxInputBytes).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(CryptoDigest.Digest, crypto),
     );
 
     const creationFingerprint = yield* fingerprint(
@@ -395,7 +395,7 @@ const makeManagement = Effect.fnUntraced(function* (limits: SchedulingLimits) {
     }
 
     const resolvedInput = yield* resolveInput(agent, input, limits.maxInputBytes).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(CryptoDigest.Digest, crypto),
     );
 
     const timingRequest =
@@ -600,11 +600,11 @@ const makeDriver = Effect.fnUntraced(function* (limits: SchedulingLimits) {
   const authorizer = yield* ScheduleAuthorizer;
   const admission = yield* PreparedInputAdmission;
   const failpoint = yield* ScheduleFailpoint;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const admissionSemaphore = yield* Semaphore.make(limits.admissionConcurrency);
 
-  const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
-    Effect.provideService(effect, Crypto.Crypto, crypto);
+  const withCrypto = <A, E>(effect: Effect.Effect<A, E, CryptoDigest.Digest>) =>
+    Effect.provideService(effect, CryptoDigest.Digest, crypto);
 
   const retry = Effect.fnUntraced(function* (
     key: ScheduleKey,
@@ -1025,7 +1025,7 @@ export class Scheduling extends Context.Service<
   ): Layer.Layer<
     Scheduling,
     ScheduleValidationError,
-    ScheduleStore | ScheduleAuthorizer | ScheduleWake | Crypto.Crypto
+    ScheduleStore | ScheduleAuthorizer | ScheduleWake | CryptoDigest.Digest
   > {
     return Layer.effect(Scheduling, validateLimits(limits).pipe(Effect.flatMap(makeManagement)));
   }
@@ -1054,7 +1054,7 @@ export class ScheduleDriver extends Context.Service<
   ): Layer.Layer<
     ScheduleDriver,
     ScheduleValidationError,
-    ScheduleStore | ScheduleAuthorizer | PreparedInputAdmission | Crypto.Crypto
+    ScheduleStore | ScheduleAuthorizer | PreparedInputAdmission | CryptoDigest.Digest
   > {
     return Layer.effect(ScheduleDriver, validateLimits(limits).pipe(Effect.flatMap(makeDriver)));
   }

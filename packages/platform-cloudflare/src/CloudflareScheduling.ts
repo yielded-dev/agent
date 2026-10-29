@@ -44,6 +44,7 @@ import {
 } from "effect-cf";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -431,11 +432,12 @@ const alarmStorageError = (operation: string) => (error: { readonly _tag: string
 const transactionLayer: Layer.Layer<
   DoScheduleTransaction,
   never,
-  DurableObjectAlarm.DurableObjectAlarm
+  DurableObjectAlarm.DurableObjectAlarm | SecureRandom.SecureRandom
 > = Layer.effect(
   DoScheduleTransaction,
   Effect.gen(function* () {
     const alarms = yield* DurableObjectAlarm.DurableObjectAlarm;
+    const random = yield* SecureRandom.SecureRandom;
 
     return DoScheduleTransaction.of({
       run: Effect.fnUntraced(function* (body) {
@@ -468,7 +470,10 @@ const transactionLayer: Layer.Layer<
                             generation: replacement.generation,
                           },
                         })
-                        .pipe(Effect.mapError(alarmStorageError("schedule Schedule Owner alarm"))),
+                        .pipe(
+                          Effect.provideService(SecureRandom.SecureRandom, random),
+                          Effect.mapError(alarmStorageError("schedule Schedule Owner alarm")),
+                        ),
                     ),
                   ),
             ),
@@ -676,7 +681,10 @@ export const makeScheduleOwnerObjectClass = <E>(
   host: Layer.Layer<
     ScheduleAuthorizer | ThreadObjectNamespace,
     E,
-    EffectCfDurableObjectState.DurableObjectState | WorkerEnvironment | ScheduleOwnerIdentity
+    | EffectCfDurableObjectState.DurableObjectState
+    | WorkerEnvironment
+    | ScheduleOwnerIdentity
+    | SecureRandom.SecureRandom
   >,
   limits: SchedulingLimits = defaultSchedulingLimits,
 ): ScheduleOwnerObjectClass => {
@@ -703,10 +711,10 @@ export const makeScheduleOwnerObjectClass = <E>(
       cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
     ),
     Layer.provide(ScheduleWakeNoop),
-    Layer.provide(cloudflareCryptoLayer),
     Layer.provideMerge(DurableObjectAlarm.DurableObjectAlarm.layer),
     Layer.provide(host),
     Layer.provideMerge(ownerLayer),
+    Layer.provide(cloudflareCryptoLayer),
   );
 
   const runtime: Layer.Layer<

@@ -18,7 +18,7 @@ import {
   type ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
@@ -80,7 +80,7 @@ type Errors = Assert<
 type Requirements = Assert<
   Equal<
     Effect.Services<typeof pass>,
-    Extractor | Destination | ActivityProcessorStore | ThreadStore | Crypto.Crypto
+    Extractor | Destination | ActivityProcessorStore | ThreadStore | CryptoDigest.Digest
   >
 >;
 

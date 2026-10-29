@@ -30,11 +30,11 @@ import { RunContextPreparation } from "@yielded/agent/run-options";
 import { Clock, Effect, Layer, Option, Schema } from "effect";
 import { WorkerEnvironment } from "effect-cf";
 import { Prompt, Tool, Toolkit } from "effect/ai";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 
 import { ScreenshotEvidence, ScreenshotId, screenshotKey } from "./contract.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

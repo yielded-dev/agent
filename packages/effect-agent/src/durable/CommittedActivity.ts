@@ -1,5 +1,5 @@
 import * as Clock from "effect/Clock";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
@@ -113,7 +113,7 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
   | DigestError
   | ThreadStoreError
   | ThreadNotMaterialized,
-  ActivityProcessorStore | ThreadStore | Crypto.Crypto | Exclude<R | RApply, Scope.Scope>
+  ActivityProcessorStore | ThreadStore | CryptoDigest.Digest | Exclude<R | RApply, Scope.Scope>
 > {
   const key = yield* Schema.decodeEffect(ActivityProcessorKey)(processor.key).pipe(
     Effect.mapError(() => invalid("Invalid activity processor key")),

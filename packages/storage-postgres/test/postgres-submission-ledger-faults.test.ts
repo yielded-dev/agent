@@ -62,7 +62,7 @@ import {
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import { AppendRequest, ThreadMaterialization } from "@yielded/agent/thread-store";
 import * as Cause from "effect/Cause";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -181,7 +181,7 @@ const settlementPublication = Effect.fn("PostgresLedgerTest.settlementPublicatio
 
 const withLedger = <A, E>(
   url: string,
-  effect: Effect.Effect<A, E, SubmissionLedger | SettlementPublisher | Crypto.Crypto>,
+  effect: Effect.Effect<A, E, SubmissionLedger | SettlementPublisher | CryptoDigest.Digest>,
 ) => Effect.provide(effect, [makeStorage(url).submissionLedger, NodeCrypto.layer]);
 
 const withSql = <A, E>(url: string, effect: Effect.Effect<A, E, SqlClientService.SqlClient>) =>
@@ -232,7 +232,7 @@ const makeFailpointHarness = Effect.fnUntraced(function* (url: string) {
     effect: Effect.Effect<
       A,
       E,
-      SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
+      SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | CryptoDigest.Digest
     >,
   ) =>
     Effect.provide(effect, [

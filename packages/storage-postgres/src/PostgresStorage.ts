@@ -162,13 +162,13 @@ export const layerWith = (options: PostgresStorageOptions) =>
   );
 
 /**
- * Thread history and submissions with default settings. Requires SqlClient and Crypto.
+ * Thread history and submissions with default settings. Requires SqlClient, Digest, and SecureRandom.
  * SQL text parameters, including identities, must exclude NUL and unpaired UTF-16
  * surrogates. Canonical JSON payload strings remain intact through escaped encoding.
  */
 export const layer = layerWith({});
 
-/** Standalone thread history over the application's SqlClient and Crypto. */
+/** Standalone thread history over the application's SqlClient and Digest. */
 export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
   ThreadReader.layer().pipe(
     Layer.provideMerge(
@@ -229,7 +229,7 @@ export const exportThread = Effect.fn("PostgresStorage.exportThread")(function* 
   );
 });
 
-/** Submissions and canonical settlement publication over the application's SqlClient and Crypto. */
+/** Submissions and canonical settlement publication over the application's SqlClient, Digest, and SecureRandom. */
 export const submissionLedgerLayer = (options: PostgresStorageOptions = {}) =>
   Layer.effectContext(
     Effect.flatMap(openJournal(options), makeSubmissionLedger).pipe(
@@ -256,7 +256,7 @@ export const scheduleStoreLayer = (options: PostgresStorageOptions = {}) =>
     }),
   );
 
-/** Message delivery over the application's SqlClient and Crypto, with optional live capacity and payload limits. */
+/** Message delivery over the application's SqlClient and Digest, with optional live capacity and payload limits. */
 export const messageDeliveryStoreLayer = (
   options: PostgresStorageOptions & {
     readonly limits?: MessageDeliveryStoreLimits | undefined;

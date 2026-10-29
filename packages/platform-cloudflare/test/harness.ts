@@ -18,7 +18,7 @@ import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submissio
 import { ThreadStore } from "@yielded/agent/thread-store";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { DurableObject } from "effect-cf";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -62,20 +62,17 @@ export const stubFor = (thread: string, namespace: TestNamespace = "THREADS") =>
 let nextProgressWaitIdentity = 0;
 
 const deterministicClientCrypto = Layer.succeed(
-  Crypto.Crypto,
-  Crypto.make({
-    randomBytes: (size) => {
-      let identity = ++nextProgressWaitIdentity;
-      const bytes = new Uint8Array(size);
+  SecureRandom.SecureRandom,
+  SecureRandom.make((size) => {
+    let identity = ++nextProgressWaitIdentity;
+    const bytes = new Uint8Array(size);
 
-      for (let index = size - 1; index >= 0 && identity > 0; index--) {
-        bytes[index] = identity & 0xff;
-        identity = Math.floor(identity / 0x100);
-      }
+    for (let index = size - 1; index >= 0 && identity > 0; index--) {
+      bytes[index] = identity & 0xff;
+      identity = Math.floor(identity / 0x100);
+    }
 
-      return bytes;
-    },
-    digest: (_algorithm, data) => Effect.succeed(data),
+    return bytes;
   }),
 );
 

@@ -1,5 +1,6 @@
 import * as FailureDiagnostic from "@yielded/agent/failure-diagnostic";
 import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as ErrorReporter from "effect/ErrorReporter";
@@ -8,10 +9,28 @@ import * as Schema from "effect/Schema";
 
 /** Translate typed failures without dropping cleanup reasons during actual cancellation. */
 export const mapBrowserError =
-  <E, E2>(map: (error: E) => E2) =>
+  <E, E2>(map: (error: E) => E2, mapDefect?: (defect: unknown) => unknown) =>
   <A, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E2, R> =>
     Effect.uninterruptibleMask((restore) =>
-      restore(effect).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, map)))),
+      restore(effect).pipe(
+        Effect.catchCause((cause) => {
+          const mapped = Cause.map(cause, map);
+
+          return Effect.failCause(
+            mapDefect === undefined
+              ? mapped
+              : Cause.fromReasons(
+                  mapped.reasons.map((reason) =>
+                    Cause.isDieReason(reason)
+                      ? Cause.makeDieReason(mapDefect(reason.defect)).annotate(
+                          Context.makeUnsafe(new Map(reason.annotations)),
+                        )
+                      : reason,
+                  ),
+                ),
+          );
+        }),
+      ),
     );
 
 /** Browser stage and classification. Original causes stay private and out of public JSON. */

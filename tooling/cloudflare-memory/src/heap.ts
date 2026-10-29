@@ -1,5 +1,6 @@
-import { Console, Crypto, Effect, FileSystem, Path, Schema, Stream } from "effect";
+import { Console, Effect, FileSystem, Path, Schema, Stream } from "effect";
 import { Command, Flag } from "effect/cli";
+import * as CryptoDigest from "effect/crypto/Digest";
 import { Hex } from "effect/encoding";
 import { ChildProcess } from "effect/process";
 
@@ -82,7 +83,7 @@ const buildBundle = Effect.fn("heap.buildBundle")(function* (options: {
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const directory = path.join(options.output, options.name);
 
   yield* fs.makeDirectory(directory, { recursive: true });
@@ -146,7 +147,7 @@ const buildBundle = Effect.fn("heap.buildBundle")(function* (options: {
     name: options.name,
     file,
     bytes: bytes.byteLength,
-    sha256: Hex.encode(yield* crypto.digest("SHA-256", bytes)),
+    sha256: Hex.encode(yield* crypto.digest(CryptoDigest.sha256, bytes)),
     modules,
     nodeSamples,
   });

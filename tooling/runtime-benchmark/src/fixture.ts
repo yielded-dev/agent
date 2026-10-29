@@ -48,7 +48,6 @@ import {
   Cause,
   Clock,
   Context,
-  Crypto,
   DateTime,
   type Duration,
   Effect,
@@ -62,6 +61,7 @@ import {
 } from "effect";
 import type { LanguageModel } from "effect/ai";
 import { AiError, Model, Prompt, Tool, Toolkit } from "effect/ai";
+import * as CryptoDigest from "effect/crypto/Digest";
 
 import { BenchmarkError, check, type Case, type Sample, type SamplePhase } from "./contracts.js";
 import { BenchmarkProgress } from "./evidence.js";
@@ -366,7 +366,7 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
 export const SeedInitializerLive = Layer.effect(
   SeedInitializer,
   Effect.gen(function* () {
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* CryptoDigest.Digest;
 
     return SeedInitializer.of({
       initialize: Effect.fn("benchmark.initializeSeed")(
@@ -383,7 +383,7 @@ export const SeedInitializerLive = Layer.effect(
                 producerId,
               }).pipe(Layer.provide(ContextCompactor.layerRollover)),
             ),
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(CryptoDigest.Digest, crypto),
             Effect.scoped,
             Effect.mapError((cause) =>
               BenchmarkError.make({ message: "Cannot initialize benchmark seed", cause }),

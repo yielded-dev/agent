@@ -1,6 +1,6 @@
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -384,8 +384,8 @@ export const prepareMessageDelivery = Effect.fnUntraced(function* (options: {
   readonly deadlineAtMillis: number;
   readonly policy?: MessageDeliveryPolicy;
   readonly predecessor?: IdempotencyKey;
-}): Effect.fn.Return<MessageDeliveryRecord, MessageDeliveryError, Crypto.Crypto> {
-  // JSON detaches every caller-owned value before Crypto can suspend preparation.
+}): Effect.fn.Return<MessageDeliveryRecord, MessageDeliveryError, CryptoDigest.Digest> {
+  // JSON detaches every caller-owned value before hashing can suspend preparation.
   const snapshot = yield* Schema.encodeEffect(Schema.fromJsonString(MessageDeliveryPreparation))({
     ...options,
     policy: options.policy ?? defaultMessageDeliveryPolicy,
@@ -451,7 +451,11 @@ export const prepareMessageDelivery = Effect.fnUntraced(function* (options: {
 export const prepareCanonicalMessageDeliveries = Effect.fnUntraced(function* (
   threadId: ThreadId,
   records: ReadonlyArray<RecordEnvelope>,
-): Effect.fn.Return<ReadonlyArray<MessageDeliveryRecord>, MessageDeliveryError, Crypto.Crypto> {
+): Effect.fn.Return<
+  ReadonlyArray<MessageDeliveryRecord>,
+  MessageDeliveryError,
+  CryptoDigest.Digest
+> {
   const deliveries: Array<MessageDeliveryRecord> = [];
 
   for (const record of records) {
@@ -719,7 +723,7 @@ export class MessageDeliveryDriver extends Context.Service<
   ): Layer.Layer<
     MessageDeliveryDriver,
     MessageDeliveryError,
-    MessageDeliveryStore | PreparedInputAdmission | Crypto.Crypto
+    MessageDeliveryStore | PreparedInputAdmission | CryptoDigest.Digest
   > {
     return Layer.effect(
       MessageDeliveryDriver,
@@ -732,7 +736,7 @@ export class MessageDeliveryDriver extends Context.Service<
 
         const store = yield* MessageDeliveryStore;
         const admission = yield* PreparedInputAdmission;
-        const crypto = yield* Crypto.Crypto;
+        const crypto = yield* CryptoDigest.Digest;
         const failpoint = yield* MessageDeliveryFailpoint;
         const semaphore = yield* Semaphore.make(config.concurrency);
 
@@ -780,7 +784,7 @@ export class MessageDeliveryDriver extends Context.Service<
                 );
 
                 const digest = yield* digestJson(envelope).pipe(
-                  Effect.provideService(Crypto.Crypto, crypto),
+                  Effect.provideService(CryptoDigest.Digest, crypto),
                   Effect.mapError((cause) => error("storage", "digest", cause)),
                 );
 

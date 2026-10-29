@@ -39,6 +39,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -793,11 +794,12 @@ const alarmStorageError = (code: string) => () => storageFailure(code);
 const transactionLayer: Layer.Layer<
   DoSubscriptionTransaction,
   never,
-  DurableObjectAlarm.DurableObjectAlarm
+  DurableObjectAlarm.DurableObjectAlarm | SecureRandom.SecureRandom
 > = Layer.effect(
   DoSubscriptionTransaction,
   Effect.gen(function* () {
     const alarms = yield* DurableObjectAlarm.DurableObjectAlarm;
+    const random = yield* SecureRandom.SecureRandom;
 
     return DoSubscriptionTransaction.of({
       run: Effect.fnUntraced(function* (body) {
@@ -822,7 +824,10 @@ const transactionLayer: Layer.Layer<
                           runAt,
                           payload: { schemaVersion: 1, generation: replacement.generation },
                         })
-                        .pipe(Effect.mapError(alarmStorageError("schedule-subscription-alarm"))),
+                        .pipe(
+                          Effect.provideService(SecureRandom.SecureRandom, random),
+                          Effect.mapError(alarmStorageError("schedule-subscription-alarm")),
+                        ),
                     ),
                   ),
             ),
@@ -934,6 +939,7 @@ export const makeSubscriptionPartitionObjectClass = <E>(
     | EffectCfDurableObjectState.DurableObjectState
     | WorkerEnvironment
     | SubscriptionPartitionIdentity
+    | SecureRandom.SecureRandom
   >,
   limits: SubscriptionLimits = defaultSubscriptionLimits,
 ): SubscriptionPartitionObjectClass => {
@@ -998,10 +1004,10 @@ export const makeSubscriptionPartitionObjectClass = <E>(
     Layer.provide(
       cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
     ),
-    Layer.provide(cloudflareCryptoLayer),
     Layer.provideMerge(DurableObjectAlarm.DurableObjectAlarm.layer),
     Layer.provide(host),
     Layer.provideMerge(identityLayer),
+    Layer.provide(cloudflareCryptoLayer),
   );
 
   const runtime: Layer.Layer<

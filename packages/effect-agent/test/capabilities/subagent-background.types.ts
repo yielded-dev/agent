@@ -13,7 +13,7 @@ import type { WorkerError } from "@yielded/agent/worker";
 import type * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -347,7 +347,7 @@ const proofs: [
   Assert<
     Equal<
       Tool.HandlerServices<typeof selected.tools.research_start>,
-      SubagentHost | Crypto.Crypto | Decoder
+      SubagentHost | CryptoDigest.Digest | Decoder
     >
   >,
   Assert<Equal<Layer.Services<typeof onlyList.layer>, never>>,

@@ -3,7 +3,6 @@ import {
   Cause,
   Clock,
   Console,
-  Crypto,
   DateTime,
   Effect,
   FileSystem,
@@ -15,6 +14,7 @@ import {
   Schema,
 } from "effect";
 import { Command, Flag } from "effect/cli";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
 import { requireReplayCpu, sha256 } from "./replay-cpu-build.ts";
@@ -76,7 +76,7 @@ const command = Command.make(
   Effect.fn("ReplayCpu.run")(function* (args) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
     const client = yield* HttpClient.HttpClient;
     const output = path.resolve(args.output);
 
@@ -125,7 +125,7 @@ const command = Command.make(
       !(yield* fs.exists(output)),
       "Output directory already exists; retain earlier evidence",
     );
-    const run = (yield* crypto.randomUUIDv4()).replaceAll("-", "").slice(0, 16);
+    const run = (yield* crypto.uuidV4()).replaceAll("-", "").slice(0, 16);
 
     const schedule = yield* Effect.gen(function* () {
       const blocks = [];

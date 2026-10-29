@@ -79,7 +79,7 @@ const PublicationHeader = SettlementPublication.mapFields((fields) => ({
 
 const decodePublicationHeader = Schema.decodeEffect(PublicationHeader);
 
-/** Own the bounded request before Crypto, callbacks, or mutation authority can suspend it. */
+/** Own the bounded request before hashing, callbacks, or mutation authority can suspend it. */
 export const validatePublication = Effect.fnUntraced(function* (input: SettlementPublication) {
   const invalid = (cause: { readonly message: string }) =>
     LedgerError.make({ operation: "publish settlement", message: cause.message, cause });

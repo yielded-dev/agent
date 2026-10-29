@@ -4,7 +4,6 @@ import {
   Clock,
   Config,
   Console,
-  Crypto,
   Effect,
   Exit,
   FileSystem,
@@ -16,6 +15,7 @@ import {
   Schema,
 } from "effect";
 import { Command, Flag } from "effect/cli";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { buildPerformanceCloudflare, PerformanceBuild } from "./build-performance-cloudflare.ts";
@@ -231,8 +231,8 @@ const command = Command.make(
         });
       const config = yield* loadPerformanceConfig;
       const openai = yield* Config.Redacted("OPENAI_API_KEY");
-      const run = (yield* (yield* Crypto.Crypto).randomUUIDv4()).replaceAll("-", "");
-      const token = Redacted.make(yield* (yield* Crypto.Crypto).randomUUIDv4());
+      const run = (yield* (yield* SecureRandom.SecureRandom).uuidV4()).replaceAll("-", "");
+      const token = Redacted.make(yield* (yield* SecureRandom.SecureRandom).uuidV4());
       const secretPath = yield* fs.makeTempFileScoped({ prefix: "performance-secrets-" });
 
       yield* fs.writeFileString(

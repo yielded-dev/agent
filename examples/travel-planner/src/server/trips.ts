@@ -1,6 +1,6 @@
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { Context, Effect, Layer, Schema } from "effect";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import {
@@ -14,7 +14,7 @@ import {
   type SaveTripRequest,
 } from "../domain.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

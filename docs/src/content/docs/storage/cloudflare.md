@@ -31,7 +31,7 @@ shows the composition.
 
 `@yielded/agent-storage-cloudflare` also exposes `DoThreadStore` and
 `DoSubmissionLedger` for custom hosts. Their convenience Layers accept the same
-`ctx.storage` and supply SQL and Crypto. Acquiring storage alone starts no agent
+`ctx.storage` and supply SQL and cryptographic services. Acquiring storage alone starts no agent
 execution or recovery driver.
 
 | Concern                              | Responsibility         |

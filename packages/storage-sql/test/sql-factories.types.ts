@@ -1,7 +1,8 @@
 import { expectTypeOf } from "@effect/vitest";
 import type { AppendConflict, ThreadStoreError } from "@yielded/agent/thread-store";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
@@ -31,17 +32,17 @@ type LedgerConstruction = ReturnType<
 
 expectTypeOf<Effect.Error<JournalConstruction>>().toEqualTypeOf<StorageFailure>();
 expectTypeOf<Effect.Services<JournalConstruction>>().toEqualTypeOf<
-  SqlClient.SqlClient | Crypto.Crypto | Scope.Scope
+  SqlClient.SqlClient | CryptoDigest.Digest | Scope.Scope
 >();
 expectTypeOf<Effect.Error<ReturnType<Journal["append"]>>>().toEqualTypeOf<
   StorageFailure | Corruption | Contention | InjectedFailure | AppendConflict | ThreadStoreError
 >();
 expectTypeOf<Effect.Services<ThreadConstruction>>().toEqualTypeOf<
-  SqlClient.SqlClient | Crypto.Crypto
+  SqlClient.SqlClient | CryptoDigest.Digest
 >();
 expectTypeOf<Effect.Error<ThreadConstruction>>().toEqualTypeOf<StorageFailure | Corruption>();
 expectTypeOf<Effect.Services<LedgerConstruction>>().toEqualTypeOf<
-  SqlClient.SqlClient | Crypto.Crypto
+  SqlClient.SqlClient | CryptoDigest.Digest | SecureRandom.SecureRandom
 >();
 expectTypeOf<Effect.Error<LedgerConstruction>>().toEqualTypeOf<never>();
 

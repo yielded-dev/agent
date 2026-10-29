@@ -1,5 +1,5 @@
 import * as Prompt from "effect/ai/Prompt";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -92,7 +92,7 @@ const readProjectedHistory = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   ProjectedRunHistory,
   RunJournalError | ThreadStoreError | ThreadNotMaterialized,
-  RunContextReader | Crypto.Crypto
+  RunContextReader | CryptoDigest.Digest
 > {
   yield* validateContextBoundary(context, original);
   const reader = yield* RunContextReader;
@@ -180,7 +180,7 @@ export const readRunContext = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   RunJournalContext,
   RunJournalError | ThreadStoreError | ThreadNotMaterialized,
-  RunContextReader | Crypto.Crypto
+  RunContextReader | CryptoDigest.Digest
 > {
   const history = yield* readProjectedHistory(context, original);
   const historyDigest = yield* digestRunHistory(history.prompt);

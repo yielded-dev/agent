@@ -8,13 +8,13 @@ import { CheckpointInput, SandboxCheckpoint } from "@yielded/sandbox/cloudflare/
 import { reportSanitizedCause } from "@yielded/sandbox/observability/RuntimeDiagnostics";
 import { Cause, Clock, Context, Effect, Fiber, Layer, Schema } from "effect";
 import { DurableObjectState } from "effect-cf";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 
 import type { SavedFiles } from "./contract.ts";
 import { SHELL_ACTIVE_KEY, SHELL_COMMAND_PREFIX, ShellCommand } from "./contract.ts";
 import { Workspace } from "./workspace.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

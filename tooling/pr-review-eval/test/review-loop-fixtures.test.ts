@@ -1,8 +1,10 @@
 import { fileURLToPath } from "node:url";
 
 import { NodeServices } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import { Effect, FileSystem } from "effect";
+import * as Layer from "effect/Layer";
 
 import { loadEvalSuite } from "../src/index.ts";
 
@@ -122,5 +124,5 @@ it.effect("reconstructs every public review-loop head from its frozen base and p
         }
       }
     }
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
 );

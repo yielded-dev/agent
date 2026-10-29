@@ -102,7 +102,7 @@ import {
   AppendRequest,
 } from "@yielded/agent/thread-store";
 import * as Cause from "effect/Cause";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -410,7 +410,7 @@ const withLedger = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    SubmissionLedger | SettlementPublisher | StorageOwner | Crypto.Crypto
+    SubmissionLedger | SettlementPublisher | StorageOwner | CryptoDigest.Digest
   >,
 ) => Effect.provide(effect, [ledgerLayer({ filename }), NodeCrypto.layer]);
 
@@ -833,7 +833,11 @@ describe("SqliteSubmissionLedger", () => {
           effect: Effect.Effect<
             A,
             E,
-            SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
+            | SubmissionLedger
+            | SettlementPublisher
+            | ThreadStore
+            | StorageOwner
+            | CryptoDigest.Digest
           >,
         ) =>
           Effect.provide(effect, [
@@ -1087,7 +1091,11 @@ describe("SqliteSubmissionLedger", () => {
             effect: Effect.Effect<
               A,
               E,
-              SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
+              | SubmissionLedger
+              | SettlementPublisher
+              | ThreadStore
+              | StorageOwner
+              | CryptoDigest.Digest
             >,
           ) =>
             Effect.provide(effect, [
@@ -1445,7 +1453,11 @@ describe("SqliteSubmissionLedger", () => {
           effect: Effect.Effect<
             A,
             E,
-            SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
+            | SubmissionLedger
+            | SettlementPublisher
+            | ThreadStore
+            | StorageOwner
+            | CryptoDigest.Digest
           >,
         ) =>
           Effect.provide(effect, [

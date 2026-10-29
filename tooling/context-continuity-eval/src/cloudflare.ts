@@ -3,17 +3,8 @@ import { digestDefinition } from "@yielded/agent/digest";
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import {
-  Clock,
-  Config,
-  Crypto,
-  DateTime,
-  Effect,
-  FileSystem,
-  Path,
-  Redacted,
-  Schema,
-} from "effect";
+import { Clock, Config, DateTime, Effect, FileSystem, Path, Redacted, Schema } from "effect";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { CloudflareIdentity, CloudflareSnapshot } from "./cloudflare-contracts.ts";
@@ -31,7 +22,7 @@ export const runCloudflareEvaluation = Effect.fn("ContextContinuity.runCloudflar
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const start = yield* Clock.currentTimeMillis;
-    const thread = `context-eval-${yield* (yield* Crypto.Crypto).randomUUIDv4()}`;
+    const thread = `context-eval-${yield* (yield* SecureRandom.SecureRandom).uuidV4()}`;
     const base = new URL(baseUrl);
 
     if (base.protocol !== "https:")

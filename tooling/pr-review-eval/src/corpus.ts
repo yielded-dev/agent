@@ -1,5 +1,6 @@
 import { ReviewRequest } from "@yielded/agent-pr-review/review";
-import { Crypto, Effect, FileSystem, Schema, Stream } from "effect";
+import { Effect, FileSystem, Schema, Stream } from "effect";
+import * as CryptoDigest from "effect/crypto/Digest";
 import { Hex } from "effect/encoding";
 
 import {
@@ -69,10 +70,10 @@ export const digestText = Effect.fn("PrReviewEval.digestText")(function* (text: 
     Effect.mapError((cause) => dataError("encode text", "UTF-8 encoding failed", { cause })),
   );
 
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
   const digest = yield* crypto
-    .digest("SHA-256", bytes)
+    .digest(CryptoDigest.sha256, bytes)
     .pipe(Effect.mapError((cause) => dataError("digest text", "SHA-256 failed", { cause })));
 
   return yield* Schema.decodeEffect(EvalInputDigest)(Hex.encode(digest)).pipe(

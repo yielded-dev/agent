@@ -6,7 +6,7 @@ import type * as Model from "effect/ai/Model";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -173,13 +173,13 @@ export const proveRegistrationRequirements = (
     Assert<
       Equal<
         Effect.Services<typeof conditionalAttempt>,
-        Crypto.Crypto | DurableWorkerRequirements<typeof first> | ReportDependency
+        CryptoDigest.Digest | DurableWorkerRequirements<typeof first> | ReportDependency
       >
     >,
     Assert<
       Equal<
         Effect.Services<ReturnType<typeof optionalOptions>>,
-        | Crypto.Crypto
+        | CryptoDigest.Digest
         | DurableWorkerRequirements<typeof first>
         | DurableWorkerRequirements<typeof second>
         | ReportDependency
@@ -208,7 +208,7 @@ export const proveRegistrationRequirements = (
   const scopedRequirements: Assert<
     Equal<
       Effect.Services<typeof scoped>,
-      Crypto.Crypto | InputProjection | ProviderInfrastructure | LookupDependency
+      CryptoDigest.Digest | InputProjection | ProviderInfrastructure | LookupDependency
     >
   > = true;
 
@@ -216,7 +216,7 @@ export const proveRegistrationRequirements = (
 
   type Services = Effect.Services<typeof compiled>;
   type Expected =
-    | Crypto.Crypto
+    | CryptoDigest.Digest
     | DurableWorkerRequirements<typeof first>
     | DurableWorkerRequirements<typeof second>;
   type CompleteUnion = Assert<Equal<Services, Expected>>;

@@ -11,7 +11,8 @@ import { ThreadImport, type ThreadArchive } from "@yielded/agent/thread-import";
 import { ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
 import * as Channel from "effect/Channel";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Scope from "effect/Scope";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -39,8 +40,9 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 ) {
   const context = Context.pick(
     SqlClient.SqlClient,
-    Crypto.Crypto,
-  )(yield* Effect.context<SqlClient.SqlClient | Crypto.Crypto>());
+    CryptoDigest.Digest,
+    SecureRandom.SecureRandom,
+  )(yield* Effect.context<SqlClient.SqlClient | CryptoDigest.Digest | SecureRandom.SecureRandom>());
 
   const owner = journalKernel.journal.owner;
   const storeKernel = yield* makeSqlThreadStoreKernel(journalKernel.journal, storeOptions);

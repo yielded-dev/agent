@@ -24,7 +24,7 @@ import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test"
 import { DurableObject } from "effect-cf";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -72,7 +72,7 @@ import {
 } from "./projection-fixture.ts";
 import { PublicationCursor, PUBLICATION_KEY } from "./publication-fixture.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

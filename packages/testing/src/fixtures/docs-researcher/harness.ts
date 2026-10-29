@@ -10,7 +10,7 @@ import { Principal, type IdempotencyKey } from "@yielded/agent/submission-ledger
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
 import type * as Response from "effect/ai/Response";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -324,7 +324,7 @@ export const redactedDocumentPreview = Effect.fn("DocsResearcher.redactedDocumen
   },
 );
 
-// Crypto is deliberately in the harness requirements (`connectMcp` digests
-// discovery): callers provide a platform Crypto Layer, keeping this fixture
+// Digest is deliberately in the harness requirements (`connectMcp` digests
+// discovery): callers provide a platform Digest Layer, keeping this fixture
 // platform-neutral.
-export type DocsResearcherHarnessRequirements = Crypto.Crypto;
+export type DocsResearcherHarnessRequirements = CryptoDigest.Digest;

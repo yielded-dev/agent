@@ -459,12 +459,19 @@ it.effect.each([
 
       expect(failed._tag).toBe("Failure");
       if (failed._tag !== "Failure") return;
-      const error = Cause.findErrorOption(failed.cause);
 
-      expect(error).toMatchObject({
-        value: { reason: "provider", dispatch: "not-dispatched", cleanup },
-      });
-      if (error._tag === "Some") expect(ErrorReporter.isIgnored(error.value)).toBe(true);
+      const error = failed.cause.reasons
+        .map((reason) =>
+          Cause.isFailReason(reason)
+            ? reason.error
+            : Cause.isDieReason(reason)
+              ? reason.defect
+              : undefined,
+        )
+        .find(Schema.is(BrowserSessionError));
+
+      expect(error).toMatchObject({ reason: "provider", dispatch: "not-dispatched", cleanup });
+      expect(ErrorReporter.isIgnored(error)).toBe(true);
       const diagnostic = JSON.stringify(FailureDiagnostic.capture(failed));
 
       expect(diagnostic).toContain("private-page-setup");
@@ -916,10 +923,18 @@ it.effect("preserves acquisition finalizer defects when creation times out", () 
 
     expect(failed._tag).toBe("Failure");
     if (failed._tag !== "Failure") return;
-    expect(Cause.findErrorOption(failed.cause)).toMatchObject({
-      value: { reason: "timeout", cleanup: "confirmed" },
-    });
-    expect(Cause.findDefect(failed.cause)).toMatchObject({ success: defect });
+    expect(
+      failed.cause.reasons.some(
+        (reason) =>
+          Cause.isDieReason(reason) &&
+          Schema.is(BrowserSessionError)(reason.defect) &&
+          reason.defect.reason === "timeout" &&
+          reason.defect.cleanup === "confirmed",
+      ),
+    ).toBe(true);
+    expect(
+      failed.cause.reasons.some((reason) => Cause.isDieReason(reason) && reason.defect === defect),
+    ).toBe(true);
     expect(provider.closed).toEqual([id]);
   }).pipe(Effect.scoped, Effect.provide(layer)),
 );

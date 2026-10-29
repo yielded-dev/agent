@@ -54,7 +54,8 @@ import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "c
 import { DurableObject } from "effect-cf";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -93,7 +94,7 @@ import { scheduledAlarm, stubFor } from "./harness.ts";
 import { recoveryReadHolds, recoveryReplies } from "./recovery-fixture.ts";
 import type { TestThreadObject } from "./worker.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );
@@ -439,7 +440,7 @@ it(
             const secondReceipt = yield* Fiber.join(preparing);
 
             yield* clock.adjust(1_000);
-            const secondStarted = yield* Deferred.isDone(secondEntered);
+            yield* Deferred.await(secondEntered);
 
             yield* submit(third, "third-independent");
             yield* clock.adjust(1_000);
@@ -447,7 +448,7 @@ it(
 
             yield* Deferred.succeed(releaseSecond, undefined);
             yield* clock.adjust(1_000);
-            const thirdStartedAfterSlotRelease = yield* Deferred.isDone(thirdEntered);
+            yield* Deferred.await(thirdEntered);
             const ledger = yield* SubmissionLedger;
 
             const queued = yield* ledger.loadRecoverySnapshot(
@@ -458,9 +459,7 @@ it(
             expect(queued.hasOwner).toBe(false);
             yield* Deferred.succeed(releaseFirst, undefined);
             yield* Fiber.join(running);
-            expect(secondStarted).toBe(true);
             expect(thirdStartedAtCapacity).toBe(false);
-            expect(thirdStartedAfterSlotRelease).toBe(true);
 
             const secondSnapshot = yield* ledger.loadRecoverySnapshot(
               RecoverySnapshotRequest.make({ submissionId: secondReceipt.submissionId }),
@@ -616,7 +615,8 @@ describe("recovery faults independent of execution history", () => {
             | ThreadMaintenance
             | ThreadStore
             | MessageDeliveryStore
-            | Crypto.Crypto
+            | SecureRandom.SecureRandom
+            | CryptoDigest.Digest
           >,
         ) =>
           Effect.promise(() =>

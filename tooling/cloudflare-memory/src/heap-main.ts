@@ -1,4 +1,5 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { Effect } from "effect";
 import { Command } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
@@ -11,6 +12,7 @@ NodeRuntime.runMain(
     Effect.scoped,
     Effect.provide([
       NodeServices.layer,
+      NodeCrypto.layerDigest,
       FetchHttpClient.layer,
       Socket.layerWebSocketConstructorGlobal,
     ]),

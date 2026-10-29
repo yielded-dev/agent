@@ -1,4 +1,5 @@
-import { Config, Crypto, Effect, FileSystem, Path, Redacted, Schema, Stream } from "effect";
+import { Config, Effect, FileSystem, Path, Redacted, Schema, Stream } from "effect";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -66,7 +67,7 @@ export const prepareReplayCpuResources = Effect.fn("ReplayCpu.prepareResources")
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
   const config = yield* credentials;
   const accountDigest = yield* sha256(config.accountId);
   const privateDirectory = yield* fs.makeTempDirectory({ prefix: "effect-agent-cpu-" });
@@ -94,8 +95,7 @@ export const prepareReplayCpuResources = Effect.fn("ReplayCpu.prepareResources")
     baseline,
     candidate,
     token:
-      (yield* crypto.randomUUIDv4()).replaceAll("-", "") +
-      (yield* crypto.randomUUIDv4()).replaceAll("-", ""),
+      (yield* crypto.uuidV4()).replaceAll("-", "") + (yield* crypto.uuidV4()).replaceAll("-", ""),
   };
 
   yield* writeReplayCpuJson(path.join(privateDirectory, "private.json"), privateState);

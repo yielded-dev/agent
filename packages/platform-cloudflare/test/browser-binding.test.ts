@@ -651,10 +651,10 @@ it.effect.each(["unacknowledged"] as const)(
       expect(
         exit.cause.reasons.some(
           (reason) =>
-            Cause.isFailReason(reason) &&
-            Schema.is(BrowserSessionError)(reason.error) &&
-            reason.error.reason === "timeout" &&
-            reason.error.cleanup === "not-requested",
+            Cause.isDieReason(reason) &&
+            Schema.is(BrowserSessionError)(reason.defect) &&
+            reason.defect.reason === "timeout" &&
+            reason.defect.cleanup === "not-requested",
         ),
       ).toBe(true);
       expect(JSON.stringify(reports)).toContain('"operation":"session.disconnect"');

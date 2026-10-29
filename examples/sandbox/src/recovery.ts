@@ -21,7 +21,7 @@ import {
   ToolReconcilerError,
 } from "@yielded/agent/tool-reconciler";
 import { Effect, Layer, Option } from "effect";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 
 import { codingTools } from "./tools.ts";
 
@@ -30,7 +30,7 @@ export const codingReconciler = Layer.effect(
   Effect.gen(function* () {
     const { threadId } = yield* ThreadObjectIdentity;
     const reader = yield* ThreadReader;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* CryptoDigest.Digest;
 
     const uncertain = ReconciliationUncertain.make({
       reason: "The original native operation still needs its receipt.",
@@ -66,7 +66,7 @@ export const codingReconciler = Layer.effect(
             : ReconciliationNeverStarted.make({});
         }).pipe(
           Effect.provideService(ThreadReader, reader),
-          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.provideService(CryptoDigest.Digest, crypto),
           Effect.mapError((cause) =>
             ToolReconcilerError.make({
               toolCallId: evidence.toolCallId,

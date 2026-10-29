@@ -17,7 +17,8 @@ import {
 } from "@yielded/agent/thread-store";
 import { checkExportSource } from "@yielded/agent/thread-transfer";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -98,7 +99,7 @@ const DatabaseHeader = Schema.Tuple([
 export const exclusiveHostClientLayer: Layer.Layer<
   SqlClientService.SqlClient | ExclusiveSqliteHost,
   SqliteStorageInitializationError,
-  SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
+  SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | CryptoDigest.Digest
 > = Layer.effectContext(
   Effect.gen(function* () {
     const sql = (yield* SqlClientService.SqlClient).withoutTransforms();
@@ -177,7 +178,7 @@ const makeServices = Effect.fnUntraced(function* () {
 });
 
 /**
- * SQLite Thread Store implementation with configuration, failpoint, SQL, and Crypto
+ * SQLite Thread Store implementation with configuration, failpoint, SQL, and Digest
  * authority kept visible in its input channel.
  * Inject a client opened with `disableWAL: true`; this adapter enables WAL only for a
  * fresh file so unsupported files reject before persistent driver configuration changes.
@@ -185,7 +186,7 @@ const makeServices = Effect.fnUntraced(function* () {
 export const threadStoreLayer: Layer.Layer<
   ThreadStore | ThreadReader | ThreadImport | StorageOwner,
   SqliteStorageInitializationError,
-  SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
+  SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | CryptoDigest.Digest
 > = Layer.effect(
   ThreadReader,
   Effect.map(ThreadStore, (store) => ThreadReader.fromStore(store)),
@@ -214,11 +215,21 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
     const exclusive = yield* ExclusiveSqliteHost;
 
     const live = yield* Effect.context<
-      Crypto.Crypto | SqliteStorageConfig | SqliteStorageFailpoint | Scope.Scope
+      | CryptoDigest.Digest
+      | SecureRandom.SecureRandom
+      | SqliteStorageConfig
+      | SqliteStorageFailpoint
+      | Scope.Scope
     >();
 
     const context = Context.add(
-      Context.pick(Crypto.Crypto, SqliteStorageConfig, SqliteStorageFailpoint, Scope.Scope)(live),
+      Context.pick(
+        CryptoDigest.Digest,
+        SecureRandom.SecureRandom,
+        SqliteStorageConfig,
+        SqliteStorageFailpoint,
+        Scope.Scope,
+      )(live),
       SqlClientService.SqlClient,
       exclusive.sql,
     );

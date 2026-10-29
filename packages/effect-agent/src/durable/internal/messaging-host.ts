@@ -1,5 +1,5 @@
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -88,7 +88,7 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
     store: yield* ThreadStore,
     ledger: yield* SubmissionLedger,
     deliveries: yield* Effect.serviceOption(MessageDeliveryStore),
-    crypto: yield* Crypto.Crypto,
+    crypto: yield* CryptoDigest.Digest,
     authorizer: yield* PeerAuthorizer,
     routes: yield* PeerRoutes,
     lifetimeMillis: yield* PeerDeliveryLifetime,
@@ -106,7 +106,7 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
 
   const digest = (value: Schema.Json) =>
     digestJson(value).pipe(
-      Effect.provideService(Crypto.Crypto, deps.crypto),
+      Effect.provideService(CryptoDigest.Digest, deps.crypto),
       Effect.mapError(() => failure("send", "storage")),
     );
 

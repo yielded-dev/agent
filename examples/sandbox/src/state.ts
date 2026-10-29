@@ -3,7 +3,7 @@ import { fetchWithSession } from "@yielded/agent-example-auth/client";
 import { decodeLiveText } from "@yielded/agent-platform-cloudflare/live-text";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { DateTime, Effect, Layer, Schema, Stream } from "effect";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 
 import {
@@ -30,7 +30,7 @@ import {
 } from "./contract";
 import { workspaceIdFromPath } from "./location";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

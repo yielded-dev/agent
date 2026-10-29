@@ -9,10 +9,11 @@ import {
   type LifecyclePublicationStorage,
 } from "@yielded/agent/lifecycle-publication";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
+import * as Arr from "effect/Array";
 import * as Array from "effect/Array";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -353,7 +354,10 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
     Schema.encodeEffect(codec)(publication).pipe(Effect.mapError(failure));
 
   const fingerprint = (text: string) =>
-    digestJson(text).pipe(Effect.provideService(Crypto.Crypto, crypto), Effect.mapError(failure));
+    digestJson(text).pipe(
+      Effect.provideService(CryptoDigest.Digest, crypto),
+      Effect.mapError(failure),
+    );
 
   const decodeRows = (rows: unknown) => decodePublicationRows(rows).pipe(Effect.mapError(failure));
 
@@ -447,9 +451,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
       existing.set(row.id, row);
       insert.push(row);
     }
-    for (let index = 0; index < insert.length; index += 16) {
-      const rows = insert.slice(index, index + 16);
-
+    for (const rows of Arr.chunksOf(insert, 16)) {
       yield* sql`INSERT INTO ${relation} ${sql.insert(rows)}`.pipe(
         execute,
         Effect.mapError(failure),

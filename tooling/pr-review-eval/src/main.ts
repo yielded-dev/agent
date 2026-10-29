@@ -1,4 +1,5 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { ConfigProvider, Console, Effect, FileSystem, Layer, Path } from "effect";
 import { Command } from "effect/cli";
 
@@ -20,7 +21,9 @@ const localConfig = ConfigProvider.layerAdd(
 const program = Command.run(command, { version: CURRENT_RUNNER_VERSION }).pipe(
   Effect.tapError((error) => Console.error(String(error))),
   Effect.scoped,
-  Effect.provide(localConfig.pipe(Layer.provideMerge(NodeServices.layer))),
+  Effect.provide(
+    localConfig.pipe(Layer.provideMerge(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
+  ),
 );
 
 NodeRuntime.runMain(program, { disableErrorReporting: true });

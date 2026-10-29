@@ -4,6 +4,8 @@ import * as Schema from "effect/Schema";
 import * as SchemaParser from "effect/SchemaParser";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
+const restoreFilePart = Schema.decodeSync(Prompt.FilePart);
+
 function restorePart(part: Prompt.UserMessagePartEncoded): Prompt.UserMessagePart;
 function restorePart(part: Prompt.AssistantMessagePartEncoded): Prompt.AssistantMessagePart;
 function restorePart(part: Prompt.ToolMessagePartEncoded): Prompt.ToolMessagePart;
@@ -14,11 +16,24 @@ function restorePart(part: Prompt.PartEncoded): Prompt.Part {
     case "reasoning":
       return Prompt.reasoningPart(part);
     case "file":
-      return Prompt.filePart(part);
+      return restoreFilePart(part);
     case "tool-call":
       return Prompt.toolCallPart({ ...part, providerExecuted: part.providerExecuted ?? false });
-    case "tool-result":
-      return Prompt.toolResultPart({ ...part, providerExecuted: part.providerExecuted ?? false });
+    case "tool-result": {
+      const { modelOutput, ...fields } = part;
+
+      return Prompt.toolResultPart({
+        ...fields,
+        providerExecuted: part.providerExecuted ?? false,
+        ...(modelOutput === undefined
+          ? {}
+          : {
+              modelOutput: modelOutput.map((output) =>
+                output.type === "file" ? restoreFilePart(output) : Prompt.textPart(output),
+              ),
+            }),
+      });
+    }
     case "tool-approval-request":
       return Prompt.toolApprovalRequestPart(part);
     case "tool-approval-response":

@@ -38,7 +38,7 @@ import {
 import { checkExportSource } from "@yielded/agent/thread-transfer";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -217,7 +217,7 @@ const makeServices = Effect.fnUntraced(function* () {
   const config = yield* DoStorageConfig;
   const failpoint = yield* DoStorageFailpoint;
   const sql = yield* SqlClientService.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const journal = yield* initializeDoJournal(sql, failpoint.hit, config.maxStoredValueBytes);
 
   if (config.verifyOnOpen) {
@@ -261,7 +261,7 @@ const makeServices = Effect.fnUntraced(function* () {
       const observed = yield* requireThread(journal, validated.threadId);
 
       const { raw: rawRequest } = yield* prepareCanonicalAppend(validated).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(CryptoDigest.Digest, crypto),
       );
 
       yield* hitFailpoint("append:before");
@@ -483,12 +483,12 @@ const makeServices = Effect.fnUntraced(function* () {
 
 /**
  * Durable Object Thread Store implementation with configuration, failpoint, SQL, and
- * Crypto authority kept visible in its input channel.
+ * Digest authority kept visible in its input channel.
  */
 export const threadStoreLayer: Layer.Layer<
   ThreadStore | ThreadReader | ThreadImport | StorageOwner,
   DoStorageInitializationError,
-  DoStorageConfig | DoStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
+  DoStorageConfig | DoStorageFailpoint | SqlClientService.SqlClient | CryptoDigest.Digest
 > = ThreadReader.layer().pipe(Layer.provideMerge(Layer.effectContext(makeServices())));
 
 /**

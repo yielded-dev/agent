@@ -1,5 +1,5 @@
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -87,7 +87,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   const workers = yield* WorkerRuntime;
   const wake = yield* WakeScheduler;
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const failpoint = yield* DurableRuntimeFailpoint;
 
   const reader = ThreadReader.fromStore(store);
@@ -104,7 +104,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
       submission.threadId,
       call.runId,
       nativeUpdateId(call.runId, call.toolCallId),
-    ).pipe(Effect.provideService(Crypto.Crypto, crypto));
+    ).pipe(Effect.provideService(CryptoDigest.Digest, crypto));
 
     const record = yield* getRecord({
       threadId: submission.threadId,
@@ -121,7 +121,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
 
     const records = yield* readRunEvidenceSnapshot(threadId, submissionId, tail.tailSequence).pipe(
       Effect.provideService(ThreadReader, reader),
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(CryptoDigest.Digest, crypto),
       Effect.mapError(storage),
     );
 
@@ -177,7 +177,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
       );
 
       const digest = yield* updateDigest(request.submission.threadId, request.runId, updateId).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(CryptoDigest.Digest, crypto),
         Effect.mapError(storage),
       );
 

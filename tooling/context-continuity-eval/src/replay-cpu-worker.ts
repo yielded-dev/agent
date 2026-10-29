@@ -35,7 +35,7 @@ import {
   ThreadTailRequest,
   type ExecutionCheckpoint,
 } from "@yielded/agent/thread-store";
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Cause, Context, DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
 import {
   AiError,
@@ -46,6 +46,8 @@ import {
   Toolkit,
   type Response as AiResponse,
 } from "effect/ai";
+import * as CryptoDigest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 
 import {
   currentLargePhase,
@@ -167,10 +169,11 @@ const application = Layer.unwrap(
     const { ctx } = yield* DurableObjectContext;
     const { threadId, producerId } = yield* ThreadObjectIdentity;
     const env = yield* WorkerEnvironment;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* CryptoDigest.Digest;
+    const random = yield* SecureRandom.SecureRandom;
 
-    moduleIncarnation ??= yield* crypto.randomUUIDv4();
-    const incarnation = { module: moduleIncarnation, runtime: yield* crypto.randomUUIDv4() };
+    moduleIncarnation ??= yield* random.uuidV4();
+    const incarnation = { module: moduleIncarnation, runtime: yield* random.uuidV4() };
     const native = yield* ContextCompactor.pipe(Effect.provide(ContextCompactor.layerRollover));
 
     ctx.storage.sql.exec(
@@ -315,9 +318,9 @@ const application = Layer.unwrap(
           }).pipe(Effect.orDie),
         );
 
-        const boundary = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
+        const boundary = <A, E>(effect: Effect.Effect<A, E, CryptoDigest.Digest>) =>
           effect.pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(CryptoDigest.Digest, crypto),
             Effect.catchCause((cause) =>
               Effect.fail(BenchError.make({ message: Cause.pretty(cause).slice(0, 2_000) })),
             ),

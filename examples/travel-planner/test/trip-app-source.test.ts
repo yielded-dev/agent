@@ -69,12 +69,20 @@ const result = (name: string): ArtifactsCreateRepoResult => {
     defaultBranch: "main",
     remote: metadata(name).remote,
     token,
-    tokenExpiresAt: "2026-09-09T00:01:00Z",
   };
 };
 
-const repository = (name: string): ArtifactsRepo & Disposable => ({
-  ...metadata(name),
+const requireGitTransport = async (): Promise<never> => {
+  throw new Error("Source reads must use the Git transport");
+};
+
+const repository = (name: string): ArtifactsRepo => ({
+  info: async () => metadata(name),
+  readBlob: requireGitTransport,
+  readTree: requireGitTransport,
+  readCommit: requireGitTransport,
+  readFile: requireGitTransport,
+  log: requireGitTransport,
   createToken: async (scope = "write") => {
     const id = `token-${++created}`;
 

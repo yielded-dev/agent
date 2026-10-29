@@ -32,7 +32,7 @@ import {
   Schema,
 } from "effect";
 import { Tool, Toolkit } from "effect/ai";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { FetchHttpClient } from "effect/http";
 
 import {
@@ -47,7 +47,7 @@ import {
   workerRunHeader,
 } from "./proof.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

@@ -25,6 +25,7 @@ import { DurableObjectAlarm, DurableObjectState, DurableObjectStorage } from "ef
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -147,12 +148,19 @@ export class DurableAlarmService extends Context.Service<
   static readonly layer = Layer.effect(DurableAlarmService)(
     Effect.gen(function* () {
       const alarms = yield* ThreadMaintenanceAlarm;
+      const random = yield* SecureRandom.SecureRandom;
       const { ctx } = yield* DurableObjectContext;
       const run = yield* makeStorageEffect;
       const inlineWork = yield* Ref.make(0);
 
       const wrap = <A, E, R>(operation: string, effect: Effect.Effect<A, E, R>) =>
-        run(operation, effect.pipe(Effect.mapError(alarmFailure(operation))));
+        run(
+          operation,
+          effect.pipe(
+            Effect.provideService(SecureRandom.SecureRandom, random),
+            Effect.mapError(alarmFailure(operation)),
+          ),
+        );
 
       return DurableAlarmService.of({
         scheduled: wrap(
@@ -227,6 +235,7 @@ const CurrentCheckpoint = Context.Reference<MaintenanceCheckpoint | undefined>(
 /** One source transaction owns queue intent and the library checkpoint through commit. */
 const makeAlarmOperation = Effect.gen(function* () {
   const alarms = yield* ThreadMaintenanceAlarm;
+  const random = yield* SecureRandom.SecureRandom;
   const sql = yield* SqlClient.SqlClient;
   const { ctx } = yield* DurableObjectContext;
   const queue = DueQueue.make(ctx.storage);
@@ -375,7 +384,9 @@ const makeAlarmOperation = Effect.gen(function* () {
       return Effect.tryPromise({
         try: () => execute(ctx.storage, intent),
         catch: alarmFailure(operation),
-      }).pipe(Effect.tap(() => checkpoint));
+      }).pipe(
+        Effect.tap(() => checkpoint.pipe(Effect.provideService(SecureRandom.SecureRandom, random))),
+      );
     });
 
     return Effect.withFiber((fiber) => {
@@ -1309,6 +1320,7 @@ export class ThreadMaintenance extends Context.Service<
     | CloudflareDurableRuntimeConfig
     | DurableObjectContext
     | SqlClient.SqlClient
+    | SecureRandom.SecureRandom
   > = Layer.effect(ThreadMaintenance)(
     Effect.gen(function* () {
       const runtime = yield* DurableAgentRuntime;

@@ -34,7 +34,8 @@ import {
   type ThreadWorkEntry,
   type WorkerReportingMode,
 } from "@yielded/agent/thread-work";
-import * as Crypto from "effect/Crypto";
+import * as Arr from "effect/Array";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -233,7 +234,7 @@ const WorkThreadRows = Schema.Array(Schema.Struct({ thread_id: ThreadId }));
 
 export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThreadWorkOptions = {}) {
   const sql = yield* SqlClient.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const progress = yield* SqlStorageProgress;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
   const recordJson = canonicalRecordJson(sql, options.namespace);
@@ -464,9 +465,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
         sequence,
       }));
 
-      for (let at = 0; at < rows.length; at += 25)
+      for (const chunk of Arr.chunksOf(rows, 25))
         yield* query(
-          sql`INSERT INTO ${table("effect_agent_rollover_buckets")} ${sql.insert(rows.slice(at, at + 25))} ${rebuild ? sql`ON CONFLICT DO NOTHING` : sql``}`,
+          sql`INSERT INTO ${table("effect_agent_rollover_buckets")} ${sql.insert(chunk)} ${rebuild ? sql`ON CONFLICT DO NOTHING` : sql``}`,
         );
     }
     const pointers = canonicalRecordPointers(record);
@@ -1082,7 +1083,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           const current = yield* checkReady(request.threadId, found);
 
           const cursor = yield* decodeWorkCursor(request).pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(CryptoDigest.Digest, crypto),
           );
 
           const pageEntries: Array<ThreadWorkEntry> = [];

@@ -68,7 +68,7 @@ import {
 } from "@yielded/agent/thread-store";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -873,7 +873,11 @@ describe("SqliteThreadStore", () => {
           let reached: SqliteStorageFailpointLocation | undefined;
 
           const withFailpoints = <A, E>(
-            effect: Effect.Effect<A, E, ThreadStore | ThreadReader | StorageOwner | Crypto.Crypto>,
+            effect: Effect.Effect<
+              A,
+              E,
+              ThreadStore | ThreadReader | StorageOwner | CryptoDigest.Digest
+            >,
           ) =>
             Effect.provide(
               effect,

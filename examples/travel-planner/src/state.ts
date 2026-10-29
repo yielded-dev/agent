@@ -2,7 +2,7 @@ import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { authenticatedHttpClient } from "@yielded/agent-example-auth/client";
 import type { Redacted } from "effect";
 import { Data, Effect, Exit, Layer, Option, Schedule, Schema, Semaphore, Stream } from "effect";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { AsyncResult, Atom, AtomRpc, Reactivity } from "effect/reactivity";
 import { RpcClient, RpcSerialization } from "effect/rpc";
@@ -27,7 +27,7 @@ import {
   type SpokenMessage,
 } from "./domain";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

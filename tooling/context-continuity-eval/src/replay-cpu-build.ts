@@ -1,6 +1,7 @@
 import { NodeCrypto, NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Console, Crypto, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { Command, Flag } from "effect/cli";
+import * as CryptoDigest from "effect/crypto/Digest";
 import { Hex } from "effect/encoding";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { build } from "esbuild";
@@ -19,11 +20,11 @@ export const requireReplayCpu = (valid: boolean, message: string) =>
   valid ? Effect.void : Effect.fail(ReplayCpuError.make({ message }));
 
 export const sha256 = Effect.fnUntraced(function* (value: string | Uint8Array) {
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
   return Hex.encode(
     yield* crypto.digest(
-      "SHA-256",
+      CryptoDigest.sha256,
       typeof value === "string" ? new TextEncoder().encode(value) : value,
     ),
   );
