@@ -1,7 +1,7 @@
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -218,15 +218,14 @@ export class LifecyclePublicationHandler extends Context.Service<
   }
 >()("@effect-agent/thread/LifecyclePublicationHandler") {}
 
-/** Adapter configuration; the opt-in layer captures its explicit Crypto requirement once. */
-export const LifecyclePublicationConfig = Context.Reference<Option.Option<Crypto.Crypto>>(
-  "@effect-agent/thread/LifecyclePublicationConfig",
-  { defaultValue: () => Option.none() },
-);
+/** Adapter configuration; the opt-in layer captures its explicit Digest requirement once. */
+export const LifecyclePublicationConfig = Context.Reference<
+  Option.Option<CryptoDigest.Digest["Service"]>
+>("@effect-agent/thread/LifecyclePublicationConfig", { defaultValue: () => Option.none() });
 
 /** Enable native SQL obligations without changing dependencies of disabled storage assemblies. */
 export const lifecyclePublicationLayer = Layer.effect(LifecyclePublicationConfig)(
-  Effect.asSome(Crypto.Crypto),
+  Effect.asSome(CryptoDigest.Digest),
 );
 
 /** Resolve immutable evidence by its exact native identity, never by scanning execution history. */

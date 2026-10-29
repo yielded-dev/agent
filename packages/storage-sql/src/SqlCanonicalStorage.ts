@@ -2,7 +2,7 @@ import { canonicalJson, digestCanonicalJson } from "@yielded/agent/digest";
 import { Digest, RecordJson, type CanonicalRecordPayload } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import { PreparedAppend, ThreadStoreError, type AppendRequest } from "@yielded/agent/thread-store";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -110,14 +110,14 @@ const decodeDefinitionRows = Schema.decodeUnknownEffect(
 );
 
 // Pure dictionary identity, independent of transaction state. Keep only one small success
-// per Crypto service; injected implementations never share cached results.
+// per Digest service; injected implementations never share cached results.
 const envelopeDigests = new WeakMap<
-  Crypto.Crypto,
+  CryptoDigest.Digest["Service"],
   { readonly json: string; readonly digest: Digest }
 >();
 
 const digestEnvelope = (envelope: typeof EnvelopeFragments.Type) =>
-  Effect.flatMap(Crypto.Crypto, (crypto) => {
+  Effect.flatMap(CryptoDigest.Digest, (crypto) => {
     const json = canonicalJson(envelope);
     const prior = envelopeDigests.get(crypto);
 
@@ -324,7 +324,7 @@ const dictionaryKeys = new WeakMap<object, DictionaryKeys>();
 /** These writes run only inside the caller's existing fenced/admission/import transaction. */
 export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const { table, execute } = yield* makeSqlQuery(namespace);
   const owner = yield* SqlStorageOwner;
   const identity = owner?.identity ?? owner;
@@ -472,7 +472,7 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
       };
 
       const digest = yield* digestCanonicalJson(json).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(CryptoDigest.Digest, crypto),
         Effect.mapError((cause) => failure("digest admission definitions", cause)),
       );
 

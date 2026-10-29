@@ -1,7 +1,7 @@
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -306,7 +306,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
     store: yield* ThreadStore,
     ledger: yield* SubmissionLedger,
     deliveries: yield* Effect.serviceOption(MessageDeliveryStore),
-    crypto: yield* Crypto.Crypto,
+    crypto: yield* CryptoDigest.Digest,
     authorizer: yield* WorkerHostAuthorizer,
     budgetAuthorizer: yield* WorkerBudgetAuthorizer,
     policyResolver: yield* WorkerPolicyResolver,
@@ -325,8 +325,8 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       message: "The storage adapter has no worker-capacity port",
     });
 
-  const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
-    Effect.provideService(effect, Crypto.Crypto, deps.crypto);
+  const withCrypto = <A, E>(effect: Effect.Effect<A, E, CryptoDigest.Digest>) =>
+    Effect.provideService(effect, CryptoDigest.Digest, deps.crypto);
 
   const currentStart = Effect.fnUntraced(function* (
     admission: WorkerStartAdmission | undefined,
@@ -469,7 +469,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         tail.tailSequence,
       ).pipe(
         Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
-        Effect.provideService(Crypto.Crypto, deps.crypto),
+        Effect.provideService(CryptoDigest.Digest, deps.crypto),
         Effect.mapError(storageFailure("inspect")),
       );
 
@@ -2858,7 +2858,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                 ),
               ),
         }),
-        Effect.provideService(Crypto.Crypto, deps.crypto),
+        Effect.provideService(CryptoDigest.Digest, deps.crypto),
         Effect.mapError(storageFailure(operation)),
       );
 

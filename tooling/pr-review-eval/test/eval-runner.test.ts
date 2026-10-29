@@ -1,5 +1,6 @@
 import { OpenAiClient } from "@effect/ai-openai";
 import { NodeServices } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import {
   ReviewChange,
@@ -171,7 +172,7 @@ describe("PR-review model eval", () => {
       });
       expect(JSON.stringify(observations)).not.toContain(privateText);
       expect(JSON.stringify(observations)).not.toContain("private-api-key");
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect("flushes out-of-order completions and cancels active work after a write failure", () =>
@@ -250,7 +251,7 @@ describe("PR-review model eval", () => {
       if (Option.isSome(handle)) {
         expect((yield* Effect.result(handle.value.stat))._tag).toBe("Failure");
       }
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.scoped, Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
   it.effect.each([
     {
@@ -440,7 +441,7 @@ describe("PR-review model eval", () => {
             },
           });
         }
-      }).pipe(Effect.provide(NodeServices.layer)),
+      }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect("requires a complete, disjoint oracle for supplied follow-ups", () =>
@@ -491,7 +492,7 @@ describe("PR-review model eval", () => {
           ),
         ).toBe(true);
       }
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect("rejects resolution expectations when the request has no follow-ups", () =>
@@ -516,6 +517,6 @@ describe("PR-review model eval", () => {
           }),
         ),
       ).toBe(true);
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 });

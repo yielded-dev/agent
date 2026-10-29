@@ -44,7 +44,8 @@ import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { ThreadReader } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -158,25 +159,33 @@ export interface NodeDurableAgentRuntimeOptions<
    * recorded (durability §10, DUR-009). Defaults to the fail-closed `ToolReconciler.uncertain`:
    * with no registered policy, every open call stays Unknown and routes to the authorized
    * DUR-017 resolution path. Construction errors and application dependencies remain in the
-   * assembled Layer's E and R; the platform supplies Crypto.
+   * assembled Layer's E and R; the platform supplies Digest and SecureRandom.
    */
   readonly toolReconciler?:
-    | Layer.Layer<ToolReconciler, ReconcilerError, ReconcilerRequirements | Crypto.Crypto>
+    | Layer.Layer<
+        ToolReconciler,
+        ReconcilerError,
+        ReconcilerRequirements | CryptoDigest.Digest | SecureRandom.SecureRandom
+      >
     | undefined;
   /** Host prompt preparation, acquired once with the runtime; default pass-through. */
   readonly runContext?:
-    | Layer.Layer<RunContextPreparation, ContextError, ContextRequirements | Crypto.Crypto>
+    | Layer.Layer<
+        RunContextPreparation,
+        ContextError,
+        ContextRequirements | CryptoDigest.Digest | SecureRandom.SecureRandom
+      >
     | undefined;
   /**
    * Independent action-time Tool authority, acquired once with the runtime; default allow-all.
    * Construction errors and application dependencies remain in the assembled Layer's E and R.
-   * The platform supplies Crypto to these extension Layers.
+   * The platform supplies Digest and SecureRandom to these extension Layers.
    */
   readonly toolAuthorization?:
     | Layer.Layer<
         RunToolAuthorization,
         AuthorizationError,
-        AuthorizationRequirements | Crypto.Crypto
+        AuthorizationRequirements | CryptoDigest.Digest | SecureRandom.SecureRandom
       >
     | undefined;
 }
@@ -278,14 +287,14 @@ const privateMessageDeliveryLayer = Layer.effect(MessageDeliveryStore)(
   Effect.gen(function* () {
     const storageContext = (yield* Effect.context<
       | SqlClientService.SqlClient
-      | Crypto.Crypto
+      | CryptoDigest.Digest
       | SqliteStorageConfig
       | SqliteStorageFailpoint
       | Scope.Scope
     >()).pipe(
       Context.pick(
         SqlClientService.SqlClient,
-        Crypto.Crypto,
+        CryptoDigest.Digest,
         SqliteStorageConfig,
         SqliteStorageFailpoint,
         Scope.Scope,
@@ -299,7 +308,7 @@ const privateMessageDeliveryLayer = Layer.effect(MessageDeliveryStore)(
         A,
         E,
         | SqlClientService.SqlClient
-        | Crypto.Crypto
+        | CryptoDigest.Digest
         | SqliteStorageConfig
         | SqliteStorageFailpoint
         | Scope.Scope

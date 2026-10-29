@@ -1,7 +1,6 @@
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
-import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 
 import { utf8Bytes } from "../core/internal/utf8.ts";
@@ -24,18 +23,12 @@ export const canonicalJson = (value: Schema.Json): string => stringifyCanonicalJ
 
 const digestText = Effect.fnUntraced(function* (
   value: string,
-): Effect.fn.Return<Digest, DigestError, Crypto.Crypto> {
-  const crypto = yield* Crypto.Crypto;
+): Effect.fn.Return<Digest, DigestError, CryptoDigest.Digest> {
+  const crypto = yield* CryptoDigest.Digest;
 
   const bytes = utf8Bytes(value);
 
-  const digest = yield* crypto
-    .digest("SHA-256", bytes)
-    .pipe(
-      Effect.mapError((error: PlatformError.PlatformError) =>
-        DigestError.make({ message: `SHA-256 failed: ${error.message}`, cause: error }),
-      ),
-    );
+  const digest = yield* crypto.digest(CryptoDigest.sha256, bytes);
 
   return yield* decodeDigest(Hex.encode(digest)).pipe(
     Effect.mapError(() => DigestError.make({ message: "SHA-256 returned an invalid digest" })),
@@ -43,7 +36,9 @@ const digestText = Effect.fnUntraced(function* (
 });
 
 /** Digest a JSON value using a stable, locale-independent object-key ordering (UTF-16 code units, RFC 8785 style). */
-export const digestJson = (value: Schema.Json): Effect.Effect<Digest, DigestError, Crypto.Crypto> =>
+export const digestJson = (
+  value: Schema.Json,
+): Effect.Effect<Digest, DigestError, CryptoDigest.Digest> =>
   Effect.suspend(() => digestText(canonicalJson(value)));
 
 /** Hash captured canonical JSON directly, sharing its encoding with accounting and storage. */
@@ -55,7 +50,7 @@ export const digestDefinition = (definition: Schema.Json) => digestJson(definiti
 /** Digest all replay-relevant definitions without hiding which authority changed. */
 export const digestDefinitions = (
   definitions: DefinitionDigestInput,
-): Effect.Effect<DefinitionDigests, DigestError, Crypto.Crypto> =>
+): Effect.Effect<DefinitionDigests, DigestError, CryptoDigest.Digest> =>
   Effect.all({
     agent: digestDefinition(definitions.agent),
     model: digestDefinition(definitions.model),

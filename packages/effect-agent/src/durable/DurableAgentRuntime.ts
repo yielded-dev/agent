@@ -3,7 +3,7 @@ import type * as Tool from "effect/ai/Tool";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -1458,7 +1458,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   const failpoint = yield* DurableRuntimeFailpoint;
   const config = yield* DurableRuntimeConfig;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const reconciler = yield* ToolReconciler;
   const approvalResolver = yield* DurableApprovalResolver;
 
@@ -1500,11 +1500,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   );
 
   const journalServices = Context.make(ThreadReader, reader).pipe(
-    Context.add(Crypto.Crypto, crypto),
+    Context.add(CryptoDigest.Digest, crypto),
   );
 
-  const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>): Effect.Effect<A, E> =>
-    Effect.provideService(effect, Crypto.Crypto, crypto);
+  const withCrypto = <A, E>(
+    effect: Effect.Effect<A, E, CryptoDigest.Digest>,
+  ): Effect.Effect<A, E> => Effect.provideService(effect, CryptoDigest.Digest, crypto);
 
   // Rebuild the pinned admission and captured suffix using this runtime's host dependencies.
   const readInitialJournal = (
@@ -12736,7 +12737,7 @@ export class DurableAgentRuntime extends Context.Service<
     | DurableRuntimeConfig
     | ToolReconciler
     | RunToolAuthorization
-    | Crypto.Crypto
+    | CryptoDigest.Digest
   > = DurableAgentRuntime.layerWithBindings([]);
 
   /** Compatible defaults: no host prompt transformation and allow-all Tool authorization. */
@@ -12751,7 +12752,7 @@ export class DurableAgentRuntime extends Context.Service<
     | DurableRuntimeFailpoint
     | DurableRuntimeConfig
     | ToolReconciler
-    | Crypto.Crypto
+    | CryptoDigest.Digest
   > = DurableAgentRuntime.layerWithServices.pipe(
     Layer.provide([RunContextPreparationPassthrough, RunToolAuthorization.allowAll]),
   );

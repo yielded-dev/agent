@@ -1,7 +1,7 @@
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
 import * as Option from "effect/Option";
@@ -136,10 +136,10 @@ const modelKey = Effect.fnUntraced(function* () {
 
   if (source._tag !== "tool")
     return yield* MessagingError.make({ operation: "send", reason: "denied" });
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
   const digest = yield* crypto
-    .digest("SHA-256", utf8Bytes(JSON.stringify(source)))
+    .digest(CryptoDigest.sha256, utf8Bytes(JSON.stringify(source)))
     .pipe(Effect.mapError(() => MessagingError.make({ operation: "send", reason: "unavailable" })));
 
   return yield* Schema.decodeEffect(IdempotencyKey)(`peer-tool:${Hex.encode(digest)}`).pipe(
@@ -151,7 +151,7 @@ const native = <
   const Name extends string,
   Parameters extends Schema.Top,
   Success extends Schema.Top,
-  Dependencies extends Array<typeof MessagingHost | typeof Crypto.Crypto>,
+  Dependencies extends Array<typeof MessagingHost | typeof CryptoDigest.Digest>,
   R,
 >(
   name: Name,
@@ -195,7 +195,7 @@ export const sendTool = <const Name extends string, Input extends Schema.Top>(
     declaration.target.input,
     MessageStatus,
     `Send input to ${declaration.name} through its authorized durable route.`,
-    [MessagingHost, Crypto.Crypto],
+    [MessagingHost, CryptoDigest.Digest],
     (input) =>
       Effect.gen(function* () {
         return yield* send(declaration, input, { idempotencyKey: yield* modelKey() });
@@ -217,7 +217,7 @@ export const replyTool = <const Name extends string, Input extends Schema.Top>(
     Schema.Struct({ inReplyTo: MessageRef, input: inputSchema }),
     MessageStatus,
     `Reply to a recorded inbound message from ${declaration.name}.`,
-    [MessagingHost, Crypto.Crypto],
+    [MessagingHost, CryptoDigest.Digest],
     ({ inReplyTo, input }) =>
       Effect.gen(function* () {
         return yield* reply(declaration, inReplyTo, input, { idempotencyKey: yield* modelKey() });

@@ -26,7 +26,7 @@ const program = AgentRuntime.run(planner, "Plan a trip to Lisbon").pipe(Effect.p
 
 Install `@yielded/agent-storage-sqlite@beta` alongside your application packages.
 Supply the agent's model and tool Layers; the store supplies its SQL client and
-Crypto. The [runnable planner](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
+cryptographic services. The [runnable planner](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
 contains the agent and provider setup used here.
 
 Save the returned `threadId` and pass it to later Runs, including after restart.

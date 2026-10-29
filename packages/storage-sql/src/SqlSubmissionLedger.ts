@@ -99,7 +99,8 @@ import {
   type ThreadStoreFailure,
 } from "@yielded/agent/thread-store";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -374,7 +375,8 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   const failpoint = { hit: options.hitFailpoint };
   const sql = yield* SqlClientService.SqlClient;
   const { table: relation, execute } = yield* makeSqlQuery(options.namespace);
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
+  const random = yield* SecureRandom.SecureRandom;
   const physical = yield* makeCanonicalStorage(options.namespace);
   const submissionColumns = sql`${sql.literal(SUBMISSION_COLUMNS)}, ${definitionJson(sql, options.namespace)} AS agent_digests_json`;
   const lifecycle = journal.lifecycle;
@@ -473,7 +475,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       );
 
   const mintIdentifier = (prefix: string, operation: string): Effect.Effect<string, LedgerError> =>
-    crypto.randomUUIDv7().pipe(
+    random.uuidV7().pipe(
       Effect.map((uuid) => `${prefix}-${uuid}`),
       Effect.mapError((error) => internalFailure(operation)(error)),
     );
@@ -1656,7 +1658,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     const { request, record, settlement } = yield* validatePublication(input);
 
     const prepared = yield* prepareSqlAppend(request.append, options.offsetPrefix).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(CryptoDigest.Digest, crypto),
     );
 
     return yield* owner.withProgress(

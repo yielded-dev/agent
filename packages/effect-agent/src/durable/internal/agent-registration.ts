@@ -1,6 +1,6 @@
 import * as Tool from "effect/ai/Tool";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -96,7 +96,10 @@ type CachedFallbackContracts = {
   readonly contracts: Record<string, Digest>;
 };
 
-const fallbackContracts = new WeakMap<Crypto.Crypto, WeakMap<object, CachedFallbackContracts>>();
+const fallbackContracts = new WeakMap<
+  CryptoDigest.Digest["Service"],
+  WeakMap<object, CachedFallbackContracts>
+>();
 
 /** Hash current operation contracts; no historical definitions or schemas are retained. */
 export const toolReplayContracts = Effect.fnUntraced(function* (
@@ -105,8 +108,8 @@ export const toolReplayContracts = Effect.fnUntraced(function* (
   fallbackVersion: PersistedJson = null,
 ) {
   // Optional lookup preserves validation before a missing-service defect. A
-  // different host Crypto service must never inherit another host's digest map.
-  const crypto = Option.getOrUndefined(yield* Effect.serviceOption(Crypto.Crypto));
+  // different host Digest service must never inherit another host's digest map.
+  const crypto = Option.getOrUndefined(yield* Effect.serviceOption(CryptoDigest.Digest));
 
   const invalidContracts = () =>
     DigestError.make({
@@ -245,7 +248,7 @@ export const compileBindingContracts = Effect.fnUntraced(function* (
   definition: Agent.AnyDefinition,
   definitions: DefinitionDigestInput,
   versions?: ReplayVersions,
-): Effect.fn.Return<Pick<ResolvedBinding, "digests">, DigestError, Crypto.Crypto> {
+): Effect.fn.Return<Pick<ResolvedBinding, "digests">, DigestError, CryptoDigest.Digest> {
   const digests = yield* digestDefinitions(definitions);
   const tools = yield* toolReplayContracts(definition, versions, definitions.tools);
 
@@ -667,7 +670,7 @@ const registrationDefinitions = (entry: AgentRegistration): DefinitionDigestInpu
 // The implementation consumes their erased union and captures the selected Layer's context.
 function compileRegistration<Entry extends AgentRegistration>(
   entry: Entry,
-): Effect.Effect<ResolvedBinding, DigestError, Crypto.Crypto | EntryRequirements<Entry>>;
+): Effect.Effect<ResolvedBinding, DigestError, CryptoDigest.Digest | EntryRequirements<Entry>>;
 function compileRegistration(entry: AgentRegistration) {
   return Effect.flatMap(
     Effect.try({
@@ -714,7 +717,7 @@ export const compileRegistrations = <const Entries extends ReadonlyArray<AgentRe
 ): Effect.Effect<
   ReadonlyArray<ResolvedBinding>,
   DigestError,
-  Crypto.Crypto | RegistrationRequirements<Entries>
+  CryptoDigest.Digest | RegistrationRequirements<Entries>
 > => {
   return Effect.forEach(entries, compileRegistration<Entries[number]>);
 };

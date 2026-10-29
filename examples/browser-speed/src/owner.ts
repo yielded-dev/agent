@@ -15,7 +15,7 @@ import {
 import { ThreadId } from "@yielded/agent/identifiers";
 import type { ThreadHistory } from "@yielded/agent/thread-history";
 import { Cause, Clock, Effect, Exit, Fiber, type Layer, Option, Redacted, Schema } from "effect";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 
 import { Browser, makeBrowser } from "./browser.ts";
 import {
@@ -39,7 +39,7 @@ import { executeTask } from "./runner.ts";
 import { makeTrace, traceOtlp, Trace } from "./telemetry.ts";
 import { TraceStore } from "./trace-store.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

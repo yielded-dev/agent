@@ -262,7 +262,7 @@ export class NodeDurableHost extends Context.Service<
 >()("@effect-agent/platform-node/NodeDurableHost") {
   /**
    * Compile typed registrations and acquire the complete host in one Layer Scope.
-   * Node supplies Crypto; model, tool, instruction, and schema services remain required.
+   * Node supplies Digest and SecureRandom; model, tool, instruction, and schema services remain required.
    * Startup recovery and shutdown gates are unchanged. Workers start only when the caller
    * runs runResolvedWorkers; this constructor never starts a background worker.
    */

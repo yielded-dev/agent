@@ -157,13 +157,8 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("model call retries", (i
           method: "streamText",
           reason: AiError.NetworkError.make({
             reason: "TransportError",
-            request: {
-              method: "POST",
-              url: "https://example.invalid/model",
-              urlParams: [],
-              hash: undefined,
-              headers: {},
-            },
+            method: "POST",
+            url: "https://example.invalid/model",
             description: "Connection lost after hosted execution, before response parts",
           }),
         });

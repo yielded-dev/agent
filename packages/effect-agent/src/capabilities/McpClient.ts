@@ -133,7 +133,7 @@ const isServerRequest = Schema.is(ServerRequest);
 const isJsonRpcRequest = (message: unknown): message is RpcMessage.RequestEncoded =>
   isServerRequest(message);
 
-/** Effect RPC's tracing extensions are not part of MCP's strict JSON-RPC request shape. */
+/** Effect RPC's tracing and discard extensions are not part of MCP's JSON-RPC request shape. */
 const mcpWireMessage = (message: unknown): unknown => {
   if (!Predicate.hasProperty(message, "_tag") || message._tag !== "Request") return message;
   const payload = Predicate.hasProperty(message, "payload") ? message.payload : undefined;
@@ -144,6 +144,7 @@ const mcpWireMessage = (message: unknown): unknown => {
     traceId: undefined,
     spanId: undefined,
     sampled: undefined,
+    discard: undefined,
     headers: [],
   };
 };
@@ -452,7 +453,16 @@ const makeHttpProtocol = Effect.fnUntraced(function* (options: McpHttpTransportO
         switch (request._tag) {
           case "Request": {
             if (isNotificationTag(request.tag)) {
-              return dispatch(clientId, { ...request, isNotification: true });
+              // MCP notifications have no server response; acknowledge the completed send locally.
+              return dispatch(clientId, { ...request, isNotification: true }).pipe(
+                Effect.andThen(
+                  writeResponse(clientId, {
+                    _tag: "Exit",
+                    requestId: request.id,
+                    exit: { _tag: "Success", value: undefined },
+                  }),
+                ),
+              );
             }
             if (request.tag === "initialize") initializeRequestId = request.id;
 
@@ -611,12 +621,22 @@ const makeStdioProtocol = Effect.fnUntraced(function* (options: McpStdioTranspor
         Effect.forkScoped,
       );
 
-      const send: RpcClient.Protocol["Service"]["send"] = (_clientId, request) => {
+      const send: RpcClient.Protocol["Service"]["send"] = (clientId, request) => {
         switch (request._tag) {
           case "Request": {
-            return enqueue(
-              isNotificationTag(request.tag) ? { ...request, isNotification: true } : request,
-            );
+            if (isNotificationTag(request.tag)) {
+              return enqueue({ ...request, isNotification: true }).pipe(
+                Effect.andThen(
+                  writeResponse(clientId, {
+                    _tag: "Exit",
+                    requestId: request.id,
+                    exit: { _tag: "Success", value: undefined },
+                  }),
+                ),
+              );
+            }
+
+            return enqueue(request);
           }
           case "Interrupt": {
             return enqueue({

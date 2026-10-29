@@ -2,7 +2,7 @@ import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema } from "effect";
 import { CloudflareTracer, WorkerEnvironment, Workflow } from "effect-cf";
 import * as Sandbox from "effect-cf/sandbox";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 
 import {
   AppBuildRequest,
@@ -22,7 +22,7 @@ import { appRepositoryForOwner, callAppRepository } from "./remote.ts";
 import { AppRepository } from "./repository.ts";
 import { AppSourceStore, appSourceLayer } from "./source.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

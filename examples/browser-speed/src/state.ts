@@ -1,7 +1,7 @@
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { authenticatedHttpClient, sessionObservation } from "@yielded/agent-example-auth/client";
 import { Cause, Effect, Option, Predicate, Redacted, Schema } from "effect";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
 import {
@@ -18,7 +18,7 @@ import {
   type RunInput,
 } from "./contract.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

@@ -124,7 +124,7 @@ import { admissionWork } from "@yielded/agent/thread-work";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -675,10 +675,10 @@ const makeSubmissionLedger = Effect.fnUntraced(
    */
   function* (options: MemorySubmissionLedgerOptions = {}) {
     const journal = yield* MemoryThreadStoreKernel;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
 
     const mintIdentity = (operation: string) =>
-      crypto.randomUUIDv4().pipe(
+      crypto.uuidV4().pipe(
         Effect.flatMap(Schema.decodeEffect(MemoryIdentityNonce)),
         Effect.mapError((cause) => ledgerError(operation, "Cannot mint a Memory identity", cause)),
       );
@@ -3532,7 +3532,7 @@ export interface MemorySubmissionLedgerOptions {
 
 /**
  * In-memory reference SubmissionLedger Layer (durability `non-durable`). All state lives in one
- * `Ref` owned by the Layer's Scope. Fresh identities use the supplied `Crypto` service;
+ * `Ref` owned by the Layer's Scope. Fresh identities use the supplied `SecureRandom` service;
  * imported identities remain unchanged. No daemon fibers are spawned and no wall clock is consulted.
  */
 export const memorySubmissionLedgerLayer = (
@@ -3540,11 +3540,11 @@ export const memorySubmissionLedgerLayer = (
 ): Layer.Layer<
   SubmissionLedger | SettlementPublisher,
   never,
-  MemoryThreadStoreKernel | Crypto.Crypto
+  MemoryThreadStoreKernel | SecureRandom.SecureRandom
 > => Layer.effectContext(makeSubmissionLedger(options));
 
 export const MemorySubmissionLedgerLive: Layer.Layer<
   SubmissionLedger | SettlementPublisher,
   never,
-  MemoryThreadStoreKernel | Crypto.Crypto
+  MemoryThreadStoreKernel | SecureRandom.SecureRandom
 > = memorySubmissionLedgerLayer();

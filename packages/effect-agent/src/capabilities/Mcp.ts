@@ -3,7 +3,7 @@ import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Array from "effect/Array";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
@@ -253,9 +253,9 @@ const digestJson = Effect.fnUntraced(function* (serverId: string, value: unknown
     ),
   );
 
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
-  const digest = yield* crypto.digest("SHA-256", utf8Bytes(encoded)).pipe(
+  const digest = yield* crypto.digest(CryptoDigest.sha256, utf8Bytes(encoded)).pipe(
     Effect.mapError((cause) =>
       McpToolkitMismatch.make({
         cause,
@@ -346,7 +346,7 @@ export const validateMcpDiscovery = Effect.fnUntraced(function* (
     ),
   );
 
-  const discoveryJson = yield* Schema.decodeEffect(Schema.Json)(encoded).pipe(
+  const discoveryJson = yield* Schema.decodeUnknownEffect(Schema.Json)(encoded).pipe(
     Effect.mapError((error) =>
       McpConnectionError.make({
         cause: error,

@@ -46,7 +46,7 @@ import {
 } from "@yielded/agent/thread-store";
 import { RpcTargets, RpcTracing } from "effect-cf";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -481,7 +481,7 @@ export class CloudflareThreadClient extends Context.Service<
   }
 >()("@effect-agent/platform-cloudflare/CloudflareThreadClient") {
   /**
-   * Assemble the client from a resolved namespace and the platform Crypto implementation.
+   * Assemble the client from a resolved namespace and the platform SecureRandom implementation.
    * rpcTracing is the binding name and remains opt-in. Caller authentication, principals,
    * idempotency keys, and definition digests are still explicit submission inputs.
    */
@@ -500,12 +500,12 @@ export class CloudflareThreadClient extends Context.Service<
   static readonly layer: Layer.Layer<
     CloudflareThreadClient,
     never,
-    ThreadObjectNamespace | Crypto.Crypto
+    ThreadObjectNamespace | SecureRandom.SecureRandom
   > = Layer.effect(CloudflareThreadClient)(
     Effect.gen(function* () {
       const namespace = yield* ThreadObjectNamespace;
       const { rpcTracing } = namespace;
-      const crypto = yield* Crypto.Crypto;
+      const crypto = yield* SecureRandom.SecureRandom;
 
       const call = Effect.fnUntraced(
         function* (
@@ -627,15 +627,7 @@ export class CloudflareThreadClient extends Context.Service<
         receipt: Receipt,
         operation: "awaitSettlement" | "awaitSettlementRecord",
       ): Effect.fn.Return<HostResponse, ClientAwaitFailure> {
-        const waiterId = yield* crypto.randomUUIDv4().pipe(
-          Effect.mapError((error) =>
-            HostProtocolError.make({
-              message: boundHostDiagnostic(
-                `${operation} cancellation identity generation failed: ${error.message}`,
-              ),
-            }),
-          ),
-        );
+        const waiterId = yield* crypto.uuidV4();
 
         const encoded = yield* encodeAwaitSettlementRequest(
           AwaitSettlementRequest.make({ ...receipt, waiterId }),
@@ -880,15 +872,7 @@ export class CloudflareThreadClient extends Context.Service<
         }),
 
         awaitProgress: Effect.fnUntraced(function* (threadId, afterSequence) {
-          const waiterId = yield* crypto.randomUUIDv4().pipe(
-            Effect.mapError((error) =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(
-                  `awaitProgress cancellation identity generation failed: ${error.message}`,
-                ),
-              }),
-            ),
-          );
+          const waiterId = yield* crypto.uuidV4();
 
           const request = AwaitProgressRequest.make({ afterSequence, waiterId });
 

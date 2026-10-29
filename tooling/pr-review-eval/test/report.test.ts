@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import { NodeServices } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import {
   ReviewFinding,
@@ -12,6 +13,7 @@ import {
   type ReviewSeverity,
 } from "@yielded/agent-pr-review/review";
 import { DateTime, Effect, Schema } from "effect";
+import * as Layer from "effect/Layer";
 
 import type { EvalObservationSetDigest, EvalOracleSetDigest } from "../src/index.ts";
 import {
@@ -171,7 +173,7 @@ describe("PR-review eval quality report", () => {
       );
 
       expect(error.message).toContain("repository source");
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect("rejects stale judgments after defect promotion or a changed resolution oracle", () =>
@@ -236,7 +238,7 @@ describe("PR-review eval quality report", () => {
 
         expect(error.message).toContain("oracle");
       }
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect("scores first-pass resolutions and preserves unresolved feedback across retries", () =>
@@ -330,7 +332,7 @@ describe("PR-review eval quality report", () => {
         "resolution-recall 1/2; unresolved-retention 1/2",
       );
       expect(report.version).toBe(7);
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect(
@@ -422,7 +424,7 @@ describe("PR-review eval quality report", () => {
         });
         expect(result?.firstTrialFindings.valid).toBe(1);
         expect(result?.cleanControls).toMatchObject({ passed: 0, total: 1 });
-      }).pipe(Effect.provide(NodeServices.layer)),
+      }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect("counts missed important defects even when a later trial finds them all", () =>
@@ -478,6 +480,6 @@ describe("PR-review eval quality report", () => {
 
       expect(result?.defectRecall).toEqual({ numerator: 0, denominator: 2, status: "measured" });
       expect(result?.allTrialFindings.valid).toBe(2);
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 });

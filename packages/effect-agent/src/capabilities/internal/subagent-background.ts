@@ -1,7 +1,7 @@
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import type * as Brand from "effect/Brand";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
 import * as Option from "effect/Option";
@@ -861,7 +861,7 @@ const modelKey = Effect.fnUntraced(function* (operation: "start" | "followUp") {
   if (caller.source._tag !== "tool")
     return yield* WorkerError.make({ operation, reason: "denied" });
   const source = caller.source;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
   const bytes = utf8Bytes(
     JSON.stringify([
@@ -875,7 +875,7 @@ const modelKey = Effect.fnUntraced(function* (operation: "start" | "followUp") {
   );
 
   const digest = yield* crypto
-    .digest("SHA-256", bytes)
+    .digest(CryptoDigest.sha256, bytes)
     .pipe(Effect.mapError(() => WorkerError.make({ operation, reason: "unavailable" })));
 
   return yield* Schema.decodeEffect(IdempotencyKey)(`worker:${Hex.encode(digest)}`).pipe(
@@ -929,7 +929,7 @@ export const startTool = <
     .annotate(WorkerOperationTool, true)
     .annotate(BackgroundSpawnTool, true)
     .addDependency(SubagentHost)
-    .addDependency(Crypto.Crypto);
+    .addDependency(CryptoDigest.Digest);
 
   const ops = operations(declaration);
 
@@ -971,7 +971,7 @@ export const followUpTool = <
   })
     .annotate(WorkerOperationTool, true)
     .addDependency(SubagentHost)
-    .addDependency(Crypto.Crypto);
+    .addDependency(CryptoDigest.Digest);
 
   const ops = operations(declaration);
 

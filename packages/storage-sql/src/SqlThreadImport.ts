@@ -87,7 +87,7 @@ import {
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
 import { AssignmentTerminal } from "@yielded/agent/worker";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -252,7 +252,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   E extends { readonly message: string },
 >(options: SqlThreadImportOptions<E>) {
   const sql = yield* SqlClient.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const deliveryLimits = options.deliveryLimits ?? defaultMessageDeliveryStoreLimits;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
   const physical = yield* makeCanonicalStorage(options.namespace);
@@ -1846,7 +1846,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
             return result;
           }).pipe(Effect.provide(readerLayer(result.threadId, result.tailSequence)));
-        }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+        }).pipe(Effect.provideService(CryptoDigest.Digest, crypto)),
       ),
     );
 
@@ -1972,7 +1972,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             return yield* failure("verify snapshot", "Thread changed during verification");
 
           return result;
-        }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+        }).pipe(Effect.provideService(CryptoDigest.Digest, crypto)),
       )
       .pipe(
         Effect.catchTag("ThreadExportRejected", (cause) =>

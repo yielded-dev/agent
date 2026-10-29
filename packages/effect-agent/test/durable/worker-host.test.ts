@@ -28,7 +28,7 @@ import { ToolResultBounds } from "@yielded/agent/tool-result";
 import { WorkerCompletion, WorkerError, WorkerUpdate } from "@yielded/agent/worker";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -212,7 +212,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
   } = {},
 ) {
   const now = yield* Clock.currentTimeMillis;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const logs = new Map<ThreadId, Array<CanonicalRecordEnvelope>>();
   const executions = new Map<RunId, ExecutionCheckpoint>();
   const rejectedAppends = { tail: 0 };
@@ -499,7 +499,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
         request.threadId,
         request.batch.records,
       ).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(CryptoDigest.Digest, crypto),
         Effect.mapError((cause) =>
           ThreadStoreError.make({ operation: "append", message: cause.message, cause }),
         ),
@@ -560,7 +560,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
     append: Effect.fnUntraced(function* (request) {
       const writer = yield* makeProgressWriter(request.threadId, DeploymentId.make("test")).pipe(
         Effect.provideService(ThreadReader, ThreadReader.fromStore(fixtureStore)),
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(CryptoDigest.Digest, crypto),
       );
 
       return yield* writer.commit(request.batch).pipe(

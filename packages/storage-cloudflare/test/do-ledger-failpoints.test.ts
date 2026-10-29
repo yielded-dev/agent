@@ -40,7 +40,7 @@ import {
 } from "@yielded/agent/submission-ledger";
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import * as Cause from "effect/Cause";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
@@ -97,7 +97,7 @@ const makeFailpointHarness = Effect.fnUntraced(function* (storage: DurableObject
     effect: Effect.Effect<
       A,
       E,
-      SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
+      SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | CryptoDigest.Digest
     >,
   ) =>
     Effect.provide(effect, [

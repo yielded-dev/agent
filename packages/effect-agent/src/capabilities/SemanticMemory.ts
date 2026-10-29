@@ -1,6 +1,6 @@
 import * as EmbeddingModel from "effect/ai/EmbeddingModel";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
 import * as Schema from "effect/Schema";
@@ -250,9 +250,9 @@ export const indexMemorySource = Effect.fnUntraced(function* <
       profile,
     ).pipe(Effect.mapError(() => invalid("encode profile")));
 
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* CryptoDigest.Digest;
 
-    const fingerprint = yield* crypto.digest("SHA-256", utf8Bytes(encodedProfile)).pipe(
+    const fingerprint = yield* crypto.digest(CryptoDigest.sha256, utf8Bytes(encodedProfile)).pipe(
       Effect.map(Hex.encode),
       Effect.mapError(() =>
         SemanticMemoryError.make({ operation: "fingerprint profile", reason: "unavailable" }),

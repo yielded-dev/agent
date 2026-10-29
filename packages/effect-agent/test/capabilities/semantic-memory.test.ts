@@ -27,7 +27,7 @@ import {
 import { type SemanticMemoryError } from "@yielded/agent/semantic-memory-revalidation";
 import type * as AiError from "effect/ai/AiError";
 import * as EmbeddingModel from "effect/ai/EmbeddingModel";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as NamespaceSchema from "effect/Schema";
@@ -198,7 +198,7 @@ export const verifyKeepsNativeProviderSourceIndexERVisibleAndOwnsItsTemporarySco
     | MemoryReader
     | SemanticMemoryIndex
     | EmbeddingModel.EmbeddingModel
-    | Crypto.Crypto;
+    | CryptoDigest.Digest;
   type QueryServices = MemoryReader | SemanticMemoryIndex | EmbeddingModel.EmbeddingModel;
 
   const indexErrorExact: [Effect.Error<typeof indexing>] extends [IndexErrors] ? true : false =

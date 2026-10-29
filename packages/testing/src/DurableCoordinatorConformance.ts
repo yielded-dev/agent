@@ -42,7 +42,7 @@ import type * as Response from "effect/ai/Response";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Cause from "effect/Cause";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -824,14 +824,14 @@ const caseName = "coordinator recovery converges after injected faults";
  * outside these scenarios; every scenario must exercise at least one injected fault.
  *
  * Provide one combined adapter Layer with SubmissionLedger, ThreadStore, SettlementPublisher,
- * StorageOwner and Crypto in a TestClock-backed environment. The helper owns its runtime Scope
+ * StorageOwner and Digest in a TestClock-backed environment. The helper owns its runtime Scope
  * and supplies a no-op WakeScheduler because it re-drives lanes explicitly. Injected failures
  * do not establish recovery after actual process loss or eviction.
  */
 export const durableCoordinatorConformance: Effect.Effect<
   void,
   DurableCoordinatorConformanceViolation | ThreadStoreError,
-  SubmissionLedger | ThreadStore | SettlementPublisher | StorageOwner | Crypto.Crypto
+  SubmissionLedger | ThreadStore | SettlementPublisher | StorageOwner | CryptoDigest.Digest
 > = Effect.gen(function* () {
   const discoveries: Array<{
     readonly scenario: CoordinatorScenario;

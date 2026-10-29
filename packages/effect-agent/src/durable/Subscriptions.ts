@@ -1,6 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -237,11 +237,11 @@ const dependencies = Effect.gen(function* () {
   const store = yield* SubscriptionStore;
   const authorizer = yield* SubscriptionAuthorizer;
   const sources = (yield* EventSources).sources;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
   const digest = (value: PersistedJson) =>
     digestJson(value).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(CryptoDigest.Digest, crypto),
       Effect.mapError(() => failure("storage", "digest")),
     );
 

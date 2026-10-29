@@ -8,7 +8,7 @@ import * as Schema from "effect/Schema";
 
 const Probability = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 }));
 
-const answerSchema = (decision: Decision.Any) =>
+const answerSchema = (decision: Exclude<Decision.Any, Decision.Locate>) =>
   Match.value(decision).pipe(
     Match.tag("Classify", ({ criteria }) =>
       Schema.TaggedStruct("Classify", {

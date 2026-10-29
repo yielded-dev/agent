@@ -48,8 +48,9 @@ import {
   ThreadStore,
   ThreadTailRequest,
 } from "@yielded/agent/thread-store";
-import { Clock, Crypto, DateTime, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
+import { Clock, DateTime, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { AiError, EmbeddingModel } from "effect/ai";
+import * as CryptoDigest from "effect/crypto/Digest";
 import { Hex } from "effect/encoding";
 
 import {
@@ -570,10 +571,10 @@ const loadCorpus = Effect.fn("SemanticMemoryEvaluation.loadCorpus")(function* ()
   const modulePath = yield* path.fromFileUrl(new URL(import.meta.url));
   const fixture = path.resolve(path.dirname(modulePath), "../fixtures/semantic-memory-corpus.json");
   const raw = yield* fs.readFileString(fixture);
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
   const digest = yield* crypto
-    .digest("SHA-256", new TextEncoder().encode(raw))
+    .digest(CryptoDigest.sha256, new TextEncoder().encode(raw))
     .pipe(Effect.map(Hex.encode));
 
   if (digest !== CORPUS_SHA256) return yield* evalError("verify corpus", `SHA-256 ${digest}`);

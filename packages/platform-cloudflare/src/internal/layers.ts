@@ -99,7 +99,8 @@ import { DurableObjectAlarm } from "effect-cf";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as ErrorReporter from "effect/ErrorReporter";
@@ -215,7 +216,8 @@ export type CloudflareBootstrapServices =
   | ThreadObjectIdentity
   | ThreadObjectPlacement
   | DurableRuntimeConfig
-  | Crypto.Crypto
+  | CryptoDigest.Digest
+  | SecureRandom.SecureRandom
   | DoStorageFailpoint
   | DurableRuntimeFailpoint
   | ThreadMaintenanceFailpoint

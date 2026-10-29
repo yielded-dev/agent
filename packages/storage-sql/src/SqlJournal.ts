@@ -1,3 +1,5 @@
+import * as Arr from "effect/Array";
+
 import {
   executionStates,
   executionStateKey,
@@ -747,12 +749,13 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 
     // Five canonical rows (18 columns each) and 33 membership rows (three columns each)
     // stay below every adapter's parameter ceiling, including Durable Objects' limit of 100.
-    for (let at = 0; at < request.records.length; at += 5) {
+    for (const [chunkIndex, physicalChunk] of Arr.chunksOf(physicalRecords, 5).entries()) {
+      const at = chunkIndex * 5;
       const records = request.records.slice(at, at + 5);
 
       const inserted =
         yield* sql`INSERT INTO ${relation("effect_agent_canonical_records")} ${sql.insert(
-          physicalRecords.slice(at, at + 5).map((record) => record.columns),
+          Arr.map(physicalChunk, (record) => record.columns),
         )} ON CONFLICT(thread_id, record_id) DO NOTHING RETURNING 1`.pipe(
           execute,
           Effect.mapError(storageError("insert canonical record")),
@@ -765,10 +768,10 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           reason: "record-identity",
         });
 
-      const memberships = physicalRecords.slice(at, at + 5).flatMap((record) => record.memberships);
+      const memberships = physicalChunk.flatMap((record) => record.memberships);
 
-      for (let from = 0; from < memberships.length; from += 33)
-        yield* sql`INSERT INTO ${relation("effect_agent_record_runs")} ${sql.insert(memberships.slice(from, from + 33))}`.pipe(
+      for (const chunk of Arr.chunksOf(memberships, 33))
+        yield* sql`INSERT INTO ${relation("effect_agent_record_runs")} ${sql.insert(chunk)}`.pipe(
           execute,
           Effect.mapError(storageError("index canonical Run membership")),
         );

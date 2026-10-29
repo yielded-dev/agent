@@ -1,4 +1,4 @@
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -122,7 +122,7 @@ export type SubmissionLedgerConformanceFailure =
  * lanes, so a suite may run every case against one shared storage owner or a fresh
  * owner per case. Cases drive elapsed time through `TestClock`, so they must run inside the
  * `@effect/vitest` test environment (`it.effect`), and they compute real content digests, so the
- * host suite must provide `Crypto.Crypto` and the same owner's `ThreadStore` and
+ * host suite must provide `CryptoDigest.Digest` and the same owner's `ThreadStore` and
  * `SettlementPublisher`.
  */
 export interface SubmissionLedgerConformanceCase {
@@ -130,7 +130,7 @@ export interface SubmissionLedgerConformanceCase {
   readonly run: Effect.Effect<
     void,
     SubmissionLedgerConformanceFailure,
-    SubmissionLedger | ThreadStore | SettlementPublisher | Crypto.Crypto | StorageOwner
+    SubmissionLedger | ThreadStore | SettlementPublisher | CryptoDigest.Digest | StorageOwner
   >;
 }
 
@@ -394,7 +394,7 @@ const conformanceCase = (
     | SubmissionLedger
     | ThreadStore
     | SettlementPublisher
-    | Crypto.Crypto
+    | CryptoDigest.Digest
     | StorageOwner
     | Scope.Scope
   >,
@@ -4634,7 +4634,7 @@ const cooperativeHandoff = conformanceCase(
 /**
  * The shared, adapter-parameterized SubmissionLedger contract suite (STORE-010). Every durable
  * ledger adapter test suite must execute each case against its own ledger provisioning, inside
- * the `@effect/vitest` test environment (TestClock) and with `Crypto.Crypto` provided.
+ * the `@effect/vitest` test environment (TestClock) and with `CryptoDigest.Digest` provided.
  */
 export const submissionLedgerConformanceCases: ReadonlyArray<SubmissionLedgerConformanceCase> = [
   admissionIdempotency,

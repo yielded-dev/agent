@@ -4,7 +4,8 @@ import { StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type * as SqlClientService from "effect/sql/SqlClient";
@@ -41,13 +42,17 @@ const makeServices = Effect.fnUntraced(function* () {
 
 /**
  * SQLite submission transitions and canonical settlement publication share the journal's
- * database file, scoped owner, and mutation gate. Configuration, failpoint, SQL, and Crypto
+ * database file, scoped owner, and mutation gate. Configuration, failpoint, SQL, Digest, and SecureRandom
  * authority stay visible in the input channel.
  */
 export const submissionLedgerLayer: Layer.Layer<
   SubmissionLedger | SettlementPublisher | StorageOwner,
   SqliteStorageInitializationError,
-  SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
+  | SqliteStorageConfig
+  | SqliteStorageFailpoint
+  | SqlClientService.SqlClient
+  | CryptoDigest.Digest
+  | SecureRandom.SecureRandom
 > = Layer.effectContext(makeServices()).pipe(Layer.provide(exclusiveHostClientLayer));
 
 /**

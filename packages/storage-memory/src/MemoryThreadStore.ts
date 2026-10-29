@@ -133,7 +133,7 @@ import {
   type ThreadWorkStorage,
 } from "@yielded/agent/thread-work";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Base64 from "effect/encoding/Base64";
 import * as Layer from "effect/Layer";
@@ -758,7 +758,7 @@ const findThread = Effect.fnUntraced(function* (
 
 const makeThreadStore = Effect.gen(function* () {
   const maxThreads = yield* ThreadCapacity;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
   const state = yield* Ref.make<MemoryState>({ threads: new Map() });
   const gate = yield* Semaphore.make(1);
   const owner = yield* makeStorageOwner(gate.withPermits(1));
@@ -840,7 +840,7 @@ const makeThreadStore = Effect.gen(function* () {
           const request = yield* validate(ThreadWorkRequest, "work page", unvalidated);
 
           const cursor = yield* decodeWorkCursor(request).pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(CryptoDigest.Digest, crypto),
           );
 
           const thread = (yield* Ref.get(state)).threads.get(request.threadId);
@@ -962,7 +962,7 @@ const makeThreadStore = Effect.gen(function* () {
             );
 
           const commitWork = yield* prepareWork(index, records).pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(CryptoDigest.Digest, crypto),
           );
 
           // Shared writer gate fences the current tail; publish native locators and catalogue together.
@@ -1105,7 +1105,7 @@ const makeThreadStore = Effect.gen(function* () {
       request.threadId,
       request.batch.records,
     ).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(CryptoDigest.Digest, crypto),
       Effect.mapError((cause) => deliveryError("Invalid canonical delivery", cause)),
     );
 
@@ -1235,7 +1235,7 @@ const makeThreadStore = Effect.gen(function* () {
               request.batch,
               decodeCanonicalSequence(thread.tailSequence + 1),
             ),
-          ).pipe(Effect.provideService(Crypto.Crypto, crypto))
+          ).pipe(Effect.provideService(CryptoDigest.Digest, crypto))
         : undefined;
 
     let commitDeliveries: (() => void) | undefined;
@@ -2038,7 +2038,7 @@ const makeThreadStore = Effect.gen(function* () {
           yield* Stream.runForEach(captured, (input) =>
             Effect.gen(function* () {
               const page = yield* prepareImportPage(progress, input).pipe(
-                Effect.provideService(Crypto.Crypto, crypto),
+                Effect.provideService(CryptoDigest.Digest, crypto),
               );
 
               const id = page.archive.threadId;
@@ -2131,7 +2131,7 @@ const makeThreadStore = Effect.gen(function* () {
                 const native = prepareIndexes(staged, records);
 
                 const commitWork = yield* prepareWork(stagedWork, records).pipe(
-                  Effect.provideService(Crypto.Crypto, crypto),
+                  Effect.provideService(CryptoDigest.Digest, crypto),
                 );
 
                 retainRecords(staged, records);
@@ -2272,7 +2272,7 @@ const makeThreadStore = Effect.gen(function* () {
                 ),
             }),
           );
-        }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+        }).pipe(Effect.provideService(CryptoDigest.Digest, crypto)),
       ),
     );
 
@@ -2612,7 +2612,7 @@ const makeThreadStore = Effect.gen(function* () {
               : { requireAllSettled: request.requireAllSettled }),
           }).pipe(
             Effect.provide(ThreadImportReader.layer(reader)),
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(CryptoDigest.Digest, crypto),
           );
         }),
       ),

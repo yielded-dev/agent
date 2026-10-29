@@ -127,7 +127,8 @@ import { AssignmentTerminal } from "@yielded/agent/worker";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -444,7 +445,8 @@ const makeServices = Effect.fnUntraced(function* () {
   const config = yield* DoStorageConfig;
   const failpoint = yield* DoStorageFailpoint;
   const sql = yield* SqlClientService.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
+  const random = yield* SecureRandom.SecureRandom;
   const physical = yield* makeCanonicalStorage();
   const submissionColumns = sql`${sql.literal(SUBMISSION_COLUMNS)}, ${definitionJson(sql)} AS agent_digests_json`;
   const admissionFence = yield* SubmissionAdmissionFence;
@@ -583,8 +585,7 @@ const makeServices = Effect.fnUntraced(function* () {
         ),
       );
 
-  const mintUuid = (operation: string): Effect.Effect<string, LedgerError> =>
-    crypto.randomUUIDv7().pipe(Effect.mapError((error) => internalFailure(operation)(error)));
+  const mintUuid = () => random.uuidV7();
 
   const currentInstant = Effect.map(Clock.currentTimeMillis, (millis) => ({
     millis,
@@ -1073,7 +1074,7 @@ const makeServices = Effect.fnUntraced(function* () {
     // routing layer parses ITS OWN minted format (split at the first ":") to address
     // submissionId-only operations to the owning Thread Object; the id stays opaque
     // to every other component, exactly like DN's `submission-{uuid}` prefix.
-    const mintedSubmissionId = `${yield* mintUuid(operation)}:${validated.threadId}`;
+    const mintedSubmissionId = `${yield* mintUuid()}:${validated.threadId}`;
 
     if (mintedSubmissionId.length > MAX_IDENTIFIER_LENGTH) {
       return yield* LedgerError.make({
@@ -1083,7 +1084,7 @@ const makeServices = Effect.fnUntraced(function* () {
           `the ${MAX_IDENTIFIER_LENGTH}-character ledger row bound; shorten the Thread identity.`,
       });
     }
-    const mintedReceiptId = `receipt-${yield* mintUuid(operation)}`;
+    const mintedReceiptId = `receipt-${yield* mintUuid()}`;
 
     yield* hitFailpoint("ledger:admit:before", operation);
 
@@ -1528,7 +1529,7 @@ const makeServices = Effect.fnUntraced(function* () {
       Effect.mapError(internalFailure(operation)),
     );
 
-    const attemptId = `attempt-${yield* mintUuid(operation)}`;
+    const attemptId = `attempt-${yield* mintUuid()}`;
 
     yield* hitFailpoint("ledger:claim:before", operation);
 
@@ -1696,7 +1697,7 @@ const makeServices = Effect.fnUntraced(function* () {
       const operation = "append original input and context";
 
       const prepared = yield* prepareCanonicalAppend(request).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(CryptoDigest.Digest, crypto),
       );
 
       const record = prepared.request.batch.records[0];
@@ -1801,7 +1802,7 @@ const makeServices = Effect.fnUntraced(function* () {
     const { request, record, settlement } = yield* validatePublication(input);
 
     const prepared = yield* prepareCanonicalAppend(request.append).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(CryptoDigest.Digest, crypto),
     );
 
     const mapAppendError = (error: { readonly _tag: string; readonly message: string }) =>
@@ -3923,12 +3924,16 @@ const makeServices = Effect.fnUntraced(function* () {
 /**
  * Durable Object SubmissionLedger implementation sharing the journal's private SQLite
  * database, storage-backed transactions, and scoped local owner.
- * Configuration, failpoint, SQL, and Crypto authority stay visible in the input channel.
+ * Configuration, failpoint, SQL, Digest, and SecureRandom authority stay visible in the input channel.
  */
 export const submissionLedgerLayer: Layer.Layer<
   SubmissionLedger | SettlementPublisher | StorageOwner,
   DoStorageInitializationError,
-  DoStorageConfig | DoStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
+  | DoStorageConfig
+  | DoStorageFailpoint
+  | SqlClientService.SqlClient
+  | CryptoDigest.Digest
+  | SecureRandom.SecureRandom
 > = Layer.effectContext(makeServices());
 
 /**

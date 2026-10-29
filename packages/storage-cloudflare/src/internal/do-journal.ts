@@ -33,6 +33,7 @@ import {
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
+import * as Arr from "effect/Array";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -93,16 +94,6 @@ const isNativeClient = Schema.is(
 );
 
 const storedTextBytes = (value: string): number => new TextEncoder().encode(value).byteLength;
-
-const chunked = <A>(values: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A>> => {
-  const chunks: Array<ReadonlyArray<A>> = [];
-
-  for (let index = 0; index < values.length; index += size) {
-    chunks.push(values.slice(index, index + size));
-  }
-
-  return chunks;
-};
 
 class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
@@ -726,6 +717,8 @@ const makeJournal = Effect.fnUntraced(function* (
 
           if (captured === undefined) return undefined;
           const physicalRecords = yield* captured;
+
+          if (!Arr.isReadonlyArrayNonEmpty(physicalRecords)) return undefined;
           const rows = yield* query(workPlan.advance, "advance native work frontier");
 
           // A zero-row predicate miss has made no change. A successful update
@@ -742,7 +735,7 @@ const makeJournal = Effect.fnUntraced(function* (
             );
 
           const inserted = yield* query(
-            sql`INSERT INTO effect_agent_canonical_records ${sql.insert(physicalRecords.map((row) => row.columns))}
+            sql`INSERT INTO effect_agent_canonical_records ${sql.insert(Arr.map(physicalRecords, (row) => row.columns))}
             ON CONFLICT(thread_id, record_id) DO NOTHING RETURNING 1`,
             "insert canonical records",
           );
@@ -756,7 +749,7 @@ const makeJournal = Effect.fnUntraced(function* (
             );
           const memberships = physicalRecords.flatMap((row) => row.memberships);
 
-          for (const group of chunked(memberships, Math.floor(MAX_BOUND_PARAMETERS / 3)))
+          for (const group of Arr.chunksOf(memberships, Math.floor(MAX_BOUND_PARAMETERS / 3)))
             yield* query(
               sql`INSERT INTO effect_agent_record_runs ${sql.insert(group)}`,
               "index canonical Run membership",
@@ -959,9 +952,9 @@ const makeJournal = Effect.fnUntraced(function* (
 
     // Captured scalar locators avoid parsing canonical JSON under the writer.
     // Eighteen bound columns per row stay within workerd's statement limit.
-    for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 18))) {
+    for (const group of Arr.chunksOf(records, Math.floor(MAX_BOUND_PARAMETERS / 18))) {
       const inserted =
-        yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(group.map(({ row }) => row))}
+        yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(Arr.map(group, ({ row }) => row))}
         ON CONFLICT(thread_id, record_id) DO NOTHING RETURNING 1`.pipe(
           Effect.mapError(storageError("insert canonical records")),
         );
@@ -974,7 +967,7 @@ const makeJournal = Effect.fnUntraced(function* (
 
       const memberships = group.flatMap(({ memberships }) => memberships);
 
-      for (const members of chunked(memberships, Math.floor(MAX_BOUND_PARAMETERS / 3)))
+      for (const members of Arr.chunksOf(memberships, Math.floor(MAX_BOUND_PARAMETERS / 3)))
         yield* sql`INSERT INTO effect_agent_record_runs ${sql.insert(members)}`.pipe(
           Effect.mapError(storageError("index canonical Run membership")),
         );

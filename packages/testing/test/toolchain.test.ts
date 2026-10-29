@@ -140,15 +140,17 @@ layer(NodeServices.layer)("workspace toolchain", (it) => {
         const commands = ChildProcessSpawner.make((command) => {
           if (command._tag !== "StandardCommand") return Effect.die("Unexpected pipeline");
 
-          const operation = command.args.find((arg) =>
-            [
-              "build",
-              "context-continuity-eval",
-              "prove:live",
-              "publish",
-              "dist-tag",
-              "pack",
-            ].includes(arg),
+          const operation = command.args.find(
+            (arg) =>
+              typeof arg === "string" &&
+              [
+                "build",
+                "context-continuity-eval",
+                "prove:live",
+                "publish",
+                "dist-tag",
+                "pack",
+              ].includes(arg),
           );
 
           if (operation === undefined) return Effect.die("Unexpected release command");

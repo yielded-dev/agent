@@ -186,6 +186,20 @@ const failure = (
   return cause === undefined ? error : FailureDiagnostic.withCause(error, cause);
 };
 
+// Effect promotes typed failures to defects when a cleanup defect joins them.
+// Preserve that fatal classification while retaining the session's cleanup evidence.
+const annotateSessionCleanup = <E>(
+  error: E,
+  cleanup: BrowserSessionError["cleanup"],
+): E | BrowserSessionError =>
+  Schema.is(BrowserSessionError)(error) &&
+  Object.prototype.isPrototypeOf.call(BrowserSessionError.prototype, error)
+    ? inheritBrowserReport(
+        error,
+        FailureDiagnostic.withCause(BrowserSessionError.make({ ...error, cleanup }), error),
+      )
+    : error;
+
 const decode = <A>(schema: Schema.Codec<A>, input: unknown) =>
   Schema.decodeUnknownEffect(schema, { onExcessProperty: "error" })(input).pipe(
     mapBrowserError((error) => failure("invalid", "not-dispatched", "not-requested", error)),
@@ -588,17 +602,9 @@ export class BrowserSessions extends Context.Service<
             orElse: () => Effect.fail(failure("timeout")),
           }),
           Effect.scoped,
-          mapBrowserError((error) =>
-            Schema.is(BrowserSessionError)(error) &&
-            Object.prototype.isPrototypeOf.call(BrowserSessionError.prototype, error)
-              ? inheritBrowserReport(
-                  error,
-                  FailureDiagnostic.withCause(
-                    BrowserSessionError.make({ ...error, cleanup: cleanupState.result }),
-                    error,
-                  ),
-                )
-              : error,
+          mapBrowserError(
+            (error: E | BrowserSessionError) => annotateSessionCleanup(error, cleanupState.result),
+            (defect) => annotateSessionCleanup(defect, cleanupState.result),
           ),
           Effect.withTracerEnabled(false),
         );
@@ -922,17 +928,9 @@ export class BrowserSessions extends Context.Service<
             orElse: () => Effect.fail(failure("timeout")),
           }),
           Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
-          mapBrowserError((error) =>
-            Schema.is(BrowserSessionError)(error) &&
-            Object.prototype.isPrototypeOf.call(BrowserSessionError.prototype, error)
-              ? inheritBrowserReport(
-                  error,
-                  FailureDiagnostic.withCause(
-                    BrowserSessionError.make({ ...error, cleanup: cleanupState.result }),
-                    error,
-                  ),
-                )
-              : error,
+          mapBrowserError(
+            (error: E | BrowserSessionError) => annotateSessionCleanup(error, cleanupState.result),
+            (defect) => annotateSessionCleanup(defect, cleanupState.result),
           ),
           Effect.withTracerEnabled(false),
         );

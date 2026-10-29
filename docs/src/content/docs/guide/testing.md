@@ -63,7 +63,7 @@ The `@yielded/agent/testing/*-store-conformance` modules and
 For coordinator recovery, run `durableCoordinatorConformance` from
 `@yielded/agent-testing/durable-coordinator-conformance` in a TestClock-backed environment such
 as `it.effect`. Provide one combined Layer containing `SubmissionLedger`, `ThreadStore`,
-`SettlementPublisher`, `StorageOwner`, and `Crypto`. Use pristine disposable storage with native
+`SettlementPublisher`, `StorageOwner`, and `Digest` from `effect/crypto/Digest`. Use pristine disposable storage with native
 Thread verification. The helper discovers six scenario paths, injects faults, and checks bounded
 recovery through settled history; violations fail with `DurableCoordinatorConformanceViolation`.
 See the [coordinator conformance module](https://github.com/yielded-dev/agent/blob/main/packages/testing/src/DurableCoordinatorConformance.ts)

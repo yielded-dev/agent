@@ -49,7 +49,7 @@ import {
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -132,7 +132,7 @@ const withRoutedPorts = <A, E>(
     | SubmissionLedger
     | ThreadStore
     | MessageDeliveryStore
-    | Crypto.Crypto
+    | CryptoDigest.Digest
     | StorageOwner
     | Scope.Scope
   >,

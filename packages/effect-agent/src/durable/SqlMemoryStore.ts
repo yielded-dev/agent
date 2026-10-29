@@ -1,3 +1,4 @@
+import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -902,9 +903,7 @@ const makeMemoryServices = Effect.fnUntraced(function* () {
           document_json: documentJson,
         }));
 
-        for (let index = 0; index < documentRows.length; index += 16) {
-          const chunk = documentRows.slice(index, index + 16);
-
+        for (const chunk of Arr.chunksOf(documentRows, 16)) {
           const changedRows = yield* sql<Record<string, unknown>>`
             INSERT INTO effect_agent_memory_documents_v1 ${sql.insert(chunk)}
             ON CONFLICT (namespace, source_id) DO UPDATE SET
@@ -932,9 +931,9 @@ const makeMemoryServices = Effect.fnUntraced(function* () {
           result_json: resultJson,
         }));
 
-        for (let index = 0; index < receiptRows.length; index += 16) {
+        for (const chunk of Arr.chunksOf(receiptRows, 16)) {
           yield* sql`
-            INSERT INTO effect_agent_memory_receipts_v1 ${sql.insert(receiptRows.slice(index, index + 16))}
+            INSERT INTO effect_agent_memory_receipts_v1 ${sql.insert(chunk)}
           `;
         }
         yield* failpoint.hit("memory:change:after-receipt");

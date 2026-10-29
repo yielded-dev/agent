@@ -32,7 +32,7 @@ import {
   canonicalBatchFitsTransfer,
 } from "@yielded/agent/thread-store";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -239,7 +239,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
   const config = options;
   const failpoint = { hit: options.hitFailpoint };
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* CryptoDigest.Digest;
 
   const hitFailpoint = (
     location: SqlStorageFailpointLocation,
@@ -269,7 +269,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const makeAppend = (commit: SqlJournal<S, C, W, F>["append"], requireMaterialized: boolean) =>
     Effect.fn("SqlThreadStore.append")(function* (request: AppendRequest) {
       const rawRequest = yield* prepareSqlAppend(request, options.offsetPrefix).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(CryptoDigest.Digest, crypto),
       );
 
       if (requireMaterialized) yield* requireThread(journal, rawRequest.threadId);
@@ -478,7 +478,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
           const prepared = yield* Schema.encodeEffect(ThreadExport)(page).pipe(
             Effect.flatMap(Schema.decodeUnknownEffect(ThreadArchive)),
             Effect.flatMap((page) => prepareImportPage(state, page, { verification: true })),
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(CryptoDigest.Digest, crypto),
             Effect.mapError((e) =>
               options.errors.corruption({
                 table: "effect_agent_canonical_batches",

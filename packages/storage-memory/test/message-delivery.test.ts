@@ -32,7 +32,7 @@ import {
   Settlement,
 } from "@yielded/agent/submission-ledger";
 import { SettledSubmission } from "@yielded/agent/submission-status";
-import * as Crypto from "effect/Crypto";
+import * as CryptoDigest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -160,7 +160,7 @@ describe("direct message delivery", () => {
     "snapshots every preparation choice before asynchronous hashing can observe caller mutation",
     () =>
       Effect.gen(function* () {
-        const crypto = yield* Crypto.Crypto;
+        const crypto = yield* CryptoDigest.Digest;
         const entered = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
         const base = yield* initial();
@@ -191,7 +191,7 @@ describe("direct message delivery", () => {
 
         let calls = 0;
 
-        const blockedCrypto: Crypto.Crypto = {
+        const blockedCrypto: CryptoDigest.Digest["Service"] = {
           ...crypto,
           digest: Effect.fnUntraced(function* (algorithm, bytes) {
             calls += 1;
@@ -205,7 +205,9 @@ describe("direct message delivery", () => {
         };
 
         const preparing = yield* Effect.forkChild(
-          prepareMessageDelivery(options).pipe(Effect.provideService(Crypto.Crypto, blockedCrypto)),
+          prepareMessageDelivery(options).pipe(
+            Effect.provideService(CryptoDigest.Digest, blockedCrypto),
+          ),
         );
 
         yield* Deferred.await(entered);

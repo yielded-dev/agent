@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { NodeServices } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import {
   ReviewChange,
@@ -13,6 +14,7 @@ import {
   ReviewRequest,
 } from "@yielded/agent-pr-review/review";
 import { Effect, Result, Schema, Stream } from "effect";
+import * as Layer from "effect/Layer";
 
 import { EvalCase, EvalCaseId, EvalSuite, EvalVariantConfiguration } from "../src/contracts.ts";
 import { digestReviewRequest } from "../src/corpus.ts";
@@ -178,7 +180,7 @@ describe("pinned local Git review source", () => {
           expect(exact.content).toBe("export const stage = 'after';");
         }),
       ({ root }) => Effect.sync(() => rmSync(root, { recursive: true, force: true })),
-    ).pipe(Effect.provide(NodeServices.layer)),
+    ).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect("accepts changed source searchable despite the read-file line bound", () =>
@@ -204,7 +206,7 @@ describe("pinned local Git review source", () => {
           expect(searched.matches.map((match) => match.path)).toContain("src/long.ts");
         }),
       ({ root }) => Effect.sync(() => rmSync(root, { recursive: true, force: true })),
-    ).pipe(Effect.provide(NodeServices.layer)),
+    ).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect(
@@ -253,7 +255,7 @@ describe("pinned local Git review source", () => {
             expect(unavailable.digest).not.toBe(capacityExcluded.digest);
           }),
         ({ root }) => Effect.sync(() => rmSync(root, { recursive: true, force: true })),
-      ).pipe(Effect.provide(NodeServices.layer)),
+      ).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect("fails closed when a pinned blob is missing from a partial clone", () =>
@@ -284,7 +286,7 @@ describe("pinned local Git review source", () => {
           rmSync(partialParent, { recursive: true, force: true });
           rmSync(root, { recursive: true, force: true });
         }),
-    ).pipe(Effect.provide(NodeServices.layer)),
+    ).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect(
@@ -353,7 +355,7 @@ describe("pinned local Git review source", () => {
             }
           }),
         ({ root }) => Effect.sync(() => rmSync(root, { recursive: true, force: true })),
-      ).pipe(Effect.provide(NodeServices.layer)),
+      ).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 
   it.effect(
@@ -431,6 +433,6 @@ describe("pinned local Git review source", () => {
             expect(observations[0]?.repositoryDigest).toBeUndefined();
           }),
         ({ root }) => Effect.sync(() => rmSync(root, { recursive: true, force: true })),
-      ).pipe(Effect.provide(NodeServices.layer)),
+      ).pipe(Effect.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest))),
   );
 });

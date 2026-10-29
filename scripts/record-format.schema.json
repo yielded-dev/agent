@@ -498,201 +498,197 @@
               "additionalProperties": true
             },
             {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "_tag": {
-                      "type": "string",
-                      "enum": ["WorkerCompletion"]
-                    },
-                    "budgetExhausted": {
-                      "type": "boolean"
-                    },
-                    "schemaVersion": {
-                      "type": "number",
-                      "enum": [1]
-                    },
-                    "report": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "_tag": {
-                              "type": "string",
-                              "enum": ["Settled"]
-                            },
-                            "worker": {
-                              "type": "object",
-                              "properties": {
-                                "schemaVersion": {
-                                  "type": "number",
-                                  "enum": [1]
-                                },
-                                "delegationId": {
-                                  "type": "string",
-                                  "minLength": 1
-                                },
-                                "targetAgentId": {
-                                  "type": "string",
-                                  "minLength": 1
-                                },
-                                "threadId": {
-                                  "type": "string",
-                                  "minLength": 1
-                                }
-                              },
-                              "required": [
-                                "schemaVersion",
-                                "delegationId",
-                                "targetAgentId",
-                                "threadId"
-                              ],
-                              "additionalProperties": true
-                            },
-                            "receipt": {
-                              "$ref": "#/$defs/@effect-agent~1thread~1ReceiptEncoded"
-                            },
-                            "runId": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "settlementId": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "outcome": {
-                              "type": "string",
-                              "enum": ["completed"]
-                            },
-                            "result": {
-                              "anyOf": [{}]
-                            }
-                          },
-                          "required": [
-                            "_tag",
-                            "worker",
-                            "receipt",
-                            "runId",
-                            "settlementId",
-                            "outcome",
-                            "result"
-                          ],
-                          "additionalProperties": true
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "_tag": {
-                              "type": "string",
-                              "enum": ["Settled"]
-                            },
-                            "worker": {
-                              "type": "object",
-                              "properties": {
-                                "schemaVersion": {
-                                  "type": "number",
-                                  "enum": [1]
-                                },
-                                "delegationId": {
-                                  "type": "string",
-                                  "minLength": 1
-                                },
-                                "targetAgentId": {
-                                  "type": "string",
-                                  "minLength": 1
-                                },
-                                "threadId": {
-                                  "type": "string",
-                                  "minLength": 1
-                                }
-                              },
-                              "required": [
-                                "schemaVersion",
-                                "delegationId",
-                                "targetAgentId",
-                                "threadId"
-                              ],
-                              "additionalProperties": true
-                            },
-                            "receipt": {
-                              "$ref": "#/$defs/@effect-agent~1thread~1ReceiptEncoded"
-                            },
-                            "runId": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "settlementId": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "outcome": {
-                              "type": "string",
-                              "enum": ["failed", "aborted"]
-                            },
-                            "failure": {
-                              "$ref": "#/$defs/SubagentExecutionFailureEncoded"
-                            }
-                          },
-                          "required": [
-                            "_tag",
-                            "worker",
-                            "receipt",
-                            "runId",
-                            "settlementId",
-                            "outcome",
-                            "failure"
-                          ],
-                          "additionalProperties": true
-                        }
-                      ]
-                    }
-                  },
-                  "required": ["_tag", "budgetExhausted", "schemaVersion", "report"],
-                  "additionalProperties": true
+              "type": "object",
+              "properties": {
+                "_tag": {
+                  "type": "string",
+                  "enum": ["WorkerCompletion"]
                 },
-                {
-                  "type": "object",
-                  "properties": {
-                    "_tag": {
-                      "type": "string",
-                      "enum": ["WorkerUpdate"]
-                    },
-                    "schemaVersion": {
-                      "type": "number",
-                      "enum": [1]
-                    },
-                    "worker": {
+                "budgetExhausted": {
+                  "type": "boolean"
+                },
+                "schemaVersion": {
+                  "type": "number",
+                  "enum": [1]
+                },
+                "report": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "schemaVersion": {
-                          "type": "number",
-                          "enum": [1]
+                        "_tag": {
+                          "type": "string",
+                          "enum": ["Settled"]
                         },
-                        "delegationId": {
+                        "worker": {
+                          "type": "object",
+                          "properties": {
+                            "schemaVersion": {
+                              "type": "number",
+                              "enum": [1]
+                            },
+                            "delegationId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "targetAgentId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "threadId": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "schemaVersion",
+                            "delegationId",
+                            "targetAgentId",
+                            "threadId"
+                          ],
+                          "additionalProperties": true
+                        },
+                        "receipt": {
+                          "$ref": "#/$defs/@effect-agent~1thread~1ReceiptEncoded"
+                        },
+                        "runId": {
                           "type": "string",
                           "minLength": 1
                         },
-                        "targetAgentId": {
+                        "settlementId": {
                           "type": "string",
                           "minLength": 1
                         },
-                        "threadId": {
+                        "outcome": {
                           "type": "string",
-                          "minLength": 1
+                          "enum": ["completed"]
+                        },
+                        "result": {
+                          "anyOf": [{}]
                         }
                       },
-                      "required": ["schemaVersion", "delegationId", "targetAgentId", "threadId"],
+                      "required": [
+                        "_tag",
+                        "worker",
+                        "receipt",
+                        "runId",
+                        "settlementId",
+                        "outcome",
+                        "result"
+                      ],
                       "additionalProperties": true
                     },
-                    "update": {
-                      "$ref": "#/$defs/@effect-agent~1core~1AgentUpdates~1UpdateEncoded"
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_tag": {
+                          "type": "string",
+                          "enum": ["Settled"]
+                        },
+                        "worker": {
+                          "type": "object",
+                          "properties": {
+                            "schemaVersion": {
+                              "type": "number",
+                              "enum": [1]
+                            },
+                            "delegationId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "targetAgentId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "threadId": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "schemaVersion",
+                            "delegationId",
+                            "targetAgentId",
+                            "threadId"
+                          ],
+                          "additionalProperties": true
+                        },
+                        "receipt": {
+                          "$ref": "#/$defs/@effect-agent~1thread~1ReceiptEncoded"
+                        },
+                        "runId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "settlementId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["failed", "aborted"]
+                        },
+                        "failure": {
+                          "$ref": "#/$defs/SubagentExecutionFailureEncoded"
+                        }
+                      },
+                      "required": [
+                        "_tag",
+                        "worker",
+                        "receipt",
+                        "runId",
+                        "settlementId",
+                        "outcome",
+                        "failure"
+                      ],
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "required": ["_tag", "budgetExhausted", "schemaVersion", "report"],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "_tag": {
+                  "type": "string",
+                  "enum": ["WorkerUpdate"]
+                },
+                "schemaVersion": {
+                  "type": "number",
+                  "enum": [1]
+                },
+                "worker": {
+                  "type": "object",
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "number",
+                      "enum": [1]
+                    },
+                    "delegationId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "targetAgentId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "minLength": 1
                     }
                   },
-                  "required": ["_tag", "schemaVersion", "worker", "update"],
+                  "required": ["schemaVersion", "delegationId", "targetAgentId", "threadId"],
                   "additionalProperties": true
+                },
+                "update": {
+                  "$ref": "#/$defs/@effect-agent~1core~1AgentUpdates~1UpdateEncoded"
                 }
-              ]
+              },
+              "required": ["_tag", "schemaVersion", "worker", "update"],
+              "additionalProperties": true
             }
           ]
         }
@@ -1638,14 +1634,28 @@
       "type": "object",
       "properties": {
         "maxTurns": {
-          "type": "integer",
-          "maximum": 9007199254740991,
-          "exclusiveMinimum": 0
+          "anyOf": [
+            {
+              "type": "integer",
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "maxToolCalls": {
-          "type": "integer",
-          "maximum": 9007199254740991,
-          "exclusiveMinimum": 0
+          "anyOf": [
+            {
+              "type": "integer",
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "maxDuration": {
           "anyOf": [

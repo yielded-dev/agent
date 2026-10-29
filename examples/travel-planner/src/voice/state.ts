@@ -1,6 +1,6 @@
 import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { Deferred, Effect, Exit, Option, Schema } from "effect";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 
 import { speechContext } from "../conversation.ts";
@@ -24,7 +24,7 @@ import { VoiceError } from "./protocol.ts";
 import { runVoiceSession, VoiceBackend, VoiceConnection, type VoiceView } from "./session.ts";
 import { groupCaption, type CaptionGroups } from "./transcript.ts";
 
-const randomUUID = Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()).pipe(
+const randomUUID = SecureRandom.SecureRandom.use((crypto) => crypto.uuidV4()).pipe(
   Effect.provide(BrowserCrypto.layer),
   Effect.orDie,
 );

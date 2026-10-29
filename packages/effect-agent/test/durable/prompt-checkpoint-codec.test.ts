@@ -106,15 +106,21 @@ it.effect("hydrates checkpoint messages exactly like Effect's JSON codec", () =>
 
       expect(actual?.prompt).toStrictEqual(expected);
     }
-    // The JSON codec's string-first union decodes URLs and binary data as strings.
+    // The JSON codec retains native URLs and bytes with tagged wire values.
     const fileCodec = Schema.toCodecJson(Prompt.FilePart);
 
     for (const [index, part] of files.entries()) {
       const json = yield* Schema.encodeEffect(fileCodec)(part);
-      const expectedData = index === 0 ? "https://example.com/image" : "AQID";
+
+      const expectedData =
+        index === 0
+          ? { _tag: "URL", href: "https://example.com/image" }
+          : index === 1
+            ? { _tag: "Uint8Array", base64: "AQID" }
+            : "AQID";
 
       expect(json).toMatchObject({ data: expectedData });
-      expect((yield* Schema.decodeEffect(fileCodec)(json)).data).toBe(expectedData);
+      expect((yield* Schema.decodeEffect(fileCodec)(json)).data).toStrictEqual(part.data);
     }
   }),
 );

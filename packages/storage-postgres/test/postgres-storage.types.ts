@@ -10,19 +10,24 @@ import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import type { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
-import type * as Crypto from "effect/Crypto";
+import type * as CryptoDigest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import type * as Layer from "effect/Layer";
 import type * as SqlClient from "effect/sql/SqlClient";
 
 type Persistence = typeof PostgresStorage.layer;
 type Ledger = ReturnType<typeof PostgresStorage.submissionLedgerLayer>;
 
-expectTypeOf<Layer.Services<Persistence>>().toEqualTypeOf<SqlClient.SqlClient | Crypto.Crypto>();
+expectTypeOf<Layer.Services<Persistence>>().toEqualTypeOf<
+  SqlClient.SqlClient | CryptoDigest.Digest | SecureRandom.SecureRandom
+>();
 expectTypeOf<Layer.Success<Persistence>>().toEqualTypeOf<
   ThreadStore | ThreadReader | ThreadImport | SubmissionLedger | SettlementPublisher | StorageOwner
 >();
 expectTypeOf<Layer.Error<Persistence>>().toEqualTypeOf<PostgresStorageInitializationError>();
-expectTypeOf<Layer.Services<Ledger>>().toEqualTypeOf<SqlClient.SqlClient | Crypto.Crypto>();
+expectTypeOf<Layer.Services<Ledger>>().toEqualTypeOf<
+  SqlClient.SqlClient | CryptoDigest.Digest | SecureRandom.SecureRandom
+>();
 expectTypeOf<Layer.Success<Ledger>>().toEqualTypeOf<
   SubmissionLedger | SettlementPublisher | StorageOwner
 >();
@@ -41,4 +46,4 @@ expectTypeOf<
 >().toEqualTypeOf<SqlClient.SqlClient>();
 expectTypeOf<
   Layer.Services<ReturnType<typeof PostgresStorage.messageDeliveryStoreLayer>>
->().toEqualTypeOf<SqlClient.SqlClient | Crypto.Crypto>();
+>().toEqualTypeOf<SqlClient.SqlClient | CryptoDigest.Digest>();
