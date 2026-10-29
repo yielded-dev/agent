@@ -171,7 +171,6 @@
       "name": "@yielded/agent-example-auth",
       "dependencies": {
         "@yielded/auth": "catalog:",
-        "@yielded/crypto": "catalog:",
         "@yielded/jose": "catalog:",
         "effect": "catalog:",
         "effect-cf": "catalog:",
@@ -714,10 +713,9 @@
     "@types/react-dom": "19.2.3",
     "@types/scheduler": "0.26.0",
     "@vitejs/plugin-react": "6.0.4",
-    "@yielded/auth": "0.1.0-beta.43",
-    "@yielded/crypto": "0.1.0-beta.43",
+    "@yielded/auth": "0.1.0-beta.47",
     "@yielded/effect-tsrs": "0.2.2",
-    "@yielded/jose": "0.1.0-beta.43",
+    "@yielded/jose": "0.1.0-beta.47",
     "@yielded/starlight-theme": "0.2.2",
     "ai": "7.0.42",
     "alchemy": "2.0.0-beta.80",
@@ -1947,9 +1945,7 @@
 
     "@yielded/agent-testing": ["@yielded/agent-testing@workspace:packages/testing"],
 
-    "@yielded/auth": ["@yielded/auth@0.1.0-beta.43", "", { "dependencies": { "@yielded/crypto": "0.1.0-beta.43", "@yielded/jose": "0.1.0-beta.43", "@yielded/oauth": "0.1.0-beta.43" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-I56KPe3dwIMykL0qjK7Vj6vxntRR2iuE+0yY2M53qqsQ4yKI3SojAQ7nxoT/lIsShPAhLDfkgVpVTYR5hYGToQ=="],
-
-    "@yielded/crypto": ["@yielded/crypto@0.1.0-beta.43", "", { "peerDependencies": { "effect": "^4.0.3" } }, "sha512-h38ZWG0V7SYdiBf+4fEh7vHwlyV4OkPz1Q9EHwfQcvT6pyc5nc6PZ4HsfiBh2nZdRSlFsrgeaOk9J2RAvt9oCg=="],
+    "@yielded/auth": ["@yielded/auth@0.1.0-beta.47", "", { "dependencies": { "@yielded/jose": "0.1.0-beta.47", "@yielded/oauth": "0.1.0-beta.47" }, "peerDependencies": { "effect": "^4.1.0" } }, "sha512-/EiCCzEJxPXzzfpiGdOWgqgYYmoy8HlSl2Rbtzsu1FjFFek/8f8HVHSY5EDd7qowYxrF1EzcjBq2vQBUDzz2UA=="],
 
     "@yielded/effect-tsrs": ["@yielded/effect-tsrs@0.2.2", "", { "optionalDependencies": { "@yielded/effect-tsrs-darwin-arm64": "0.2.2", "@yielded/effect-tsrs-darwin-x64": "0.2.2", "@yielded/effect-tsrs-linux-arm64": "0.2.2", "@yielded/effect-tsrs-linux-x64": "0.2.2", "@yielded/effect-tsrs-win32-x64": "0.2.2" }, "bin": { "effect-tsrs": "bin/effect-tsrs.js" } }, "sha512-F0woy23jX5bMMVOo4Wh+PXhUPvnsH3pNZn7IUamUB2K0sKijui4YNz7dib8Tb6y90+0/pbnIU3iKrZTAsI1phw=="],
 
@@ -1963,9 +1959,9 @@
 
     "@yielded/effect-tsrs-win32-x64": ["@yielded/effect-tsrs-win32-x64@0.2.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5Vb0JusFTEPUJ6LREP94qO2hX4gMMTx06cg7dPt5OU9Xb0eiBcqi1m8xegw3maK1fEFc8rd2hYN+ikTleSlPDw=="],
 
-    "@yielded/jose": ["@yielded/jose@0.1.0-beta.43", "", { "dependencies": { "@yielded/crypto": "0.1.0-beta.43" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-IjIeWOQzV1/gtG8BdSgqJ9eNC2og9MXF7cbsdJ990qWlHBoJa+iVSFph01W+wle7e7jVskk4n6RS+qyl+SLUBA=="],
+    "@yielded/jose": ["@yielded/jose@0.1.0-beta.47", "", { "peerDependencies": { "effect": "^4.1.0" } }, "sha512-xFrwhZ1ljgvF7fFrMCYDrO0ovIDnKDg0aXo3g/3w8ipUylrmyhPf0xCoAruGIuZTEoZNOb9Ct+6VZewKJoQCdQ=="],
 
-    "@yielded/oauth": ["@yielded/oauth@0.1.0-beta.43", "", { "dependencies": { "@yielded/jose": "0.1.0-beta.43" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-CebTK2kRSv06SVqdhsnBnwYR+6RrBYz0QmfWTdPCDtoIr2PBBp8LkmTDTv+isUxBvM05i2cy4fKpjQzJ5ItFZg=="],
+    "@yielded/oauth": ["@yielded/oauth@0.1.0-beta.47", "", { "dependencies": { "@yielded/jose": "0.1.0-beta.47" }, "peerDependencies": { "effect": "^4.1.0" } }, "sha512-5cIh18WLSuQSQSj17XUulSCiOwIyPf9jqPvGzfS99ldNrCaTljceh49OSnAgwFDwjmayRb9ptxSl9ezseFj49Q=="],
 
     "@yielded/sandbox": ["@yielded/sandbox@0.9.0", "", { "dependencies": { "@cloudflare/sandbox": "1.0.3" }, "peerDependencies": { "effect": "^4.1.0", "effect-cf": "^0.59.0" } }, "sha512-poRmMD/XLEmZ63vNrpuviIba1oD/lKygVyxLK/IspaI21+xuolDSlc5+UYsE7AUbKqXHpDRA6pdNfUN0W9V5dQ=="],
 
