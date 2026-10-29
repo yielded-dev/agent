@@ -89,11 +89,11 @@ disables the remote browser binding.
 Use a separate development Worker name to keep its remote proxy session independent of the
 deployed application's hostname and Cloudflare Access policy.
 
-The OpenAI model picker offers GPT-6 Astra, GPT-6.1 Sol and GPT-6 Luna. Runs default to Fast
-processing; Standard is also available. Ultrafast is available for Astra and Sol. Comparing
-models with Ultrafast selected runs Luna on Fast, and switching to Luna displays Fast.
-Direct API requests for Luna with Ultrafast are rejected before opening a browser.
-Reasoning is independent of speed: Luna defaults to none, while Astra and Sol use low.
+The OpenAI model picker offers GPT-6.1 Terra (the default), GPT-6 Astra and GPT-6.1 Sol.
+Runs default to Fast processing; Standard is also available. Ultrafast is available for Astra
+and Sol. Comparing models with Ultrafast selected runs Terra on Fast, and switching to Terra
+displays Fast. Direct API requests for Terra with Ultrafast are rejected before opening a browser.
+Reasoning is independent of speed: Terra defaults to none, while Astra and Sol use low.
 Model spans retain returned token counts and service tiers when available.
 
 Chromium uses a host-owned Browser Session. Kitesurf uses its ephemeral CDP connection;

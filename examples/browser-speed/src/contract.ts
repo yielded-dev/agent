@@ -58,13 +58,16 @@ export const StartUrl = Schema.String.check(
 );
 
 export const ModelId = Schema.Literals([
+  "gpt-6.1-terra",
   "gpt-6-astra",
   "gpt-6.1-sol",
+  // Retained reports can contain Luna; modelChoices controls availability for new runs.
   "gpt-6-luna",
   "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
 ]);
 
 export type ModelId = typeof ModelId.Type;
+export const defaultModel = "gpt-6.1-terra" satisfies ModelId;
 export const Reasoning = Schema.Literals(["none", "low", "medium", "high", "xhigh", "max"]);
 export const ServiceTier = Schema.Literals(["ultrafast", "fast", "default"]);
 
@@ -75,9 +78,9 @@ export const modelChoices: ReadonlyArray<{
   requiresReasoning?: true;
   supportsUltrafast?: true;
 }> = [
+  { id: "gpt-6.1-terra", label: "GPT-6.1 Terra" },
   { id: "gpt-6-astra", label: "GPT-6 Astra", requiresReasoning: true, supportsUltrafast: true },
   { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", requiresReasoning: true, supportsUltrafast: true },
-  { id: "gpt-6-luna", label: "GPT-6 Luna" },
   { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 · Workers AI" },
 ];
 
