@@ -41,7 +41,7 @@ export default defineConfig({
   run: {
     tasks: {
       preview: {
-        command: "node --experimental-transform-types preview/main.ts",
+        command: "node preview/main.ts",
         dependsOn: ["build"],
         cache: false,
       },

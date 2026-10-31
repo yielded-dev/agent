@@ -271,11 +271,11 @@ export default defineConfig({
       },
       "semantic-memory-eval": {
         cache: false,
-        command: "node --experimental-transform-types tooling/semantic-memory-eval/src/main.ts",
+        command: "node tooling/semantic-memory-eval/src/main.ts",
       },
       "context-continuity-eval": {
         cache: false,
-        command: "node --experimental-transform-types tooling/context-continuity-eval/src/main.ts",
+        command: "node tooling/context-continuity-eval/src/main.ts",
       },
       "release:checked-publish": {
         cache: false,

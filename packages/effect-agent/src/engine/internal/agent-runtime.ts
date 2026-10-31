@@ -9847,10 +9847,13 @@ const programmaticOutcomeError = (
 
 /** A call's typed failure captured as a value so defects stay defects. */
 class BrokerCallFailure {
-  constructor(
-    readonly error: unknown,
-    readonly cause: Cause.Cause<unknown>,
-  ) {}
+  readonly error: unknown;
+  readonly cause: Cause.Cause<unknown>;
+
+  constructor(error: unknown, cause: Cause.Cause<unknown>) {
+    this.error = error;
+    this.cause = cause;
+  }
 }
 
 /** Run-owned authorization with typed override failures preserved for broker projection. */
