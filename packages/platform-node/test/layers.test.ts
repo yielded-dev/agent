@@ -22,6 +22,7 @@ import {
 } from "@yielded/agent/durable-failpoint";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { ThreadId } from "@yielded/agent/identifiers";
+import * as Output from "@yielded/agent/output";
 import {
   DefinitionDigests,
   DefinitionDigestInput,
@@ -186,6 +187,89 @@ describe("NodeDurableAgentRuntime", () => {
         }).pipe(Effect.provide(NodeHost.layer([], options)));
 
         yield* Effect.void.pipe(Effect.provide(NodeHost.layer([], options)));
+      }),
+    ),
+  );
+
+  // b92f250d refused a Turn that appended no messages, and that failure ended every host worker.
+  it.effect("settles an empty model stop and keeps its Thread usable", () =>
+    withTemporaryDatabase((filename) =>
+      Effect.gen(function* () {
+        const prompts: Array<Prompt.Prompt> = [];
+        const emptyStop: ReadonlyArray<Response.StreamPartEncoded> = [
+          { type: "finish", reason: "stop", usage },
+        ];
+
+        const model = yield* makeScriptedModel((call, prompt) => {
+          prompts.push(prompt);
+
+          switch (call) {
+            case 1:
+              return [
+                { type: "tool-call", id: "call-ping", name: "ping", params: {} },
+                { type: "finish", reason: "tool-calls", usage },
+              ];
+            case 3:
+              return finalParts("third");
+            default:
+              return emptyStop;
+          }
+        });
+
+        const Ping = Tool.make("ping", { success: Schema.String });
+        const tools = Toolkit.make(Ping);
+
+        const definition = Agent.make("platform-node-empty-stop", {
+          input: Schema.Struct({ question: Schema.String }),
+          output: Output.text(Schema.String),
+          instructions: "Answer the question.",
+          inputPrompt: ({ question }) => question,
+          toolkit: tools,
+        });
+
+        const threadId = decodeThreadId("node-empty-stop");
+
+        yield* Effect.gen(function* () {
+          const host = yield* NodeDurableHost;
+          const runtime = yield* DurableAgentRuntime;
+
+          const settle = (question: string, key: string) =>
+            runtime
+              .submitRegistered(
+                { definition },
+                { question },
+                {
+                  threadId,
+                  principal: PRINCIPAL,
+                  idempotencyKey: decodeIdempotencyKey(key),
+                },
+              )
+              .pipe(Effect.flatMap(host.awaitSettlement));
+
+          // The first Turn holds only its input; a later Turn appends no message.
+          expect((yield* settle("first", "empty-stop-1")).outcome).toBe("completed");
+          expect((yield* settle("second", "empty-stop-2")).outcome).toBe("completed");
+          expect(yield* host.admissionOpen).toBe(true);
+          expect((yield* settle("third", "empty-stop-3")).outcome).toBe("completed");
+          expect(JSON.stringify(prompts[3]?.content)).toContain("first");
+          expect((yield* runtime.verify(threadId)).ok).toBe(true);
+        }).pipe(
+          Effect.provide(
+            NodeHost.layer(
+              [
+                {
+                  agent: Agent.withModel(definition, model),
+                  definitions: DefinitionDigestInput.make({
+                    agent: "v1",
+                    model: "v1",
+                    tools: "v1",
+                  }),
+                },
+              ],
+              runtimeOptions(filename, { settlementPollInterval: 5 }),
+            ).pipe(Layer.provide(tools.toLayer({ ping: () => Effect.succeed("pong") }))),
+          ),
+        );
       }),
     ),
   );
