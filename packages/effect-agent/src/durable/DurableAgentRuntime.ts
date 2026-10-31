@@ -7064,6 +7064,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         Agent.DefinitionRequirements<(typeof agent)["definition"]>
       > = {
         awaitJoin,
+        hasJoin: (policy) =>
+          recordHalt(prepareInputs(policy === "one" ? 1 : MAX_JOIN_DRAIN, true)).pipe(
+            Effect.map((prepared) => prepared.length > 0),
+          ),
         drain: Effect.fnUntraced(function* (policy) {
           const joinedInputs = yield* recordHalt(
             Effect.gen(function* () {
