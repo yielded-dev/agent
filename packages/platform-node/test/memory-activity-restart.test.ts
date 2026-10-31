@@ -122,7 +122,7 @@ const spawnWorker = Effect.fn("MemoryActivityTest.spawnWorker")(function* (
     new URL("./memory-activity-worker-entry.ts", import.meta.url),
   );
 
-  return yield* ChildProcess.make("node", ["--experimental-transform-types", entry], {
+  return yield* ChildProcess.make("node", [entry], {
     cwd: path.dirname(entry),
     env: {
       EFFECT_AGENT_MEMORY_ACTIVITY_DB: filename,

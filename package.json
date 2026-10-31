@@ -15,7 +15,7 @@
     "changeset:version": "changeset version",
     "ci:version": "changeset version && vp install --ignore-scripts",
     "verify:package-purity": "bun scripts/verify-package-purity.ts",
-    "admin:durable": "node --experimental-transform-types scripts/durable-admin.ts",
+    "admin:durable": "node scripts/durable-admin.ts",
     "docs:dev": "vp run -F @yielded/agent-docs dev",
     "docs:build": "vp run -F @yielded/agent-docs build",
     "docs:preview": "vp run -F @yielded/agent-docs preview",

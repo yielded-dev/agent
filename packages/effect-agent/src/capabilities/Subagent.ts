@@ -1126,7 +1126,11 @@ const settleReservation = (
  */
 class GenuineEngineSignal {
   readonly _tag = "GenuineEngineSignal";
-  constructor(readonly signal: ToolCallWaiting | SubagentDurabilityError) {}
+  readonly signal: ToolCallWaiting | SubagentDurabilityError;
+
+  constructor(signal: ToolCallWaiting | SubagentDurabilityError) {
+    this.signal = signal;
+  }
 }
 
 const wrapEngineSignal = (signal: ToolCallWaiting | SubagentDurabilityError) =>
