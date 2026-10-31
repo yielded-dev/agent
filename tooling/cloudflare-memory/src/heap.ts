@@ -130,7 +130,6 @@ const buildBundle = Effect.fn("heap.buildBundle")(function* (options: {
     Effect.fn(function* (i) {
       const sample = yield* run(options.example, [
         "node",
-        "--experimental-transform-types",
         "--expose-gc",
         "--experimental-vm-modules",
         path.join(options.example, "src", "heap-node-main.ts"),

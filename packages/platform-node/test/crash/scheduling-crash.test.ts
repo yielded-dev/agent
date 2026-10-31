@@ -201,7 +201,7 @@ it.live(
 
           const child = yield* ChildProcess.make(
             process.execPath,
-            ["--experimental-transform-types", "test/crash/scheduling-worker-entry.ts"],
+            ["test/crash/scheduling-worker-entry.ts"],
             {
               cwd: childCwd,
               env: {
