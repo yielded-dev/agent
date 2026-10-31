@@ -22,6 +22,7 @@ import {
 } from "@yielded/agent/durable-failpoint";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { ThreadId } from "@yielded/agent/identifiers";
+import * as Output from "@yielded/agent/output";
 import {
   DefinitionDigests,
   DefinitionDigestInput,
@@ -56,6 +57,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -186,6 +188,117 @@ describe("NodeDurableAgentRuntime", () => {
         }).pipe(Effect.provide(NodeHost.layer([], options)));
 
         yield* Effect.void.pipe(Effect.provide(NodeHost.layer([], options)));
+      }),
+    ),
+  );
+
+  // efa46d13 drained joined input before it committed the Turn that stopped, so a later restart
+  // read that response as proof that its prompt held the input.
+  it.live("keeps input that joins at a model stop across a restart", () =>
+    withTemporaryDatabase((filename) =>
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const prompts: Array<string> = [];
+
+        const model = Model.make(
+          "scripted",
+          "platform-node-test",
+          Layer.effect(
+            LanguageModel.LanguageModel,
+            LanguageModel.make({
+              generateText: () => Effect.succeed([]),
+              streamText: ({ prompt }) =>
+                Stream.unwrap(
+                  Effect.gen(function* () {
+                    prompts.push(JSON.stringify(prompt.content));
+                    if (prompts.length === 1) {
+                      yield* Deferred.succeed(started, undefined);
+                      yield* Deferred.await(release);
+                    }
+
+                    return Stream.fromIterable(finalParts(`answer ${prompts.length}`));
+                  }),
+                ),
+            }),
+          ),
+        );
+
+        const definition = Agent.make("platform-node-stop-join", {
+          input: Schema.Struct({ question: Schema.String }),
+          output: Output.text(Schema.String),
+          instructions: "Answer the question.",
+          inputPrompt: ({ question }) => question,
+          toolkit: Toolkit.empty,
+        });
+
+        const registrations = [
+          {
+            agent: Agent.withModel(definition, model),
+            definitions: DefinitionDigestInput.make({ agent: "v1", model: "v1", tools: "v1" }),
+          },
+        ];
+
+        const options = {
+          threadId: decodeThreadId("node-stop-join"),
+          principal: PRINCIPAL,
+        };
+
+        let isCrashed = false;
+
+        const [root, joined] = yield* Effect.gen(function* () {
+          const host = yield* NodeDurableHost;
+          const runtime = yield* DurableAgentRuntime;
+
+          const root = yield* runtime.submitRegistered(
+            { definition },
+            { question: "root question" },
+            { ...options, idempotencyKey: decodeIdempotencyKey("root") },
+          );
+
+          yield* Deferred.await(started);
+
+          const joined = yield* runtime.submitRegistered(
+            { definition },
+            { question: "joined question" },
+            { ...options, idempotencyKey: decodeIdempotencyKey("joined") },
+          );
+
+          yield* Deferred.succeed(release, undefined);
+          yield* host.admissionOpen.pipe(
+            Effect.repeat({ until: (isOpen) => !isOpen, schedule: Schedule.spaced("10 millis") }),
+          );
+
+          return [root, joined] as const;
+        }).pipe(
+          Effect.provide(
+            NodeHost.layer(
+              registrations,
+              runtimeOptions(filename, {
+                settlementPollInterval: 5,
+                // Crash after the first canonical commit that carries the Turn's response.
+                runtimeFailpoint: (location) => {
+                  if (isCrashed || !location.startsWith("turn:after-")) return Effect.void;
+                  isCrashed = true;
+
+                  return Effect.fail(DurableRuntimeFailpointError.make({ location }));
+                },
+              }),
+            ),
+          ),
+        );
+
+        yield* Effect.gen(function* () {
+          const host = yield* NodeDurableHost;
+
+          expect((yield* host.awaitSettlement(root)).outcome).toBe("completed");
+          expect((yield* host.awaitSettlement(joined)).outcome).toBe("completed");
+          expect(prompts.at(-1)).toContain("joined question");
+        }).pipe(
+          Effect.provide(
+            NodeHost.layer(registrations, runtimeOptions(filename, { settlementPollInterval: 5 })),
+          ),
+        );
       }),
     ),
   );

@@ -7189,8 +7189,20 @@ const makeTurn = <
             const turnsBlocked =
               policy.onExhaustion === "fail" ? turn >= bounds.maxTurns : turn > bounds.maxTurns;
 
-            const steering =
-              turnsBlocked || context.finalizationUsed ? [] : yield* drainInputs(context, options);
+            const canDrain = !turnsBlocked && !context.finalizationUsed;
+            const hasJoin = options.input?.hasJoin;
+
+            const isJoinReady =
+              canDrain &&
+              (hasJoin === undefined || (yield* hasJoin(options.commandDrainPolicy ?? "one")));
+
+            // Recovery reads a response after a joined input as proof that its prompt held
+            // that input, so this response must commit before `drain` appends one.
+            if (isJoinReady && hasJoin !== undefined) {
+              yield* settleTurn(context, trace, turn, turnId, options);
+            }
+
+            const steering = isJoinReady ? yield* drainInputs(context, options) : [];
 
             const queued =
               steering.length > 0
