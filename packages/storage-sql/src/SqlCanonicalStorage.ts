@@ -391,12 +391,10 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
         return key;
       };
 
-      const read = Effect.fnUntraced(function* () {
-        const [row] = yield* decodeEnvelopeRows(
-          yield* query(sql`
-          SELECT envelope_key AS key, prefix, before_payload, before_record_id, suffix
-          FROM ${table("effect_agent_envelopes")} WHERE content_digest=${value.envelope_digest}`),
-        ).pipe(Effect.mapError((cause) => failure("read envelope dictionary", cause)));
+      const decodeKey = Effect.fnUntraced(function* (rows: unknown) {
+        const [row] = yield* decodeEnvelopeRows(rows).pipe(
+          Effect.mapError((cause) => failure("read envelope dictionary", cause)),
+        );
 
         if (
           row !== undefined &&
@@ -410,18 +408,29 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
         return row?.key;
       });
 
+      const read = () =>
+        query(sql`
+          SELECT envelope_key AS key, prefix, before_payload, before_record_id, suffix
+          FROM ${table("effect_agent_envelopes")} WHERE content_digest=${value.envelope_digest}`).pipe(
+          Effect.flatMap(decodeKey),
+        );
+
       const prior = yield* read();
 
       if (prior !== undefined) return retain(prior);
-      yield* query(sql`INSERT INTO ${table("effect_agent_envelopes")}
+
+      // Validate returned rows exactly like reads; only a no-op conflict needs another lookup.
+      const inserted = yield* query(sql`INSERT INTO ${table("effect_agent_envelopes")}
         (content_digest, prefix, before_payload, before_record_id, suffix)
         VALUES (${value.envelope_digest}, ${value.envelope.prefix}, ${value.envelope.before_payload}, ${value.envelope.before_record_id}, ${value.envelope.suffix})
-        ON CONFLICT(content_digest) DO NOTHING`);
-      const inserted = yield* read();
+        ON CONFLICT(content_digest) DO NOTHING
+        RETURNING envelope_key AS key, prefix, before_payload, before_record_id, suffix`).pipe(
+        Effect.flatMap(decodeKey),
+      );
 
-      return inserted === undefined
-        ? yield* failure("missing envelope dictionary")
-        : retain(inserted);
+      const key = inserted ?? (yield* read());
+
+      return key === undefined ? yield* failure("missing envelope dictionary") : retain(key);
     }),
     run: Effect.fnUntraced(function* (threadId: string, runId: string) {
       const retained = keys?.run;
@@ -476,12 +485,10 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
         Effect.mapError((cause) => failure("digest admission definitions", cause)),
       );
 
-      const read = Effect.fnUntraced(function* () {
-        const [row] = yield* decodeDefinitionRows(
-          yield* query(sql`
-          SELECT definition_key AS key, value_json FROM ${table("effect_agent_definitions")}
-          WHERE content_digest=${digest}`),
-        ).pipe(Effect.mapError((cause) => failure("read definition dictionary", cause)));
+      const decodeKey = Effect.fnUntraced(function* (rows: unknown) {
+        const [row] = yield* decodeDefinitionRows(rows).pipe(
+          Effect.mapError((cause) => failure("read definition dictionary", cause)),
+        );
 
         if (row !== undefined && row.value_json !== json)
           return yield* failure("definition dictionary collision");
@@ -489,16 +496,23 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
         return row?.key;
       });
 
+      const read = () =>
+        query(sql`
+          SELECT definition_key AS key, value_json FROM ${table("effect_agent_definitions")}
+          WHERE content_digest=${digest}`).pipe(Effect.flatMap(decodeKey));
+
       const prior = yield* read();
 
       if (prior !== undefined) return retain(prior);
-      yield* query(sql`INSERT INTO ${table("effect_agent_definitions")} (content_digest, value_json)
-        VALUES (${digest}, ${json}) ON CONFLICT(content_digest) DO NOTHING`);
-      const inserted = yield* read();
 
-      return inserted === undefined
-        ? yield* failure("missing definition dictionary")
-        : retain(inserted);
+      const inserted =
+        yield* query(sql`INSERT INTO ${table("effect_agent_definitions")} (content_digest, value_json)
+        VALUES (${digest}, ${json}) ON CONFLICT(content_digest) DO NOTHING
+        RETURNING definition_key AS key, value_json`).pipe(Effect.flatMap(decodeKey));
+
+      const key = inserted ?? (yield* read());
+
+      return key === undefined ? yield* failure("missing definition dictionary") : retain(key);
     }),
   };
 
