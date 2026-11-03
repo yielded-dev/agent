@@ -153,6 +153,14 @@ export interface RunInputHook<Error = never, Requirements = never> {
    * Used only with `restartOnJoinedInput`; each wait belongs to the model stream's Scope.
    */
   readonly awaitJoin?: Effect.Effect<void, Error, Requirements> | undefined;
+  /**
+   * Claim an eligible join without appending it to history, and report whether one exists. At a
+   * model stop the engine calls this first and calls `drain` only after `true`, so the stopped
+   * Turn's response precedes the joined input in history. A later join gets its own Run.
+   */
+  readonly hasJoin?:
+    | ((policy: CommandDrainPolicy) => Effect.Effect<boolean, Error, Requirements>)
+    | undefined;
   readonly start?: (() => Effect.Effect<void, Error, Requirements>) | undefined;
   readonly drain: (
     policy: CommandDrainPolicy,
