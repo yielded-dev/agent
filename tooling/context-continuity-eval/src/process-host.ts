@@ -41,7 +41,7 @@ export const supervise = Effect.fn("ContextContinuity.supervise")(
     const apiKey = yield* Config.Redacted("OPENAI_API_KEY");
 
     for (let incarnation = 0; incarnation <= RESTARTS.length; incarnation++) {
-      const child = yield* ChildProcess.make("node", ["--experimental-transform-types", entry], {
+      const child = yield* ChildProcess.make("node", [entry], {
         env: { CONTEXT_EVAL_WORKER_OPTIONS: optionsPath, OPENAI_API_KEY: Redacted.value(apiKey) },
         extendEnv: true,
         stdout: "inherit",

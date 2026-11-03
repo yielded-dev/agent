@@ -1142,7 +1142,11 @@ const abortedRunPhase = (usageSummary: RunUsageSummary): RunPhaseOutcome => ({
  */
 class CoordinatorHalt {
   readonly _tag = "CoordinatorHalt";
-  constructor(readonly failure: DurableWorkerFailure) {}
+  readonly failure: DurableWorkerFailure;
+
+  constructor(failure: DurableWorkerFailure) {
+    this.failure = failure;
+  }
 }
 
 const isCoordinatorHaltCause = (
