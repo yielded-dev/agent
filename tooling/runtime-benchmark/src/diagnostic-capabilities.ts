@@ -575,7 +575,7 @@ const mcpCase = Effect.fn("diagnostic.mcp")(function* (workload: DiagnosticCase)
         activeSession = `session-${connects}`;
         activeCredential = `fixture-credential-${connects}`;
         result = {
-          protocolVersion: "2025-06-18",
+          protocolVersion: "2025-11-25",
           capabilities: { tools: {} },
           serverInfo: { name: "in-process-http-diagnostic", version: "1" },
         };

@@ -90,7 +90,10 @@ See [durability](/concepts/durability/).
 
 ## Connect MCP servers
 
-`McpClient` discovers tools through an application-configured transport. These remain ordinary
+`McpClient` uses Effect’s native MCP client through an application-configured HTTP or stdio
+transport. The default protocol is `2025-11-25`; set the transport’s `protocol` to
+`McpProtocol.v2026_07_28` to select the newer revision. Servers must support the selected
+revision and supply their implementation identity. These remain ordinary
 tools with the same authorization, approval, and uncertainty rules. Server hints are untrusted
 by default; opt into `trustToolAnnotations` only for a trusted server. `connectMcp` validates
 discovery and returns its native `toolkit` and `handlers` together. Retain

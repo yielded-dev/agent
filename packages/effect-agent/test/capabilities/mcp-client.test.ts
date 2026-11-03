@@ -46,7 +46,7 @@ const callHandler = Effect.fnUntraced(function* (
 
 // ---------------------------------------------------------------------------
 // A scripted server that answers every request as `text/event-stream`, mints
-// a session, and negotiates an older protocol revision. Effect's own server
+// a session, and uses the selected protocol revision. Effect's own server
 // replies with JSON, so this is the only coverage of the SSE response path,
 // session propagation, notification framing, and session teardown.
 // ---------------------------------------------------------------------------
@@ -133,7 +133,7 @@ const scriptedSseServer = Effect.gen(function* () {
             request,
             message.id,
             {
-              protocolVersion: "2025-06-18",
+              protocolVersion: "2025-11-25",
               capabilities: { tools: {} },
               serverInfo: { name: "scripted-sse", version: "0.1.0" },
             },
@@ -230,7 +230,7 @@ describe("MCP client over server-sent events", () => {
               );
 
               expect(silent.isFailure).toBe(true);
-              expect((silent.result as McpToolCallFailed).message).toContain("without answering");
+              expect((silent.result as McpToolCallFailed).message).toContain("no response");
             }),
           );
 
