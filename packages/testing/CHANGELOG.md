@@ -1,5 +1,13 @@
 # @yielded/agent-testing
 
+## 0.1.0-beta.192
+
+### Patch Changes
+
+- [#1129](https://github.com/yielded-dev/agent/pull/1129) [`56cdc99`](https://github.com/yielded-dev/agent/commit/56cdc99f0ac42ada9ebdae9609ff7aa27c1b1a58) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remove framework-owned MCP clients, connectors, discovery contracts, and unused discovery fixtures. BEHAVIOR CHANGE: Use `effect/ai/McpClient` with ordinary Toolkit handlers instead of `@yielded/agent/mcp` or `@yielded/agent/mcp-client`.
+- Updated dependencies [[`d4edd24`](https://github.com/yielded-dev/agent/commit/d4edd24e5e46e313782c01cf132a79b410a84770), [`56cdc99`](https://github.com/yielded-dev/agent/commit/56cdc99f0ac42ada9ebdae9609ff7aa27c1b1a58), [`67c3aec`](https://github.com/yielded-dev/agent/commit/67c3aecff2f1372367340d0db57c1dff56aca970)]:
+  - @yielded/agent@0.1.0-beta.192
+
 ## 0.1.0-beta.191
 
 ### Patch Changes

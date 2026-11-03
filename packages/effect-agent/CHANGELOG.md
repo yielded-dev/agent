@@ -1,5 +1,15 @@
 # @yielded/agent
 
+## 0.1.0-beta.192
+
+### Patch Changes
+
+- [#1122](https://github.com/yielded-dev/agent/pull/1122) [`d4edd24`](https://github.com/yielded-dev/agent/commit/d4edd24e5e46e313782c01cf132a79b410a84770) Thanks [@artile](https://github.com/artile)! - Settle a model stop with no text and no Tool Call through the Agent's output Schema, instead of ending every worker of the host.
+
+- [#1129](https://github.com/yielded-dev/agent/pull/1129) [`56cdc99`](https://github.com/yielded-dev/agent/commit/56cdc99f0ac42ada9ebdae9609ff7aa27c1b1a58) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remove framework-owned MCP clients, connectors, discovery contracts, and unused discovery fixtures. BEHAVIOR CHANGE: Use `effect/ai/McpClient` with ordinary Toolkit handlers instead of `@yielded/agent/mcp` or `@yielded/agent/mcp-client`.
+
+- [#1123](https://github.com/yielded-dev/agent/pull/1123) [`67c3aec`](https://github.com/yielded-dev/agent/commit/67c3aecff2f1372367340d0db57c1dff56aca970) Thanks [@artile](https://github.com/artile)! - Commit a stopped Turn's response before joined input enters history, so a restart delivers that input to the model instead of settling it unread.
+
 ## 0.1.0-beta.191
 
 ### Patch Changes
