@@ -1715,9 +1715,6 @@ const modelResponseRecord = Effect.fnUntraced(function* (
 ): Effect.fn.Return<RecordEnvelope, RunJournalError> {
   const promptMessages = input.responseMessages;
 
-  if (promptMessages.length === 0) {
-    return yield* journalError(`Turn ${input.turn} appended no model-visible Prompt messages`);
-  }
   if (promptMessages.some((message) => message.role === "tool")) {
     return yield* journalError("Application Tool outcomes must be supplied as terminal facts");
   }
@@ -1728,7 +1725,7 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     (input.turn !== 1 ||
       !Number.isSafeInteger(runScopedPrefixLength) ||
       runScopedPrefixLength <= 0 ||
-      runScopedPrefixLength >= promptMessages.length ||
+      runScopedPrefixLength > promptMessages.length ||
       promptMessages
         .slice(0, runScopedPrefixLength)
         .some((message) => message.role !== "system" && message.role !== "user"))

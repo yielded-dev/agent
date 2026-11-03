@@ -438,9 +438,10 @@ const ModelResponseRecordedFields = Schema.Struct({
       }
 
       // Equal counts and unique matching operation IDs already cover every declaration.
+      // A model may stop with no response parts, so the prefix may cover every message.
       return (
         response.runScopedPrefixLength === undefined ||
-        (response.runScopedPrefixLength < response.messages.content.length &&
+        (response.runScopedPrefixLength <= response.messages.content.length &&
           response.messages.content
             .slice(0, response.runScopedPrefixLength)
             .every((message) => message.role === "system" || message.role === "user"))
