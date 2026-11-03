@@ -1,4 +1,3 @@
-import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -115,7 +114,7 @@ describe("SUB-015 durable child exfiltration resistance (DN)", () => {
     () =>
       withTemporaryDirectory((directory) =>
         Effect.gen(function* () {
-          const harness = yield* makeDocsResearcherHarness().pipe(Effect.provide(NodeCrypto.layer));
+          const harness = yield* makeDocsResearcherHarness();
 
           yield* Effect.gen(function* () {
             const receipt = yield* submitMission("redteam-exfiltration", "redteam-exfil-1");

@@ -90,12 +90,16 @@ See [durability](/concepts/durability/).
 
 ## Connect MCP servers
 
-`McpClient` discovers tools through an application-configured transport. These remain ordinary
-tools with the same authorization, approval, and uncertainty rules. Server hints are untrusted
-by default; opt into `trustToolAnnotations` only for a trusted server. `connectMcp` validates
-discovery and returns its native `toolkit` and `handlers` together. Retain
-`discovery.toolkitSchemaDigest` and pass it as `expectedToolkitSchemaDigest` when reconnecting
-to reject changed tool contracts before execution.
+Use `effect/ai/McpClient` for MCP connections and discovery. Acquire the client in a Scope
+and bind selected remote calls through ordinary Toolkit handlers. Its `callTool` operation
+can decode structured output with the application's Schema; declare `McpClientError` from
+`effect/ai/McpClientError` as the Tool's failure schema when returning remote failures to the model.
+Keep the client Scope open while its tool handlers can run, and configure transport and
+discovery limits through Effect's APIs.
+
+Remote calls follow the same authorization, approval, budgets, and uncertainty rules as other
+tools. Leave their execution class `"uncertain"` unless the application can establish a stronger
+contract; server hints alone do not establish replay safety.
 
 Use [subagents](/guide/subagents/) for delegation, [browser tools](/guide/browser/) for web
 interaction, or [Code Mode](/guide/code-mode/) for a bounded program over several tools.

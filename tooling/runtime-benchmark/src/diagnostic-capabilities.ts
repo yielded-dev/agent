@@ -5,8 +5,6 @@ import {
   type ScriptedTurnInput,
 } from "@yielded/agent-testing/scripted-model";
 import { RunId, ThreadId } from "@yielded/agent/identifiers";
-import * as Mcp from "@yielded/agent/mcp";
-import * as McpClient from "@yielded/agent/mcp-client";
 import * as Memory from "@yielded/agent/memory";
 import {
   MemoryAttribution,
@@ -21,6 +19,9 @@ import * as Reservations from "@yielded/agent/subagent-reservations";
 import * as Thread from "@yielded/agent/thread";
 import { Clock, Deferred, Effect, FileSystem, Layer, Schema, Stream } from "effect";
 import { AiError, Model, Prompt, Tool, Toolkit } from "effect/ai";
+import * as McpClient from "effect/ai/McpClient";
+import * as McpClientError from "effect/ai/McpClientError";
+import * as McpProtocol from "effect/ai/McpProtocol";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { BenchmarkError, check } from "./contracts.js";
@@ -575,7 +576,7 @@ const mcpCase = Effect.fn("diagnostic.mcp")(function* (workload: DiagnosticCase)
         activeSession = `session-${connects}`;
         activeCredential = `fixture-credential-${connects}`;
         result = {
-          protocolVersion: "2025-06-18",
+          protocolVersion: "2025-11-25",
           capabilities: { tools: {} },
           serverInfo: { name: "in-process-http-diagnostic", version: "1" },
         };
@@ -646,19 +647,13 @@ const mcpCase = Effect.fn("diagnostic.mcp")(function* (workload: DiagnosticCase)
     ),
   );
 
-  const request = Mcp.McpConnectionRequest.make({
-    serverId: "fixture",
-    maxToolCount: 8,
-    maxToolDescriptionBytes: 256,
-    maxDiscoveryBytes: 16_384,
-    connectTimeoutMillis: 5_000,
-  });
-
   const localToolName: string = "echo";
 
   const localTool = Tool.make(localToolName, {
     parameters: Schema.Struct({ message: Schema.String }),
     success: Schema.Struct({ echoed: Schema.String }),
+    failure: McpClientError.McpClientError,
+    failureMode: "return",
   });
 
   const localToolkit = Toolkit.make(localTool);
@@ -732,19 +727,33 @@ const mcpCase = Effect.fn("diagnostic.mcp")(function* (workload: DiagnosticCase)
     const connectionStart = yield* Clock.monotonicTimeNanos;
     let closeStart = 0n;
 
-    const connector = McpClient.layer([
-      McpClient.McpHttpTransport.make({
-        serverId: "fixture",
-        url: "http://mcp.test/mcp",
-        headers: { authorization: `fixture-credential-${session}` },
-      }),
-    ]).pipe(Layer.provide(Layer.succeed(HttpClient.HttpClient, client)));
-
     yield* Effect.scoped(
       Effect.gen(function* () {
         const connection = enabled
-          ? yield* Mcp.connectMcp(request).pipe(Effect.provide(connector))
+          ? yield* McpClient.make({
+              name: "mcp-diagnostic",
+              version: "1",
+              timeout: 5_000,
+              discoveryLimits: { maxItems: 8 },
+            }).pipe(
+              Effect.provideService(
+                McpClient.Transport,
+                yield* McpClient.http({
+                  url: "http://mcp.test/mcp",
+                  protocol: McpProtocol.v2025_11_25,
+                  headers: { authorization: `fixture-credential-${session}` },
+                  maxMessageBytes: 16_384,
+                }).pipe(Effect.provideService(HttpClient.HttpClient, client)),
+              ),
+            )
           : undefined;
+
+        const discovered = connection === undefined ? [] : yield* connection.listTools();
+        const remoteEcho = discovered.find((tool) => tool.name === "echo");
+
+        if (connection !== undefined && remoteEcho === undefined) {
+          return yield* BenchmarkError.make({ message: "MCP server did not advertise echo" });
+        }
 
         if (enabled) {
           metrics.push({ name: `connect.${session}`, value: yield* elapsed(connectionStart) });
@@ -754,12 +763,21 @@ const mcpCase = Effect.fn("diagnostic.mcp")(function* (workload: DiagnosticCase)
           });
         }
 
-        const tools = connection?.toolkit ?? localToolkit;
+        const tools = localToolkit;
 
-        const handlers = connection?.handlers ?? localHandlers;
+        const handlers =
+          connection !== undefined && remoteEcho !== undefined
+            ? tools.toLayer({
+                echo: (args) =>
+                  connection.callTool({
+                    tool: remoteEcho,
+                    arguments: args,
+                    schema: localTool.successSchema,
+                  }),
+              })
+            : localHandlers;
 
-        if (enabled)
-          yield* check(Object.keys(tools.tools).length === 8, "MCP discovery tool count changed");
+        if (enabled) yield* check(discovered.length === 8, "MCP discovery tool count changed");
 
         if (session === 1) {
           yield* Effect.gen(function* () {
@@ -770,39 +788,23 @@ const mcpCase = Effect.fn("diagnostic.mcp")(function* (workload: DiagnosticCase)
               });
               const callStart = yield* Clock.monotonicTimeNanos;
 
-              const results =
-                connection === undefined
-                  ? yield* Stream.runCollect(
-                      yield* (yield* localToolkit).handle("echo", { message: `reuse-${index}` }),
-                    )
-                  : yield* Stream.runCollect(
-                      yield* (yield* connection.toolkit).handle("echo", {
-                        message: `reuse-${index}`,
-                      }),
-                    );
+              const results = yield* Stream.runCollect(
+                yield* (yield* tools).handle("echo", { message: `reuse-${index}` }),
+              );
 
               metrics.push({ name: `reusedCall.${index}`, value: yield* elapsed(callStart) });
               const last = results.at(-1);
 
               yield* check(last !== undefined && !last.isFailure, "MCP reused call failed");
 
-              const expected = enabled
-                ? Schema.decodeUnknownOption(McpClient.McpToolResult)(last?.result)
-                : undefined;
+              const content = yield* Schema.decodeUnknownEffect(localTool.successSchema)(
+                last?.result,
+              );
 
-              if (expected !== undefined) {
-                const content =
-                  expected._tag === "Some"
-                    ? yield* Schema.decodeUnknownEffect(Schema.Struct({ echoed: Schema.String }))(
-                        expected.value.structuredContent,
-                      )
-                    : undefined;
-
-                yield* check(
-                  content?.echoed === `reuse-${index}`,
-                  "MCP reused call changed its result",
-                );
-              }
+              yield* check(
+                content.echoed === `reuse-${index}`,
+                "MCP reused call changed its result",
+              );
             }
             const runStart = yield* Clock.monotonicTimeNanos;
 

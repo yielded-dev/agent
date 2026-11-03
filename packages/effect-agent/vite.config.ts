@@ -29,8 +29,6 @@ export default defineConfig({
       "src/core/IdGenerator.ts",
       "src/core/Identifiers.ts",
       "src/sandbox/InteractiveBrowser.ts",
-      "src/capabilities/Mcp.ts",
-      "src/capabilities/McpClient.ts",
       "src/core/Memory.ts",
       "src/core/MemoryNamespace.ts",
       "src/capabilities/MemoryNotes.ts",

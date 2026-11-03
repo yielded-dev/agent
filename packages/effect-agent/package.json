@@ -44,8 +44,6 @@
     "./identifiers": "./src/core/Identifiers.ts",
     "./in-memory": "./src/InMemory.ts",
     "./interactive-browser": "./src/sandbox/InteractiveBrowser.ts",
-    "./mcp": "./src/capabilities/Mcp.ts",
-    "./mcp-client": "./src/capabilities/McpClient.ts",
     "./memory": "./src/core/Memory.ts",
     "./memory-namespace": "./src/core/MemoryNamespace.ts",
     "./memory-notes": "./src/capabilities/MemoryNotes.ts",
