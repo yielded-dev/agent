@@ -196,6 +196,7 @@ describe("NodeDurableAgentRuntime", () => {
     withTemporaryDatabase((filename) =>
       Effect.gen(function* () {
         const prompts: Array<Prompt.Prompt> = [];
+
         const emptyStop: ReadonlyArray<Response.StreamPartEncoded> = [
           { type: "finish", reason: "stop", usage },
         ];
