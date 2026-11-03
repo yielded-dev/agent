@@ -19,8 +19,6 @@ export * as Thread from "./core/Thread.ts";
 export * as IdGenerator from "./core/IdGenerator.ts";
 export * as Identifiers from "./core/Identifiers.ts";
 export * as InteractiveBrowser from "./sandbox/InteractiveBrowser.ts";
-export * as Mcp from "./capabilities/Mcp.ts";
-export * as McpClient from "./capabilities/McpClient.ts";
 export * as Memory from "./core/Memory.ts";
 export * as MemoryNamespace from "./core/MemoryNamespace.ts";
 export * as MemoryNotes from "./capabilities/MemoryNotes.ts";

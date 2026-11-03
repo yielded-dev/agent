@@ -12,8 +12,7 @@ import * as Schema from "effect/Schema";
 // ---------------------------------------------------------------------------
 // Docs Researcher (P7 internal agent #3, plan §6): a coordinator that
 // delegates per-document summarization to a doc-summarizer child through the
-// S2 durable delegation surface, with the child's content tools served —
-// and validated — through the MCP connector against a scripted MCP fixture.
+// S2 durable delegation surface and a statically authored content toolkit.
 // The corpus, tools, and both Agent Definitions are deterministic fixtures in
 // the travel-planner style so DN tests (and any later DC assembly) reuse them.
 // ---------------------------------------------------------------------------
@@ -34,7 +33,7 @@ export class DocumentQuery extends Schema.Class<DocumentQuery>("DocumentQuery")(
   documentId: ResearchDocumentId,
 }) {}
 
-/** One bounded research document as the MCP content server exposes it. */
+/** One bounded research document returned by the content tool. */
 export class ResearchDocument extends Schema.Class<ResearchDocument>("ResearchDocument")({
   documentId: ResearchDocumentId,
   title: BoundedTitle,
@@ -49,7 +48,7 @@ export class DocumentUnavailable extends Schema.TaggedError<DocumentUnavailable>
   },
 ) {}
 
-/** The content store behind the scripted MCP server. */
+/** The document store available to the summarizer child. */
 export class DocumentLibrary extends Context.Service<
   DocumentLibrary,
   {
@@ -57,12 +56,7 @@ export class DocumentLibrary extends Context.Service<
   }
 >()("@effect-agent/testing/docs-researcher/DocumentLibrary") {}
 
-/**
- * The one content tool the doc-summarizer child uses. Its authored JSON
- * schema is what MCP discovery must serve byte-for-byte: the scripted MCP
- * fixture derives its discovery entry from `Tool.getJsonSchema(FetchDocument)`
- * and the assembly checks the discovered schemas before worker registration.
- */
+/** The content tool the doc-summarizer child uses. */
 export const FetchDocument = Tool.make("fetch_document", {
   description: "Fetch one bounded research document by its identifier.",
   parameters: DocumentQuery,
@@ -142,7 +136,7 @@ const requireCorpusEntry = (documentId: string): CorpusEntry => {
   return entry;
 };
 
-/** Deterministic library lookup shared by the scripted MCP content handlers. */
+/** Deterministic lookup for the fixture document library. */
 export const researchDocumentLookup = (
   query: DocumentQuery,
 ): Effect.Effect<ResearchDocument, DocumentUnavailable> => {
@@ -168,8 +162,7 @@ export const documentBodyPhrase = (documentId: string): string =>
 
 // ---------------------------------------------------------------------------
 // Doc Summarizer: the child Agent Definition. Its toolkit is the authored
-// `DocContentToolkit`; the harness registers its worker Binding only after
-// MCP discovery validates that exact toolkit (mcp.ts).
+// `DocContentToolkit`, whose handlers use the fixture document library.
 // ---------------------------------------------------------------------------
 
 export class SummaryBrief extends Schema.Class<SummaryBrief>("SummaryBrief")({
@@ -204,7 +197,7 @@ export const DocSummarizer = Agent.make("doc-summarizer", {
     maxDuration: "30 seconds",
     toolConcurrency: 1,
   }),
-  description: "Summarize one bounded research document fetched through MCP content tools.",
+  description: "Summarize one bounded research document fetched through the content tool.",
 });
 
 // ---------------------------------------------------------------------------

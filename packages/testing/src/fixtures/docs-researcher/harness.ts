@@ -2,7 +2,6 @@ import * as Agent from "@yielded/agent/agent";
 import { DurableWorkerBinding, type ResolvedBinding } from "@yielded/agent/agent-registration";
 import { type DurableSubmitOptions } from "@yielded/agent/durable-agent-runtime";
 import { type ThreadId } from "@yielded/agent/identifiers";
-import { connectMcp, type McpDiscovery } from "@yielded/agent/mcp";
 import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import { Redactor, type RedactedPreview, type RedactionError } from "@yielded/agent/redaction";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
@@ -10,7 +9,6 @@ import { Principal, type IdempotencyKey } from "@yielded/agent/submission-ledger
 import * as LanguageModel from "effect/ai/LanguageModel";
 import * as Model from "effect/ai/Model";
 import type * as Response from "effect/ai/Response";
-import type * as CryptoDigest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -32,11 +30,6 @@ import {
   researchDocumentFor,
   researchDocumentLookup,
 } from "./definition.ts";
-import {
-  assertDiscoveryMatchesAuthoredToolkit,
-  docsMcpConnectorLayer,
-  docsMcpRequest,
-} from "./mcp.ts";
 
 // ---------------------------------------------------------------------------
 // DN durable harness for the docs-researcher (P7 plan §6 agent #3), following
@@ -182,12 +175,10 @@ export interface DocsResearcherHarnessOptions {
   readonly documentIds?: ReadonlyArray<string> | undefined;
 }
 
-/** One durable coordinator/summarizer pair with observable counters and MCP evidence. */
+/** One durable coordinator/summarizer pair with observable model and tool counters. */
 export interface DocsResearcherHarness {
   /** Resolved registrations for the parent and child workers. */
   readonly bindings: ReadonlyArray<ResolvedBinding>;
-  /** The validated MCP discovery the child toolkit registration was gated on. */
-  readonly discovery: McpDiscovery;
   /** Total coordinator model invocations across every Attempt and runtime handle. */
   readonly parentModelCalls: Effect.Effect<number>;
   /** JSON-encoded coordinator prompts in request order. */
@@ -196,34 +187,15 @@ export interface DocsResearcherHarness {
   readonly childModelCalls: Effect.Effect<number>;
   /** JSON-encoded summarizer prompts in request order (context-isolation evidence). */
   readonly childPrompts: Effect.Effect<ReadonlyArray<string>>;
-  /** MCP content-tool handler executions for one document (external side-effect record). */
+  /** Content-tool handler executions for one document. */
   readonly fetchInvocations: (documentId: string) => Effect.Effect<number>;
 }
 
-/**
- * Build the docs-researcher harness. Order matters and is the point: the
- * child's content toolkit is only registered as a worker Binding AFTER the
- * MCP connector's bounded discovery validated the authored toolkit
- * byte-for-byte (`connectMcp` + `assertDiscoveryMatchesAuthoredToolkit`), so
- * "the tools the summarizer runs are the tools discovery served" is enforced
- * at assembly, not assumed. Content-tool execution then flows through the
- * counting `DocumentLibrary` — the scripted MCP server's content store.
- */
+/** Build durable workers with the authored content toolkit and a counting document library. */
 export const makeDocsResearcherHarness = Effect.fnUntraced(function* (
   options?: DocsResearcherHarnessOptions,
 ) {
   const documentIds = options?.documentIds ?? researchCorpusDocumentIds;
-
-  // MCP discovery gate (CAP-009): bounded, digest-verified, fail-closed.
-  const discovery = yield* Effect.scoped(
-    Effect.gen(function* () {
-      const connection = yield* connectMcp(docsMcpRequest);
-
-      yield* assertDiscoveryMatchesAuthoredToolkit(connection);
-
-      return connection.discovery;
-    }),
-  ).pipe(Effect.provide(docsMcpConnectorLayer));
 
   const fetchCounts = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
 
@@ -292,7 +264,6 @@ export const makeDocsResearcherHarness = Effect.fnUntraced(function* (
 
   const harness: DocsResearcherHarness = {
     bindings: [parentResolved, childResolved],
-    discovery,
     parentModelCalls: parentModel.calls,
     parentPrompts: parentModel.prompts,
     childModelCalls: childModel.calls,
@@ -323,8 +294,3 @@ export const redactedDocumentPreview = Effect.fn("DocsResearcher.redactedDocumen
     return yield* redactor.redact(encoded);
   },
 );
-
-// Digest is deliberately in the harness requirements (`connectMcp` digests
-// discovery): callers provide a platform Digest Layer, keeping this fixture
-// platform-neutral.
-export type DocsResearcherHarnessRequirements = CryptoDigest.Digest;

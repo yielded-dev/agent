@@ -262,10 +262,9 @@ destination acceptance, and destination processing are distinct states; a retain
 is not a Submission Receipt.
 
 **MCP Server**
-An external Model Context Protocol server reached through an application-configured transport.
-Its discovered tools become dynamic Effect AI Tools that forward `tools/call`; they remain ordinary
-Tools for approval, authorization, and durability, and their advertised hints are untrusted unless
-the transport opts in.
+An external Model Context Protocol server reached through Effect's native MCP client.
+Applications select remote calls and expose them through ordinary Effect AI Tools, with the
+same approval, authorization, and uncertainty rules as local Tools.
 
 **Sandbox**  
 A scoped capability set for filesystem, process, and optional network operations. It is not a
