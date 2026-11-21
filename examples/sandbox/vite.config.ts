@@ -10,7 +10,7 @@ export default defineConfig({
     tasks: {
       "db:generate": { command: "drizzle-kit generate", cache: false },
       check: {
-        command: "effect-tsrs diagnostics --type-check --project tsconfig.json",
+        command: "effect-tsgo tsrs --noEmit -p tsconfig.json",
         cache: false,
       },
       build: { command: "vp build && wrangler deploy --dry-run", cache: false },

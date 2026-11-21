@@ -19,6 +19,7 @@
     "plugins": [
       {
         "name": "@effect/language-service",
+        "ignoreEffectWarningsInTscExitCode": true,
         "effectFn": ["span", "untraced"],
         "allowedUnstableApis": [
           "@effect/ai-anthropic",
@@ -151,7 +152,7 @@
             "options": {
               "diagnosticSeverity": {
                 "nodeBuiltinImport": "warning",
-                "preferSchemaOverJson": "suggestion"
+                "globalJsonInEffect": "suggestion"
               }
             }
           }
