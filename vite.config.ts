@@ -120,7 +120,7 @@ export default defineConfig({
     ignorePatterns: generatedPaths,
     options: {
       typeAware: true,
-      // effect-tsrs owns compiler and Effect diagnostics; keep unique typed lint rules.
+      // effect-tsgo tsrs owns compiler and Effect diagnostics; keep unique typed lint rules.
       typeCheck: false,
     },
     jsPlugins: [

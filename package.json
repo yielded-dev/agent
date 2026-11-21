@@ -26,7 +26,7 @@
     "ready": "vp run check && vp run test && vp run build",
     "check:record-format": "bun scripts/verify-record-format.ts",
     "typecheck": "vp run -F './packages/*' -F './examples/*' -F './tooling/*' -F './docs' --concurrency-limit 1 check && vp run check:scripts",
-    "check:scripts": "effect-tsrs diagnostics --type-check --project scripts/tsconfig.json",
+    "check:scripts": "effect-tsgo tsrs --noEmit -p scripts/tsconfig.json",
     "check:docs": "tsrs --noEmit -p docs/tsconfig.json"
   },
   "devDependencies": {
@@ -55,7 +55,6 @@
     "@yielded/agent-storage-sql": "workspace:*",
     "@yielded/agent-storage-sqlite": "workspace:*",
     "@yielded/agent-testing": "workspace:*",
-    "@yielded/effect-tsrs": "catalog:",
     "alchemy": "catalog:",
     "effect": "catalog:",
     "effect-cf": "catalog:",
@@ -99,7 +98,7 @@
     "@effect/sql-pg": "4.1.2",
     "@effect/sql-sqlite-do": "4.1.2",
     "@effect/sql-sqlite-node": "4.1.2",
-    "@effect/tsgo": "0.53.3",
+    "@effect/tsgo": "0.73.2",
     "@effect/vitest": "4.1.2",
     "@fontsource-variable/ibm-plex-sans": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.3.0",
@@ -153,7 +152,6 @@
     "@yielded/jose": "0.1.0-beta.47",
     "drizzle-orm": "1.0.0-rc.4",
     "drizzle-kit": "1.0.0-rc.4",
-    "@yielded/effect-tsrs": "0.2.2",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929"
   },
   "catalogs": {
