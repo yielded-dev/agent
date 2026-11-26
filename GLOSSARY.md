@@ -111,6 +111,12 @@ aggregate model-usage and estimated-cost summary; joined Submissions do not dupl
 
 ## Agent capabilities
 
+**Skill**
+
+A native Effect bundle of discovery metadata, instructions, and supporting files captured by an
+Agent Definition. The model retrieves instructions and text files through readonly Tools.
+Loading a Skill grants no authority; each Subagent declares its own Skills.
+
 **Tool**  
 An Effect AI model-visible operation defined by Effect Schemas for parameters, success, and typed
 failure. A Tool definition is pure. Application Handlers are provided through an Effect AI Toolkit

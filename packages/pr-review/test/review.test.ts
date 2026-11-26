@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
+import type { ReviewResolution } from "@yielded/agent-pr-review/review";
 import {
   makeReviewer,
   ReviewChange,
   ReviewCostSnapshot,
   ReviewFinding,
   ReviewFollowUp,
-  ReviewResolution,
   ReviewRequest,
   ReviewUsage,
 } from "@yielded/agent-pr-review/review";
@@ -54,11 +54,11 @@ const followUp = ReviewFollowUp.make({
   description: "The earlier review blocks because omitted input is retained without a bound.",
 });
 
-const resolution = ReviewResolution.make({
+const resolution: typeof ReviewResolution.Encoded = {
   id: followUp.id,
   evidence:
     "src/index.ts now charges every candidate before retaining it, rejecting input over the aggregate bound.",
-});
+};
 
 const usage = {
   inputTokens: { total: 10, uncached: 7, cacheRead: 2, cacheWrite: 1 },

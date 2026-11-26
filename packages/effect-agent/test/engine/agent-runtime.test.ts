@@ -334,7 +334,7 @@ layer(testLayer)("RUN-001 Phase 1 AgentRuntime", (it) => {
           tools: native.tools,
           handle: <Name extends keyof typeof tools.tools>(
             name: Name,
-            parameters: Tool.Parameters<(typeof tools.tools)[Name]>,
+            parameters: Schema.Json,
             toolCallId?: string,
           ) =>
             native.handle(name, parameters, toolCallId).pipe(

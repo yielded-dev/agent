@@ -4,6 +4,7 @@ import * as Model from "effect/ai/Model";
 import * as Prompt from "effect/ai/Prompt";
 import * as Response from "effect/ai/Response";
 import * as ResponseIdTracker from "effect/ai/ResponseIdTracker";
+import type * as Skill from "effect/ai/Skill";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import * as Arr from "effect/Array";
@@ -72,6 +73,12 @@ import {
   type TurnId,
 } from "../../core/Identifiers.ts";
 import { IdGenerator } from "../../core/IdGenerator.ts";
+import {
+  isSkillTool,
+  skillToolkit,
+  loadSkill,
+  readSkillFile,
+} from "../../core/internal/agent-skills.ts";
 import { nativeUpdateId } from "../../core/internal/agent-updates.ts";
 import {
   CompletionMetadata,
@@ -553,6 +560,7 @@ type EventPublisher = (events: ReadonlyArray<RunEvent>) => Effect.Effect<void>;
 
 interface RunContext {
   readonly publish: EventPublisher | undefined;
+  currentTurn: number;
   readonly progressFailure: Deferred.Deferred<never, ModelProtocolError | AgentPolicyError>;
   readonly updates: Map<string, Update>;
   readonly validateUpdate: (value: Schema.Json) => Effect.Effect<void, UpdateError>;
@@ -4678,6 +4686,7 @@ const makeInitialPrompt = (
   instructions: Prompt.RawInput,
   inputPrompt: Prompt.RawInput,
   history: Prompt.Prompt,
+  skills: ReadonlyArray<Skill.Skill>,
 ): Effect.Effect<Prompt.Prompt, AgentInputError> =>
   Effect.suspend(() =>
     Effect.try({
@@ -4694,6 +4703,20 @@ const makeInitialPrompt = (
         return Prompt.fromMessages([
           ...history.content,
           ...instructionPrompt.content,
+          ...(skills.length === 0
+            ? []
+            : [
+                Prompt.systemMessage({
+                  content:
+                    "When a skill matches the task, call load_skill and follow its instructions within existing permissions. Loading does not execute scripts.\nAvailable skills:\n" +
+                    JSON.stringify(
+                      skills.map((skill) => ({
+                        name: skill.frontmatter.name,
+                        description: skill.frontmatter.description,
+                      })),
+                    ),
+                }),
+              ]),
           ...Prompt.make(inputPrompt).content,
         ]);
       },
@@ -6586,6 +6609,7 @@ const makeTurn = <
                         prompt: providerPrompt,
                         toolkit: deferredToolParameterToolkit(requestToolkit),
                         disableToolCallResolution: true,
+                        toolCallValidation: "deferred",
                         // Exact required Tool selection preserves the toolkit. A oneOf
                         // subset can drop other schemas and break the cached prefix.
                         ...(toolChoice === undefined ? {} : { toolChoice }),
@@ -8777,8 +8801,11 @@ function executeWithCompletion<
                     Effect.mapError(() => UpdateError.make({ reason: "validation" })),
                   );
 
+          const skills = agent.definition.skills ?? [];
+
           const context: RunContext = {
             publish,
+            currentTurn: 0,
             progressFailure: yield* Deferred.make<never, ModelProtocolError | AgentPolicyError>(),
             validateUpdate,
             updates: new Map(),
@@ -9026,7 +9053,7 @@ function executeWithCompletion<
 
               const prompt =
                 options.retainedContext === undefined
-                  ? yield* makeInitialPrompt(instructions, inputPrompt, context.history)
+                  ? yield* makeInitialPrompt(instructions, inputPrompt, context.history, skills)
                   : Prompt.fromMessages([
                       ...context.history.content,
                       ...options.retainedContext.content,
@@ -9114,6 +9141,8 @@ function executeWithCompletion<
                 let request = pending;
 
                 while (request !== undefined) {
+                  context.currentTurn = request.turn;
+
                   const output: TurnOutput = yield* Effect.scoped(
                     request.resume === undefined
                       ? makeTurn(
@@ -9160,6 +9189,38 @@ function executeWithCompletion<
           // batch shadows with per-batch / per-call live services. Providing them
           // here is what removes these services from the runtime's public
           // requirements.
+          const skillTools = Object.values(agent.definition.toolkit.tools).filter(isSkillTool);
+
+          const skillHandlers =
+            skillTools.length === 0
+              ? Context.empty()
+              : yield* skillToolkit.toHandlers({
+                  load_skill: (request) =>
+                    Effect.suspend(() =>
+                      loadSkill(
+                        skills,
+                        request.name,
+                        durableResultBounds(
+                          agent.definition.policy.toolResultBounds,
+                          options,
+                          context.currentTurn,
+                        ).maxBytes,
+                      ),
+                    ),
+                  read_skill_file: (request) =>
+                    Effect.suspend(() =>
+                      readSkillFile(
+                        skills,
+                        request,
+                        durableResultBounds(
+                          agent.definition.policy.toolResultBounds,
+                          options,
+                          context.currentTurn,
+                        ).maxBytes,
+                      ),
+                    ),
+                });
+
           const nativeUpdateTool = agent.definition.toolkit.tools.emit_update;
 
           const updateHandlers =
@@ -9252,6 +9313,7 @@ function executeWithCompletion<
               }),
             }),
             Context.merge(updateHandlers),
+            Context.merge(skillHandlers),
             Context.add(Emitter, {
               emit: () => Effect.fail(UpdateError.make({ reason: "unavailable" })),
             }),
