@@ -6586,6 +6586,7 @@ const makeTurn = <
                         prompt: providerPrompt,
                         toolkit: deferredToolParameterToolkit(requestToolkit),
                         disableToolCallResolution: true,
+                        toolCallValidation: "deferred",
                         // Exact required Tool selection preserves the toolkit. A oneOf
                         // subset can drop other schemas and break the cached prefix.
                         ...(toolChoice === undefined ? {} : { toolChoice }),

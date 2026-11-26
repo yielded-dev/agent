@@ -41,5 +41,5 @@ export const native = <T extends Tool.AnyProviderDefined>(options: { readonly to
     throw new Error("WebSearch.native requires a provider-executed web_search tool");
   }
 
-  return Toolkit.make(options.tool);
+  return Toolkit.make<readonly [T]>(options.tool);
 };
