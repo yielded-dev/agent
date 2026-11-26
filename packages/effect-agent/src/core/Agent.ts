@@ -2,6 +2,7 @@ import type * as AiError from "effect/ai/AiError";
 import type * as LanguageModel from "effect/ai/LanguageModel";
 import type * as Model from "effect/ai/Model";
 import type * as Prompt from "effect/ai/Prompt";
+import type * as Skill from "effect/ai/Skill";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
 import type * as Effect from "effect/Effect";
@@ -17,6 +18,7 @@ import type {
 } from "./AgentError.ts";
 import { AgentPolicy, type AgentPolicyInput } from "./AgentPolicy.ts";
 import { AgentId } from "./Identifiers.ts";
+import { snapshotSkills, withSkillTools } from "./internal/agent-skills.ts";
 import { type UpdateToolkit, withUpdateTool } from "./internal/agent-updates.ts";
 import type { Configuration } from "./ToolExposure.ts";
 
@@ -132,6 +134,8 @@ export interface Definition<
   readonly inputPrompt?: InputPromptValue | undefined;
   /** Native Effect AI toolkit whose failures and requirements remain visible. */
   readonly toolkit: ToolkitValue;
+  /** Captured native bundles available through framework-owned readonly retrieval tools. */
+  readonly skills?: ReadonlyArray<Skill.Skill> | undefined;
   readonly toolExposure?: Configuration | undefined;
   /** Finite execution bounds enforced by the runtime. */
   readonly policy: AgentPolicy;
@@ -162,6 +166,7 @@ export interface DefinitionOptions<
   readonly instructions: Instructions;
   readonly inputPrompt?: InputPromptValue | undefined;
   readonly toolkit: ToolkitValue;
+  readonly skills?: ReadonlyArray<Skill.Skill> | undefined;
   readonly toolExposure?: Configuration | undefined;
   readonly policy?: Partial<AgentPolicyInput> | undefined;
   readonly completion?: CompletionToolFor<ToolkitValue, OutputSchema["Type"]> | undefined;
@@ -482,6 +487,7 @@ export function make(
     readonly instructions: unknown;
     readonly inputPrompt?: unknown;
     readonly toolkit: Toolkit.Any;
+    readonly skills?: ReadonlyArray<Skill.Skill> | undefined;
     readonly toolExposure?: Configuration | undefined;
     readonly policy?: Partial<AgentPolicyInput> | undefined;
     readonly completion?: CompletionToolDeclaration | undefined;
@@ -503,9 +509,12 @@ export function make(
     ? Toolkit.make(...readonlyTools)
     : options.toolkit;
 
+  const skills = snapshotSkills(options.skills);
+
   return Object.freeze({
     ...options,
-    toolkit: withUpdateTool(toolkit, options.updates),
+    skills,
+    toolkit: withSkillTools(withUpdateTool(toolkit, options.updates), skills),
     policy: AgentPolicy.resolve(options.policy),
     policyOverrides: Object.freeze({ ...options.policy }),
     toolExposure:
